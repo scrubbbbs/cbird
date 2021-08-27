@@ -1,0 +1,10 @@
+coverage.info
+coverage-stripped.info
+lcov
+*/runtest
+*/_tmp
+*/*.pro.user*
+*/*.csv
+*/*.json
+*/settings.ini
+
