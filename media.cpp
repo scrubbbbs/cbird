@@ -1,3 +1,23 @@
+/* Media file container and utilities
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "media.h"
 #include "cvutil.h"
 //#include "opencv2/highgui/highgui.hpp"
@@ -10,7 +30,7 @@
 //#include <QtNetwork/QtNetwork>  // httpRequest
 //#include <memory>
 
-#include <exiv2/exiv2.hpp>
+#include "exiv2/exiv2.hpp"
 #include "quazip/quazip.h"
 #include "quazip/quazipfile.h"
 
@@ -407,10 +427,43 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
 }
 
 std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
-  std::function<QVariant(const Media&)> select;
 
   static QHash<QString, QVariant> propCache;
   static QMutex* cacheMutex = new QMutex;
+
+  std::function<QVariant(const Media&)> select;
+
+  // lookup table for stateless properties
+#define PAIR(prop) { #prop ,  [](const Media& m) { return m.prop(); } }
+  static const QHash<QString,decltype(select)> props({
+      PAIR(id),
+      PAIR(isValid),
+      PAIR(md5),
+      PAIR(type),
+      PAIR(path),
+      PAIR(parentPath),
+      PAIR(name),
+      PAIR(suffix),
+      PAIR(score),
+      PAIR(width),
+      PAIR(height),
+      PAIR(resolution),
+      PAIR(compressionRatio),
+      PAIR(contentType),
+      PAIR(matchFlags),
+      PAIR(isArchived),
+      PAIR(archiveCount),
+      { "res",     [](const Media& m) { return qMax(m.width(),m.height()); } },
+      { "archive", [](const Media& m) {
+          if (m.isArchived()) {
+            QString a, t;
+            m.archivePaths(a, t);
+            return a;
+          }
+          return QString();
+      }},
+      /// todo: attr(), VideoContext::metadata
+  });
 
   // field:args:modifier
   // field:modifier
@@ -418,26 +471,10 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
   const QString field = args.front();
   args.pop_front();
 
-  if (field == "path")
-    select = [](const Media& m) { return m.path(); };
-  else if (field == "name")
-    select = [](const Media& m) { return m.path().split("/").last(); };
-  else if (field == "archive")
-    select = [](const Media& m) {
-      if (m.isArchived()) {
-        QString a, t;
-        m.archivePaths(a, t);
-        return a;
-      }
-      return QString();
-    };
-  else if (field == "type")
-    select = [](const Media& m) { return m.type(); };
-  else if (field == "res")
-    select = [](const Media& m) {
-      int max = qMax(m.width(), m.height());
-      return max;
-    };
+  auto it = props.find(field);
+  if (it != props.end()) {
+    select = *it;
+  }
   else if (field == "exif") {
     if (args.count() == 0) qFatal("exif requires exif tag name(s)");
     QStringList exifKeys = args.front().split(",");
@@ -463,7 +500,6 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
         QMutexLocker locker(cacheMutex);
         propCache.insert(cacheKey, result);
       }
-
       return result;
     };
   } else if (field == "ffmeta") {
@@ -479,7 +515,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       return QVariant();
     };
   } else
-    qFatal("invalid sort field: %s", qPrintable(field));
+    qFatal("invalid property: %s", qPrintable(field));
 
   if (args.count() > 0) {
       auto func = unaryFunc(args.front());
@@ -640,7 +676,7 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
   while (video.nextFrame(img)) {
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (now - then > 5000) {
-      qInfo("%dx%d (%dx%d) %3d%% %3d:1 %5dfps %s(%d) %s", _width, _height,
+      qDebug("%dx%d (%dx%d) %3d%% %3d:1 %5dfps %s(%d) %s", _width, _height,
             img.cols, img.rows, numFrames * 100 / std::max(totalFrames, 1),
             numFrames / std::max(numFrames - nearFrames, 1),
             int(curFrames * 1000 / (now - then)),
@@ -856,37 +892,68 @@ void Media::openMedia(const Media& m, float seek) {
     */
 #endif
   } else if (m.isArchived()) {
-    // todo: support external tool for opening zip contents
-    qDebug() << "open archive: " << m.path();
-
     QString parent, child;
     m.archivePaths(parent, child);
 
     QIODevice* io = m.ioDevice();
     if (io && io->open(QIODevice::ReadOnly)) {
-      QTemporaryFile* tm = new QTemporaryFile(qApp);
-      child = child.replace("/", "|");
-      QFileInfo info(child);
-      tm->setFileTemplate(QDir::tempPath() + "/zip|" + info.baseName() +
-                          "|XXXXXX." + info.suffix());
-      if (tm->open()) {
-        tm->write(io->readAll());
-        tm->close();
-        QDesktopServices::openUrl(QUrl::fromLocalFile(tm->fileName()));
+
+      QString temporaryName;
+
+      // temporary is not closeable (necessary on win32), so fart around
+      {
+        QTemporaryFile tm;
+        tm.setAutoRemove(false);
+
+        child = child.split("/").last();
+        QFileInfo info(child);
+        tm.setFileTemplate(QDir::tempPath() + "/" + info.completeBaseName() +
+                           ".unzipped.XXXXXX." + info.suffix());
+
+        if (!tm.open()) {
+          qWarning() << "open archived file: cannot open temporary"
+                     << tm.fileTemplate() << tm.fileName();
+          return;
+        }
+
+        // todo: support external tool for opening zip contents
+        qInfo() << "open archived file: from temporary" << tm.fileName()
+                << ", deleting after 60s";
+
+        tm.write(io->readAll());
+
+        temporaryName = tm.fileName();
+        // closed here
       }
 
-      QTimer::singleShot(60000, tm, &QObject::deleteLater);
+      QDesktopServices::openUrl(QUrl::fromLocalFile(temporaryName));
+
+      // attempt to delete the file after 60s
+      QTimer::singleShot(60000, [=]() {
+        QFile f(temporaryName);
+        if (f.exists() && !f.remove())
+          qWarning() << "failed to delete temporary (after 60s)" << temporaryName;
+      });
+
+      // attempt to remove on app shutdown
+      QObject* object = new QObject(qApp);
+      QObject::connect(object, &QObject::destroyed, [=]() {
+        QFile f(temporaryName);
+        if (f.exists() && !f.remove())
+          qWarning() << "failed to delete temporary (at exit)" << temporaryName;
+      });
     }
     delete io;
   } else {
-    qDebug() << "open general: " << m.path();
     QUrl url(m.path());
-    if (url.scheme() == "") {
+    if (url.scheme().length() < 2) { // empty or a drive letter
       QString path = m.path();
       QFileInfo info(path);
       if (info.isFile()) path = info.absoluteFilePath();
       url = QUrl::fromLocalFile(path);
     }
+    qDebug() << "QDesktopServices::openUrl" << url;
+
     QDesktopServices::openUrl(url);
   }
 }
@@ -1025,7 +1092,6 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   qMessageContext.setLocalData("QImageReader: " + QFileInfo(name).fileName());
 
   // safe to cast away const since we do not write the buffer
-  //reader.setDevice(io.get());
   QBuffer* buffer = new QBuffer(const_cast<QByteArray*>(&data));
   std::unique_ptr<QIODevice> io;
 
@@ -1063,7 +1129,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   // in incorrect rotation
   long exifOrientation = 0;
   if (format == "jpeg" && reader.transformation() != 0) {
-    qMessageContext.setLocalData("Exiv2: " + QFileInfo(name).fileName());
+    qMessageContext.setLocalData(QFileInfo(name).fileName());
 
     auto exif = Exiv2::ImageFactory::open(
         reinterpret_cast<const Exiv2::byte*>(data.constData()), data.size());
@@ -1081,7 +1147,6 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   qreal rotate = 0;
   switch (exifOrientation) {
     case 1:
-      rotate = 0;
       exifOrientation = 0;
       break;
     case 3:
@@ -1199,27 +1264,27 @@ QVariantList Media::readExifKeys(const QStringList& keys) const {
     values.append(QVariant());
   }
 
+  qMessageContext.setLocalData(QFileInfo(path()).fileName());
+
   try {
-    Exiv2::Image::AutoPtr exif;
+    std::unique_ptr<Exiv2::Image> exif;
+    QByteArray data = _data;
 
-    QByteArray data;
-
-    if (!_data.isEmpty()) {
-      exif = Exiv2::ImageFactory::open(
-          reinterpret_cast<const Exiv2::byte*>(_data.constData()),
-          _data.size());
-    } else if (isArchived()) {
+    if (data.isEmpty() && isArchived()) {
       QIODevice* io = ioDevice();
       if (io) {
         io->open(QIODevice::ReadOnly);
         data = io->readAll();
         delete io;
-        exif = Exiv2::ImageFactory::open(
-            reinterpret_cast<const Exiv2::byte*>(data.constData()),
-            data.size());
       }
+    }
+
+    if (!data.isEmpty()) {
+      exif = Exiv2::ImageFactory::open(
+          reinterpret_cast<const Exiv2::byte*>(data.constData()),
+          data.size());
     } else
-      exif = Exiv2::ImageFactory::open(qPrintable(path()));
+      exif = Exiv2::ImageFactory::open(qUtf8Printable(path()));
 
     if (exif.get()) {
       exif->readMetadata();
@@ -1235,5 +1300,8 @@ QVariantList Media::readExifKeys(const QStringList& keys) const {
   } catch (std::exception& e) {
     qWarning() << "exif exception:" << path() << e.what();
   }
+
+  qMessageContext.setLocalData("");
+
   return values;
 }
