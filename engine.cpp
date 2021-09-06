@@ -1,3 +1,23 @@
+/* Component integration
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "engine.h"
 
 #include "colordescindex.h"
@@ -36,19 +56,6 @@ Engine::~Engine() {
 void Engine::add(const Media& m) {
   // additions are committed in batches to hide database write latency,
   // this requires clients to call commit() after all items added
-  // videos take a long time to process so do not batch, and commit immediately
-  if (m.type() == Media::TypeVideo) {
-    // If there are multiple processes updating (user error as this is unsupported),
-    // they might cause database corruption, so lock them out.
-    // This will not prevent sql constraint violation if they attempt to
-    // add the same file. If processes work on different subtrees this won't happen.
-    QLockFile dbLock(db->indexPath() + "/write.lock");
-    if (dbLock.tryLock(0))
-      db->add({m});
-    else
-      qCritical() << "database update aborted, another process is writing";
-    return;
-  }
 
   if (_batch.contains(m)) {
     qWarning() << "attempt to add media twice in same batch, discarding..."
@@ -61,20 +68,21 @@ void Engine::add(const Media& m) {
   copy.setImage(QImage());
   _batch.append(copy);
 
-  if (_batch.count() >= scanner->indexParams().writeBatchSize) {
-    printf("w");
-    fflush(stdout);
+  // videos take a long time to process so do not batch, and commit immediately
+  if (m.type() == Media::TypeVideo || _batch.count() >= scanner->indexParams().writeBatchSize) {
+    //printf("w");
+    //fflush(stdout);
     commit();
   }
 }
 
 void Engine::commit() {
+  // If there are multiple processes updating (user error as this is unsupported),
+  // they might cause database corruption, so lock them out.
+  // This will not prevent sql constraint violation if they attempt to
+  // add the same file. If processes work on different subtrees this won't happen.
   if (_batch.count() > 0) {
-    QLockFile dbLock(db->indexPath() + "/write.lock");
-    if (dbLock.tryLock(0))
-      db->add(_batch);
-    else
-      qCritical() << "database update aborted, another process is writing";
+     db->add(_batch);
     _batch.clear();
   }
 }
@@ -97,7 +105,7 @@ void Engine::update(bool wait) {
   // check for missing external index data, (currently only video index)
   // todo: should be implemented by specific index
   // todo: re-index missing item now
-  if (scanner->indexParams().algos & IndexParams::AlgoVideo)
+  if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo))
     for (const Media& m : db->mediaWithType(Media::TypeVideo)) {
       QString vIndexPath =
           QString("%1/%2.vdx").arg(db->videoPath()).arg(m.id());

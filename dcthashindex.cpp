@@ -1,3 +1,23 @@
+/* Index for rescaled or recompressed images
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "dcthashindex.h"
 #include "hamm.h"
 #include "profile.h"
@@ -73,8 +93,7 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath,
           _hashes = strict_realloc(_hashes, capacity);
           _mediaId = strict_realloc(_mediaId, capacity);
 
-          printf("DctHashIndex::load: sql query: %d\r", i);
-          fflush(stdout);
+          qInfo("sql query:<PL> %d", i);
         }
 
         _mediaId[i] = query.value(0).toUInt();
@@ -85,8 +104,7 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath,
 
       _numHashes = i;
 
-      printf("DctHashIndex::load: sql query: %d\r", i);
-      printf("\n");
+      qInfo("sql query:<PL> %d", i);
     }
 
     uint64_t end = nanoTime();

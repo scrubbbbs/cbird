@@ -1,3 +1,23 @@
+/* Directory scanning and indexing
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "scanner.h"
 
 #include "cvutil.h"
@@ -41,7 +61,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected) {
 
   _gpuPool.setMaxThreadCount(_params.gpuThreads);
   _videoPool.setMaxThreadCount(_params.indexThreads);
-  _imagePool.setMaxThreadCount(_params.indexThreads);
+  //_imagePool.setMaxThreadCount(_params.indexThreads);
 
   _topDirPath = path;
   _existingFiles = 0;
@@ -152,16 +172,21 @@ QMutex* Scanner::staticMutex() {
 void Scanner::scanProgress(const QString& path) const {
   const QString elided = qElide(path.mid(_topDirPath.length()+1), 80);
 
-  fflush(stdout);
-  fprintf(stdout, "%s images:%06d videos:%06d ignored:%04d ok:%08d %-80s\r",
-          qPrintable(_topDirPath), _imageQueue.count(), _videoQueue.count(), _ignoredFiles,
-         _existingFiles, qPrintable(elided));
-  fflush(stdout);
+  // <PL> means erase the previous line IIF text before <PL> matches the last log line
+  // (so it cannot erase unrelated lines)
+  QString status = QString::asprintf(
+  //fflush(stdout);
+  //fprintf(stdout,
+              "%s<PL> images:%06d videos:%06d ignored:%04d ok:%08d %-80s",
+          qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(), _ignoredFiles,
+         _existingFiles, qUtf8Printable(elided));
+  //fflush(stdout);
+  qInfo().noquote() << status;
 }
 
 void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
   if (!QDir(dirPath).exists()) {
-    qWarning("%s does not exist", qPrintable(dirPath));
+    qWarning("%s does not exist", qUtf8Printable(dirPath));
     return;
   }
 
@@ -276,13 +301,16 @@ void Scanner::finish() {
       loop.exit(0);
       return;
     }
-    printf(
-        "\rqueued:image=%d,video=%d:active=%d,running:hwdec=%d,video=%d,image=%"
-        "d                           ",
+    // <NC> == no context
+    //fprintf(stdout,
+    QString status = QString::asprintf(
+        "<NC>queued:<PL>image=%d,video=%d:batch=%d,threads:gpu=%d,video=%d,global=%"
+        "d    ",
         _imageQueue.count(), _videoQueue.count(), _activeWork.count(),
         _gpuPool.activeThreadCount(), _videoPool.activeThreadCount(),
-        _imagePool.activeThreadCount());
-    fflush(stdout);
+        QThreadPool::globalInstance()->activeThreadCount());
+    //fflush(stdout);
+    qInfo().noquote() << status;
     timer.setInterval(100);
   });
 
@@ -312,7 +340,7 @@ void Scanner::processOne() {
 
     if (_activeWork.count() < _params.indexThreads &&
         _imageQueue.size() > queueLimit)
-      qWarning() << "worker starvation, consider increasing writeBatchSize";
+      qWarning() << "worker starvation, maybe increase writeBatchSize (-i.bsize)";
   }
 
   if (_activeWork.count() < queueLimit) {
@@ -352,8 +380,8 @@ void Scanner::processOne() {
           f = QtConcurrent::run(pool, this, &Scanner::processVideo, v);
         }
         _videoQueue.removeFirst();
-        printf("v");
-        fflush(stdout);
+        //printf("v");
+        //fflush(stdout);
       }
     } else if (!_imageQueue.empty()) {
       path = _imageQueue.takeFirst();
@@ -361,11 +389,11 @@ void Scanner::processOne() {
       f = QtConcurrent::run(this, &Scanner::processImageFile, path,
                             QByteArray());
       queuedImage = true;
-      printf("i");
-      fflush(stdout);
+      //printf("i");
+      //fflush(stdout);
     } else {
-      printf(".");
-      fflush(stdout);
+      //printf(".");
+      //fflush(stdout);
     }
 
     if (!f.isCanceled()) {
@@ -425,8 +453,8 @@ void Scanner::processFinished() {
     // up the commit
   }
 
-  printf("%c", result.ok ? '+' : 'X');
-  fflush(stdout);
+  //printf("%c", result.ok ? '+' : 'X');
+  //fflush(stdout);
 
   _activeWork.remove(result.path);
   _work.removeOne(w);
@@ -445,7 +473,10 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
 
   // opencv throws exceptions
   try {
-    CVErrorLogger cvLogger("processImage:" + path.mid(_topDirPath.length()+1));
+    const QString shortPath = path.mid(_topDirPath.length()+1);
+    qMessageContext.setLocalData(shortPath);
+
+    CVErrorLogger cvLogger(shortPath);
 
     cv::Mat cvImg;
     qImageToCvImg(qImg, cvImg);
@@ -460,7 +491,7 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
     int height = cvImg.rows;
 
     uint64_t dctHash = 0;
-    if (_params.algos & IndexParams::AlgoDct) dctHash = dctHash64(cvImg);
+    if (_params.algos & (1 << SearchParams::AlgoDCT)) dctHash = dctHash64(cvImg);
 
     result.media =
         Media(path, Media::TypeImage, width, height, digest, dctHash);
@@ -468,30 +499,34 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
 
     if (_params.retainImage) m.setImage(qImg);
 
-    if (_params.algos & IndexParams::AlgoColor) {
+    if (_params.algos & (1 << SearchParams::AlgoColor)) {
       ColorDescriptor colorDesc;
       colorDescriptor(cvImg, colorDesc);
       m.setColorDescriptor(colorDesc);
     }
 
-    if (_params.algos & IndexParams::AlgoFeatures) {
+    if (_params.algos & (1 << SearchParams::AlgoDCTFeatures |
+                         1 << SearchParams::AlgoCVFeatures)) {
       sizeLongestSide(cvImg, _params.resizeLongestSide);
       m.makeKeyPoints(cvImg, _params.numFeatures);
 
-      if (_params.algos & IndexParams::AlgoCvFeatures)
+      if (_params.algos & (1 << SearchParams::AlgoCVFeatures))
         m.makeKeyPointDescriptors(cvImg);
 
-      if (_params.algos & IndexParams::AlgoDctFeatures)
+      if (_params.algos & (1 << SearchParams::AlgoDCTFeatures))
         m.makeKeyPointHashes(cvImg);
     }
 
+    qMessageContext.setLocalData("");
     result.ok = true;
     return result;
   } catch (std::exception& e) {
     setError(path, QString("std::exception: ") + e.what());
+    qMessageContext.setLocalData("");
     return result;
   } catch (...) {
     setError(path, "unknown exception");
+    qMessageContext.setLocalData("");
     return result;
   }
 }
@@ -596,11 +631,23 @@ IndexResult Scanner::processImageFile(const QString& path,
   bool isJpeg = findJpegMarker(bytes, path);
 
   // decompress, may perform exif orientation
-  QImage qImg = Media::loadImage(bytes, QSize(), path);
-
-  if (qImg.isNull()) {
-    setError(path, ErrorLoad);
-    return result;
+  QImage qImg;
+  QSize size(-1,-1);
+  if (_params.algos) {
+    qImg = Media::loadImage(bytes, QSize(), path);
+    if (qImg.isNull()) {
+      setError(path, ErrorLoad);
+      return result;
+    }
+  }
+  else {
+    // we only want the md5, get size w/o decoding
+    QBuffer buffer(&bytes);
+    QImageReader reader;
+    reader.setDevice(&buffer);
+    if (reader.canRead() &&
+        reader.supportsOption(QImageIOHandler::Size))
+      size = reader.size();
   }
 
   // hash the payload of the jpeg, ignoring exif
@@ -610,9 +657,16 @@ IndexResult Scanner::processImageFile(const QString& path,
   QString digest =
       QString(QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex());
 
+
+  if (!_params.algos) {
+    result.media = Media(path, Media::TypeImage, size.width(),
+                         size.height(), digest, 0);
+    result.ok = true;
+    return result;
+  }
+
   // release the memory now, process will take a while and we could use it
   bytes.clear();
-
   result = processImage(path, digest, qImg);
   return result;
 }
@@ -664,8 +718,8 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
   result.media = Media(result.path, Media::TypeVideo, 0, 0, md5, 0);
   Media& m = result.media;
 
-  if (!(_params.algos & IndexParams::AlgoVideo)) {
-    qWarning("video index disabled, storing md5 and metadata");
+  if (!(_params.algos & (1<<SearchParams::AlgoVideo))) {
+    //qWarning("video index disabled, storing md5 and metadata");
     m.setWidth(video->width());
     m.setHeight(video->height());
   } else {

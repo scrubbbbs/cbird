@@ -1,10 +1,30 @@
+/* Display list of Media in different ways
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "mediabrowser.h"
-#include "videocontext.h"
 #include "mediafolderlistwidget.h"
 #include "mediagrouplistwidget.h"
-#include "engine.h"
-#include "database.h"
-#include "qtutil.h"
+#include "../videocontext.h"
+#include "../engine.h"
+#include "../database.h"
+#include "../qtutil.h"
 
 extern Engine& engine();
 
@@ -23,7 +43,7 @@ class DebugFilter : public QObject {
   bool eventFilter(QObject* object, QEvent* event) {
     static int counter = 0;
 
-    printf("event %d: object=%p event=%p type=%d spontaneous=%d\n", counter++,
+    qDebug("event %d: object=%p event=%p type=%d spontaneous=%d\n", counter++,
            object, event, event->type(), event->spontaneous());
 
     if (event->type() == QEvent::MetaCall) {
@@ -35,7 +55,7 @@ class DebugFilter : public QObject {
       if (mc->sender() && mc->sender()->metaObject())
         senderClass = mc->sender()->metaObject()->className();
       if (object->metaObject()) recvClass = object->metaObject()->className();
-      printf("meta call event: sender=%s receiver=%s method=%s\n", senderClass,
+      qDebug("meta call event: sender=%s receiver=%s method=%s\n", senderClass,
              recvClass, qPrintable(slot.methodSignature()));
 
       // return true;
@@ -112,6 +132,7 @@ int MediaBrowser::showFolders(const MediaGroupList& list,
       key = first.parentPath();  // todo: media::parent, media::relativeParent,
                                  // media::relativePath
     key = key.mid(prefix.length());
+    key = qElide(key, MB_TEXT_MAXLEN);
     keys.append(key);
 
     GroupStats& s = stats[key];

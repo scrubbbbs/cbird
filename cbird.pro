@@ -1,11 +1,15 @@
 TEMPLATE = app
 #TARGET =
-DEPENDPATH += .
-INCLUDEPATH += .
+DEPENDPATH *= .
+INCLUDEPATH *= .
 
-QT += widgets network xml
+QT *= widgets
+
+# we only want to build one target, these screw that up...
+CONFIG -= debug_and_release
+CONFIG -= debug_and_release_target
+
 CONFIG += release
-CONFIG += debug
 
 include(cbird.pri)
 
@@ -16,7 +20,8 @@ precompile_header {
 
     win32 {
 
-        warning("mxe precompiled header hack")
+        # copy header so it works
+        warning("win32 precompiled header hack")
 	
         PRECOMPILED_HEADER_COPY=$$OBJECTS_DIR/$$PRECOMPILED_HEADER
         copy_pch.target = $$PRECOMPILED_HEADER_COPY
@@ -54,3 +59,27 @@ SOURCES += $$files(lib/*.cpp)
 
 DISTFILES += \
     index.pri
+
+# installation location override
+PREFIX=/usr/local
+!equals('',$$(PREFIX)) {
+  PREFIX=$$(PREFIX)
+  message("Installing in $$PREFIX")
+}
+
+cbird.files = $$TARGET
+cbird.path  = $$PREFIX/bin/
+
+ffplay_sbs.files = tools/ffplay-sbs
+ffplay_sbs.path  = $$PREFIX/bin/
+
+ffaudio.files = tools/ff-compare-audio
+ffaudio.path  = $$PREFIX/bin/
+
+INSTALLS += cbird ffplay_sbs ffaudio
+
+CONFIG -= silent
+message("QT=" $$QT)
+message("CONFIG=" $$CONFIG)
+message("QMAKE_CXXFLAGS=" $$QMAKE_CXXFLAGS)
+message("QMAKE_CFLAGS=" $$QMAKE_CFLAGS)

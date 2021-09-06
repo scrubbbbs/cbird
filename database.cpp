@@ -1,3 +1,23 @@
+/* Database management and search
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "database.h"
 #include "profile.h"
 #include "templatematcher.h"
@@ -286,6 +306,18 @@ void Database::add(const MediaGroup& inMedia) {
   uint64_t then = nanoTime();
   uint64_t now;
 
+  // try to protect database from corruption
+  // it is still possible to corrupt if another thread crashes the app
+  // during a commit.
+
+  QWriteLocker locker(&_rwLock);
+  QLockFile dbLock(indexPath() + "/write.lock");
+  if (!dbLock.tryLock(0)) {
+    qCritical() << "database update aborted, another process is writing,"
+                << "or lock file is stale";
+    return;
+  }
+
   int mediaId = -1;
   {
     // using sql auto-increment and lastInsertId() is not going to work
@@ -309,6 +341,10 @@ void Database::add(const MediaGroup& inMedia) {
     //else
       media.append(m);
   }
+
+  std::sort(media.begin(), media.end(), [](const Media& a, const Media& b) {
+    return a.path() < b.path();
+  });
 
   connect().transaction();
   for (Index* i : _algos) connect(i->databaseId()).transaction();
@@ -426,10 +462,7 @@ void Database::add(const MediaGroup& inMedia) {
   uint64_t w2 = now-then;
   then=now;
 
-  {
-    QWriteLocker locker(&_rwLock);
-    for (Index* index : _algos) index->add(added);
-  }
+  for (Index* index : _algos) index->add(added);
 
   connect().commit();
   for (Index* i : _algos) connect(i->databaseId()).commit();
@@ -438,8 +471,7 @@ void Database::add(const MediaGroup& inMedia) {
   uint64_t w3 = now-then;
   then=now;
 
-
-  qInfo("count=%d write=%d+%d+%d+%d=%d ms \n",
+  qDebug("count=%d write=%d+%d+%d+%d=%d ms",
          media.count(),
          (int)(w0/1000000),
               (int)(w1/1000000),
@@ -485,6 +517,14 @@ void Database::remove(const MediaGroup& group) {
 
 void Database::remove(const QVector<int>& ids) {
   if (ids.size() <= 0) return;
+
+  QWriteLocker locker(&_rwLock);
+  QLockFile dbLock(indexPath() + "/write.lock");
+  if (!dbLock.tryLock(0)) {
+    qCritical() << "database update aborted, another process is writing,"
+                << "or lock file is stale";
+    return;
+  }
 
   QSqlQuery query(connect());
 
@@ -549,14 +589,19 @@ void Database::remove(const QVector<int>& ids) {
         qCritical("failure to delete file %s", qPrintable(hashFile));
   }
 
-  QWriteLocker locker(&_rwLock);
   for (Index* i : _algos) i->remove(ids);
 }
 
 void Database::vacuum() {
-  const char* sql = "vacuum";
   QWriteLocker locker(&_rwLock);
+  QLockFile dbLock(indexPath() + "/write.lock");
+  if (!dbLock.tryLock(0)) {
+    qCritical() << "database update aborted, another process is writing,"
+                << "or lock file is stale";
+    return;
+  }
   qInfo("vacuum main db");
+  const char* sql = "vacuum";
   QSqlQuery query(connect());
   if (!query.exec(sql))
     SQL_FATAL(exec);
@@ -721,7 +766,7 @@ bool Database::rename(Media& old, const QString& newName) {
   }
 
   if (!info.exists()) {
-    qWarning("cannot rename: original does not exist");
+    qWarning() << "cannot rename: original does not exist" << info.fileName();
     return false;
   }
 
@@ -732,7 +777,7 @@ bool Database::rename(Media& old, const QString& newName) {
 
   QDir parent = info.dir();
   if (parent.exists(newName)) {
-    qWarning("cannot rename: new name already exists");
+    qWarning() << "cannot rename: new name exists " << parent.absoluteFilePath(newName) ;
     return false;
   }
 
@@ -845,16 +890,10 @@ void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
 
     if (maxLen > 0 && i >= maxLen) break;
 
-    if (i++ % 1000 == 0) {
-      printf("Database::fillMediaGroup: sql query %d\r", i);
-      fflush(stdout);
-    }
+    if (i++ % 1000 == 0) qInfo("<PL>sql query %d", i);
   }
 
-  if (i > 1000) {
-    printf("Database::fillMediaGroup: sql query %d\r", i);
-    printf("\n");
-  }
+  if (i > 1000) qInfo("<PL>sql query %d", i);
 }
 
 /*
@@ -971,10 +1010,10 @@ MediaGroup Database::mediaWithSql(const QString& sql,
                                   const QVariant& value) {
   QSqlQuery query(connect());
 
-  if (!placeholder.isEmpty()) {
-    if (!query.prepare(sql)) SQL_FATAL(prepare)
+  if (!query.prepare(sql)) SQL_FATAL(prepare)
+
+  if (!placeholder.isEmpty())
     query.bindValue(placeholder, value);
-  }
 
   if (!query.exec()) SQL_FATAL(exec);
 
@@ -1144,7 +1183,8 @@ bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
     tmp.append(match[0]);
 
     QString prefix = params.path;
-    if (!prefix.startsWith("/")) prefix = this->path() + "/" + params.path;
+    if (!prefix.startsWith(this->path()))
+      prefix = this->path() + "/" + params.path;
 
     for (int i = 1; i < match.count(); i++)
       if ((!params.inPath) ^ match[i].path().startsWith(prefix))
@@ -1155,15 +1195,14 @@ bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
 
   // remove match if all in the same directory
   if (params.filterParent && match.count() > 1) {
-    QStringList parent = match[0].path().split("/");
+    auto parent = match[0].path().splitRef("/");
     parent.pop_back();
     int i;
     for (i = 1; i < match.count(); i++) {
-      QStringList tmp = match[i].path().split("/");
+      auto tmp = match[i].path().splitRef("/");
       tmp.pop_back();
       if (tmp != parent) break;
     }
-
     if (i == match.count()) return true;
   }
 
@@ -1288,6 +1327,9 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   TemplateMatcher tm;
 
+  QSet<int> skip;
+  QMutex mutex;
+
   QFuture<void> f = QtConcurrent::map(
       haystack, [&idMap, &results, &progress, &tm, progressInterval,
                  progressTotal, params, index, this](const Media& m) {
@@ -1316,7 +1358,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
           results[resultIndex] = result;
         }
         if ((resultIndex % progressInterval) == 0)
-          qInfo() << resultIndex << progressTotal;
+          qInfo() << "<PL>" << resultIndex << progressTotal;
       });
 
   f.waitForFinished();

@@ -1,3 +1,23 @@
+/* Get system information
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "env.h"
 
 #include <unistd.h>
@@ -6,15 +26,28 @@
 #include <iostream>
 #include <string>
 
-#ifdef __WIN32__
-static void systemMemory(float& totalKb, float& freeKb) {
-  // todo: win32windows port
+#ifdef Q_OS_WIN
+
+#include <psapi.h>
+
+void Env::systemMemory(float& totalKb, float& freeKb) {
   totalKb = freeKb = 0;
+  MEMORYSTATUSEX status;
+  status.dwLength = sizeof(status);
+  if (GlobalMemoryStatusEx(&status)) {
+      (void)totalKb; (void)freeKb;
+      totalKb = status.ullTotalPhys / 1024.0;
+      freeKb = status.ullAvailPhys / 1024.0;
+  }
 }
 
 void Env::memoryUsage(float& virtualKb, float& workingSetKb) {
-  // todo: win32 port
   virtualKb = workingSetKb = 0;
+  PROCESS_MEMORY_COUNTERS pmc;
+  if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+    virtualKb = pmc.PagefileUsage / 1024.0;
+    workingSetKb = pmc.WorkingSetSize / 1024.0;
+  }
 }
 #else
 

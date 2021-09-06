@@ -1,3 +1,23 @@
+/* Index for rotated images
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "cvfeaturesindex.h"
 #include "cvutil.h"
 #include "ioutil.h"
@@ -199,13 +219,11 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
         lastId = id;
 
         if (numDesc > nextProgress) {
-          printf("CvFeaturesIndex::load: query %d\r", int(numDesc));
-          fflush(stdout);
+          qInfo("sql query:<PL>%d", int(numDesc));
           nextProgress = numDesc + 50000;
         }
       }
-      printf("\n");
-      assert(_descriptors.rows == int(numDesc));
+      Q_ASSERT(_descriptors.rows == int(numDesc));
 
       // build the actual flann index
       buildIndex(cv::Mat());
@@ -313,6 +331,7 @@ void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
       int upper = std::min(i + 10000, _descriptors.rows);
       _index->build(_descriptors.rowRange(0, upper),
                     _descriptors.rowRange(i, upper), indexParams);
+      qInfo("adding descriptors:<PL> %d / %d", i, _descriptors.rows);
     }
   }
 
@@ -324,9 +343,9 @@ void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
 
 void CvFeaturesIndex::loadIndex(const QString& path) {
   uint64_t then = nanoTime();
-  loadMap(_indexMap, path + "/cvfeatures_indexmap.map");
-  loadMap(_idMap, path + "/cvfeatures_idmap.map");
   loadMatrix(path + "/cvfeatures.mat", _descriptors);
+  loadMap(_idMap, path + "/cvfeatures_idmap.map");
+  loadMap(_indexMap, path + "/cvfeatures_indexmap.map");
 
   uint64_t now = nanoTime();
   uint64_t nsLoad = now - then;
@@ -340,10 +359,14 @@ void CvFeaturesIndex::loadIndex(const QString& path) {
   qInfo("load=%.1fms build=%.2fms", nsLoad / 1000000.0, nsBuild / 1000000.0);
 }
 
-void CvFeaturesIndex::saveIndex(const QString& path) {
+void CvFeaturesIndex::saveIndex(const QString& path) {  
+  qDebug() << "save descriptors";
   saveMatrix(_descriptors, path + "/cvfeatures.mat");
+  qDebug() << "save ids";
   saveMap(_idMap, path + "/cvfeatures_idmap.map");
+  qDebug() << "save indices";
   saveMap(_indexMap, path + "/cvfeatures_indexmap.map");
+  qDebug() << "completed";
 }
 
 cv::Mat CvFeaturesIndex::descriptorsForMediaId(uint32_t mediaId) const {

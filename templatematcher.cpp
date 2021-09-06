@@ -1,3 +1,23 @@
+/* Feature-based template matching
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "templatematcher.h"
 #include "cvutil.h"
 #include "hamm.h"
@@ -19,6 +39,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
 
   uint64_t then = nanoTime();
 
+  // matching is slow, look for results in our cache first
   bool useCache = true;
 
   if (tmplMedia.md5().isEmpty()) {
@@ -35,7 +56,6 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
   MediaGroup good, notCached;
 
   if (useCache) {
-    // since matching is slow, look for results in our cache first
     QReadLocker locker(&_lock);
 
     for (int i = 0; i < group.count(); i++) {
@@ -43,8 +63,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
       Q_ASSERT(!m.md5().isEmpty());
 
       // cache stores one key (md5(a)+md5(b)) for each pair of images that have
-      // been template matched; check both possible keys for any given pair of
-      // images
+      // been template matched; check both possible keys
       const QString cacheKey(m.md5() + tmplMedia.md5());
       const QString key2(tmplMedia.md5() + m.md5());
 

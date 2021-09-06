@@ -1,4 +1,23 @@
+/* Command-line interface
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
 
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "database.h"
 #include "engine.h"
 #include "env.h"
@@ -8,6 +27,7 @@
 #include "scanner.h"
 #include "qtutil.h"
 #include "cimgops.h"
+#include "cpu.h"
 
 #include "gui/mediabrowser.h"
 #include "gui/mediagrouplistwidget.h"
@@ -27,9 +47,46 @@ Engine& engine() {
   return *e;
 }
 
-static int printUsage(int argc, char** argv) {
-  (void)argc;
-  // clang-format off
+// for checking the build, don't want to release version
+// with avx enabled (probably)
+static QStringList buildFlags() {
+  QStringList flags;
+#ifdef __GNUC__
+  flags += "gcc v" __VERSION__;
+#endif
+#ifdef DEBUG
+  flags += "debug";
+#endif
+#ifdef __x86_64__
+  flags += "x86_64";
+#endif
+#ifdef __SSE2__
+  flags += "sse2";
+#endif
+#ifdef __SSSE3__
+  flags += "ssse3";
+#endif
+#ifdef __FMA__
+  flags += "fma";
+#endif
+#ifdef __SSE4_1__
+  flags += "sse4_1";
+#endif
+#ifdef __SSE4_2__
+  flags += "sse4_2";
+#endif
+#ifdef __POPCNT__
+  flags += "popcnt";
+#endif
+#ifdef __AVX__
+  flags += "avx";
+#endif
+#ifdef __AVX2__
+  flags += "avx2";
+#endif
+
+  return flags;
+}
 
 #define BR "\n"
 #define HR "\n======================================================================="
@@ -37,24 +94,62 @@ static int printUsage(int argc, char** argv) {
 #define H2 "\n"
 #define H3 "\n  "
 
-    printf(
-        BR "usage: %s [args...]"
-        H2 "* arguments are positional, and may be given multiple times"
-        H2 "* operations occur in the order given"
-        H2 "* definitions in <>, see last page for help"
-        H2 "* optional values in []"
-        H2 "* alternatives separated by pipe (|)"
+static void printLicense() {
+  // clang-format off
+  printf(
+      H2 "cbird, the Content Based Image Retrieval Database"
+      H2 "Copyright (C) 2021 scrubbbbs (scrubbbbs@gmail.com) https://github.com/scrubbbbs/cbird"
+      H2 "Licensed to you under the GNU GPL version 2 http://www.gnu.org/licenses"
+      H2
+      H2 "cbird is free software; you are free to modify an distribute it."
+      H2 "There is NO WARRANTY, to the extent permitted by law."
+      H2
+      HR
+      H2
+      H2 "This software uses the Qt5 library under GPLv2 https://www.qt.io"
+      H2 "This software uses the OpenCV library under Apache License v2 https://opencv.org"
+      H2 "This software uses the FFmpeg library under GPLv2 https://ffmpeg.org"
+      H2 "This software uses the quazip library under GPLv2 https://github.com/stachenov/quazip"
+      H2 "This software uses the exiv2 library under GPLv2 https://exiv2.org"
+      H2 "This software uses the CImg library under CeCILL v2.1 https://cimg.eu"
+      H2
+      H2 "This software includes code from jpegquality by Neal Krawetz,"
+      H2 "Hacker Factor Solutions, Copyright 2005-2007."
+      H2
+  );
+  // clang-format on
+}
 
-        H1 "setup"
+static int printUsage(int argc, char** argv) {
+  (void)argc;
+  // clang-format off
+
+    printf(
+        BR
+        H2 "    „__„                     CBIRD"
+        H2 "    {o,o}     Content Based Image Retrieval Database"
+        H2 "    |)__)       https://github.com/scrubbbbs/cbird"
+        H2 "    -“–“-        license: GPLv2 (see: -license)"
+        H2 ""
+        BR "Usage: %s [args...]"
+        BR
+        H2 "* Arguments are positional, and may be given multiple times"
+        H2 "* Operations occur in the order given, can often be chained"
+        H2 "* Definitions in <>, see last page for help"
+        H2 "* Optional values in []"
+        H2 "* Alternatives separated |"
+
+        H1 "Setup"
         HR
         H2 "-use <dir>                       set index location, in <dir>/_index, default current directory"
         H2 "-update                          create/refresh index"
         H2 "-headless                        enable most operations without a window manager (must be first argument)"
-        H2 "-about                           print system information"
-        H2 "-h|-help                         print help page"
-        H2 "-v|-version                      print version"
+        H2 "-about                           system information"
+        H2 "-h|-help                         help page"
+        H2 "-v|-version                      version"
+        H2 "-license|--license               show software license and attribution"
 
-        H1 "queries"
+        H1 "Queries"
         HR
         H2 "-dups                            exact duplicates using md5 hash"
         H2 "-dups-in <selector>              exact duplicates in subset"
@@ -63,7 +158,7 @@ static int printUsage(int argc, char** argv) {
         H2 "-similar-in <selector>           similar items within a subset"
         H2 "-similar-to <file>|<selector>    similar items to a file, directory, or subset, within entire index"
 
-        H1 "selections"
+        H1 "Selections"
         HR
         H2 "* select commands may be chained to append to the current selection"
         H2 "* operations on current selection may clear the selection (-group-by etc)"
@@ -79,15 +174,15 @@ static int printUsage(int argc, char** argv) {
         H2 "-select-files <file> [<file>]... ignore index, existing files of supported file types"
         H2 "-select-grid <file>              ignore index, detect a grid of thumbnails, break up into separate images"
 
-        H1 "filtering selection/results"
+        H1 "Filtering"
         HR
         H2 "-with <prop>[:<func>] <comparator>    remove items if comparator is false"
         H2 "-without <prop>[:<func>] <comparator> inversion of -with"
-        H2 "-first                                remove all but the first item"
+        H2 "-first                                keep only the first item"
         H2 "-chop                                 remove the first item"
         H2 "-first-sibling                        keep one item from each directory"
 
-        H1 "sorting/grouping selection/results"
+        H1 "Sorting/Grouping"
         HR
         H2 "-sort <prop>[:<func>]               sort ascending"
         H2 "-sort-rev <prop>[:<func>]           sort descending"
@@ -96,9 +191,9 @@ static int printUsage(int argc, char** argv) {
         H2 "-merge <selector> <selector>        merge two selections by similarity, into a new list, assuming first selection is sorted"
 
 
-        H1 "operations on selection/results"
+        H1 "Operations on Selection/Results"
         HR
-        H2 "-remove                            remove from the index"
+        H2 "-remove                            remove from the index (force re-indexing)"
         H2 "-nuke                              remove from index and move files to trash"
         H2 "-rename <find> <replace> [-vxp]    rename selection with find/replace, ignoring/preserving file extension"
         H2 "    v                              * verbose preview, show what didn't match and won't be renamed"
@@ -107,19 +202,18 @@ static int printUsage(int argc, char** argv) {
         H2 "-move <dir>                        move selection to another location in the index directory"
         H2 "-verify                            verify md5 sums"
 
-        H1 "viewing selection/results"
+        H1 "Viewing"
         HR
-        H2 "-groups                          enable group view, use existing groups from group-by/results"
         H2 "-folders                         enable group view, group results from the same parent directory"
         H2 "-sets                            enable group view, group results with the same pair of directories"
-        H2 "-exit-on-select                  select action on gui exits with index as exit code, < 0 if canceled"
-        H2 "-max-per-page <int>              select max items per page [10]"
+        H2 "-exit-on-select                  \"select\" action exits with selected index as exit code, < 0 if canceled"
+        H2 "-max-per-page <int>              maximum items on one page [10]"
         H2 "-show                            show results browser for the current selection/results"
 
 
-        H1 "miscellaneous"
+        H1 "Miscellaneous"
         HR
-        H2 "-qualityscore img                calc img quality score"
+        H2 "-qualityscore img                no-reference quality score"
         H2 "-simtest testfile                run automated matching test"
         H2 "-jpeg-repair-script <file>       script/program to repair truncated jpeg files (-verify) [~/bin/jpegfix.sh]"
         H2 "-compare-videos <file> <file>    open a pair of videos in compare tool"
@@ -130,11 +224,13 @@ static int printUsage(int argc, char** argv) {
         H2 "-vacuum                          compact/optimize database files"
 
 
-        H1 "search parameters (for -similar*)"
+        H1 "Search Parameters (for -similar*)"
         HR
         H2 "-p.<key> value                   set search parameters"
+        H2 "-p:<key> value                   (alternate)"
         H2 "*all values are integer (0=disable, 1=enable)"
         H2 "*default value in [ ]"
+        H2 "*must appear before -similar or other queries to take effect"
         H2 "*keys:"
         H3 "alg   search algorithm ([0]=dct,1=dctFeatures,2=cvFeatures,3=histogramHash,4=dctVideo)"
         H3 "  *dct            discrete cosine transform hash (scale)"
@@ -155,17 +251,19 @@ static int printUsage(int argc, char** argv) {
         H3 "qt    query types (CSV) [1]=image,2=video,3=audio"
         H3 "rt    result types (CSV) 1=image,2=video,3=audio [1,2]"
         H3 "vpad  frames to skip at start/end of videos from search [300]"
-        H3 "fg    filter-groups: remove duplicate groups {a,b}=={b,a} (same items with different order) [0]"
+        H3 "fg    filter-groups: remove duplicate groups {a,b}=={b,a} (same items with different order) [1]"
         H3 "fp    filter-parent: remove groups with all items in the same parent directory [0]"
         H3 "fs    filter-self: remove needle matching itself [1]"
         H3 "mg    merge-groups: merge n-connected groups (currently only 1 supported) [0]"
         H3 "eg    expand-groups: if a matches {b,c}, make two groups {a,b} and {a,c} [0]"
 
-        H1 "index parameters (for -update)"
+        H1 "Index Parameters (for -update)"
         HR
         H2 "-i.<key> value                  set index parameters"
+        H2 "-i:<key> value                  (alternate)"
         H2 "* all values are integers (0=disable, 1=enable)"
         H2 "* default value in [ ]"
+        H2 "* must appear before -update to take effect"
         H3 "rec    enable/disable recursive scan [1]"
         H3 "algos  enabled search algos mask [15]"
         H3 "crop   enable/disable border detection/cropping of video prior to indexing [1]"
@@ -175,9 +273,9 @@ static int printUsage(int argc, char** argv) {
         H3 "idxthr max thread count for index jobs (0==auto) [0]"
         H3 "ljf    video only: estimate job cost and process longest jobs first [1]"
         H3 "dry    enable dry-run, only show what would be updated [0]"
-        H3 "bsize  set size of database write batches to hide write latency [1024]"
+        H3 "bsize  size of database write batches to hide write latency [1024]"
 
-        H1 "definitions"
+        H1 "Definitions"
         HR
         H2 "<file>                          path to file"
         H2 "<dir>                           path to directory"
@@ -198,7 +296,7 @@ static int printUsage(int argc, char** argv) {
         H2 "    <template>                  - replace entire string, must contain at least one capture"
         H2 "    <string>                    - replace whole-words/strings, may not contain any capture"
         H2 "    #0 #1 .. #n                 - capture: the nth capture from <find>, #0 captures the entire string"
-        H2 "    %%1                         - special: the sequence number, with automatic zero-padding"
+        H2 "    %%1                          - special: the sequence number, with automatic zero-padding"
         H2 "    {arg:<func>[:<func>]...}    - special: transform arg (after capture/special expansion) with function(s)"
         H2 "<binop>                         logical operators for expressions (comparator)"
         H2 "    ==                          - equal to"
@@ -212,11 +310,28 @@ static int printUsage(int argc, char** argv) {
         H2 "    [<binop>]<string>           - compare using operator, string is converted to value's type"
         H2 "    ~null                       - tests if value is null/missing vs empty"
         H2 "<prop>                          item property for sorting, grouping, filtering"
+        H2 "    id                          - unique id"
+        H2 "    isValid                     - 1 if id != 0"
+        H2 "    md5                         - checksum"
+        H2 "    type                        - 1=image,2=video,3=audio"
         H2 "    path                        - file path"
+        H2 "    parentPath                  - parent path (dirpath)"
         H2 "    name                        - file name"
-        H2 "    archive                     - archive/zip path"
-        H2 "    type                        - 1==image,2==video,3==audio"
-        H2 "    res                         - maximum width/height"
+        H2 "    archivePath                 - archive/zip path, or empty"
+        H2 "    suffix                      - file suffix"
+        H2 "    isArchived                  - 1 if archive member"
+        H2 "    archiveCount                - number of archive members"
+
+        H2 "    contentType                 - mime content type"
+        H2 "    width                       - pixel width"
+        H2 "    height                      - pixel height"
+        H2 "    resolution                  - width*height"
+        H2 "    res                         - max of width, height"
+        H2 "    compressionRatio            - resolution / file size"
+
+        H2 "    score                       - match score"
+        H2 "    matchFlags                  - match flags (Media::matchFlags)"
+
         H2 "    exif:<tag1[,tagN]>          - comma-separated exif tags, first available tag is used (\"Exif.\" prefix optional)"
         H2 "                                  see: https://www.exiv2.org/tags.html"
         H2 "    ffmeta:<tag1[,tagN]         - comma-separated ffmpeg metadata tags, first available tag is used"
@@ -239,7 +354,7 @@ static int printUsage(int argc, char** argv) {
         H2 "    add,<integer>               - add integer arg to value"
         H2 "    pad,<integer>               - pad integer with zeros with argument width"
 
-        H1 "examples"
+        H1 "Examples"
         HR
         H2 "create index in cwd             cbird -update"
         H2 "find exact duplicates           cbird -update -dups -show"
@@ -251,11 +366,6 @@ static int printUsage(int argc, char** argv) {
         ,argv[0]
         );
 
-#undef BR
-#undef HR
-#undef H1
-#undef H2
-#undef H3
   // clang-format on
   return 0;
 }
@@ -279,13 +389,13 @@ int printCompletions(const char* argv0, const QStringList& args) {
   QStringList cmds;
 
   const QStringList noArgs{
-      "-update",      "-headless",       "-dups",          "-similar",
-      "-select-none", "-select-all",     "-select-errors", "-first",
-      "-chop",        "-first-sibling",  "-sort-similar",  "-remove",
-      "-nuke",        "-rename",         "-groups",        "-sets",
-      "-folders",     "-exit-on-select", "-show",          "-help",
-      "-version",     "-about",          "-verify",        "-vacuum",
-      "-select-result"};
+      "-update",         "-headless",      "-dups",          "-similar",
+      "-select-none",    "-select-all",    "-select-errors", "-first",
+      "-chop",           "-first-sibling", "-sort-similar",  "-remove",
+      "-nuke",           "-rename",        "-sets",          "-folders",
+      "-exit-on-select", "-show",          "-help",          "-version",
+      "-about",          "-verify",        "-vacuum",        "-select-result"
+      "-license"};
   cmds << noArgs;
 
   QStringList oneArg{"-select-id", "-select-type", "-select-sql",  "-sort",
@@ -324,8 +434,14 @@ int printCompletions(const char* argv0, const QStringList& args) {
 
   int cword = args.at(2).toInt() + 3;
 
+  // completions write to stdout so we cannot log there
+#ifdef DEBUG_COMPLETIONS
   QFile log(QDir::tempPath() + "/cbird-completions.log");
   Q_ASSERT(log.open(QFile::WriteOnly | QFile::Append));
+#else
+  QString log;
+#endif
+
   QDebug debug(&log);
   debug << args << "\n";
 
@@ -537,6 +653,10 @@ int main(int argc, char** argv) {
   int selectMode = MediaBrowser::SelectSearch;
   int maxPerPage = 10;  // max images on a page (when paging)
 
+  auto sqlEscapePath = [](const QString& path) {
+    return QString(path).replace("%", "\\%").replace("_", "\\_");
+  };
+
   // <selector>
   auto selectPath = [&](const QString& pathSpec) {
     QString path = pathSpec;
@@ -558,8 +678,7 @@ int main(int argc, char** argv) {
     } else {
       QFileInfo info(path);
       if (info.exists())
-        path = info.absoluteFilePath().replace("%", "\\%").replace("_", "\\_") +
-               "%";
+        path = sqlEscapePath(info.absoluteFilePath()) + "%";
       else if (path.contains("/")) {
         QStringList parts = path.split("/");
 
@@ -571,13 +690,11 @@ int main(int argc, char** argv) {
         while (parts.count() > 0) {
           // check if we can form a valid path, remove user-escapes
           // (temporarily)
-          QString cand =
-              parts.join("/").replace("\\%", "%").replace("\\_", "_");
+          QString cand = sqlEscapePath(parts.join("/"));
 
           QFileInfo info(cand);
           if (info.exists()) {
-            path =
-                info.absoluteFilePath().replace("%", "\\%").replace("_", "\\_");
+            path = sqlEscapePath(info.absoluteFilePath());
             path += "/" + tail.join("/");
             break;
           }
@@ -589,8 +706,7 @@ int main(int argc, char** argv) {
       }
 
       // make relative to index, required since database stores relative path
-      const QString cwd =
-          QDir::currentPath().replace("%", "\\%").replace("_", "\\_");
+      const QString cwd = sqlEscapePath(QDir::currentPath());
       if (path.startsWith(cwd))
         path = path.mid(engine().db->path().length() + 1);
 
@@ -607,7 +723,6 @@ int main(int argc, char** argv) {
   };
 
   //    auto indexRelativePath = [&](const QString& path) {
-
   //        QString rel = path;
   //        QFileInfo info(rel);
   //        if (info.exists())
@@ -645,9 +760,10 @@ int main(int argc, char** argv) {
     arg = args.takeFirst();
 
     // clang-format off
-    if (arg.startsWith("-p.")) {
+    if (arg.startsWith("-p.") || arg.startsWith("-p:")) {
       const QString val = nextArg();
-      const QString key = arg.split(".")[1];
+      const QChar sep = arg[2];
+      const QString key = arg.split(sep)[1];
       int intVal = val.contains(",") ? 0 : intArg(val);
 
       if      (key == "dht") params.dctThresh = intVal;
@@ -682,9 +798,10 @@ int main(int argc, char** argv) {
         ::exit(1);
       }
     }
-    else if (arg.startsWith("-i.")) {
+    else if (arg.startsWith("-i.") || arg.startsWith("-i:")) {
       const int intVal = intArg(nextArg());
-      const QString key = arg.split(".")[1];
+      const QChar sep = arg[2];
+      const QString key = arg.split(sep)[1];
 
       // todo: implement all index params
       if      (key == "rec")   indexParams.recursive = intVal;
@@ -723,7 +840,6 @@ int main(int argc, char** argv) {
       QThreadPool::globalInstance()->setMaxThreadCount(
           QThread::idealThreadCount());
 
-      printf("\n\n");
     } else if (arg == "-about") {
       Scanner* sc = engine().scanner;
       Database* db = engine().db;
@@ -734,6 +850,7 @@ int main(int argc, char** argv) {
       qInfo("%s version %s, https://%s", qPrintable(app->applicationName()),
             qPrintable(app->applicationVersion()),
             qPrintable(app->organizationDomain()));
+      qInfo() << "build:" << buildFlags();
       qInfo() << "Qt" << qVersion() << "compiled:" << QT_VERSION_STR;
       qInfo() << "FFmpeg" << ff[0] << "compiled:" << ff[1];
       qInfo() << "OpenCV" << cv[0] << "compiled:" << cv[1];
@@ -747,11 +864,15 @@ int main(int argc, char** argv) {
       qInfo() << db->countType(Media::TypeImage) << "image files";
       qInfo() << db->countType(Media::TypeVideo) << "video files";
       qInfo() << db->countType(Media::TypeAudio) << "audio files";
+      qInfo() << "see -license for software license";
+
     } else if (arg == "-v" || arg == "-version" || arg == "--version") {
       qInfo() << app->applicationName() << app->applicationVersion();
+    } else if (arg == "-license" || arg == "--license") {
+      printLicense();
     } else if (arg == "-remove") {
-      qInfo() << "removing:";
-      Media::printGroup(selection);
+      qInfo() << "removing: " << selection.count() << "items";
+      //Media::printGroup(selection);
       engine().db->remove(selection);
     } else if (arg == "-dups") {
       queryResult = engine().db->dupsByMd5(params);
@@ -766,9 +887,6 @@ int main(int argc, char** argv) {
 
       QDir dir(path);
       if (!dir.exists()) qFatal("dup-nuke: specified dir does not exist");
-
-      if (DesktopHelper::trashDir(path).isEmpty())
-        qFatal("Trash directory unavailable. Is INDEX_TRASH_DIR environment a valid path?");
 
       path = dir.absolutePath();
 
@@ -806,10 +924,8 @@ int main(int argc, char** argv) {
     } else if (arg == "-nuke") {
 
       if (selection.count() > 0) {
-        if (DesktopHelper::trashDir(selection.at(0).path()).isEmpty())
-          qFatal("Trash directory unavailable. Is INDEX_TRASH_DIR environment a valid path?");
-
         qWarning() << "about to move" << selection.count() << "items to trash.";
+        qFlushOutput();
         printf("Proceed? Y/[N]: ");
         fflush(stdout);
         char ch = 'N';
@@ -865,7 +981,7 @@ int main(int argc, char** argv) {
             IndexParams tmp = indexParams;
             tmp.retainImage = true;
             tmp.autocrop = true;
-            tmp.algos = IndexParams::AlgoDct;
+            tmp.algos = 1 << SearchParams::AlgoDCT;
 
             scanner->setIndexParams(tmp);
 
@@ -972,7 +1088,14 @@ int main(int argc, char** argv) {
 
         int i = 1;
         for (auto& w : work) {
-          w.waitForFinished();
+          try {
+            w.waitForFinished();
+          }
+          catch(std::exception& e) {
+            qCritical("exception: %s", e.what());
+            w.waitForFinished();
+          }
+
           search = w.result();
 
           // note: engine.query(db.similarTo) already filtered groups
@@ -982,8 +1105,7 @@ int main(int argc, char** argv) {
             list.append(search.matches);
           }
 
-          printf("similar-to: %d/%d         \r", ++i, work.count());
-          fflush(stdout);
+          qInfo("similar-to:<PL> %d/%d", ++i, work.count());
         }
         engine().db->filterMatches(params, list);
 
@@ -1264,12 +1386,10 @@ int main(int argc, char** argv) {
             m.setAttribute("filter", ":yes");
         });
         while (future.isRunning()) {
-          printf("filtering selection %d/%d    \r", future.progressValue(),
+          qInfo("filtering selection:<PL> %d/%d", future.progressValue(),
                  future.progressMaximum());
-          fflush(stdout);
           QThread::msleep(100);
         }
-        printf("\n\n");
 
         MediaGroup tmp;
         for (Media& m : selection) {
@@ -1292,12 +1412,10 @@ int main(int argc, char** argv) {
         });
 
         while (future.isRunning()) {
-          printf("filtering result %d/%d    \r", future.progressValue(),
+          qInfo("filtering result:<PL> %d/%d", future.progressValue(),
                  future.progressMaximum());
-          fflush(stdout);
           QThread::msleep(100);
         }
-        printf("\n\n");
 
         MediaGroupList tmp;
         for (auto& g : queryResult) {
@@ -1339,7 +1457,7 @@ int main(int argc, char** argv) {
         selection = fn(selection);
     } else if (arg == "-sort" || arg == "-sort-rev") {
       const QString sortKey = nextArg();
-      // pre-compute properties so sort doesn't duplicate
+      // pre-compute property values and cache them
       auto getValue = Media::propertyFunc(sortKey);
       auto future = QtConcurrent::map(selection, getValue);
       future.waitForFinished();
@@ -1358,9 +1476,8 @@ int main(int argc, char** argv) {
         auto f = work.front();
         f.waitForFinished();
         work.pop_front();
-        printf("group-by: %d/%d     \r", selection.count() - work.count(),
+        qInfo("group-by:<PL> %d/%d", selection.count() - work.count(),
                selection.count());
-        fflush(stdout);
 
         const QString key = f.result().toString();
 
@@ -1638,7 +1755,8 @@ int main(int argc, char** argv) {
             if (!Media(path).isArchived()) {
               path = path.replace("\"", "\\\"");
               QString cmd = QString("%s \"%1\"").arg(jpegFixPath).arg(path);
-              (void)system(qPrintable(cmd));
+              if (0 != system(qPrintable(cmd)))
+                qWarning() << "jpeg repair script failed";
             }
           }
       }
@@ -1727,7 +1845,7 @@ int main(int argc, char** argv) {
           numFrames = 0;
         }
       }
-    } else if (arg == "-videotest") {
+    } else if (arg == "-test-video") {
       VideoContext vc;
       VideoContext::DecodeOptions opt;
       // settings used by indexer, maybe higher hit rate
@@ -1772,8 +1890,6 @@ int main(int argc, char** argv) {
 
       continue;
 #endif
-
-#if 1
 
 #define USE_THREADS 1
 
@@ -1857,8 +1973,9 @@ int main(int argc, char** argv) {
             // printf("%d %d\n", range.srcIn, range.dstIn);
           }
 
+          qFlushOutput();
           printf("%c", status);
-          fflush(stdout);
+          //fflush(stdout);
 #if USE_THREADS
         }
 #endif
@@ -1892,13 +2009,14 @@ int main(int argc, char** argv) {
 
       std::sort(rangeError.begin(), rangeError.end());
 
+      qFlushOutput();
+
       printf("\nframes=%d found=%.3f%% poor=%.3f%% bad=%.3f%% none=%.3f%%\n",
              frames, found * 100.0 / frames, poor * 100.0 / frames,
              bad * 100.0 / frames, none * 100.0 / frames);
       printf("range error (frames): mean=%.3f, min=%d, max=%d, median=%d\n\n",
              double(sumDistance) / (found + poor), minDistance, maxDistance,
              rangeError[rangeError.length() / 2]);
-#endif
     } else if (arg == "-test-update") {
       QDialog* d = new QDialog();
       QPushButton* b = new QPushButton(d);
@@ -1941,6 +2059,10 @@ int main(int argc, char** argv) {
       delete d;
     } else {
       qCritical("unknown argument=%s", qPrintable(arg));
+#ifdef Q_OS_WIN
+      if (arg == "-p" || arg == "-i")
+        qWarning() << "in PowerShell you must use -p: / -i: ";
+#endif
       return 1;
     }
   }

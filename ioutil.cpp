@@ -1,3 +1,23 @@
+/* Utilties for reading/writing files
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "ioutil.h"
 
 QCancelableIODevice::QCancelableIODevice(QIODevice *io, QFuture<void>* future)
@@ -68,29 +88,45 @@ void loadBinaryData(const QString& path, void** data, uint64_t* len,
   *data = nullptr;
   *len = 0;
 
-  QFile f(path);
-  f.open(QFile::ReadOnly);
-  QByteArray b = (f.readAll());
-  if (compress) b = qUncompress(b);
+  try {
+    QFile f(path);
+    f.open(QFile::ReadOnly);
 
-  void* ptr = malloc(size_t(b.size()));
-  memcpy(ptr, b.data(), size_t(b.size()));
+    if (compress) {
+      QByteArray b = (f.readAll());
+      if (compress) b = qUncompress(b);
+      void* ptr = malloc(size_t(b.size()));
+      if (!ptr) throw std::bad_alloc();
+      memcpy(ptr, b.data(), size_t(b.size()));
+      *data = ptr;
+      *len = size_t(b.size());
+    }
+    else {
+      qint64 size = f.size();
+      char* ptr = strict_malloc(ptr, size);
+      if (!ptr) throw std::bad_alloc();
+      if (size != f.read(ptr, size))
+        qFatal("failed to read file %d: %s",
+               f.error(), qPrintable(f.errorString()));
+      *data = ptr;
+      *len = size;
+    }
 
-  *data = ptr;
-  *len = size_t(b.size());
-
-  f.close();
+  } catch (std::bad_alloc &e) {
+    // could be from QByteArray or malloc
+    qFatal("bad_alloc");
+  }
 }
 
 void saveBinaryData(const void* data, uint64_t len, const QString& path,
                     bool compress) {
   QFile f(path);
-  f.open(QFile::WriteOnly | QFile::Truncate);
+  bool isOpen = f.open(QFile::WriteOnly | QFile::Truncate);
+  Q_ASSERT(isOpen);
   QByteArray b =
       QByteArray::fromRawData(reinterpret_cast<const char*>(data), int(len));
   if (compress) b = qCompress(b);
   f.write(b);
-  f.close();
 }
 
 QString fullMd5(QIODevice& io) {

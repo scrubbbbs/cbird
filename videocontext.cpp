@@ -1,3 +1,23 @@
+/* Video decoding and metadata
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "videocontext.h"
 
 extern "C" {
@@ -11,6 +31,13 @@ extern "C" {
 #include "opencv2/imgproc/imgproc.hpp"
 
 #include <unistd.h> // getcwd
+
+#define AV_CRITICAL(x) \
+  qCritical() << _path << ":" << x << Qt::hex << err << avErrorString(err)
+#define AV_WARNING(x) \
+  qWarning() << _path << ":" << x
+#define AV_DEBUG(x) \
+  qDebug() << _path << ":" << x
 
 static QString avErrorString(int err) {
   char str[AV_ERROR_MAX_STRING_SIZE] = {0};
@@ -182,14 +209,14 @@ QImage VideoContext::frameGrab(const QString& path, int frame, bool fast) {
 
   QImage img;
 
-  // note: hardware decoder is much slower to open
+  // note: hardware decoder is much slower to open, not worthwhile
   // todo: system configuration for grab location
   VideoContext video;
   if (0 == video.open(path, options)) {
     const auto md = video.metadata();
     const int maxFrame = int(md.frameRate * float(md.duration));
     if (frame >= maxFrame) {
-      qWarning() << path << ": seek frame out of range:" << frame << ", using auto";
+      qWarning() << path << ": seek frame out of range :" << frame << ", using auto";
       frame = -1;
     }
     if (frame < 0) {
@@ -206,9 +233,7 @@ QImage VideoContext::frameGrab(const QString& path, int frame, bool fast) {
       ok = video.seek(frame);
 
     if (ok) video.nextFrame(img);
-  } else
-    qWarning("VideoContext::grabFrame: failed to open: %s", qPrintable(path));
-
+  }
   return img;
 }
 
@@ -244,12 +269,13 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   _p->format = avformat_alloc_context();
   Q_ASSERT(_p->format);
 
+  // set context to log source of errors
   const QString fileName = QFileInfo(_path).fileName();
   avLoggerSetFileName(_p->format, fileName);
 
-  if (avformat_open_input(&_p->format, qPrintable(_path), nullptr, nullptr) <
-      0) {
-    qCritical("%s: Cannot open input", qPrintable(_path));
+  int err = 0;
+  if ((err=avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, nullptr)) < 0) {
+    AV_CRITICAL("cannot open input");
     avLoggerUnsetFileName(_p->format);
     return -1;
   }
@@ -274,8 +300,9 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   avformat_close_input(&_p->format);
   avLoggerUnsetFileName(_p->format);
 
+  err=0;
   if (_firstPts == AV_NOPTS_VALUE) {
-    qCritical("%s: No PTS was found", qPrintable(_path));
+    AV_CRITICAL("no PTS was found");
     return -1;
   }
 
@@ -283,17 +310,17 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   Q_ASSERT(_p->format);
   avLoggerSetFileName(_p->format, fileName);
 
-  if (avformat_open_input(&_p->format, qPrintable(_path), nullptr, nullptr) <
+  if ((err=avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, nullptr)) <
       0) {
-    qCritical("%s: Cannot open input", qPrintable(_path));
+    AV_CRITICAL("cannot reopen input");
     avLoggerUnsetFileName(_p->format);
     return -1;
   }
 
   avLoggerSetFileName(_p->format, fileName);
 
-  if (avformat_find_stream_info(_p->format, nullptr) < 0) {
-    qCritical("%s: Cannot find stream info", qPrintable(_path));
+  if ((err=avformat_find_stream_info(_p->format, nullptr)) < 0) {
+    AV_CRITICAL("cannot find stream info");
     avLoggerUnsetFileName(_p->format);
     return -2;
   }
@@ -315,6 +342,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
       AVCodec* vCodec = avcodec_find_decoder(context->codec_id);
       if (vCodec) _metadata.videoCodec = vCodec->name;
+
     } else if (context->codec_type == AVMEDIA_TYPE_AUDIO) {
       _metadata.isEmpty = false;
       _metadata.audioBitrate = int(context->bit_rate);
@@ -341,8 +369,9 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     }
   }
 
+  err=0;
   if (videoStreamIndex < 0) {
-    qCritical("%s: Cannot find video stream", qPrintable(_path));
+    AV_CRITICAL("cannot find video stream");
     avLoggerUnsetFileName(_p->format);
     return -3;
   }
@@ -368,8 +397,8 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       if (*fmt++ == _p->context->pix_fmt) supported = true;
 
     if (!supported) {
-      qDebug("%s: unsupported pixel format for hw codec %s", qPrintable(_path),
-             qPrintable(av_pix_fmt_desc_get(_p->context->pix_fmt)->name));
+      qDebug() << _path << ": unsupported pixel format for hw codec :"
+               << av_pix_fmt_desc_get(_p->context->pix_fmt)->name;
       tryHardware = false;
     }
   }
@@ -391,7 +420,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
     for (int i = 0; codecs[i].id; i++)
       if (codecs[i].id == _p->context->codec_id) {
-        qDebug("%s: trying hw codec '%s'", qPrintable(_path), codecs[i].name);
+        qDebug() << _path << ": trying hw codec :" << codecs[i].name;
         _p->codec = avcodec_find_decoder_by_name(codecs[i].name);
         break;
       }
@@ -399,11 +428,11 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
   AVDictionary* codecOptions = nullptr;
   if (!_p->codec) {
-    if (tryHardware) qDebug("%s: no hw codec, trying sw", qPrintable(_path));
+    if (tryHardware) AV_DEBUG("no hw codec, trying sw");
 
     _p->codec = avcodec_find_decoder(_p->context->codec_id);
     if (!_p->codec) {
-      qWarning("%s: no codec found", qPrintable(_path));
+      AV_WARNING("no codec found");
       avLoggerUnsetFileName(_p->format);
       avLoggerUnsetFileName(_p->context);
       return -4;
@@ -415,7 +444,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
         QString(_p->codec->name).endsWith("cuvid")) {
       // enable hardware scaler
       QString size = QString("%1x%2").arg(opt.maxW).arg(opt.maxH);
-      qInfo() << "using gpu scaler@" << size;
+      qInfo() << _path << ": using gpu scaler@" << size;
       av_dict_set(&codecOptions, "resize", qPrintable(size), 0);
       _isHardwareScaled = true;
     }
@@ -438,27 +467,26 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     //        _p->context->execute2 = avExecute2;
   }
 
-  if (avcodec_open2(_p->context, _p->codec, &codecOptions) < 0) {
+  if ((err=avcodec_open2(_p->context, _p->codec, &codecOptions)) < 0) {
     if (_isHardware) {
-      qWarning("%s: could not open hardware codec, trying software",
-               qPrintable(_path));
+      AV_WARNING("could not open hardware codec, trying software");
       _isHardware = false;
       _p->codec = avcodec_find_decoder(_p->context->codec_id);
       if (!_p->codec) {
-        qWarning("%s: no codec found", qPrintable(_path));
+        AV_WARNING("no codec found");
         avLoggerUnsetFileName(_p->format);
         avLoggerUnsetFileName(_p->context);
         return -4;
       }
 
-      if (avcodec_open2(_p->context, _p->codec, nullptr) < 0) {
-        qCritical("%s: could not open fallback codec", qPrintable(_path));
+      if ((err=avcodec_open2(_p->context, _p->codec, nullptr)) < 0) {
+        AV_CRITICAL("could not open fallback codec");
         avLoggerUnsetFileName(_p->format);
         avLoggerUnsetFileName(_p->context);
         return -5;
       }
     } else {
-      qCritical("%s: could not open codec", qPrintable(_path));
+      AV_CRITICAL("could not open codec");
       avLoggerUnsetFileName(_p->format);
       avLoggerUnsetFileName(_p->context);
       return -5;
@@ -466,12 +494,13 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   }
 
   qDebug("%s: using %d threads (requested %d) active_type=%d",
-         qPrintable(_path), _p->context->thread_count, _numThreads,
+         qUtf8Printable(_path), _p->context->thread_count, _numThreads,
          _p->context->active_thread_type);
 
   _p->frame = av_frame_alloc();
   if (!_p->frame) {
-    qCritical("%s: Could not allocate video frame", qPrintable(_path));
+    err=0;
+    AV_CRITICAL("could not allocate video frame");
     avLoggerUnsetFileName(_p->format);
     avLoggerUnsetFileName(_p->context);
     return -6;
@@ -491,13 +520,13 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   // avLoggerSetFileName(_p->codec, "codec-name");
   // avLoggerSetFileName(_p->videoStream, "stream-name");
 
-  //    printf("_metadata.title=%s\n", qPrintable(_metadata.title));
+  //    printf("_metadata.title=%s\n", qUtf8Printable(_metadata.title));
   //    printf("_metadata.duration=%d\n", _metadata.duration);
   //
   //    printf("_metadata.frameRate=%.2f\n", _metadata.frameRate);
   //    printf("_metadata.frameSize=%dx%d\n", _metadata.frameSize.width(),
   //    _metadata.frameSize.height()); printf("_metadata.videoCodec=%s\n",
-  //    qPrintable(_metadata.videoCodec)); printf("_metadata.videoBitrate=%d\n",
+  //    qUtf8Printable(_metadata.videoCodec)); printf("_metadata.videoBitrate=%d\n",
   //    _metadata.videoBitrate);
   //
   //    printf("_metadata.audioCodec=%s\n", qPrintable(_metadata.audioCodec));
@@ -535,7 +564,7 @@ void VideoContext::close() {
 }
 
 bool VideoContext::seekDumb(int frame) {
-  qWarning("%s: seek dumb: %d", qPrintable(_path), frame);
+  AV_WARNING("seek dumb decodes all frames");
   QImage tmp;
   while (frame--)
     if (!decodeFrame()) return false;
@@ -557,14 +586,14 @@ bool VideoContext::seekFast(int frame) {
 
   const int64_t targetTS = int64_t(floor(startSeconds / tb + 0.5)) + _firstPts;
 
-  qDebug("seek frame=%d time=%.2f tb=(%" PRIi64 ")", frame, startSeconds,
+  qDebug("frame=%d time=%.2f tb=(%" PRIi64 ")", frame, startSeconds,
          targetTS);
 
   // seek <= where we want to go
   int err = av_seek_frame(_p->format, _p->videoStream->index, targetTS,
                           AVSEEK_FLAG_BACKWARD);
   if (err < 0) {
-    qWarning() << _path << "seek error" << err;
+    qWarning() << _path << ": seek error :" << err;
     return false;
   }
 
@@ -595,7 +624,7 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
 
   const int64_t targetTS = int64_t(floor(startSeconds / tb + 0.5)) + _firstPts;
 
-  qDebug("%s: seek: frame=%d time=%.2f tb=(%" PRIi64 ")", qPrintable(_path),
+  qDebug("%s: seek: frame=%d time=%.2f tb=(%" PRIi64 ")", qUtf8Printable(_path),
          frame, startSeconds, targetTS);
 
   if (startSeconds / tb > _firstPts) {
@@ -621,11 +650,11 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
 
         isKeyframe = _p->packet.flags & AV_PKT_FLAG_KEY;
         if (!isKeyframe)
-          qWarning("%s: seek: not a keyframe", qPrintable(_path));
+          AV_WARNING("not a keyframe");
 
         err = avcodec_send_packet(_p->context, &_p->packet);
         if (err != 0) {
-          qWarning("%s: seek: send_packet error %d", qPrintable(_path), err);
+          AV_WARNING("send_packet error") << Qt::hex << err;
           break;
         }
 
@@ -635,11 +664,10 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
       tries++;
 
       if (tries > 1)
-        qWarning("%s: seek try loop: try=%d", qPrintable(_path), tries);
+        AV_WARNING("try loop: try=") << tries;
 
       if (tries > 10) {
-        qWarning("%s: seek: failed to seek after 10 attempts, seeking dumbly",
-                 qPrintable(_path));
+        AV_WARNING("failed after 10 attempts, seeking dumb");
         close();
         open(_path, opt);
         seekDumb(frame);
@@ -653,7 +681,7 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
 
   _consumed = 0;
   int framesLeft = frame - framesSeeked;
-  qDebug("%s: seek: decoding %d frames", qPrintable(_path), framesLeft);
+  AV_DEBUG("decoding frames :") << framesLeft;
 
   while (framesLeft--)
     if (decodeFrame()) {
@@ -667,13 +695,13 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
           avImgToQImg(_p->scaled.data, _p->scaled.linesize, w, h, tmp, AVPixelFormat(fmt));
           decoded->append(tmp);
         } else
-          qWarning("%s: seek: failed to convert frame", qPrintable(_path));
+          AV_WARNING("failed to convert frame");
       }
     } else {
       // no longer valid since we couldn't get the target
       if (decoded) decoded->clear();
 
-      qWarning("%s: seek: failure", qPrintable(_path));
+      AV_WARNING("decode failed, giving up");
       return false;
     }
 
@@ -687,13 +715,12 @@ bool VideoContext::readPacket() {
     int err = av_read_frame(_p->format, &_p->packet);
     if (err < 0) {
       if (err != AVERROR_EOF)
-        qCritical("%s: av_read_frame error: %s", qPrintable(_path),
-                  qPrintable(avErrorString(err)));
+        AV_CRITICAL("av_read_frame");
       return false;
     }
 
     if (_p->packet.flags & AV_PKT_FLAG_CORRUPT)
-      qWarning("%s: Corrupt packet", qPrintable(_path));
+      AV_WARNING("corrupt packet");
 
   } while (_p->packet.stream_index != _p->videoStream->index);
 
@@ -706,11 +733,10 @@ bool VideoContext::decodeFrame() {
     if (err == 0) return true;
 
     if (err == AVERROR_EOF) {
-      qDebug("%s: avcodec_receive_frame eof", qPrintable(_path));
+      AV_DEBUG("avcodec_receive_frame eof");
       break;
     } else if (err != AVERROR(EAGAIN)) {
-      qCritical("%s: avcodec_receive_frame error 0x%x: %s", qPrintable(_path),
-                err, qPrintable(avErrorString(err)));
+      AV_CRITICAL("avcodec_receive_frame");
       break;
     }
 
@@ -722,7 +748,7 @@ bool VideoContext::decodeFrame() {
       }
 
       if (_p->packet.size == 0) {
-        qCritical("%s: Empty packet, giving up", qPrintable(_path));
+        AV_CRITICAL("empty packet, giving up");
         break;
       }
 
@@ -730,12 +756,11 @@ bool VideoContext::decodeFrame() {
 
       err = avcodec_send_packet(_p->context, &_p->packet);
       if (err != 0)
-        qWarning("%s: avcodec_send_packet error 0x%x : %s", qPrintable(_path),
-                 err, qPrintable(avErrorString(err)));
+        AV_CRITICAL("avcodec_send_packet");
     }
     else {
       // attempt to prevent hang when seeking near the eof
-      qWarning() << "resending null packet, might hang here";
+      AV_WARNING("resending null packet, might hang here");
       avcodec_send_packet(_p->context, nullptr);
     }
   }
@@ -743,7 +768,7 @@ bool VideoContext::decodeFrame() {
   return false;
 }
 
-QVariantList VideoContext::readMetaData(const QString& path,
+QVariantList VideoContext::readMetaData(const QString& _path,
                                         const QStringList& keys) {
   AVFormatContext* format = nullptr;
 
@@ -753,17 +778,17 @@ QVariantList VideoContext::readMetaData(const QString& path,
   format = avformat_alloc_context();
   Q_ASSERT(format);
 
-  const QString fileName = QFileInfo(path).fileName();
+  const QString fileName = QFileInfo(_path).fileName();
   avLoggerSetFileName(format, fileName);
-
-  if (avformat_open_input(&format, qPrintable(path), nullptr, nullptr) < 0) {
-    qCritical("%s: Cannot open input", qPrintable(path));
+  int err = 0;
+  if ((err = avformat_open_input(&format, qUtf8Printable(_path), nullptr, nullptr)) < 0) {
+    AV_CRITICAL("cannot open input");
     avLoggerUnsetFileName(format);
     return values;
   }
 
   if (!format->metadata) {
-    qWarning("%s: No metadata", qPrintable(path));
+    AV_WARNING("no metadata");
     avLoggerUnsetFileName(format);
     return values;
   }
@@ -797,12 +822,12 @@ bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
 
     if (_p->scaler == nullptr) {
       if (!av_pix_fmt_desc_get(AVPixelFormat(_p->frame->format))) {
-        qCritical("%s: error while decoding: invalid pixel format in AVFrame",
-                  qPrintable(_path));
+        int err = 0;
+        AV_CRITICAL("invalid pixel format in AVFrame");
         return false;
       }
 
-      qInfo() << _path << "scaling from: "
+      qDebug() << _path << "scaling from: "
               << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
               << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height)
               << "to:" << av_get_pix_fmt_name(AVPixelFormat(fmt))
@@ -851,8 +876,8 @@ void VideoContext::avLogger(void* ptr, int level, const char* fmt, va_list vl) {
     fileName = names[ptr];
   else {
     char path[PATH_MAX+1]={0};
-    getcwd(path, sizeof(path));
-    fileName = QString("cwd={") + path + "}";
+    if (getcwd(path, sizeof(path)))
+      fileName = QString("cwd={") + path + "}";
   }
 
   char buf[1024] = {0};
@@ -986,7 +1011,7 @@ float VideoContext::aspect() const {
   float aspect = float(av_q2d(
       av_guess_sample_aspect_ratio(_p->format, _p->videoStream, _p->frame)));
   if (aspect == 0.0f) {
-    qWarning() << _path << ": unable to guess SAR, assuming 1.0";
+    AV_WARNING("unable to guess SAR, assuming 1.0");
     aspect = 1.0f;
   }
   return aspect;

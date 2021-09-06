@@ -1,9 +1,29 @@
+/* Side-by-side Video Display
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "videocomparewidget.h"
 
 #include <inttypes.h>
 
-#include "qtutil.h"
-#include "cimgops.h"
+#include "../qtutil.h"
+#include "../cimgops.h"
 
 /// decode one frame in a thread
 static bool loadFrameFunc(VideoContext* context, QImage* outImg) {
@@ -302,7 +322,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
   const VideoContext::Metadata& rmd = _rightFrames->ctx().metadata();
 
   QString leftText = QString::asprintf(
-      "%s<br/>%s<br/>%dx%d (%.2f) %.2f<br/>In:[%d%+d] "
+      "<div class=\"default\">%s<br/>%s<br/>%dx%d (%.2f) %.2f<br/>In:[%d%+d] "
       "Out:[%d]<br/>Hash:%" PRIx64 "",
       qPrintable(_leftLabel), qPrintable(lmd.toString(true)), leftImage.width(),
       leftImage.height(), _leftFrames->ctx().aspect(), _leftFrames->ctx().fps(),
@@ -311,7 +331,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
       leftFrame.hash);
 
   QString rightText = QString::asprintf(
-      "%s<br/>%s<br/>%dx%d (%.2f) %.2f <br/>In:[%d] Out:[%d]<br/>Hash:%" PRIx64
+      "<div class=\"default\">%s<br/>%s<br/>%dx%d (%.2f) %.2f <br/>In:[%d] Out:[%d]<br/>Hash:%" PRIx64
       " (%d)",
       qPrintable(_rightLabel), qPrintable(rmd.toString(true)),
       rightImage.width(), rightImage.height(), _rightFrames->ctx().aspect(),
@@ -328,6 +348,9 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
     leftText.append("(" + leftImage.text("description") + ")");
     rightText.append("(" + rightImage.text("description") + ")");
   }
+
+  leftText += "</div>";
+  rightText += "</div>";
 
   QRect geom = this->geometry();
 

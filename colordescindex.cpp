@@ -1,3 +1,23 @@
+/* Index for similar-color search
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "colordescindex.h"
 #include "profile.h"
 
@@ -138,20 +158,14 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath,
     else {
       // this should not happen anymore since addRecords() prevents it
       empty++;
-      //memset(_descriptors + i, 0, sizeof(ColorDescriptor));
       _descriptors[i].clear();
       qWarning("no color desc for id %d, correct by re-indexing", _mediaId[i]);
     }
     i++;
 
-    if (i % 20000 == 0) {
-      printf("ColorDescIndex::load: query: %d\r", i);
-      fflush(stdout);
-    }
+    if (i % 20000 == 0) qInfo("sql query:<PL>%d", i);
 
   } while (query.next());
-
-  printf("\n");
 
   uint64_t end = nanoTime();
   qInfo("%d descriptors, %d empty, %dms", _count, empty,

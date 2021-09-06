@@ -1,3 +1,23 @@
+/* Directory scanning and indexing
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #pragma once
 
 #include "media.h"
@@ -5,23 +25,11 @@
 /// settings to control scanning/indexing
 class IndexParams {
  public:
-  /// available search algorithms
-  /// @note to speed up scanning, some may be disabled
-  enum {
-    AlgoDct = 1,           // dct hash
-    AlgoColor = 2,         // color histogram
-    AlgoDctFeatures = 4,   // dct hash around features
-    AlgoCvFeatures = 8,    // opencv descriptor of features
-    AlgoVideo = 16,        // dct hash of video frames
-    AlgoFeatures = 8 + 4,  // all indexes that utilize features
-    AlgoAll = 0xFFFF
-  };
-
   /// indexable types
   /// @note to speed up scanning, types can be disabled
   enum { TypeImage = 1, TypeVideo = 2, TypeAudio = 4, TypeAll = 0xF };
 
-  int algos = AlgoAll;          // enabled search algorithms
+  int algos = 0xFFFFFFF;        // enabled search algorithms
   int types = TypeAll;          // enabled media types
   bool recursive = true;        // scan subdirs
   bool autocrop = true;         // detect and crop borders prior to processing
@@ -208,7 +216,7 @@ class Scanner : public QObject {
   // separate pools to manage number of threads used
   QThreadPool _gpuPool;
   QThreadPool _videoPool;
-  QThreadPool _imagePool;
+  //QThreadPool _imagePool;
 
   QString _topDirPath;
   int _existingFiles, _ignoredFiles;

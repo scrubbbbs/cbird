@@ -1,3 +1,23 @@
+/* Index for cropped images
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "dctfeaturesindex.h"
 #include "ioutil.h"
 #include "profile.h"
@@ -95,10 +115,10 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
     _tree = new HammingTree;
 
     if (!stale) {
-      qInfo("from cache");
+      qDebug("from cache");
       _tree->read(qPrintable(cacheFile));
     } else {
-      qInfo("from db");
+      qDebug("from db");
 
       int numHashes = 0;
       std::vector<HammingTree::Value> values;
@@ -129,17 +149,13 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
           _tree->insert(values);
           values.clear();
 
-          printf("DctFeaturesIndex::load: query: %d \t%dms\t%.2fGB\r",
+          qInfo("sql query:<PL> %d %dms %.2fGB",
                  numHashes, int(QDateTime::currentMSecsSinceEpoch() - then),
                  numHashes* int(sizeof(HammingTree::Value)) / 1000000000.0);
-          fflush(stdout);
         }
       }
-      printf("\n");
-
       _tree->insert(values);
       values.clear();
-
       _tree->write(qPrintable(cacheFile));
     }
 
@@ -157,8 +173,8 @@ void DctFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
   const QString cacheFile = cachePath + "/dctfeatures.cache";
 
   if (DBHelper::isCacheFileStale(db, cacheFile)) {
-    printf("DctFeaturesIndex::save\n");
-    _tree->write(qPrintable(cacheFile));
+    qDebug() << "write" << cacheFile;
+    _tree->write(qUtf8Printable(cacheFile));
   }
 }
 
@@ -222,7 +238,7 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& x,
      _tree->findIndex(x.id(), hashes);
 
     if (hashes.size() <= 0) {
-      qWarning() << "no keypoint hashes for" << x.id() << x.path();
+      qWarning() << "no hashes for needle id" << x.id() << x.path();
       return QVector<Index::Match>();
     }
   }

@@ -1,6 +1,6 @@
 #include "mediafilterwidget.h"
 #include "mediagrouptablewidget.h"
-#include "qtutil.h"
+#include "../qtutil.h"
 
 MediaFilterWidget::MediaFilterWidget(QWidget* parent) : QWidget(parent)
 {

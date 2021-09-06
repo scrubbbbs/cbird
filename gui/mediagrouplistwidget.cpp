@@ -1,27 +1,48 @@
+/* Grid display for list of MediaGroup (search results)
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "mediagrouplistwidget.h"
-#include "../lib/jpegquality.h"
-#include "database.h"
-#include "env.h"
-#include "ioutil.h"
 #include "mediafolderlistwidget.h"
-#include "profile.h"
-#include "qtutil.h"
-#include "templatematcher.h"
 #include "videocomparewidget.h"
-#include "videocontext.h"
-#include "cimgops.h"
+
+#include "../lib/jpegquality.h"
+#include "../database.h"
+#include "../env.h"
+#include "../ioutil.h"
+#include "../profile.h"
+#include "../qtutil.h"
+#include "../templatematcher.h"
+#include "../videocontext.h"
+#include "../cimgops.h"
 
 #include <memory>
 
-#define LW_MIN_FREE_MEMORY_KB (1024*1024)
+#define LW_MIN_FREE_MEMORY_KB (256*1024)
 #define LW_MAX_CACHED_ROWS (5)
 
 #define LW_PAN_STEP (10.0)
 #define LW_ZOOM_IN_STEP (0.9)
 #define LW_ZOOM_OUT_STEP (1.1)
 
-#define FW_ICON_SIZE (200) // folder list view icon size
-#define LW_WM_ICON_SIZE (128) // size of window/application icon
+#define FW_ICON_SIZE (200)    // folder list view icon size
+//#define LW_WM_ICON_SIZE (128) // size of window/application icon
 
 #define LW_ITEM_SPACING (8)
 #define LW_ITEM_MIN_IMAGE_HEIGHT (16)  // do not draw image below this
@@ -614,9 +635,8 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
     setCurrentIndex(model()->index(row, 0));
   }
 
-  // estimate height of item info text; must be accurate
-  // for optimial layout
-  if (count() > 0){
+  // info text height must be accurate for reliable layout
+  if (count() > 0) {
     QImage qImg(640, 480, QImage::Format_RGB32);
 
     const auto green = qRgb(0,0,255);
@@ -635,9 +655,15 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 //    label->setPixmap(QPixmap::fromImage(qImg));
 //    label->show();
 
-    qInfo() << "estimated text height:" << y;
+    qDebug() << "estimated text box height:" << y;
     _itemDelegate->setTextHeight(y);
   }
+
+  connect(&_updateTimer, &QTimer::timeout, [&]() {
+    _updateTimer.stop();
+    if (_updateTimer.property("row").toInt() != _currentRow) return;
+    this->updateItems();
+  });
 
   connect(this, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this,
           SLOT(openAction()));
@@ -991,6 +1017,8 @@ void MediaGroupListWidget::loadMedia(int row) {
     return isAnalysis(m) || m.isReloadable();
   };
 
+//  auto then = nanoTime();
+
   do {
     float totalKb, freeKb;
     Env::systemMemory(totalKb, freeKb);
@@ -1004,15 +1032,18 @@ void MediaGroupListWidget::loadMedia(int row) {
 
     int lru = _lruRows.takeFirst();
 
-    qDebug() << "purge row" << lru << "lru:" << _lruRows;
+    qDebug() << "purge row" << lru << "lru:" << _lruRows << "reqKb" << requiredKb << "freeKb" << freeKb;
 
     // cannot purge the current displayed row, move it to the back
     if (lru == _currentRow) {
       _lruRows.removeAll(_currentRow);
       _lruRows.append(_currentRow);
+      if (_lruRows.count() == 1) break;
       continue;
     }
 
+    // this can take a bit, if we do not wait for threads to cancel
+    // memory could be exhausted
     waitLoaders(lru);
 
     for (auto& m : _list[lru])
@@ -1023,7 +1054,6 @@ void MediaGroupListWidget::loadMedia(int row) {
         // memory use increasing...
         qWarning() << "unpurgable item, heap expanding" << m.path();
 
-
     if (lru == row) { // we just purged ourself, nothing else we can do
       qWarning() << "row" << row+1 << "cannot be loaded due to low memory"
                  << _lruRows;
@@ -1031,6 +1061,9 @@ void MediaGroupListWidget::loadMedia(int row) {
     }
 
   } while(true);
+
+//  auto now = nanoTime();
+//  qCritical() << "purge:" << (now-then) / 100000.0 << "ms";
 
   int groupIndex=-1;
   for (Media& m : group) {
@@ -1073,7 +1106,11 @@ void MediaGroupListWidget::loadMedia(int row) {
             for (Media& m : _list[row])
               if (m.path() == path && m.image().isNull()) {
                 m = iw->media;
-                if (row == _currentRow) this->updateItems();
+                if (row == _currentRow) {
+                  _updateTimer.stop();                  // coalesce updates
+                  _updateTimer.setProperty("row", row); // don't update rows we can't see
+                  _updateTimer.start(1000/60);          // 60hz is plenty
+                }
                 break;
               }
 
@@ -1134,18 +1171,21 @@ static const char* relativeLabel(const T& a, const T& b) {
 };
 
 void MediaGroupListWidget::updateItems() {
-  qDebug() << __started << (__finished + __canceled)
+  qDebug() << _currentRow
+           << __started << (__finished + __canceled)
            << __canceled << __canceledComplete;
 
   if (_list[_currentRow].count() <= 0) return;
 
-  const Media& icon = _list[_currentRow].first();
-  if (!icon.image().isNull() &&
-      property("iconPath").toString() != icon.path()) {
-    setWindowIcon(QIcon(QPixmap::fromImage(
-        icon.image().scaledToHeight(LW_WM_ICON_SIZE))));
-    setProperty("iconPath", icon.path());
-  }
+// I don't like this anymore
+//
+//  const Media& icon = _list[_currentRow].first();
+//  if (!icon.image().isNull() &&
+//      property("iconPath").toString() != icon.path()) {
+//    setWindowIcon(QIcon(QPixmap::fromImage(
+//        icon.image().scaledToHeight(LW_WM_ICON_SIZE))));
+//    setProperty("iconPath", icon.path());
+//  }
 
   MediaGroup& group = _list[_currentRow];
 
@@ -1385,8 +1425,6 @@ void MediaGroupListWidget::loadRow(int row) {
   QString prefix = Media::greatestPathPrefix(group);
   prefix = prefix.mid(0, prefix.lastIndexOf('/') + 1);
 
-  updateItems();
-
   const QString homePath = QDir::homePath();
   if (prefix.startsWith(homePath)) {
     prefix = prefix.mid(homePath.length());
@@ -1408,13 +1446,21 @@ void MediaGroupListWidget::loadRow(int row) {
 
   if (lastIndex.isValid()) setCurrentIndex(lastIndex);
 
+  updateItems();
+
   // todo: save the last row jump and offset that amount
   bool preloadNextRow = true;
   int nextRow = row + rowStride;
   nextRow = std::min(_list.count(), std::max(nextRow, 0));
 
   // preload the next row we expect to see
-  if (preloadNextRow) loadMedia(nextRow);
+  if (preloadNextRow) {
+    QTimer::singleShot(100, [=]() {
+      // if it is still valid after timer
+      if (_currentRow + rowStride == nextRow)
+        loadMedia(nextRow);
+    });
+  }
 
   if (QProcessEnvironment::systemEnvironment().contains(
           "BENCHMARK_LISTWIDGET")) {
@@ -1494,6 +1540,8 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
     return;
   }
 
+  QVector<int> removed;
+
   for (int i = 0; i < items.count(); ++i) {
     int index = items[i]->type();
     const Media& m = group[index];
@@ -1544,20 +1592,39 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
           if (replace && group.count() == 2) {
             int otherIndex = (index + 1) % 2;
             Media& other = group[otherIndex];
-            QFileInfo info(path);
+            const QFileInfo info(path);
+            const QFileInfo otherInfo(other.path());
+
             // the new name must keep the suffix, could be different
             QString newName = info.completeBaseName() + "." +
-                              QFileInfo(other.path()).suffix();
-            if (_db->rename(other, newName))
+                              otherInfo.suffix();
+
+            // rename (if needed) and then move
+            if (otherInfo.fileName() == newName ||
+                _db->rename(other, newName))
               _db->move(other, info.dir().absolutePath());
           }
         }
       }
     }
 
-    group.removeAt(index);
-    _lastColumn = index;
+    removed.append(index);
   }
+
+  if (removed.count() <= 0) return;
+
+  // remove deleted indices; we cannot remove using
+  // path because of renaming
+  MediaGroup newGroup;
+  for (int i = 0; i < group.count(); ++i)
+    if (!removed.contains(i))
+      newGroup.append(group[i]);
+  group = newGroup;
+
+  // this is no longer a valid column for this row,
+  // but could be for the next row
+  _lastColumn = *(std::min_element(removed.begin(),removed.end()));
+
   updateCurrentRow(group);
 }
 
