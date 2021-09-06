@@ -1,3 +1,23 @@
+/* Operations on cv::Mat images
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "cvutil.h"
 #include "opencv2/highgui/highgui.hpp"
 
@@ -45,22 +65,26 @@ QByteArray matrixHeader(uint32_t mediaId, const cv::Mat& m) {
 
 QByteArray matrixData(const cv::Mat& m) {
   const int len = m.cols * int(m.elemSize());
-
-  QByteArray b;
-  for (int i = 0; i < m.rows; i++) {
-    const char* ptr = m.ptr<char>(i);
-    b.append(ptr, len);
+  try {
+    QByteArray b;
+    for (int i = 0; i < m.rows; ++i)
+      b.append(m.ptr<char>(i), len);
+    return b;
   }
-
-  return b;
+  catch (std::bad_alloc& e) {
+    qFatal("QByteArray limits exceeded");
+  }
+  return QByteArray();
 }
+
+#if DEADCODE
 
 void loadMatrixArray(const QString& path, vector<uint32_t>& mediaIds,
                      vector<cv::Mat>& array) {
   void* dataPtr = nullptr;
   uint64_t dataLen;
 
-  loadBinaryData(qPrintable(path), &dataPtr, &dataLen, false);
+  loadBinaryData(path, &dataPtr, &dataLen, false);
 
   char* src = reinterpret_cast<char*>(dataPtr);
   char* end = src + dataLen;
@@ -83,36 +107,70 @@ void loadMatrixArray(const QString& path, vector<uint32_t>& mediaIds,
 
 void saveMatrixArray(const vector<uint32_t>& mediaIds,
                      const vector<cv::Mat>& array, const QString& path) {
-  QByteArray data;
+  QFile f(path);
+  bool ok = f.open(QFile::WriteOnly|QFile::Truncate);
+  Q_ASSERT(ok);
 
   for (size_t i = 0; i < array.size(); i++) {
     const cv::Mat& m = array[i];
+    QByteArray data;
     data += matrixHeader(mediaIds[i], m);
     data += matrixData(m);
+    int len = f.write(data);
+    if (len != data.length())
+      qFatal("write failed: %d: %s", f.error(),
+             qPrintable(f.errorString()));
   }
-
-  saveBinaryData(data.data(), uint64_t(data.size()), qPrintable(path), false);
 }
+#endif // DEADCODE
 
 void loadMatrix(const QString& path, cv::Mat& mat) {
-  void* dataPtr;
-  uint64_t dataLen;
+  QFile f(path);
+  bool ok = f.open(QFile::ReadOnly);
+  if (!ok)
+    qFatal("open failed: %d: %s", f.error(),
+           qPrintable(f.errorString()));
 
-  loadBinaryData(qPrintable(path), &dataPtr, &dataLen, false);
+  MatrixHeader h;
+  int len = f.read(reinterpret_cast<char*>(&h), sizeof(h));
+  if (len != sizeof(h))
+    qFatal("read failed (header): %d: %s", f.error(),
+           qPrintable(f.errorString()));
 
-  MatrixHeader* h = reinterpret_cast<MatrixHeader*>(dataPtr);
+  mat.create(h.rows, h.cols, h.type);
 
-  loadMatrix(h->rows, h->cols, h->type, h->stride,
-             reinterpret_cast<char*>(h) + sizeof(*h), mat);
+  int rowLen = mat.size().width * int(mat.elemSize());
+  Q_ASSERT(rowLen == h.stride);
 
-  free(dataPtr);
+  for (int i = 0; i < mat.size().height; i++) {
+    char* dst = mat.ptr<char>(i);
+    len = f.read(dst, rowLen);
+    if (len != rowLen)
+      qFatal("read failed (row): %d: %s", f.error(),
+             qPrintable(f.errorString()));
+  }
 }
 
 void saveMatrix(const cv::Mat& mat, const QString& path) {
-  QByteArray data;
-  data += matrixHeader(0, mat);
-  data += matrixData(mat);
-  saveBinaryData(data.data(), uint64_t(data.size()), qPrintable(path), false);
+  QFile f(path);
+  bool ok = f.open(QFile::WriteOnly|QFile::Truncate);
+  if (!ok)
+    qFatal("open failed: %d: %s", f.error(),
+           qPrintable(f.errorString()));
+
+  QByteArray data = matrixHeader(0, mat);
+  int len = f.write(data);
+  if (len != data.length())
+    qFatal("write failed (header): %d: %s", f.error(),
+           qPrintable(f.errorString()));
+
+  int rowLen = mat.cols * int(mat.elemSize());
+  for (int i = 0; i < mat.rows; ++i) {
+    len = f.write(mat.ptr<char>(i), rowLen);
+    if (len != rowLen)
+      qFatal("write failed (row): %d: %s",
+             f.error(), qPrintable(f.errorString()));
+  }
 }
 
 void showImage(const cv::Mat& img) {
@@ -275,7 +333,7 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
       break;
 
     default:
-      qCritical("unsupported bit depth: %d, converting to RGB888", src.depth());
+      qWarning("unsupported depth: %d, converting to RGB888", src.depth());
       QImage tmp = src.convertToFormat(QImage::Format_RGB888);
       qImageToCvImg(tmp, dst);
   }
@@ -416,15 +474,14 @@ uint64_t dctHash64(const cv::Mat& cvImg) {
   // cv::imwrite("4.freq.png", freq);
 
   // take 8x8 lowest frequencies of DCT, into a 64 element array
-  // v4: take 9x9 and discard some lower / upper freqs
+  // v4: take 9x9 and discard some lower freqs
   freq = freq.rowRange(cv::Range(0, 9)).colRange(cv::Range(0, 9)).clone();
   // cv::imwrite("4.structure.png", freq);
 
-  // convert to 64 element vector
   freq = freq.reshape(1, 1);
   // cv::imwrite("5.reshape.png", freq);
 
-  // v4: The byte order is changed using zig-zag traversal,
+  // v4: The frequency order is changed using zig-zag traversal,
   // so near frequences appear together, lowest frequencies
   // at the start.
   constexpr char zigZag[] = {
@@ -440,6 +497,7 @@ uint64_t dctHash64(const cv::Mat& cvImg) {
   //        56,57,50,43,36,29,22,15,23,30,37,44,51,58,59,52,45,38,31,39,46,53,60,61,54,47,55,62,63
   //    };
 
+  // convert to 64 element vector
   {
     cv::Mat tmp = freq.clone();
     float* dst = reinterpret_cast<float*>(tmp.ptr(0));
@@ -488,9 +546,9 @@ uint64_t phash64_cimg(const cv::Mat& cvImg) {
   uint64_t hash = 0;
   if (img.width() == 32 && img.height() == 32) {
     if (0 < ph_dct_imagehash_cimg32(img, hash))
-      printf("ERROR: phash64 (32x32) failed\n");
+      qCritical("phash64 (32x32) failed");
   } else if (0 < ph_dct_imagehash_cimg(img, hash))
-    printf("ERROR: phash64 failed\n");
+    qCritical("phash64 failed");
 
   return hash;
 }
@@ -713,7 +771,7 @@ QColor DescriptorColor::toQColor() const {
 void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
   // TODO: check descriptor always makes the same output for the same input
   if (cvImg.type() != CV_8UC3 && cvImg.type() != CV_8UC4) {
-    qWarning("colorDescriptor: img type is not color");
+    qWarning("input is not rgb or rgba");
     return;
   }
 
@@ -809,7 +867,7 @@ void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
   }
 
   if (samples.size() < NUM_DESC_COLORS) {
-    qWarning("not enough colors after filtering");
+    qWarning("not enough colors");
     return;
   }
 
@@ -1313,8 +1371,6 @@ void autocrop(cv::Mat& cvImg, int range) {
     else
       right = img.cols - left;
   }
-
-  // printf("top=%d bottom=%d left=%d right=%d\n", top, bottom, left, right);
 
   if ((left != 0 && right != img.cols) || (top != 0 && bottom != img.rows))
     if (left < right && top < bottom &&  // valid ranges
