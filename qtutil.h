@@ -1,3 +1,23 @@
+/* General reusable qt bits and platform abstractions
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #pragma once
 
 /// portable interface for desktop/platform environment
@@ -19,17 +39,18 @@ class DesktopHelper {
   /// location of settings file
   static QString settingsFile();
 
-  /// location of trash dir for a given path
-  static QString trashDir(const QString& path);
-
   /// move file to trash, do not overwrite existing files
   static bool moveToTrash(const QString& path);
 
- private:
-  static void runProgram(QStringList& args, const QString& inPath = "",
+private:
+  static void runProgram(QStringList& args, bool wait, const QString& inPath = "",
                          double seek = 0.0, const QString& inPath2 = "",
                          double seek2 = 0.0);
   static QVariant getSetting(const QString& key, const QVariant& defaultValue);
+  static void putSetting(const QString &key, const QVariant &value);
+  static bool chooseProgram(QStringList& args, const QVector<QStringList>& options,
+                            const char* settingsKey, const char* dialogTitle, const char* dialogText);
+  static bool moveFile(const QString& path, const QString& dir);
 };
 
 /// common tasks for widgets
@@ -86,7 +107,8 @@ class WidgetHelper {
         ".none { color:#000; }"   // "hide" value by matching background color
         ".archive { color:#FF9; }"// value is an archive/zip file
         ".file { color:#FFF; }"   // value is normal file
-    );
+        ".default { color:#FFF; }"   // normal text
+     );
 
     td.setHtml(text);
     td.setDocumentMargin(0);
@@ -200,7 +222,10 @@ static inline double qRotationAngle(const QMatrix& mat) {
   return 180.0 / M_PI * atan((p1.y() - p0.y()) / (p1.x() - p0.x()));
 }
 
-/// customized color message output
+/// customized logger with compression, color, etc
 void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context, const QString& msg);
+
+/// flush log messages before using printf/scanf etc
+void qFlushOutput();
 
 extern QThreadStorage<QString> qMessageContext;

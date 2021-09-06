@@ -1,0 +1,126 @@
+#!/bin/bash
+#   Play two videos side-by-side using ffmpeg/ffplay
+#  Copyright (C) 2021 scrubbbbs
+#  Contact: screubbbebs@gemeaile.com =~ s/e//g
+#  Project: https://github.com/scrubbbbs/cbird
+
+#  This file is part of cbird.
+
+#  cbird is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public
+#  License as published by the Free Software Foundation; either
+#  version 2 of the License, or (at your option) any later version.
+#
+#  cbird is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+#  General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public
+#  License along with cbird; if not, see
+#  <https://www.gnu.org/licenses/>.
+##
+# ffplay-sbs
+# args: file1,seek1,file2,seek2 or file1,file2
+#
+# Each video is seeked to a pipe, as is the audio.
+# This works well but the downside is you cannot
+# seek in the player.
+#
+# Both audio streams are present, press "a" to
+# cycle audio track between left/right
+#
+if [ $# -lt 4 ]; then
+  file1=$1
+  file2=$2
+  seek1=0
+  seek2=0
+else
+  file1=$1
+  seek1=$2
+  file2=$3
+  seek2=$4
+fi
+
+if [ -z $TMPDIR ]; then
+  TMPDIR=/tmp
+fi
+
+input1=$TMPDIR/sbsLeft.avi
+input2=$TMPDIR/sbsRight.avi
+rm -f $input1 $input2
+
+#ln -sf "$file1" $input1 
+#ln -sf "$file2" $input2
+
+video1=$TMPDIR/sbsLeft.y4m
+video2=$TMPDIR/sbsRight.y4m
+audio1=$TMPDIR/sbsLeft.wav
+audio2=$TMPDIR/sbsRight.wav
+rm -f $video1 $video2 $audio1 $audio2
+
+mkfifo $video1
+mkfifo $video2
+mkfifo $audio1
+mkfifo $audio2
+
+ffmpeg -ss "$seek1" -i "$file1" -f yuv4mpegpipe - 2>/dev/null >$video1 &
+ffmpeg -ss "$seek1" -i "$file1" -f wav          -y $audio1 2>/dev/null &
+ffmpeg -ss "$seek2" -i "$file2" -f yuv4mpegpipe -y $video2 2>/dev/null &
+ffmpeg -ss "$seek2" -i "$file2" -f wav          -y $audio2 2>/dev/null &
+
+
+height1=`ffprobe -show_streams "$file1" 2>/dev/null | grep ^height | sed s/height=//`
+height2=`ffprobe -show_streams "$file2" 2>/dev/null | grep ^height | sed s/height=//`
+
+echo h1: $height1
+echo h2: $height2
+
+if [ $height1 -gt $height2 ]; then
+    ih=$height1
+    iw=`ffprobe -show_streams "$file1" 2>/dev/null | grep ^width | sed s/width=//`
+else
+    ih=$height2
+    iw=`ffprobe -show_streams "$file1" 2>/dev/null | grep ^width | sed s/width=//`
+fi
+
+scale="scale=w=$iw:h=$ih"
+
+
+# 2x width, full frame sbs
+#ffplay -window_title 'ffplay' -f lavfi -i \
+#"\
+#movie=$video1  [left]; \
+#amovie=$audio1 [out0]; \
+#movie=$video2  [right]; \
+#amovie=$audio2 [out1];
+#[left]$scale,pad=$iw*2:$ih[pad]; \
+#[right]$scale[rs]; [pad][rs]overlay=w [out2]"
+
+# 1x width, right side of frame sbs
+#ffplay -window_title 'ffplay' -f lavfi -i \
+#"\
+#movie=$video1  [left]; \
+#amovie=$audio1 [out0]; \
+#movie=$video2  [right]; \
+#amovie=$audio2 [out1]; \
+#[right]$scale,pad=$iw:$ih[pad]; \
+#[left]$scale[ls]; [pad][ls]overlay=-w/2 [out2]"
+
+# center-cropped sbs
+# note: new ffmpeg has crop="" and hstack="" so it is
+# simpler to do a center-cropped sbs
+
+ffmpeg -f lavfi -i "\
+movie=$video1  [left]; \
+amovie=$audio1 [out0]; \
+movie=$video2  [right]; \
+amovie=$audio2 [out1]; \
+[right]$scale,crop=$iw/2:$ih [rs];\
+[left]$scale,crop=$iw/2:$ih [ls]; [ls][rs]hstack [out2]" \
+-map 0:v -c:v rawvideo -map 0:a:0 -c:a pcm_s16le -map 0:a:1 -c:a pcm_s16le -f matroska -v quiet - | ffplay -window_title 'ffplay: side-by-side' -
+
+rm -f $video1 $video2 $audio1 $audio2
+
+exit
+

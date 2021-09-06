@@ -1,20 +1,45 @@
+/* General reusable qt bits and platform abstractions
+   Copyright (C) 2021 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
+
+   This file is part of cbird.
+
+   cbird is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as published by the Free Software Foundation; either
+   version 2 of the License, or (at your option) any later version.
+
+   cbird is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with cbird; if not, see
+   <https://www.gnu.org/licenses/>.  */
 #include "qtutil.h"
-#include <QtDBus/QtDBus>
 
 // qttools/src/qdbus/qdbus/qdbus.cpp
+#ifndef Q_OS_WIN
+#include <QtDBus/QtDBus>
 #include <QtXml/QtXml>
-static QStringList listServiceObjects(QDBusConnection& connection, const QString &service, const QString &path) {
+
+static QStringList listServiceObjects(QDBusConnection& connection,
+                                      const QString& service,
+                                      const QString& path) {
   QStringList objectPaths;
 
   // make a low-level call, to avoid introspecting the Introspectable interface
-  QDBusMessage call = QDBusMessage::createMethodCall(service, path.isEmpty() ? QLatin1String("/") : path,
-                                                     QLatin1String("org.freedesktop.DBus.Introspectable"),
-                                                     QLatin1String("Introspect"));
+  QDBusMessage call = QDBusMessage::createMethodCall(
+      service, path.isEmpty() ? QLatin1String("/") : path,
+      QLatin1String("org.freedesktop.DBus.Introspectable"),
+      QLatin1String("Introspect"));
   QDBusReply<QString> xml = connection.call(call);
   if (path.isEmpty()) {
     // top-level
     if (xml.isValid()) {
-      //printf("/\n");
+      // printf("/\n");
     } else {
       QDBusError err = xml.error();
       if (err.type() == QDBusError::ServiceUnknown)
@@ -33,8 +58,9 @@ static QStringList listServiceObjects(QDBusConnection& connection, const QString
   QDomElement child = node.firstChildElement();
   while (!child.isNull()) {
     if (child.tagName() == QLatin1String("node")) {
-      QString sub = path + QLatin1Char('/') + child.attribute(QLatin1String("name"));
-      //printf("%s\n", qPrintable(sub));
+      QString sub =
+          path + QLatin1Char('/') + child.attribute(QLatin1String("name"));
+      // printf("%s\n", qPrintable(sub));
       objectPaths.append(sub);
       objectPaths.append(listServiceObjects(connection, service, sub));
     }
@@ -42,10 +68,11 @@ static QStringList listServiceObjects(QDBusConnection& connection, const QString
   }
   return objectPaths;
 }
+#endif  // !Q_OS_WIN
 
-void DesktopHelper::runProgram(QStringList& args, const QString& inPath,
-                               double seek, const QString& inPath2,
-                               double seek2) {
+void DesktopHelper::runProgram(QStringList& args, bool wait,
+                               const QString& inPath, double seek,
+                               const QString& inPath2, double seek2) {
   QString path(inPath);
   QString path2(inPath2);
 #ifdef Q_OS_WIN
@@ -57,18 +84,21 @@ void DesktopHelper::runProgram(QStringList& args, const QString& inPath,
     arg.replace("%2", path2);
     arg.replace("%seek", QString::number(seek));
     arg.replace("%seek2", QString::number(seek2));
+    arg.replace("%seek(int)", QString::number(int(seek)));
+    arg.replace("%seek2(int)", QString::number(int(seek2)));
     arg.replace("%home", QDir::homePath());
     arg.replace("%dirname(1)", QFileInfo(path).dir().absolutePath());
     arg.replace("%dirname(2)", QFileInfo(path2).dir().absolutePath());
   }
 
-  qDebug() << args;
+  qInfo() << args;
 
   if (args.count() > 0) {
     const QString prog = args.first();
     if (prog == "DesktopServices") {
       if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path)))
-        qWarning() << "failed to open via desktop services";
+        qWarning() << "QDesktopService::openUrl failed for" << path;
+#ifndef Q_OS_WIN
     } else if (prog == "DBus") {
       // example : "DBus, org.krusader, /Instances/krusader/right_manager,
       // org.krusader.PanelManager, newTab, %dirname(1)
@@ -80,18 +110,27 @@ void DesktopHelper::runProgram(QStringList& args, const QString& inPath,
 
       auto bus = QDBusConnection::sessionBus();
       auto paths = listServiceObjects(bus, args[1], QString());
-      qDebug() << "DBus services" << QStringList(bus.interface()->registeredServiceNames());
+      qDebug() << "DBus services"
+               << QStringList(bus.interface()->registeredServiceNames());
       qDebug() << "Service objects" << paths;
 
       // path may contain regular expression, the first matching path is taken
       // useful for apps that have randomized path names (krusader)
       auto objectPath = args[2];
+      bool validPath = false;
       QRegularExpression pathMatch(objectPath);
       for (auto& path : paths)
         if (pathMatch.match(path).hasMatch()) {
           objectPath = path;
+          validPath = true;
           break;
         }
+
+      if (!validPath) {
+        qWarning() << "DBus service missing" << objectPath << "is" << args[1]
+                   << "running?";
+        return;
+      }
 
       QDBusInterface remoteApp(args[1], objectPath, args[3],
                                QDBusConnection::sessionBus());
@@ -105,16 +144,28 @@ void DesktopHelper::runProgram(QStringList& args, const QString& inPath,
         if (!reply.isValid()) qWarning() << "DBus Error:" << reply.error();
       } else
         qWarning() << "DBus failed to connect:" << remoteApp.lastError();
+#endif  // !Q_OS_WIN
     } else {
-#ifdef Q_OS_WIN
       QProcess p;
       p.setProgram(prog);
-      p.setNativeArguments(args.mid(1).join(" "));
-      if (!p.startDetached())
-#else
-      if (!QProcess::startDetached(prog, args.mid(1)))
-#endif
-        qWarning() << "process failed to start";
+      //#ifdef Q_OS_WIN
+      //      p.setNativeArguments(args.mid(1).join(" "));
+      //#else
+      p.setArguments(args.mid(1));
+      //#endif
+      if (!wait) {
+        if (!p.startDetached())
+          qWarning() << prog << "failed to start, is it installed?";
+      } else {
+        p.start();
+        if (!p.waitForStarted()) {
+          qWarning() << prog << "failed to start, is it installed?";
+          return;
+        }
+        p.waitForFinished();
+        if (p.exitCode() != 0)
+          qWarning() << prog << "exit code" << p.exitCode() << p.errorString();
+      }
     }
   }
 }
@@ -128,77 +179,149 @@ QVariant DesktopHelper::getSetting(const QString& key,
   return settings.value(key);
 }
 
+void DesktopHelper::putSetting(const QString& key, const QVariant& value) {
+  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+  settings.beginGroup("DesktopHelper");
+  settings.setValue(key, value);
+}
+
+bool DesktopHelper::chooseProgram(QStringList& args,
+                                  const QVector<QStringList>& options,
+                                  const char* settingsKey,
+                                  const char* dialogTitle,
+                                  const char* dialogText) {
+  if (args.empty() || (qApp->keyboardModifiers() & Qt::ControlModifier)) {
+    QStringList items;
+    for (auto& option : qAsConst(options)) items += option.first();
+
+    QWidget* parent = qApp->widgetAt(QCursor::pos());
+
+    bool ok = false;
+    QString item =
+        QInputDialog::getItem(parent, dialogTitle,
+                              QString(dialogText) + "\n\n" +
+                                  "To change this setting, press the Control "
+                                  "key while selecting the action.",
+                              items, 0, false, &ok);
+    if (!ok) return false;
+
+    for (auto& option : qAsConst(options))
+      if (option.first() == item) {
+        args = option;
+        args.removeFirst();
+        break;
+      }
+
+    putSetting(settingsKey, args);
+  }
+
+  return true;
+}
+
 void DesktopHelper::revealPath(const QString& path) {
+  QVector<QStringList> fileManagers;
+
 #ifdef Q_OS_WIN
   const QStringList defaultArgs{{"explorer", "/select,\"%1\""}};
 #else
-  const QStringList defaultArgs{{"/usr/bin/nautilus", "-s", "%1"}};
+  const QStringList defaultArgs;
+  fileManagers += QStringList{{"Default", "DesktopServices"}};
+  fileManagers +=
+      QStringList{{"Dolphin (KDE)", "/usr/bin/dolphin", "--select", "%1"}};
+  fileManagers += QStringList{{"Krusader (Right Panel)", "DBus", "org.krusader",
+                               "/Instances/krusader[0-9]*/right_manager", "",
+                               "newTab", "%dirname(1)"}};
+  fileManagers += QStringList{{"Krusader (Left Panel)", "DBus", "org.krusader",
+                               "/Instances/krusader[0-9]*/left_manager", "",
+                               "newTab", "%dirname(1)"}};
+  fileManagers +=
+      QStringList{{"Nautilus (GNOME)", "/usr/bin/nautilus", "-s", "%1"}};
 #endif
-  QStringList args = getSetting("OpenFileLocation", defaultArgs).toStringList();
-  runProgram(args, path);
+  const char* settingsKey = "OpenFileLocation";
+  QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
+
+  if (!chooseProgram(
+          args, fileManagers, settingsKey, "Choose File Manager",
+          "Please choose the program for viewing a file's location."))
+    return;
+
+  // QDesktopServices cannot reveal file location and select it, we need the dir
+  // path
+  QString tmp = path;
+  if (args.count() > 0 && args.first() == "DesktopServices")
+    tmp = QFileInfo(path).absoluteDir().path();
+
+  runProgram(args, false, tmp);
 }
 
 void DesktopHelper::openVideo(const QString& path, double seekSeconds) {
-  QString settingsKey = "OpenVideoSeek";
-  QStringList defaultArgs{"mpv", "--start=%seek" "%1"};
-  if (abs(seekSeconds) < 0.1) {
-    settingsKey = "OpenVideo";
-    defaultArgs = QStringList{"mpv", "%1"};
+  QStringList args;
+  if (abs(seekSeconds) >= 0.1) {
+    const char* settingsKey = "OpenVideoSeek";
+    const QStringList defaultArgs;
+    args = getSetting(settingsKey, defaultArgs).toStringList();
+
+    QVector<QStringList> openVideoSeek;
+    openVideoSeek += QStringList{{"Default", "DesktopServices"}};
+#ifdef Q_OS_WIN
+    openVideoSeek +=
+        QStringList{{"VLC", "C:/Program Files (x86)/VideoLan/VLC/vlc.exe",
+                     "--start-time=%seek", "%1"}};
+    openVideoSeek +=
+        QStringList{{"FFplay", "ffplay.exe", "-ss", "%seek", "%1"}};
+#else
+    openVideoSeek += QStringList{
+        {"Celluloid", "celluloid", "--mpv-options=--start=%seek", "%1"}};
+    openVideoSeek += QStringList{{"MPlayer", "mplayer", "-ss", "%seek", "%1"}};
+    openVideoSeek += QStringList{{"MPV", "mpv", "--start=%seek", "%1"}};
+    openVideoSeek +=
+        QStringList{{"SMPlayer", "smplayer", "-start", "%seek(int)", "%1"}};
+    openVideoSeek += QStringList{{"VLC", "vlc", "--start-time=%seek", "%1"}};
+#endif
+    if (!chooseProgram(args, openVideoSeek, settingsKey, "Choose Video Player",
+                       "Select the program for viewing video at a timestamp"))
+      return;
+  } else {
+    const char* settingsKey = "OpenVideo";
+    const QStringList defaultArgs = QStringList{{"DesktopServices"}};
+    args = getSetting(settingsKey, defaultArgs).toStringList();
   }
 
-  QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
-  runProgram(args, path, seekSeconds);
+  runProgram(args, false, path, seekSeconds);
 }
 
 void DesktopHelper::compareAudio(const QString& path1, const QString& path2) {
   const QString settingsKey = "CompareAudio";
-  const QStringList defaultArgs{
-      {"%home/src/ffscripts/compareaudio.sh", "%1", "%2"}};
+  const QStringList defaultArgs{{"ff-compare-audio", "%1", "%2"}};
   QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
-  runProgram(args, path1, 0.0, path2);
+  runProgram(args, false, path1, 0.0, path2);
 }
 
 void DesktopHelper::playSideBySide(const QString& path1, double seek1,
                                    const QString& path2, double seek2) {
   const QString settingsKey = "PlaySideBySide";
-  const QStringList defaultArgs{
-      {"%home/src/ffscripts/sbs.sh", "%1", "%seek", "%2", "%seek2"}};
+  const QStringList defaultArgs{{"ffplay-sbs", "%1", "%seek", "%2", "%seek2"}};
   QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
-  runProgram(args, path1, seek1, path2, seek2);
+  runProgram(args, false, path1, seek1, path2, seek2);
 }
 
 QString DesktopHelper::settingsFile() {
-  const char* file = getenv("SETTINGS_FILE");
-  QString path;
-  if (file)
-    path = file;
-  else
-    path = qApp->applicationDirPath() + "/settings.ini";
+  QString path =
+      QProcessEnvironment::systemEnvironment().value("CBIRD_SETTINGS_FILE");
+  if (path.isEmpty())
+    path = QSettings(QSettings::IniFormat, QSettings::UserScope,
+                     qApp->applicationName())
+               .fileName();
 
   qDebug() << path;
-
   return path;
 }
 
-QString DesktopHelper::trashDir(const QString& path) {
-  (void)path;
-  QString trashDir =
-      QProcessEnvironment::systemEnvironment().value("INDEX_TRASH_DIR");
+bool DesktopHelper::moveFile(const QString& path, const QString& dir) {
+  const QFileInfo info(path);
 
-  return trashDir;
-}
-
-bool DesktopHelper::moveToTrash(const QString& path) {
-
-  QString dir = trashDir(path);
-  if (dir.isEmpty()) {
-    qWarning("INDEX_TRASH_DIR environment unset or path does not exist");
-    return false;
-  }
-
-  QFileInfo info(path);
-  if (!info.isFile()) {
-    qWarning() << "requested path is not a file:" << path;
+  if (!QDir(dir).exists()) {
+    qWarning() << "destination does not exist:" << dir;
     return false;
   }
 
@@ -224,7 +347,123 @@ bool DesktopHelper::moveToTrash(const QString& path) {
   return ok;
 }
 
-#include <unistd.h>   // isatty
+bool DesktopHelper::moveToTrash(const QString& path) {
+  QFileInfo info(path);
+  if (!info.isFile()) {
+    qWarning() << "requested path is not a file:" << path;
+    return false;
+  }
+
+  QString dir =
+      QProcessEnvironment::systemEnvironment().value("CBIRD_TRASH_DIR");
+  if (!dir.isEmpty()) return moveFile(path, dir);
+
+  const char* settingsKey = "TrashFile";
+
+#ifdef Q_OS_WIN
+  const QStringList defaultArgs;
+  QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
+
+  if (!args.empty()) {
+    runProgram(args, true, path);
+  } else {
+    // use the recycle bin with move fallback
+    // - we might not have a window for dialogs of SHFileOperationW
+    // - SHFileOperationW will silently delete on filesystems that cannot
+    // recycle
+    // - therefore, if path cannot be recycled do our own move
+    auto absPath = QFileInfo(path).absoluteFilePath();
+
+    SHQUERYRBINFO info;
+    info.cbSize = sizeof(info);
+    HRESULT res = SHQueryRecycleBinW(LPCWSTR(absPath.utf16()), &info);
+    if (res != S_OK) {
+      qInfo() << absPath << "does not support recycling" << Qt::hex << res;
+
+      QString mountPoint;
+      const auto parts = absPath.split("/", Qt::SkipEmptyParts);
+      if (absPath.startsWith("//")) {
+        if (parts.length() > 2)
+          mountPoint = "//" + parts[0] + "/" + parts[1] + "/";
+      } else {
+        const QStorageInfo sInfo(QFileInfo(absPath).dir());
+        if (!sInfo.isValid()) {
+          qWarning() << "has no mount point (drive letter) or is invalid"
+                     << absPath;
+          return false;
+        }
+        mountPoint = sInfo.rootPath();
+      }
+
+      if (mountPoint.isEmpty() || !QDir(mountPoint).exists()) {
+        qWarning() << "invalid or unsupported mount point" << mountPoint;
+        return false;
+      }
+
+      const QString volumeTrashDir =
+          getSetting("VolumeTrashDir", "_trash").toString();
+
+      qInfo() << "trying fallback" << mountPoint + volumeTrashDir;
+
+      QDir trashDir(mountPoint);
+      if (!trashDir.exists(volumeTrashDir) && !trashDir.mkdir(volumeTrashDir)) {
+        qWarning() << "fallback failed, cannot create volume trash dir on"
+                   << trashDir;
+      }
+
+      return moveFile(path, trashDir.absoluteFilePath(volumeTrashDir));
+    } else {
+      absPath.replace(QLatin1Char('/'), QLatin1Char('\\'));  // backslashified
+      QByteArray delBuf((absPath.length() + 2) * 2,
+                        0);  // utf16, double-null terminated
+      memcpy(delBuf.data(), absPath.utf16(), absPath.length() * 2);
+
+      SHFILEOPSTRUCTW op;
+      memset(&op, 0, sizeof(SHFILEOPSTRUCTW));
+      op.wFunc = FO_DELETE;
+      op.pFrom = (LPCWSTR)delBuf.constData();
+      op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI;
+      int status = SHFileOperationW(&op);
+      if (status != 0)
+        qWarning() << "SHFileOperation() error" << Qt::hex << status;
+    }
+  }
+#else
+  const QStringList defaultArgs{{"trash-put", "%1"}};
+  QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
+  // we must wait, because the caller could be renaming or moving
+  runProgram(args, true, path);
+#endif
+  bool ok = !QFileInfo(path).exists();
+  if (!ok) qWarning() << "failed to move to trash" << path;
+  return ok;
+}
+
+//
+// Custom logger magic!
+//
+// - "just works" by using qDebug() etc everywhere
+// - colors for qDebug etc
+// - disable colors if no tty (isatty()=0)
+// - per-thread context can be added (like what file is being worked on)
+// - special sequences recognized
+//   <NC> - do not write message context, good for progress bars
+//   <PL> - progress line, erase the previous line (like \r)
+// - threaded output
+//    * logs choke main thread, really badly on windows
+//    * qFlushOutput() to sync up when needed
+// - compression
+//    * repeated log lines show # of repeats
+//
+// todo: drop logs if too much piles up
+// todo: avoid color resets? they might slow the terminal
+// todo: do bigger console writes, combine lines with timer
+// todo: use ::write() instead of fwrite
+//
+
+
+#include <unistd.h>  // isatty
+#include "exiv2/error.hpp" // capture exif library logs
 
 #define VT_RED "\x1B[31m"
 #define VT_GRN "\x1B[32m"
@@ -244,12 +483,124 @@ bool DesktopHelper::moveToTrash(const QString& path) {
 #if !defined(QT_MESSAGELOGCONTEXT)
 #error qColorMessageOutput requires QT_MESSAGELOGCONTEXT
 #endif
-
 QThreadStorage<QString> qMessageContext;
 
+static void exifLogHandler(int level, const char* msg) {
+  const int nLevels = 4;
+  constexpr QtMsgType levelToType[nLevels] = {
+    QtDebugMsg, QtInfoMsg, QtWarningMsg, QtCriticalMsg
+  };
+  constexpr QMessageLogContext context("", 0, "exif()", "");
+  if (level < nLevels && level > 0)
+    qColorMessageOutput(levelToType[level], context, QString(msg).trimmed());
+}
+
+
+#ifdef Q_OS_WIN
+#include <fcntl.h>
+#endif
+
+class LoggerThread {
+ public:
+  QThread* thread;
+  QMutex mutex;
+  QWaitCondition cond;
+  volatile bool stop = false;
+  QVector<QString> log;
+
+  LoggerThread() {
+    std::set_terminate(qFlushOutput);
+    Exiv2::LogMsg::setHandler(exifLogHandler);
+
+#ifdef Q_OS_WIN
+    // disable text mode to speed up console
+    _setmode( _fileno(stdout), _O_BINARY );
+#endif
+    thread = QThread::create([this]() {
+      QString lastInput, lastOutput;
+      int repeats = 0;
+      QMutexLocker locker(&mutex);
+      while (!stop && cond.wait(&mutex))
+        while (log.count() > 0) {
+          const QString line = log.takeFirst();
+          // do not compress progress lines
+          int pl = line.indexOf("<PL>");
+          if (pl <= 0 && lastInput == line) {
+            repeats++;
+            continue;
+          }
+          locker.unlock();
+
+          if (repeats > 0) {
+            QString output = lastInput + " [x" + QString::number(repeats) + "]\n";
+            QByteArray utf8 = output.toUtf8();
+            fwrite(utf8.data(), utf8.length(), 1, stdout);
+            repeats = 0;
+          }
+
+          lastInput = line;
+
+          QString output;
+
+          if (pl > 0) {
+            output = line;
+            output.replace("<PL>", "");
+            if (lastInput.startsWith(line.midRef(0, pl)))
+              output = "\r" + output;
+          }
+          else {
+            if (!lastOutput.endsWith("\n"))
+              output = "\n" + line + "\n";
+            else
+              output = line + "\n";
+          }
+
+          lastOutput = output;
+
+          QByteArray utf8 = output.toUtf8();
+          fwrite(utf8.data(), utf8.length(), 1, stdout);
+          if (pl > 0) fflush(stdout);
+          locker.relock();
+        }
+    });
+    thread->start();
+  }
+  ~LoggerThread() {
+    //fprintf(stdout, "~LoggerThread\n");
+    stop = true;
+    cond.wakeAll();
+    thread->wait();
+    qFlushOutput();
+    fprintf(stdout, "\n"); // last output might have no trailing "\n"
+    fflush(stdout);
+  };
+  void append(const QString& msg) {
+    {
+      QMutexLocker locker(&mutex);
+      log.append(msg);
+    }
+    cond.wakeAll();
+  }
+  void flush() {
+    QMutexLocker locker(&mutex);
+    QByteArray utf8;
+    while (log.count() > 0)
+      utf8 += (log.takeFirst() + "\n").toUtf8();
+    fwrite(utf8.data(), utf8.length(), 1, stdout);
+    fflush(stdout);
+  }
+};
+
+/// global logger, use static destruction to flush the log!
+static LoggerThread logger;
+
+void qFlushOutput() {
+  logger.flush();
+}
+
 void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
-                            const QString& msg) {
-  const QByteArray localMsg = msg.toLocal8Bit();
+                         const QString& msg) {
+  // const QByteArray localMsg = msg.toLocal8Bit();
   const bool tty = isatty(fileno(stdout));
 
   char typeCode = '\0';
@@ -279,9 +630,12 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
       break;
     case QtFatalMsg:
       typeCode = 'F';
-      color = (VT_REVERSE VT_BRIGHT VT_RED);
+      color = (VT_UNDERL VT_BRIGHT VT_RED);
       break;
   }
+
+  if (msg.contains("<PL>")) // progress line
+    color = VT_CYN;
 
   if (!tty) {
     color = "";
@@ -292,30 +646,34 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
 
   if (typeCode) {
     QString shortFunction = context.function;
+
     if (shortFunction.contains("::<lambda"))
       shortFunction = shortFunction.split("::<lambda").front();
-    if (shortFunction.contains("::")) {
-      // int Foo::bar(int x) const
-      // int Foo::bar<float>(int x) const
-      // int Foo::bar<float>(int x)::(anonymous class)::operator()()
 
-      QStringList parts = QString(context.function).split("::");
-      QString className = "";
-      if (parts.length() > 1) {
-        // remove return type
-        className = parts[0].split(" ").back();
+    // int bar(...)
+    // int Foo::bar(...)
+    // int Foo::bar<float>(...)
+    shortFunction = shortFunction.split("(").first();
 
-        // remove argument list
-        QString args = parts[1].split("(").front();
+    QStringList parts = shortFunction.split("::");
 
-        // remove trailing things from function/arguments
-        // QString args = parts[1].replace("()", "");
-        shortFunction = className + "::" + args;
+    if (parts.length() > 1) {
+      // (1) cv::Mat foo
+      // (2) void class::foo
+      // (3) cv::Mat class::foo
+      // (4) cv::Mat class<bar>::foo
+      //fprintf(stdout, "%s\n", qPrintable(shortFunction));
+
+      shortFunction = parts.back().trimmed();
+      //fprintf(stdout, "%s\n", qPrintable(shortFunction));
+      parts.pop_back();
+      parts = parts.join("").split(" ");
+      if (parts.length() > 1) { // case (1) ignored
+        QString className = parts.back();
+        shortFunction = className + "::" + shortFunction;
+        if (filteredClasses.contains(className)) return;
       }
-
-      if (filteredClasses.contains(className)) return;
     } else {
-      shortFunction = shortFunction.split("(").front();  // drop arguments
       shortFunction = shortFunction.split(" ").back();   // drop return type
     }
 
@@ -325,6 +683,7 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
     if (!debugTrigger.isNull()) {
       if (msg.contains(debugTrigger)) {
         const char* color = tty ? VT_RED : "";
+        qFlushOutput();
         fprintf(stdout, "%s[X][%s:%d] debug message matched: %s\n%s", color,
                 QT_MESSAGELOG_FUNC, QT_MESSAGELOG_LINE, qPrintable(msg), reset);
         fflush(stdout);
@@ -342,16 +701,41 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
       if (env.contains("DEBUG_MSG")) {
         debugTrigger = env.value("DEBUG_MSG");
         const char* color = tty ? VT_RED : "";
+        qFlushOutput();
         fprintf(stdout, "%s[X] debug message enabled: %s\n%s", color,
                 qPrintable(debugTrigger), reset);
         fflush(stdout);
       }
     }
 
-    if (!threadContext.isNull())
-      shortFunction += "{"+threadContext+"}";
+    if (!threadContext.isNull()) shortFunction += "{" + threadContext + "}";
 
-    fprintf(stdout, "%s[%c][%s] %s%s\n", color, typeCode,
-            qPrintable(shortFunction), localMsg.constData(), reset);
+    QString logLine;
+    if (msg.startsWith("<NC>")) // no context
+      logLine = QString("%1%2%3")
+                      .arg(color)
+                      .arg(msg.midRef(4))
+                      .arg(reset);
+    else
+      logLine = QString("%1[%2][%3] %4%5")
+                          .arg(color)
+                          .arg(typeCode)
+                          .arg(shortFunction)
+                          .arg(msg)
+                          .arg(reset);
+
+    logger.append(logLine);
+
+    if (type == QtFatalMsg) { // we are going to abort() next or debug break
+      qFlushOutput();
+      fprintf(stdout, "\n\n");
+    }
+
+    // logLine += "\n";
+    //auto buf = logLine.toUtf8();
+    //fwrite(buf, buf.length(), 1, stdout);
+
+    // fprintf(stdout, "%s[%c][%s] %s%s\n", color, typeCode,
+    //        qPrintable(shortFunction), localMsg.constData(), reset);
   }
 }
