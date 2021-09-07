@@ -1,0 +1,8 @@
+cbird
+cbird.exe
+_build
+_win32
+_index
+Makefile
+.qmake.stash
+settings.ini
