@@ -86,23 +86,23 @@ Running
 
 #### Find exact duplicates
 
-``cbird -use <path> -dups -show``
+`cbird -use <path> -dups -show`
 
 #### Find near duplicates, medium threshold
 
-``cbird -use <path> -similar -show```
+`cbird -use <path> -similar -show`
 
 #### Find near duplicates, lowest threshold
 
-``cbird -use <path> -p.dht 1 -similar -show``
+`cbird -use <path> -p.dht 1 -similar -show`
 
 Using the GUI
 =====================
 This is lacking documentation at the moment. But for now...
 
 - The GUI is displayed with `-show` if there is a selection or results.
-- GUI windows have a context menu (right click) with all available actions and shortcuts.
-- Deletion actions use the trash/recycler by default, there is
+- GUI windows have a context menu (right click) with all actions and shortcuts.
+- The two deletion actions ("Delete" and "Replace") use the trash/recycler by default. There is
  no way to permanently delete files (not even with `-nuke` or `-dup-nuke` options)
 
 Environment Variables
@@ -110,7 +110,7 @@ Environment Variables
 There are a few for power users.
 
 - `CBIRD_SETTINGS_FILE` overrides the path to the global settings file
-- ``CBIRD_TRASH_DIR` overrides the path to trash folder, do not use the system trash bin
+- `CBIRD_TRASH_DIR`overrides the path to trash folder, do not use the system trash bin
 
 Search Algorithms
 ====================
@@ -119,7 +119,7 @@ Search Algorithms
 Stores one 64-bit hash per image, similar to pHash. Very fast and good for rescaled images.
 
 #### DCT Features `-p.alg 1`
-Stores DCT hashes of regions around up to 400 ORB features per image. Good for heavily cropped images, much faster than ORB features search.
+Stores DCT hashes of regions around ORB features, up to 400 per image. Good for heavily cropped images, much faster than ORB features.
 
 #### OpenCV Features `-p.alg 2`
 Stores up to 400 Oriented Rotated Brief (ORB) 256-bit features per image and searches using FLANN-based matcher. Good for rotated, cropped but slow.
@@ -270,7 +270,7 @@ Minor Bugs
 - Windows 10: titlebar/dialogs do not use native theme
 - MGLW: delete multi-select as one batch
 - MGLW: suppress QIR eof warnings from thread cancellation
-- LoggerThread: flush command for Y/N prompts
+- replace qPrintable() used for file i/o with qUtf8Printable or QString
 
 Compiling
 =========================
@@ -290,9 +290,9 @@ This recipe is for Ubuntu 21.04/Debian 11
 
 1.1 Packages
 
-```
+``
 apt-get install qtbase5-dev cmake g++ libpng-dev libjpeg-turbo8-dev libtiff5-dev libopenxr-dev libexiv2-dev git
-```
+``
 
 1.2 Compiling OpenCV 2.4
 
@@ -339,7 +339,7 @@ sudo make install
 
 1.6 Setup Environment
 
-````
+```
 .bashrc
 
 # make libraries in /usr/local/lib visible
@@ -405,14 +405,7 @@ cd cbird
 source windows/mxe.env
 qmake
 make -j8
-```
-
-2.6 Copy dependencies
-
-The `mxe-pkg.sh` script makes a windows stand-alone version in _win32/cbird. It uses wine to find the minimum set of DLL's. Run it until there is no more output, then you will have a working build.
-
-```
-./windows/mxe-pkg.sh
+make install
 ```
 
 
@@ -430,10 +423,10 @@ Development
 Cbird uses the QTest unit test framework. The tests require a test data set, download it here.
 
 ```
-> export TEST_DATA_DIR=</path/to/cbird-testdata>
-> cd unit/<test>
-> qmake
-> make [-j8]
-> ./runtest
+export TEST_DATA_DIR=</path/to/cbird-testdata>
+cd unit/<test>
+qmake
+make [-j8]
+./runtest
 ```
 

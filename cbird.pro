@@ -19,9 +19,9 @@ PRECOMPILED_HEADER=prefix.h
 precompile_header {
 
     win32 {
-
-        # copy header so it works
-        warning("win32 precompiled header hack")
+        # pch only works on windows if .h is in the same dir as .gch,
+        # since we changed OBJECTS_DIR, gch is in the wrong dir
+        message("win32 precompiled header hack")
 	
         PRECOMPILED_HEADER_COPY=$$OBJECTS_DIR/$$PRECOMPILED_HEADER
         copy_pch.target = $$PRECOMPILED_HEADER_COPY
@@ -43,6 +43,14 @@ precompile_header {
     QMAKE_EXTRA_TARGETS += precompiled_header
 }
 
+# git version info
+QMAKE_PRE_TARGETDEPS += $$OBJECTS_DIR/git.h
+git.target = $$OBJECTS_DIR/git.h
+git.commands = ./tools/gitversion.sh "$$OBJECTS_DIR"
+git.depends = .git
+QMAKE_EXTRA_TARGETS += git
+
+
 # Input
 HEADERS += $$files(*.h) \
     tree/dcttree.h \
@@ -60,23 +68,35 @@ SOURCES += $$files(lib/*.cpp)
 DISTFILES += \
     index.pri
 
-# installation location override
-PREFIX=/usr/local
-!equals('',$$(PREFIX)) {
-  PREFIX=$$(PREFIX)
-  message("Installing in $$PREFIX")
+win32: {
+    INSTALLS += target
+    target.path = _win32/cbird
+
+    warn.path = _win32/cbird
+    warn.extra = ./windows/mxe-pkg.sh
+    INSTALLS += warn
 }
 
-cbird.files = $$TARGET
-cbird.path  = $$PREFIX/bin/
+unix: {
+    # installation location override
+    PREFIX=/usr/local
+    !equals('',$$(PREFIX)) {
+      PREFIX=$$(PREFIX)
+      message("Installing in $$PREFIX")
+    }
 
-ffplay_sbs.files = tools/ffplay-sbs
-ffplay_sbs.path  = $$PREFIX/bin/
+    INSTALLS += target
+    target.path = $$PREFIX/bin
 
-ffaudio.files = tools/ff-compare-audio
-ffaudio.path  = $$PREFIX/bin/
+    scripts.files = tools/ffplay-sbs tools/ff-compare-audio
+    scripts.path  = $$PREFIX/bin/
+    #scripts.extra = echo extra
 
-INSTALLS += cbird ffplay_sbs ffaudio
+    # qt bug: only strip if exe
+    QMAKE_STRIP = tools/strip.sh
+
+    INSTALLS += scripts
+}
 
 CONFIG -= silent
 message("QT=" $$QT)

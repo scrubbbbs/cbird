@@ -98,7 +98,7 @@ static void printLicense() {
   // clang-format off
   printf(
       H2 "cbird, the Content Based Image Retrieval Database"
-      H2 "Copyright (C) 2021 scrubbbbs (scrubbbbs@gmail.com) https://github.com/scrubbbbs/cbird"
+      H2 "Copyright (C) 2021 scrubbbbs (scrubbbbs@gmail.com) " CBIRD_HOMEPAGE
       H2 "Licensed to you under the GNU GPL version 2 http://www.gnu.org/licenses"
       H2
       H2 "cbird is free software; you are free to modify an distribute it."
@@ -128,7 +128,7 @@ static int printUsage(int argc, char** argv) {
         BR
         H2 "    „__„                     CBIRD"
         H2 "    {o,o}     Content Based Image Retrieval Database"
-        H2 "    |)__)       https://github.com/scrubbbbs/cbird"
+        H2 "    |)__)       "       CBIRD_HOMEPAGE
         H2 "    -“–“-        license: GPLv2 (see: -license)"
         H2 ""
         BR "Usage: %s [args...]"
@@ -626,10 +626,8 @@ int main(int argc, char** argv) {
   else
     app.reset(new QApplication(argc, argv));
 
-  app->setApplicationName("cbird");
-  app->setApplicationVersion("0.5");
-  app->setOrganizationName("Doppelgänger Industries");
-  app->setOrganizationDomain("cbird.org");
+  app->setApplicationName(CBIRD_PROGNAME);
+  app->setApplicationVersion(CBIRD_VERSION);
 
   if (args.count() <= 0) {
     printUsage(argc, argv);
@@ -847,9 +845,8 @@ int main(int argc, char** argv) {
       const QStringList cv = cvVersion();
       const QStringList ev = Media::exifVersion();
       //            const QStringList qv = {"??", "??"};
-      qInfo("%s version %s, https://%s", qPrintable(app->applicationName()),
-            qPrintable(app->applicationVersion()),
-            qPrintable(app->organizationDomain()));
+      qInfo() << CBIRD_PROGNAME << CBIRD_VERSION
+              << "[" << CBIRD_GITVERSION << "]" << CBIRD_HOMEPAGE;
       qInfo() << "build:" << buildFlags();
       qInfo() << "Qt" << qVersion() << "compiled:" << QT_VERSION_STR;
       qInfo() << "FFmpeg" << ff[0] << "compiled:" << ff[1];
