@@ -1095,6 +1095,13 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   QBuffer* buffer = new QBuffer(const_cast<QByteArray*>(&data));
   std::unique_ptr<QIODevice> io;
 
+  // svg loader does not like having io terminated early, deadlocks
+  if (future) {
+    const auto lcName = name.toLower();
+    if (name.endsWith(".svg") || name.endsWith(".svgz") )
+      future = nullptr;
+  }
+
   if (future)
     io.reset( new QCancelableIODevice(buffer, future) );
   else

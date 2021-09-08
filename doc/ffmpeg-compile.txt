@@ -1,0 +1,17 @@
+
+apt install git build-essential nasm mercurial cmake cmake-curses-gui libspeex-dev libvpx-dev libfreetype-dev libfontconfig1-dev libxm2-dev libssl-dev libfribidi-dev libsdl2-dev
+
+
+git clone https://git.videolan.org/git/x264.git
+./configure --enable-shared --chroma-format=all
+
+hg clone http://hg.videolan.org/x265
+cd build; cmake ../source; 
+
+git clone https://github.com/FFmpeg/FFmpeg
+git checkout 358c0b
+
+./configure --enable-nonfree --enable-gpl --enable-shared --enable-libx264 --enable-libx265 --enable-libspeex --enable-libfreetype --enable-libfontconfig --enable-libfribidi --enable-libvpx --enable-ffplay --enable-libxml2 --enable-openssl
+
+optional
+--enable-vdpau --enable-opencl --enable-cuvid

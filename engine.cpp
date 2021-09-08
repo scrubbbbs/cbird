@@ -185,7 +185,7 @@ MediaSearch Engine::query(const MediaSearch& search_) {
   // e.g. params.imageNeeded()
   bool releaseImage = false;
   if (needle.image().isNull() && (params.mirrorMask || params.templateMatch)) {
-    qWarning() << "(re)loading image" << needle.path();
+    qWarning() << "loading image for reflection or template match" << needle.path();
     needle.setImage(needle.loadImage());
     releaseImage = true;
   }
@@ -205,7 +205,7 @@ MediaSearch Engine::query(const MediaSearch& search_) {
 
   if (releaseImage) {
     needle.setImage(QImage());
-    qWarning() << "discarding needle image";
+    qDebug() << "discarding needle image";
   }
 
   return search;

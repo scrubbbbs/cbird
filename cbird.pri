@@ -67,7 +67,13 @@ unix {
 
     LIBS *= -L/usr/local/lib
     LIBS *= $$system("pkg-config opencv --libs")
-    LIBS *= -lquazip1-qt5 -lz
+
+    exists(/usr/local/lib/libquazip1-qt5.so) {
+        LIBS *= -lquazip1-qt5 -lz
+    }
+    else {
+        LIBS *= -lquazip -lz
+    }
 }
 
 LIBS *= -lpng # for cimg

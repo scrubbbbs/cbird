@@ -36,8 +36,8 @@ template <typename ValueType, typename DistanceType,
 class VpTree {
  public:
   VpTree() {
-    qDebug("node == %d bytes, value == %d bytes, distance == %d bytes",
-           int(sizeof(Node)), int(sizeof(ValueType)), int(sizeof(DistanceType)));
+    //qDebug("node == %d bytes, value == %d bytes, distance == %d bytes",
+    //       int(sizeof(Node)), int(sizeof(ValueType)), int(sizeof(DistanceType)));
   }
 
   ~VpTree() { delete _root; }

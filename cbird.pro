@@ -88,6 +88,12 @@ unix: {
     INSTALLS += target
     target.path = $$PREFIX/bin
 
+    desktop.files = cbird.desktop
+    desktop.path = $$PREFIX/share/applications
+
+    icon.files = cbird.svg
+    icon.path = $$PREFIX/share/icons/hicolor/scalable
+
     scripts.files = tools/ffplay-sbs tools/ff-compare-audio
     scripts.path  = $$PREFIX/bin/
     #scripts.extra = echo extra
@@ -95,7 +101,20 @@ unix: {
     # qt bug: only strip if exe
     QMAKE_STRIP = tools/strip.sh
 
-    INSTALLS += scripts
+    INSTALLS += desktop icon scripts
+
+    APPDIR=$$OBJECTS_DIR/appimage
+    QMAKE=/usr/local/Qt-5.15.2/bin/qmake
+    LINUXDEPLOYQT=~/Downloads/linuxdeployqt-continuous-x86_64.AppImage
+    appimage.commands = (rm -rf $$APPDIR && \
+      PREFIX="$$APPDIR/cbird" $$QMAKE && \
+      make install && \
+      $$LINUXDEPLOYQT \
+        $$APPDIR/cbird/share/applications/cbird.desktop \
+        -qmake=$$QMAKE \
+        -appimage)
+
+    QMAKE_EXTRA_TARGETS += appimage
 }
 
 CONFIG -= silent

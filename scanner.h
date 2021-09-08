@@ -48,6 +48,7 @@ class IndexParams {
   bool estimateCost = true;      // estimate indexing cost to schedule jobs better
   bool showUnsupported = false;  // show unsupported filetype errors
   bool dryRun = false;           // scan for changes but do not process
+  bool followSymlinks = false;   // follow symlinks to files/dirs
 };
 
 /// Stores result of image/video processing, prior to saving

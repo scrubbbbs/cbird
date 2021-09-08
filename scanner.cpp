@@ -197,8 +197,11 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
 
   scanProgress(dirPath);
 
-  for (const QString& name : QDir(dirPath).entryList(QDir::Files | QDir::Dirs |
-                                                     QDir::NoDotAndDotDot)) {
+  QDir::Filters filters = QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot;
+  if (!_params.followSymlinks)
+    filters |= QDir::NoSymLinks;
+
+  for (const QString& name : QDir(dirPath).entryList(filters)) {
     const QString& path = dirPath + "/" + name;
     if (expected.contains(path)) {
       expected.remove(path);

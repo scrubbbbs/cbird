@@ -125,7 +125,7 @@ class DctTree {
     for (int i = 0; i < numHashes; ++i)
       values.push_back( vpValue(hashes[i], ids[i]) );
     _tree.create(values);
-    _tree.printStats();
+    //_tree.printStats();
   }
 
   QVector<Index::Match> search(uint64_t target, int threshold) {

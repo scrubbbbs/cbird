@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=cbird
+Comment=Content-Based Image Retrieval Database
+Exec=cbird
+Icon=cbird
+Categories=AudioVideo;
+

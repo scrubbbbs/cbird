@@ -2,7 +2,9 @@ readme todo:
 
 - finish 500k indexer stats
 - license
-- download links
+- app download links
+- test data download link
+- unit tests are broken
 
 
 About cbird
@@ -61,7 +63,8 @@ Installing
 #### Linux AppImage 64-bit:
 - Download:
 - Run the appimage chmod
-- Install helpers: ffplay, ffmpeg, ffprobe, trash-cli, ocenaudio
+- Required packages: trash-cli
+- Optional packages: ffplay, ffmpeg, ffprobe, ocenaudio
 - Install command argument completion (bash)
 
 #### Windows 7+ 64-bit
@@ -125,7 +128,7 @@ Stores DCT hashes of regions around ORB features, up to 400 per image. Good for 
 Stores up to 400 Oriented Rotated Brief (ORB) 256-bit features per image and searches using FLANN-based matcher. Good for rotated, cropped but slow.
 
 #### Color Histogram `-p.alg 3`
-Stores a quantized histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. Good for similarity sorting.
+Stores a quantized histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` which is too slow except with `-similar-to`
 
 #### DCT Video Index `-p.alg 4`
 Stores DCT hashes of ()up to 64k) video frames, with temporal compression of similar hashes. Frames are pre-processed to remove letterboxing.
@@ -218,6 +221,7 @@ Wish List
 - display current (applicable?) parameter values (-params)
 - presets for multiple parameters
 - move/link files rather than delete
+- prune groups, keeping/ignoring needle
 
 ### Indexing
 - store date-modified,size for better updating
@@ -228,8 +232,9 @@ Wish List
   - colordescriptor on grayscale image
 - console progress bar
 - error-log to file
+- removing items breaks symlinks to that item... ideally also track symlinks and update them
 
-### Search
+### Search	
 - csv output for other tools, gui wrappers
 - sort groups with closest matches first
 
@@ -239,6 +244,8 @@ Wish List
 - cv min/max filter 8-bit indexed
 - disable/enable relevant actions
 - show results in batches as they are being computed, for slow queries
+- toggle histogram view
+- context menu: copy path
 
 Major Bugs
 ==========================
@@ -253,6 +260,7 @@ Major Bugs
 - ~~MGLW folder view doesn't compute thumbs when group only contains videos~~
 - ~~MGLW template matcher doesn't align images~~
 - ~~MGLW clear multiple ("A") has OOB access~~
+- MGLW potential deadlock in QFuture::waitForFinished
 
 Minor Bugs
 =========================
@@ -271,6 +279,10 @@ Minor Bugs
 - MGLW: delete multi-select as one batch
 - MGLW: suppress QIR eof warnings from thread cancellation
 - replace qPrintable() used for file i/o with qUtf8Printable or QString
+- max matches (-p.mm) is off by one in the final result
+- maybe scale up small svg prior to indexing
+- MGLW: load next row loses focus item on some systems (gnome?)
+- MGLW: template match (T) hides diff image / doesn't restore after reset (F5)
 
 Compiling
 =========================
@@ -282,17 +294,17 @@ Compiling
 - FFmpeg
 - quazip
 
-## Compiling: Linux
+## Compiling: Linux (Ubuntu 21.04/Debian 11)
 
 The easiest way is to use a distro that has Qt 5.15. However, the qt.io distribution or building from source can have additional image formats like tiff, tga, and webp.
 
-This recipe is for Ubuntu 21.04/Debian 11
+This recipe is for Ubuntu 21.04/Debian 11 which includes required versions of core dependencies already.
 
 1.1 Packages
 
-``
+```
 apt-get install qtbase5-dev cmake g++ libpng-dev libjpeg-turbo8-dev libtiff5-dev libopenxr-dev libexiv2-dev git
-``
+```
 
 1.2 Compiling OpenCV 2.4
 
@@ -330,7 +342,6 @@ See: doc/ffmpeg-compile.txt
 1.5 Compiling cbird
 
 ```
-git clone https://github.com/scrubbbbs/cbird.git
 cd cbird
 qmake
 make -j8
@@ -355,6 +366,90 @@ function _cbird {
 complete -F _cbird cbird
 ```
 
+## Compiling: AppImage
+
+Build using linuxdeployqt on ubuntu 18.04 LTS. Core dependencies have to be compiled (maybe PPA can be used?)
+
+Use a virtual machine (I use qemu) with xubuntu 18.04 lts, target CPU "Westmere". The CPU target helps ensure compatibility with older systems.
+
+#### apt packages
+
+```
+sudo apt-get install bison build-essential gperf flex ruby python git mercurial cmake nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev
+
+sudo apt-get install libxcb*-dev libx11*-dev libxext-dev libxfixes-dev libxi-dev libxcd*-dev libxkb*-dev libxrender-dev libfontconfig1-dev libfreetype6-dev libdrm-dev libegl1-mesa-dev libxcursor-dev libxcomposite-dev libxdamage-dev libxrandr-dev libfontconfig1-dev libxss-dev libevent-dev 
+```
+
+#### qt base
+
+```
+for x in qtbase qtimageformats qtwayland; do
+  wget "https://download.qt.io/official_releases/qt/5.15/5.15.2/submodules/$x-everywhere-src-5.15.2.tar.xz"
+done
+
+for x in qtbase qtimageformats qtwayland; do
+  tar -Jxvf "$x-everywhere-src-5.15.2.tar.xz"
+done
+```
+
+```
+cd qtbase-everywhere-src-5.15.2
+ ./configure  -opensource -confirm-license -nomake examples -nomake tests -no-avx -xcb -silent
+make -j8
+sudo make install
+```
+
+#### qt submodules
+
+```
+alias qmake=/usr/local/Qt-5.15.2/bin/qmake
+for x in qtimageformats qtwayland; do
+  (cd "$x-everywhere-src-5.15.2" && qmake && make -j8 && sudo make install)
+done
+```
+
+#### ffmpeg
+
+The latest ffmpeg will not work due to deprecations, so checkout a working version.
+
+```
+git clone https://github.com/FFmpeg/FFmpeg.git
+cd FFmpeg
+git checkout 358c0b
+./configure --enable-gpl --enable-ffplay --disable-static --enable-shared
+make -j8
+sudo make install
+```
+
+#### opencv
+
+```
+cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_FAST_MATH=ON -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
+```
+
+#### quazip
+
+```
+git clone https://github.com/stachenov/quazip
+git checkout v0.8.1
+alias qmake=/usr/local/Qt-5.15.2/bin/qmake
+cd quazip
+qmake PREFIX=/usr/local
+make -j8
+sudo make install
+```
+
+#### cbird
+
+"make appimage" should work if linuxdeployqt is in ~/Downloads/
+
+```
+cd cbird
+alias qmake=/usr/local/Qt-5.15.2/bin/qmake
+qmake
+make -j8
+make appimage
+```
 
 ## Compiling: Windows
 

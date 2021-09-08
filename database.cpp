@@ -1264,6 +1264,9 @@ void Database::filterMatches(const SearchParams& params,
 MediaGroupList Database::similar(const SearchParams& params) {
   qint64 start = QDateTime::currentMSecsSinceEpoch();
 
+  if (params.mirrorMask)
+    qWarning() << "reflected images unsupported, use -similar-to";
+
   // note: if set is provided, it is assumed to contain relevant media type(s)
   MediaGroup haystack;
   if (params.inSet)
