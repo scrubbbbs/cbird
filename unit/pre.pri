@@ -1,11 +1,14 @@
 QT += testlib concurrent 
-CONFIG += debug c++17 console
+CONFIG += debug c++17 console silent
 TEMPLATE = app
 #TARGET = runtest
-TARGET = runtest-$$system("basename $$_PRO_FILE_PWD_")
+
+TEST = $$system("basename $$_PRO_FILE_ | sed -re 's/\.pro$//'")
+TARGET = runtest-$$TEST
+
 INCLUDEPATH += . .. ../..
-MOC_DIR = ../_build 
-OBJECTS_DIR = ../_build
+MOC_DIR = _build 
+OBJECTS_DIR = _build
 
 LIBS += -L/usr/local/lib
 
@@ -28,9 +31,8 @@ FILES_GUI = gui/mediagrouplistwidget gui/mediafolderlistwidget env \
 #CONFIG += precompile_header
 #PRECOMPILED_HEADER = ../../prefix.h
 
-QMAKE_CXXFLAGS += -fPIC -I/opt/qt/current/include -include ../../prefix.h
+QMAKE_CXXFLAGS += -fPIC -I/opt/qt/current/include -include ../prefix.h
 
-#QMAKE_CXX += $$COMPILER -include ../../prefix.h
 QMAKE_CXXFLAGS += -fdiagnostics-color=always -Wno-deprecated-declarations
 
 #QMAKE_LFLAGS += -fuse-ld=gold
@@ -49,6 +51,5 @@ QMAKE_CXXFLAGS += -fdiagnostics-color=always -Wno-deprecated-declarations
 # deprecated code, at some point want to get rid of it!
 #DEFINES += ENABLE_DEPRECATED
 
-SOURCES = *.cpp
-
-FILES =
+SOURCES =
+FILES = $$TEST

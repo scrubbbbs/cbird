@@ -8,14 +8,14 @@ for (BASE, FILES) {
 
     for (FILE, LIST) {
         exists($$FILE) {
-            SOURCES += ../$$FILE
+            SOURCES += $$FILE
         }
     }
 
     LIST=../$${BASE}.h $${BASE}.h
     for (FILE, LIST) {
         exists($$FILE) {
-            HEADERS += ../$$FILE
+            HEADERS += $$FILE
         }
     }
 }

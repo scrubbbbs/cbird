@@ -513,13 +513,16 @@ Development
 - Editor: Qt Creator is nice (enable ClangFormat plugin)
 
 ## Unit tests
-Cbird uses the QTest unit test framework. The tests require a test data set, download it here.
+Cbird uses the QTest unit test framework. The tests require a test data set, see release page on github.
 
 ```
 export TEST_DATA_DIR=</path/to/cbird-testdata>
-cd unit/<test>
-qmake
-make [-j8]
-./runtest
-```
+cd unit/
 
+# recompile, run all tests with coverage
+./unit.sh -clean -coverage
+
+# run one test
+qmake <test>.pro -o <test>.pro.make
+make -f <test>.pro.make -j
+./runtest-<test>

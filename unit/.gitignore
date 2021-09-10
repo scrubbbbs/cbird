@@ -1,10 +1,7 @@
-coverage.info
-coverage-stripped.info
-lcov
-*/runtest
-*/_tmp
-*/*.pro.user*
-*/*.csv
-*/*.json
-*/settings.ini
-
+runtest-*
+*.make
+_build
+_coverage
+*.pro.user*
+*.csv
+*.json

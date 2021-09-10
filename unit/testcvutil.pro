@@ -1,4 +1,4 @@
-include("../pre.pri")
+include("pre.pri")
 
 #QT += sql
 
@@ -10,4 +10,4 @@ contains(DEFINES, ENABLE_DEPRECATED) {
     LIBS += $$LIBS_LIBPHASH
 }
 
-include("../post.pri")
+include("post.pri")
