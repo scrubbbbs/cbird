@@ -34,9 +34,11 @@ void TestIndexBase::baseInitTestCase(Index* index, const QString& dataSet,
 
   _scanner = new Scanner();
 
-  // if we don't care about features and that will speed up the test
+  // if we don't care about features that will speed up the test
   IndexParams params;
-  if (!enableFeatures) params.algos &= ~IndexParams::AlgoFeatures;
+  if (!enableFeatures) params.algos &= ~(
+    1<<SearchParams::AlgoDCTFeatures |
+    1<<SearchParams::AlgoCVFeatures);
 
   _scanner->setIndexParams(params);
 

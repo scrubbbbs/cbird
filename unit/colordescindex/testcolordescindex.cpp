@@ -21,7 +21,6 @@ class TestColorDescIndex : public TestIndexBase {
   void testDefaults() { baseTestDefaults(new ColorDescIndex); }
   void testEmpty() { baseTestEmpty(new ColorDescIndex); }
   void testAddRemove();
-
   void testMemoryUsage();
   void testLoad();
 };

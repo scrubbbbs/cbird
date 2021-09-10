@@ -1,6 +1,6 @@
 include("../pre.pri")
 
-QT += sql dbus xml
+QT += sql dbus xml widgets
 
 LIBS += $$LIBS_INDEX
 

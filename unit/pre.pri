@@ -1,11 +1,11 @@
 QT += testlib concurrent 
-CONFIG += debug c++11 precompile_header console
+CONFIG += debug c++17 console
 TEMPLATE = app
-TARGET = runtest
+#TARGET = runtest
+TARGET = runtest-$$system("basename $$_PRO_FILE_PWD_")
 INCLUDEPATH += . .. ../..
-MOC_DIR = _tmp
-OBJECTS_DIR = _tmp
-
+MOC_DIR = ../_build 
+OBJECTS_DIR = ../_build
 
 LIBS += -L/usr/local/lib
 
@@ -25,18 +25,26 @@ LIBS_GUI = $$LIBS_CIMG
 FILES_GUI = gui/mediagrouplistwidget gui/mediafolderlistwidget env \
     lib/jpegquality gui/videocomparewidget cimgops
 
-#QMAKE_CXX += -include prefix.h
-PRECOMPILED_HEADER = ../../prefix.h
-#QMAKE_CXX += -fdiagnostics-color=always
+#CONFIG += precompile_header
+#PRECOMPILED_HEADER = ../../prefix.h
+
+QMAKE_CXXFLAGS += -fPIC -I/opt/qt/current/include -include ../../prefix.h
+
+#QMAKE_CXX += $$COMPILER -include ../../prefix.h
+QMAKE_CXXFLAGS += -fdiagnostics-color=always -Wno-deprecated-declarations
 
 #QMAKE_LFLAGS += -fuse-ld=gold
 
 # coverage
-#CONFIG -= release
-#CONFIG += debug
-#QMAKE_CXXFLAGS += -O0 -Wall -fprofile-arcs -ftest-coverage
-#QMAKE_LFLAGS += -O0 -Wall -fprofile-arcs -ftest-coverage
-#LIBS += -lgcov
+!equals('',$$(COVERAGE)) {
+  message("coverage enabled")
+  CONFIG -= release
+  CONFIG += debug
+
+  QMAKE_CXXFLAGS += -O0 -Wall -fprofile-arcs -ftest-coverage
+  QMAKE_LFLAGS += -O0 -Wall -fprofile-arcs -ftest-coverage
+  LIBS += -lgcov
+}
 
 # deprecated code, at some point want to get rid of it!
 #DEFINES += ENABLE_DEPRECATED

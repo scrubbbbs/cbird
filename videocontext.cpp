@@ -185,6 +185,7 @@ class VideoContextPrivate {
     frame = nullptr;
     videoStream = nullptr;
     scaler = nullptr;
+    sar = -1;
     memset(&scaled, 0, sizeof(scaled));
   }
 
@@ -194,6 +195,7 @@ class VideoContextPrivate {
   AVFrame* frame;
   AVStream* videoStream;
   AVPacket packet;
+  float sar;
 
   SwsContext* scaler;
   struct {
@@ -624,7 +626,7 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
 
   const int64_t targetTS = int64_t(floor(startSeconds / tb + 0.5)) + _firstPts;
 
-  qDebug("%s: seek: frame=%d time=%.2f tb=(%" PRIi64 ")", qUtf8Printable(_path),
+  qDebug("\"%s\" : frame=%d time=%.2f tb=(%" PRIi64 ")", qUtf8Printable(_path),
          frame, startSeconds, targetTS);
 
   if (startSeconds / tb > _firstPts) {
@@ -660,11 +662,17 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
 
       } while (!isKeyframe && _p->packet.pts < targetTS);
 
-      seekTime -= 1.0 / tb;
       tries++;
-
       if (tries > 1)
-        AV_WARNING("try loop: try=") << tries;
+        AV_WARNING("try loop: ") << tries << isKeyframe << seekTime - _p->packet.pts;
+
+      // guess the next time try; if we back up too much we pay the price
+      // of decoding a lot of frames; not enough and we never get there...
+
+      //seekTime -= 1.0 / tb; // back up one frame
+
+      // back up half as much each time we miss
+      seekTime = (seekTime + (seekTime - _p->packet.pts)/2.0 - 1.0/tb);
 
       if (tries > 10) {
         AV_WARNING("failed after 10 attempts, seeking dumb");
@@ -673,6 +681,10 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
         seekDumb(frame);
         return true;
       }
+
+      // assuming we missed, next seek time should be before last try
+      //if (isKeyframe && _p->packet.pts)
+      //  seekTime = _p->packet.pts - seekTime
 
     } while (!isKeyframe || _p->packet.pts > targetTS);
 
@@ -686,7 +698,10 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
   while (framesLeft--)
     if (decodeFrame()) {
       // store the intermediate frames if so desired
-      if (decoded) {
+      if (decoded && decoded->count() < 400) {
+        if (decoded->count() >= 399) // this can blow up and use all memory
+          AV_WARNING("too many decoded frames, keeping the first 400");
+
         QImage tmp;
         int w, h, fmt;
 
@@ -1008,11 +1023,13 @@ bool VideoContext::nextFrame(cv::Mat& outImg) {
 }
 
 float VideoContext::aspect() const {
-  float aspect = float(av_q2d(
+  if (_p->sar > 0.0) return _p->sar;
+
+  _p->sar = float(av_q2d(
       av_guess_sample_aspect_ratio(_p->format, _p->videoStream, _p->frame)));
-  if (aspect == 0.0f) {
+  if (_p->sar == 0.0f) {
     AV_WARNING("unable to guess SAR, assuming 1.0");
-    aspect = 1.0f;
+    _p->sar = 1.0f;
   }
-  return aspect;
+  return _p->sar;
 }

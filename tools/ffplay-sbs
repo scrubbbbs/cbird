@@ -1,5 +1,5 @@
 #!/bin/bash
-#   Play two videos side-by-side using ffmpeg/ffplay
+#  Play two videos side-by-side using ffmpeg/ffplay
 #  Copyright (C) 2021 scrubbbbs
 #  Contact: screubbbebs@gemeaile.com =~ s/e//g
 #  Project: https://github.com/scrubbbbs/cbird
@@ -64,11 +64,13 @@ mkfifo $video2
 mkfifo $audio1
 mkfifo $audio2
 
+echo s1: $seek1
+echo s2: $seek2
+
 ffmpeg -ss "$seek1" -i "$file1" -f yuv4mpegpipe - 2>/dev/null >$video1 &
 ffmpeg -ss "$seek1" -i "$file1" -f wav          -y $audio1 2>/dev/null &
 ffmpeg -ss "$seek2" -i "$file2" -f yuv4mpegpipe -y $video2 2>/dev/null &
 ffmpeg -ss "$seek2" -i "$file2" -f wav          -y $audio2 2>/dev/null &
-
 
 height1=`ffprobe -show_streams "$file1" 2>/dev/null | grep ^height | sed s/height=//`
 height2=`ffprobe -show_streams "$file2" 2>/dev/null | grep ^height | sed s/height=//`

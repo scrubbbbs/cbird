@@ -1,7 +1,6 @@
 readme todo:
 
 - finish 500k indexer stats
-- license
 - app download links
 - test data download link
 - unit tests are broken
@@ -511,10 +510,9 @@ Development
 - Code Style: clang-format: Google
 - Two spaces indent
 - 80-100 character line
-- Editor: QtCreator is nice (enable ClangFormat plugin)
+- Editor: Qt Creator is nice (enable ClangFormat plugin)
 
 ## Unit tests
-
 Cbird uses the QTest unit test framework. The tests require a test data set, download it here.
 
 ```

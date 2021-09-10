@@ -37,9 +37,9 @@ class TestCvUtil : public QObject {
                               << "result/grayscale/$file,fail/grayscale/$file");
   }
   void testGrayscale();
-
+#if DEADCODE
   void testLoadSaveMatrix();
-
+#endif
   void testDctHashCv_data();
   void testDctHashCv();
 
@@ -446,6 +446,7 @@ void TestCvUtil::testGrayscale() {
   }
 }
 
+#if DEADCODE
 void TestCvUtil::testLoadSaveMatrix() {
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
@@ -483,6 +484,7 @@ void TestCvUtil::testLoadSaveMatrix() {
   // void loadMatrixArray(const QString& path,
   //    std::vector<uint32_t>& mediaIds, std::vector<cv::Mat>& array);
 }
+#endif
 
 void TestCvUtil::commonPhashData() {
   QString root = getenv("TEST_DATA_DIR");

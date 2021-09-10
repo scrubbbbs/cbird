@@ -374,13 +374,9 @@ static int printUsage(int argc, char** argv) {
 }
 
 /// print command line completions (e.g. for bash), pipe (|) separated
+/// see install() for enabling in bash
 int printCompletions(const char* argv0, const QStringList& args) {
-  //
-  // for bash, we need:
-  // function _cbird { OIFS=$IFS; IFS='|'; COMPREPLY=($(cbird -complete
-  // $COMP_CWORD ${COMP_WORDS[*]})); IFS=$OIFS; } complete -F _cbird cbird
-  //
-  // cword is the $CWORD variable in bash... index of the cursor (in words)
+
   if (args.count() < 3) {
     printf(
         "completions require $CWORD as 2nd argument\nusage:%s -complete $CWORD "
@@ -429,17 +425,16 @@ int printCompletions(const char* argv0, const QStringList& args) {
                                  "decthr", "idxthr", "ljf",  "dry", "bsize",
                                  "msize"};
   for (auto& k : indexKeys) oneArg << ("-i." + k);
-
   cmds << oneArg;
 
   const QStringList argTypeFile{"-compare-videos"};
-
   cmds.sort();
 
+  // cword is the $CWORD variable in bash... index of the cursor (in words)
   int cword = args.at(2).toInt() + 3;
 
   // completions write to stdout so we cannot log there
-#ifdef DEBUG_COMPLETIONS
+#if DEBUG_COMPLETIONS
   QFile log(QDir::tempPath() + "/cbird-completions.log");
   Q_ASSERT(log.open(QFile::WriteOnly | QFile::Append));
 #else
@@ -450,6 +445,8 @@ int printCompletions(const char* argv0, const QStringList& args) {
   debug << args << "\n";
 
   QStringList completions;
+
+  // current and previous "words"/args
   const QString curr = cword >= args.count() ? "" : args[cword];
   const QString prev = cword > 4 && args.count() > 4 ? args[cword - 1] : "";
   const QString prev1 = cword > 5 && args.count() > 5 ? args[cword - 2] : "";
@@ -462,59 +459,40 @@ int printCompletions(const char* argv0, const QStringList& args) {
     path.replace("\\", "");  // remove shell escape so QFileInfo works
     path = path.trimmed();
 
-    bool quote = false; // remove leading quote, in which case we do not escape output
+    //bool quote = false; // remove leading quote, in which case we do not escape output
     if (path.startsWith("\"") || path.startsWith("\'")) {
-      quote = true;
-      path = path.mid(1);
+    //  quote = true;
+       path = path.mid(1);
     }
-
     const QString homePath = QDir::homePath();
     const bool isHome = path.startsWith("~");
     if (isHome) path = homePath + path.mid(1);  // QFileInfo doesn't recognize ~
 
     const QFileInfo info(path);
-    const QDir dir = info.dir();  // dir containing path
+    const QDir dir = info.dir();  // dir we are going to list for completions
 
-    // prefix for dir entries must be compatible with query(curr),
-    // use (prefix+entry).startsWith(curr) for the match
-    QString prefix = dir.absolutePath();
-    if (info.isRelative()) prefix = QDir().relativeFilePath(prefix);
+    // prefix for dir entries so completion is (prefix + "/" + entry)
+    QString prefix = dir.path();
+    if (!info.isRelative())
+      prefix = dir.absolutePath();
     if (isHome)
       prefix = "~" + prefix.mid(homePath.length());  // keep ~ when matching
 
-    prefix += "/";
+    if (!prefix.endsWith("/")) prefix += "/"; // some rare cases do not need / added, like "/"
 
-    // the prefix will only start with ./ if listing cwd,
-    // we only want it if curr also starts with ./
-    if (prefix.startsWith("./")) prefix = prefix.mid(2);
-    if (curr.startsWith("./")) prefix = "./" + prefix;
-
+    debug << "prefix" << prefix << "\n";
     debug << "isDir" << info.isDir() << path << dir.exists() << "\n";
     debug << "isFile" << info.isFile() << "\n";
 
-    bool accept = false;
-    if (!accept) accept = (filter & QDir::Files) && info.isFile();
-    if (!accept) accept = (filter & QDir::Dirs) && info.isDir();
-
-    // if curr ends with /, list the dir contents, even if
-    // we are looing for a dir
-    if (accept && path != "" && !path.endsWith("/"))
-      // fixme: this is only valid if also no alternatives
-      debug << "path exists, no completions";  // acceptable value, no completions
-    else {
-      const auto entries =
-          dir.entryInfoList(filter | QDir::Dirs | QDir::NoDotAndDotDot);
-      if ((path == "" || info.exists()) && entries.count() > 1)
-        for (auto& e : entries)
-          completions << e.fileName();  // names only, if possible
-      else
-        for (auto& e : entries) {  // match curr to name
-          QString comp = prefix + e.fileName();
-          if (!quote) comp = comp.replace(" ", "\\ ");
-          if (!(filter & QDir::Dirs) && e.isDir()) comp += "/";
-          debug << "check-prefix" << path << comp << "\n";
-          if (comp.startsWith(path)) completions << comp;
-        }
+    const auto entries =
+        dir.entryInfoList(filter | QDir::Dirs | QDir::NoDotAndDotDot);
+    for (auto& e : entries) {  // match curr to name
+      QString comp = prefix + e.fileName();
+      //if (!quote) comp = comp.replace(" ", "\\ ");
+      //if (!(filter & QDir::Dirs) && e.isDir()) comp += "/";
+      if (isHome && path.startsWith(homePath)) path = "~" + path.mid(homePath.length());
+      debug << "check-prefix" << path << comp << "\n";
+      if (comp.startsWith(path)) completions << comp;
     }
   };
 
@@ -536,8 +514,112 @@ int printCompletions(const char* argv0, const QStringList& args) {
   for (auto& c : completions) debug << "output:" << c << "\n";
 
   printf("%s\n", qPrintable(completions.join("|")));
-
   return 0;
+}
+
+static char inputChar(char defaultOption) {
+  qFlushOutput();
+  char ch = 0, option = defaultOption;
+
+  // non-newline, valid option
+  if (1 == scanf("%c", &ch) && ch != 10)
+    option = ch;
+
+  // no input
+  if (ch == 0) exit(-1);
+
+  // non-newline, eat anything else until the newline
+  if (ch != 10)
+    while (1 == scanf("%c", &ch) && ch != 10) ;
+
+  return option;
+}
+
+static void install(const QString& argv0, const QString& prefix) {
+
+  QFileInfo dir(prefix);
+  if (!dir.isDir()) {
+    printf("install: %s is not a directory\n", qUtf8Printable(prefix));
+    return;
+  }
+
+  const char* bashCompletionScript =
+    "\n"
+    "##### <cbird-completions> #####\n"
+    "function _cbird {\n"
+    "  OIFS=$IFS\n"
+    "  IFS='|'\n"
+    "  COMPREPLY=($(cbird -complete $COMP_CWORD ${COMP_WORDS[*]}))\n"
+    "  IFS=$OIFS\n"
+    "}\n"
+    "complete -o filenames -F _cbird cbird\n"
+    "##### </cbird-completions> #####\n\n"
+    ;
+
+  printf("install: Install cbird into %s ? Y/[N]: ",
+          qUtf8Printable(prefix));
+  char ch = inputChar('N');
+  if (ch == 'Y' || ch == 'y') {
+    QString sudo;
+    if (!dir.isWritable() || !dir.isExecutable()) {
+      Q_ASSERT(0 == system("sudo -k")); // force re-entering password
+      fprintf(stdout, "install: Permission required for %s\n", qPrintable(prefix));
+      if (0 != system("sudo echo 'install: Authenticated'"))
+        return;
+      sudo = "sudo ";
+    }
+
+    QVector<QStringList> binaries{{"cbird", argv0}};
+
+    // this does not work; permission denied
+//    const QString appDir = getenv("APPDIR");
+//    if (!appDir.isEmpty()) {
+//      binaries.append({"ffplay-sbs", appDir+"/cbird/bin/ffplay-sbs"});
+//      binaries.append({"ff-compare-audio", appDir+"/cbird/bin/ff-compare-audio"});
+//    }
+
+    for (auto& binary : qAsConst(binaries)) {
+      QString cmd = QString("%1install -D -v \"%2\" \"%3/bin/%4\"")
+                        .arg(sudo).arg(binary[1])
+                        .arg(prefix).arg(binary[0]);
+      qDebug() << cmd;
+      qFlushOutput();
+      if (0 != system(qUtf8Printable(cmd)))
+        printf("install: installation of %s failed\n", qPrintable(binary[0]));
+    }
+  }
+
+  if (0 != system("cbird -version >/dev/null 2>&1"))
+    printf("install: cbird doesn't seem to be in your PATH, bash completions cannot work\n");
+  if (0 != system("trash-put --version >/dev/null 2>&1"))
+    printf("install: trash-cli is not installed, required for file deletion\n");
+  if (0 != system("ffplay -version >/dev/null 2>&1"))
+    printf("install: ffplay is not installed, recommended for video compare tool\n");
+
+  const QString shell = getenv("SHELL");
+  if (shell == "/bin/bash") {
+    printf("install: You seem to be using bash, install completions in ~/.bashrc? Y/[N]: ");
+    char ch = inputChar('N');
+    if ((ch == 'Y' || ch == 'y')) {
+      QFile bashrc(QDir::home().filePath(".bashrc"));
+      if (!bashrc.exists()) {
+        printf("install: .bashrc does not exist\n");
+        return;
+      }
+      Q_ASSERT(bashrc.open(QFile::ReadOnly));
+      QString bashContents = bashrc.readAll();
+      if (bashContents.contains("<cbird-completions>")) {
+        printf("install: .bashrc seems to contain completions, I'm not going to modify it\n");
+        printf("install: here is the current completions script:\n");
+        printf("%s", bashCompletionScript);
+        return;
+      }
+      bashrc.close();
+      Q_ASSERT(bashrc.open(QFile::ReadWrite|QFile::Append));
+      bashrc.write(bashCompletionScript);
+      printf("install: .bashrc updated, run \"source ~/.bashrc\" or start a new shell\n");
+    }
+  }
 }
 
 /// Support <comparator> argument type
@@ -853,6 +935,7 @@ int main(int argc, char** argv) {
       qInfo() << CBIRD_PROGNAME << CBIRD_VERSION
               << "[" << CBIRD_GITVERSION << "]" << CBIRD_HOMEPAGE;
       qInfo() << "build:" << buildFlags();
+      qInfo() << "settings:" << DesktopHelper::settingsFile();
       qInfo() << "Qt" << qVersion() << "compiled:" << QT_VERSION_STR;
       qInfo() << "FFmpeg" << ff[0] << "compiled:" << ff[1];
       qInfo() << "OpenCV" << cv[0] << "compiled:" << cv[1];
@@ -872,6 +955,10 @@ int main(int argc, char** argv) {
       qInfo() << app->applicationName() << app->applicationVersion();
     } else if (arg == "-license" || arg == "--license") {
       printLicense();
+    } else if (arg == "-install") {
+      QString prefix = "/usr/local";
+      if (args.count() > 0) prefix = nextArg();
+      install(argv[0], prefix);
     } else if (arg == "-remove") {
       qInfo() << "removing: " << selection.count() << "items";
       //Media::printGroup(selection);
@@ -902,36 +989,42 @@ int main(int argc, char** argv) {
       qInfo() << "dup-nuke:" << filtered.count() << "duplicate groups";
       if (filtered.count() <= 0) continue;
 
-      qInfo() << "dup-nuke: removing (at most) one item from each group";
+      qInfo() << "dup-nuke: trashing (at most) one item from each group";
 
-      // fixme: deletion confirmation
+      qFlushOutput();
+      fprintf(stdout, "dup-nuke: %d items will be trashed, proceed Y/[N]: ", filtered.count());
+      fflush(stdout);
+      fflush(stdin);
+      char ch = inputChar('N');
+      if (ch == 'Y') {
+        int nuked = 0;
+        MediaGroup toRemove;
+        for (const MediaGroup& group : filtered) {
+          // only remove one of the dups; it could be dup of
+          // another in the same path
+          // -dups-in <dir> -nuke would delete them all
+          for (const Media& m : group)
+            if (m.path().startsWith(path)) {
+              toRemove.append(m);
+              DesktopHelper::moveToTrash(m.path());
+              nuked++;
+              break;
+            }
+        }
 
-      int nuked = 0;
-      MediaGroup toRemove;
-      for (const MediaGroup& group : filtered) {
-        // only remove one of the dups; it could be dup of
-        // another in the same path
-        // -dups-in <dir> -nuke would delete them all
-        for (const Media& m : group)
-          if (m.path().startsWith(path)) {
-            toRemove.append(m);
-            DesktopHelper::moveToTrash(m.path());
-            nuked++;
-            break;
-          }
+        qInfo("dup-nuke: %d nuked, updating db", nuked);
+        engine().db->remove(toRemove);
       }
 
-      qInfo("dup-nuke: %d nuked, updating db", nuked);
-      engine().db->remove(toRemove);
     } else if (arg == "-nuke") {
 
       if (selection.count() > 0) {
-        qWarning() << "about to move" << selection.count() << "items to trash.";
         qFlushOutput();
-        printf("Proceed? Y/[N]: ");
+        fprintf(stdout, "nuke: about to move %d items to trash, proceed? Y/[N]: ", selection.count());
         fflush(stdout);
-        char ch = 'N';
-        if (1 == scanf("%c", &ch) && ch == 'Y') {
+        fflush(stdin);
+        char ch = inputChar('N');
+        if (ch == 'Y') {
           engine().db->remove(selection);
 
           for (auto& m : selection)

@@ -82,10 +82,10 @@ void DesktopHelper::runProgram(QStringList& args, bool wait,
   for (QString& arg : args) {
     arg.replace("%1", path);
     arg.replace("%2", path2);
-    arg.replace("%seek", QString::number(seek));
-    arg.replace("%seek2", QString::number(seek2));
-    arg.replace("%seek(int)", QString::number(int(seek)));
     arg.replace("%seek2(int)", QString::number(int(seek2)));
+    arg.replace("%seek(int)", QString::number(int(seek)));
+    arg.replace("%seek2", QString::number(seek2));
+    arg.replace("%seek", QString::number(seek));
     arg.replace("%home", QDir::homePath());
     arg.replace("%dirname(1)", QFileInfo(path).dir().absolutePath());
     arg.replace("%dirname(2)", QFileInfo(path2).dir().absolutePath());
@@ -148,6 +148,25 @@ void DesktopHelper::runProgram(QStringList& args, bool wait,
     } else {
       QProcess p;
       p.setProgram(prog);
+
+      const QString disableAppProgs = getenv("CBIRD_NO_APPIMAGE_PROGS");
+      if (disableAppProgs.isEmpty()) {
+        const QString appDir = getenv("APPDIR");
+        const QString appProg = appDir + "/cbird/bin/" + prog;
+        if (!appDir.isEmpty() && QFileInfo(appProg).exists()) {
+          qInfo() << "using" << appProg << "for:" << prog;
+          qInfo() << "to disable this, set CBIRD_NO_APPIMAGE_PROGS";
+
+          // put the bundled apps before everything else
+          auto env = QProcessEnvironment::systemEnvironment();
+          const QString binPath = env.value("PATH");
+          const QString libPath = env.value("LD_LIBRARY_PATH"); // might be empty, should be fine
+          env.insert("PATH", appDir+"/cbird/bin:" + binPath);
+          env.insert("LD_LIBRARY_PATH", appDir+"/cbird/lib:" + libPath);
+          p.setProcessEnvironment(env);
+          p.setProgram(appProg);
+        }
+      }
       //#ifdef Q_OS_WIN
       //      p.setNativeArguments(args.mid(1).join(" "));
       //#else
@@ -312,8 +331,6 @@ QString DesktopHelper::settingsFile() {
     path = QSettings(QSettings::IniFormat, QSettings::UserScope,
                      qApp->applicationName())
                .fileName();
-
-  qDebug() << path;
   return path;
 }
 

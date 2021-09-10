@@ -109,8 +109,12 @@ unix: {
     appimage.commands = (rm -rf $$APPDIR && \
       PREFIX="$$APPDIR/cbird" $$QMAKE && \
       make install && \
+      cp -auv /usr/local/bin/ff* $$APPDIR/cbird/bin/ && \
       $$LINUXDEPLOYQT \
         $$APPDIR/cbird/share/applications/cbird.desktop \
+        -executable=/usr/local/bin/ffmpeg \
+        -executable=/usr/local/bin/ffplay \
+        -executable=/usr/local/bin/ffprobe \
         -qmake=$$QMAKE \
         -appimage)
 
