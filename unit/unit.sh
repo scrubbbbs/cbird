@@ -1,8 +1,5 @@
 #!/bin/bash
 
-clean="echo -n ''"
-coverage=""
-
 option=$1
 while [ ! -z $option ]; do 
   shift 1
@@ -11,10 +8,9 @@ while [ ! -z $option ]; do
   if [ $option = "-coverage" ]; then export COVERAGE=1; fi
   option=$1
 done
-echo "clean=$clean"
-echo "coverage=$COVERAGE"
 
-for project in *.pro; do
+for project in test*.pro; do
+  echo ============================================================
   echo $project
   qmake -o "$project".make "$project" && make -f "$project.make" -j
 done

@@ -1,5 +1,6 @@
 runtest-*
 *.make
+Makefile.*
 _build
 _coverage
 *.pro.user*
