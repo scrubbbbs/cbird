@@ -52,7 +52,8 @@ Scanner::Scanner() {
 
 Scanner::~Scanner() { flush(); }
 
-void Scanner::scanDirectory(const QString& path, QSet<QString>& expected) {
+void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
+                            const QDateTime& modifiedSince) {
   if (_params.indexThreads <= 0)
     _params.indexThreads = QThread::idealThreadCount();
 
@@ -66,6 +67,8 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected) {
   _topDirPath = path;
   _existingFiles = 0;
   _ignoredFiles = 0;
+  _modifiedFiles = 0;
+  _modifiedSince = modifiedSince;
   readDirectory(path, expected);
   scanProgress(path);
 
@@ -121,19 +124,24 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
   // so we need to remove from skip list after iterating
   QStringList skipped;
 
-  const QStringList list = zip.getFileNameList();
-  for (const QString& file : list) {
+  const auto list = zip.getFileInfoList();
+  for (const auto& entry : list) {
+    QString file = entry.name;
     // todo: setting for ignored folder names
     if (file.startsWith(".") || file.startsWith("__MACOSX")) {
       _ignoredFiles++;
       continue;
     }
-
     const QString zipPath = Media::virtualPath(path, file);
     if (expected.contains(zipPath)) {
-      skipped.append(zipPath);
-      _existingFiles++;
-      continue;
+      if (entry.dateTime < _modifiedSince) {
+        skipped.append(zipPath);
+        _existingFiles++;
+        continue;
+      }
+      else {
+        _modifiedFiles++;
+      }
     }
 
     QFileInfo info(file);
@@ -177,9 +185,9 @@ void Scanner::scanProgress(const QString& path) const {
   QString status = QString::asprintf(
   //fflush(stdout);
   //fprintf(stdout,
-              "%s<PL> images:%06d videos:%06d ignored:%04d ok:%08d %-80s",
+              "<NC>%s<PL> i:%d v:%d ign:%d mod:%d ok:%d %s",
           qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(), _ignoredFiles,
-         _existingFiles, qUtf8Printable(elided));
+         _modifiedFiles, _existingFiles, qUtf8Printable(elided));
   //fflush(stdout);
   qInfo().noquote() << status;
 }
@@ -203,13 +211,19 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
 
   for (const QString& name : QDir(dirPath).entryList(filters)) {
     const QString& path = dirPath + "/" + name;
-    if (expected.contains(path)) {
-      expected.remove(path);
-      _existingFiles++;
-      continue;
-    }
-
     entry.setFile(path);
+
+    if (expected.contains(path)) {
+      // use metadataChangeTime() since lastModified() would not see
+      // a change when an old file is renamed.
+      if (entry.metadataChangeTime() < _modifiedSince) {
+        expected.remove(path);
+        _existingFiles++;
+        continue;
+      }
+      else
+        _modifiedFiles++;
+    }
 
     if (entry.isFile() && !_activeWork.contains(path)) {
       //            printf("considering: images=%d videos=%d %s \r",
@@ -231,6 +245,11 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         else if (!isQueued(path))
           _videoQueue.append(path);
       } else if (_archiveTypes.contains(type)) {
+        // todo: attempt to skip deep scan of zip files... this is slow
+        // 1. the zip modified date is before _modifiedSince
+        // 2. the expected list contains the zip members
+        // 3. remove all from expected list
+        //if (entry.metadataChangeTime() >= _modifiedSince)
         scanProgress(path);
         readArchive(path, expected);
       } else {

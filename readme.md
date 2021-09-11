@@ -246,7 +246,6 @@ Wish List
 
 Major Bugs
 ==========================
-
 - might be possible for -remove to corrupt database
   - e.g. -select-type 1 -remove -update
 - sws_scale buffer overflow (264x480 yuv420p)
@@ -254,24 +253,23 @@ Major Bugs
 
 Minor Bugs
 =========================
+- max matches (-p.mm) is off by one in the final result
+- maybe scale up small svg prior to indexing
 - 64-bit image support
 - colordescriptor somewhat non-deterministic, could be a bug
 - vacuum database once in a while, maybe have a delete counter
 - dctfeature hash logic seems flawed, needs analysis
 - ffmpeg deprecations, requires older branch to compile
+- replace qPrintable() used for file path with qUtf8Printable or QString
 - maybe problem with some chars in filenames, dirs ending in "!" are skipped by scanner
 - MGLW jpeg-compression-quality does not work in zip archives
 - MGLW scale-to-fit does not work when diff image enabled
 - MGLW up/down key selection swaps sides (scroll wheel does not)
-- replace & rename a file will not update index (needs to store date-modified and/or size)
-- Windows: titlebar/dialogs do not use native theme
 - MGLW: delete multi-select as one batch
 - MGLW: suppress QIR eof warnings from thread cancellation
-- replace qPrintable() used for file path with qUtf8Printable or QString
-- max matches (-p.mm) is off by one in the final result
-- maybe scale up small svg prior to indexing
 - MGLW: load next row loses focus item on some systems (gnome?)
 - MGLW: template match (T) hides diff image / doesn't restore after reset (F5)
+- Windows: titlebar/dialogs do not use native theme
 
 Compiling
 =========================

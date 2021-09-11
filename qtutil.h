@@ -124,19 +124,22 @@ class WidgetHelper {
 
 class DBHelper {
  public:
-  /// test if a database-backed cache is stale or not
-  static bool isCacheFileStale(QSqlDatabase& db, const QString& cacheFile) {
+  static bool isCacheFileStale(const QSqlDatabase& db, const QString& cacheFile) {
+    QFileInfo cacheInfo(cacheFile);
+
+    return !cacheInfo.exists() ||
+           lastModified(db) > cacheInfo.lastModified();
+  }
+
+  static QDateTime lastModified(const QSqlDatabase& db) {
     // this only works with local file database drivers, like sqlite
     QString dbPath = db.databaseName();
     Q_ASSERT( !dbPath.isEmpty() );
 
     QFileInfo dbInfo(dbPath);
-    if (!dbInfo.exists()) return false;
+    if (!dbInfo.exists()) return QDateTime::fromSecsSinceEpoch(INT64_MAX);
 
-    QFileInfo cacheInfo(cacheFile);
-
-    return !cacheInfo.exists() ||
-           dbInfo.lastModified() > cacheInfo.lastModified();
+    return dbInfo.lastModified();
   }
 };
 

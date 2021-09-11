@@ -111,10 +111,12 @@ class Scanner : public QObject {
    * @param dir Directory to scan
    * @param [in] expected files to see (from a previous scan),
    *        [out] list of what the scanner did not see (removed files)
+   * @param modifiedSince file is "removed" if modified after this
    *
    * @note Connect signals to get the results of the scan
    */
-  void scanDirectory(const QString& dir, QSet<QString>& expected);
+  void scanDirectory(const QString& dir, QSet<QString>& expected,
+                     const QDateTime& modifiedSince=QDateTime::fromSecsSinceEpoch(INT64_MAX));
 
   /**
    * process compressed image
@@ -220,5 +222,6 @@ class Scanner : public QObject {
   //QThreadPool _imagePool;
 
   QString _topDirPath;
-  int _existingFiles, _ignoredFiles;
+  int _existingFiles, _ignoredFiles, _modifiedFiles;
+  QDateTime _modifiedSince;
 };

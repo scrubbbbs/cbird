@@ -21,6 +21,7 @@
 #include "database.h"
 #include "profile.h"
 #include "templatematcher.h"
+#include "qtutil.h"
 
 QAtomicInt& Database::connectionCount() {
   static auto* s = new QAtomicInt(0);
@@ -301,6 +302,24 @@ Database::~Database() {
    */
 }
 
+QDateTime Database::lastAdded() {
+  // note: we cannot use the date of the database file, because
+  //       other operations like rename, vacuum will modify it
+  QFileInfo info(indexPath() + "/last-added.txt");
+  if (!info.exists()) {
+    qWarning() << "missing timestamp file, -update may ignore modified files";
+    return DBHelper::lastModified(connect());
+  }
+  return info.lastModified();
+}
+
+void Database::writeTimestamp() {
+  QFile f(indexPath() + "/last-added.txt");
+  Q_ASSERT(f.open(QFile::WriteOnly | QFile::Truncate));
+  QString date = QDateTime::currentDateTime().toString();
+  f.write(qPrintable(date));
+}
+
 void Database::add(const MediaGroup& inMedia) {
 
   uint64_t then = nanoTime();
@@ -466,6 +485,8 @@ void Database::add(const MediaGroup& inMedia) {
 
   connect().commit();
   for (Index* i : _algos) connect(i->databaseId()).commit();
+
+  writeTimestamp();
 
   now = nanoTime();
   uint64_t w3 = now-then;

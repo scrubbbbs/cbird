@@ -28,6 +28,7 @@
 #include "dctvideoindex.h"
 #include "scanner.h"
 #include "templatematcher.h"
+#include "qtutil.h"
 
 Engine::Engine(const QString& path, const IndexParams& params) {
   db = new Database(path);
@@ -92,7 +93,7 @@ void Engine::update(bool wait) {
   // fixme: find modified files
   QSet<QString> skip = db->indexedFiles();
 
-  scanner->scanDirectory(db->path(), skip);
+  scanner->scanDirectory(db->path(), skip, db->lastAdded());
 
   QVector<int> toRemove;
 

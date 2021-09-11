@@ -50,6 +50,10 @@ class Database {
   /// @return directory for video index files
   QString videoPath() const { return indexPath() + "/video"; }
 
+  /// @return last time anything was added, files modified
+  ///         after this date are re-indexed
+  QDateTime lastAdded();
+
   /**
    * Add processed media (typically from Scanner) to the index
    * @note all-or-nothing operation, using sql transactions
@@ -219,6 +223,9 @@ class Database {
 
   /// @return the new path after moving file
   QString moveFile(const QString& srcPath, const QString& dstDir);
+
+  /// write timestamp for modification detection
+  void writeTimestamp();
 
   /// Directory containing the indexed files and database file
   QString _indexDir;
