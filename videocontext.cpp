@@ -19,6 +19,7 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "videocontext.h"
+#include "qtutil.h" // message context
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -33,11 +34,11 @@ extern "C" {
 #include <unistd.h> // getcwd
 
 #define AV_CRITICAL(x) \
-  qCritical() << _path << ":" << x << Qt::hex << err << avErrorString(err)
+  qCritical() << x << Qt::hex << err << avErrorString(err)
 #define AV_WARNING(x) \
-  qWarning() << _path << ":" << x
+  qWarning() << x
 #define AV_DEBUG(x) \
-  qDebug() << _path << ":" << x
+  qDebug() << x
 
 static QString avErrorString(int err) {
   char str[AV_ERROR_MAX_STRING_SIZE] = {0};
@@ -399,7 +400,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       if (*fmt++ == _p->context->pix_fmt) supported = true;
 
     if (!supported) {
-      qDebug() << _path << ": unsupported pixel format for hw codec :"
+      qDebug() << "unsupported pixel format for hw codec :"
                << av_pix_fmt_desc_get(_p->context->pix_fmt)->name;
       tryHardware = false;
     }
@@ -422,7 +423,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
     for (int i = 0; codecs[i].id; i++)
       if (codecs[i].id == _p->context->codec_id) {
-        qDebug() << _path << ": trying hw codec :" << codecs[i].name;
+        qDebug() << "trying hw codec :" << codecs[i].name;
         _p->codec = avcodec_find_decoder_by_name(codecs[i].name);
         break;
       }
@@ -446,7 +447,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
         QString(_p->codec->name).endsWith("cuvid")) {
       // enable hardware scaler
       QString size = QString("%1x%2").arg(opt.maxW).arg(opt.maxH);
-      qInfo() << _path << ": using gpu scaler@" << size;
+      qInfo() << "using gpu scaler@" << size;
       av_dict_set(&codecOptions, "resize", qPrintable(size), 0);
       _isHardwareScaled = true;
     }
@@ -495,8 +496,8 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     }
   }
 
-  qDebug("%s: using %d threads (requested %d) active_type=%d",
-         qUtf8Printable(_path), _p->context->thread_count, _numThreads,
+  qDebug("using %d threads (requested %d) active_type=%d",
+         _p->context->thread_count, _numThreads,
          _p->context->active_thread_type);
 
   _p->frame = av_frame_alloc();
@@ -595,7 +596,7 @@ bool VideoContext::seekFast(int frame) {
   int err = av_seek_frame(_p->format, _p->videoStream->index, targetTS,
                           AVSEEK_FLAG_BACKWARD);
   if (err < 0) {
-    qWarning() << _path << ": seek error :" << err;
+    AV_WARNING("seek error") << err;
     return false;
   }
 
@@ -626,7 +627,7 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
 
   const int64_t targetTS = int64_t(floor(startSeconds / tb + 0.5)) + _firstPts;
 
-  qDebug("\"%s\" : frame=%d time=%.2f tb=(%" PRIi64 ")", qUtf8Printable(_path),
+  qDebug("frame=%d time=%.2f tb=(%" PRIi64 ")",
          frame, startSeconds, targetTS);
 
   if (startSeconds / tb > _firstPts) {
@@ -842,7 +843,7 @@ bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
         return false;
       }
 
-      qDebug() << _path << "scaling from: "
+      qDebug() << "scaling from: "
               << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
               << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height)
               << "to:" << av_get_pix_fmt_name(AVPixelFormat(fmt))
@@ -895,9 +896,15 @@ void VideoContext::avLogger(void* ptr, int level, const char* fmt, va_list vl) {
       fileName = QString("cwd={") + path + "}";
   }
 
+  if (qMessageContext.hasLocalData()) {
+    QString ctx = qMessageContext.localData();
+    if (ctx == "")
+      qMessageContext.setLocalData(fileName);
+  }
+
   char buf[1024] = {0};
   vsnprintf(buf, sizeof(buf) - 1, fmt, vl);
-  QString str = fileName + ": " + buf;
+  QString str = buf;
   QByteArray bytes = str.trimmed().toUtf8();
   const char* msg = bytes.data();
 

@@ -676,12 +676,11 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
   while (video.nextFrame(img)) {
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (now - then > 5000) {
-      qDebug("%dx%d (%dx%d) %3d%% %3d:1 %5dfps %s(%d) %s", _width, _height,
+      qDebug("%dx%d (%dx%d) %3d%% %3d:1 %5dfps %s(%d)", _width, _height,
             img.cols, img.rows, numFrames * 100 / std::max(totalFrames, 1),
             numFrames / std::max(numFrames - nearFrames, 1),
             int(curFrames * 1000 / (now - then)),
-            (video.isHardware() ? "HW" : "SW"), video.threadCount(),
-            qPrintable(path));
+            (video.isHardware() ? "HW" : "SW"), video.threadCount());
       curFrames = 0;
       then = now;
     }
@@ -1265,13 +1264,13 @@ QStringList Media::exifVersion() {
 }
 
 QVariantList Media::readExifKeys(const QStringList& keys) const {
+  const MessageContext mc(QFileInfo(path()).fileName());
+
   QVariantList values;
   for (auto& key : keys) {
     (void)key;
     values.append(QVariant());
   }
-
-  qMessageContext.setLocalData(QFileInfo(path()).fileName());
 
   try {
     std::unique_ptr<Exiv2::Image> exif;
@@ -1307,8 +1306,6 @@ QVariantList Media::readExifKeys(const QStringList& keys) const {
   } catch (std::exception& e) {
     qWarning() << "exif exception:" << path() << e.what();
   }
-
-  qMessageContext.setLocalData("");
 
   return values;
 }

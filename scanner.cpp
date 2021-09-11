@@ -307,7 +307,7 @@ void Scanner::finish() {
     // <NC> == no context
     //fprintf(stdout,
     QString status = QString::asprintf(
-        "<NC>queued:<PL>image=%d,video=%d:batch=%d,threads:gpu=%d,video=%d,global=%"
+        "<NC>queued:<PL>image=%d,video=%d:batch=%d,threadpool:gpu=%d,video=%d,global=%"
         "d    ",
         _imageQueue.count(), _videoQueue.count(), _activeWork.count(),
         _gpuPool.activeThreadCount(), _videoPool.activeThreadCount(),
@@ -350,6 +350,7 @@ void Scanner::processOne() {
     QString path;
     if (!_videoQueue.empty()) {
       path = _videoQueue.first();
+      const MessageContext mc(path.mid(_topDirPath.length()+1));
 
       bool tryGpu = _params.useHardwareDec &&
                     _gpuPool.activeThreadCount() < _gpuPool.maxThreadCount();
@@ -362,27 +363,34 @@ void Scanner::processOne() {
         cpuThreads = _videoPool.maxThreadCount() - _videoPool.activeThreadCount();
       }
 
-      if (!tryGpu && cpuThreads < 2)
-        ; //qCritical() << "cpu threads < 2, will not start video jobs!";
-      else {
+      if (tryGpu || cpuThreads > 0) {
         VideoContext* v = initVideoProcess(path, tryGpu, cpuThreads);
         if (v) {
-          QThreadPool* pool;
+          QThreadPool* pool = nullptr;
           if (v->isHardware()) {
             pool = &_gpuPool;
-            // qWarning() << "gpu pool" << v->threadCount();
-          } else {
+            // qDebug() << "gpu pool" << v->threadCount();
+          } else if (cpuThreads > 0) {
             pool = &_videoPool;
-            // qWarning() << "cpu pool" << v->threadCount();
+            // qDebug() << "cpu pool" << v->threadCount();
             if (v->threadCount() > 1)
               pool->setMaxThreadCount(
                   qMax(1, pool->maxThreadCount() - v->threadCount() + 1));
           }
-          // qWarning() << "enqueue work" << pool->activeThreadCount() <<
-          // pool->maxThreadCount();
-          f = QtConcurrent::run(pool, this, &Scanner::processVideo, v);
+
+          if (!pool && tryGpu) {
+            // stop gpu from retrying the same file
+            // fixme: disable gpu after too many fails
+            // fixme: search queue for things that will possibly work
+            _videoQueue.removeFirst();
+            _videoQueue.append(path);
+          }
+
+          if (pool) {
+            f = QtConcurrent::run(pool, this, &Scanner::processVideo, v);
+            _videoQueue.removeFirst();
+          }
         }
-        _videoQueue.removeFirst();
         //printf("v");
         //fflush(stdout);
       }
@@ -477,9 +485,8 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
   // opencv throws exceptions
   try {
     const QString shortPath = path.mid(_topDirPath.length()+1);
-    qMessageContext.setLocalData(shortPath);
-
-    CVErrorLogger cvLogger(shortPath);
+    const MessageContext mc(shortPath);
+    const CVErrorLogger cvLogger(shortPath);
 
     cv::Mat cvImg;
     qImageToCvImg(qImg, cvImg);
@@ -520,16 +527,13 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
         m.makeKeyPointHashes(cvImg);
     }
 
-    qMessageContext.setLocalData("");
     result.ok = true;
     return result;
   } catch (std::exception& e) {
     setError(path, QString("std::exception: ") + e.what());
-    qMessageContext.setLocalData("");
     return result;
   } catch (...) {
     setError(path, "unknown exception");
-    qMessageContext.setLocalData("");
     return result;
   }
 }
@@ -680,12 +684,11 @@ VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu,
 
   int deviceIndex = -1;
 
-  // dct hash uses 32x32, too small to detect and crop borders
   VideoContext::DecodeOptions opt;
   opt.threads = cpuThreads;
   opt.gpu = tryGpu;
   opt.deviceIndex = deviceIndex;
-  opt.maxH = 128;
+  opt.maxH = 128;                 // need just enough to detect/crop borders
   opt.maxW = 128;
   if (video->open(path, opt) < 0) {
     setError(path, ErrorLoad);
@@ -693,15 +696,17 @@ VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu,
     return nullptr;
   }
 
-  qInfo("decode using %s, threads=%d\n\n", video->isHardware() ? "gpu" : "cpu",
-        video->threadCount());
+  //qDebug("decode using %s, threads=%d\n\n", video->isHardware() ? "gpu" : "cpu",
+  //      video->threadCount());
 
   return video;
 }
 
 IndexResult Scanner::processVideo(VideoContext* video) const {
 
-  CVErrorLogger cvLogger("processVideo:" + video->path().mid(_topDirPath.length()+1));
+  const QString context = video->path().mid(_topDirPath.length()+1);
+  const CVErrorLogger cvLogger("processVideo:" + context);
+  const MessageContext mc(context);
 
   IndexResult result;
   result.path = video->path();

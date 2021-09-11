@@ -271,7 +271,7 @@ static int printUsage(int argc, char** argv) {
         H3 "crop   enable/disable border detection/cropping of video prior to indexing [1]"
         H3 "types  enabled media types mask (1=image, 2=video) [3]"
         H3 "hwdec  enable hardware video decoder [0]"
-        H3 "decthr max thread count for one video decoder (0==auto) [0]"
+        H3 "decthr max thread count for one video decoder (0==idxthr) [0]"
         H3 "idxthr max thread count for index jobs (0==auto) [0]"
         H3 "ljf    video only: estimate job cost and process longest jobs first [1]"
         H3 "dry    enable dry-run, only show what would be updated [0]"
@@ -535,8 +535,9 @@ static char inputChar(char defaultOption) {
   return option;
 }
 
-static void install(const QString& argv0, const QString& prefix) {
+#ifndef Q_OS_WIN
 
+static void install(const QString& argv0, const QString& prefix) {
   QFileInfo dir(prefix);
   if (!dir.isDir()) {
     printf("install: %s is not a directory\n", qUtf8Printable(prefix));
@@ -621,6 +622,7 @@ static void install(const QString& argv0, const QString& prefix) {
     }
   }
 }
+#endif // !Q_OS_WIN
 
 /// Support <comparator> argument type
 class Comparator {
@@ -955,10 +957,12 @@ int main(int argc, char** argv) {
       qInfo() << app->applicationName() << app->applicationVersion();
     } else if (arg == "-license" || arg == "--license") {
       printLicense();
+#ifndef Q_OS_WIN
     } else if (arg == "-install") {
       QString prefix = "/usr/local";
       if (args.count() > 0) prefix = nextArg();
       install(argv[0], prefix);
+#endif
     } else if (arg == "-remove") {
       qInfo() << "removing: " << selection.count() << "items";
       //Media::printGroup(selection);

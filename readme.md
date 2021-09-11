@@ -3,8 +3,6 @@ readme todo:
 - finish 500k indexer stats
 - app download links
 - test data download link
-- unit tests are broken
-
 
 About cbird
 =========================
@@ -61,10 +59,10 @@ Installing
 
 #### Linux AppImage 64-bit:
 - Download:
-- Run the appimage chmod
+- Chmod
+- foo.AppImage -install
 - Required packages: trash-cli
-- Optional packages: ffplay, ffmpeg, ffprobe, ocenaudio
-- Install command argument completion (bash)
+- Optional packages: ocenaudio
 
 #### Windows 7+ 64-bit
 - Download: TODO
@@ -248,18 +246,11 @@ Wish List
 
 Major Bugs
 ==========================
-- ~~windows: cli args with "." in them (-p.dht) do not work in powershell~~
+
 - might be possible for -remove to corrupt database
   - e.g. -select-type 1 -remove -update
-- i.decthr 1 hangs
 - sws_scale buffer overflow (264x480 yuv420p)
-- ~~"-move" drops video index~~
-- ~~MGLW crash when moving up after deleting last row *maybe fixed*~~
 - MBW move folder option broken
-- ~~MGLW folder view doesn't compute thumbs when group only contains videos~~
-- ~~MGLW template matcher doesn't align images~~
-- ~~MGLW clear multiple ("A") has OOB access~~
-- MGLW potential deadlock in QFuture::waitForFinished
 
 Minor Bugs
 =========================
@@ -267,17 +258,16 @@ Minor Bugs
 - colordescriptor somewhat non-deterministic, could be a bug
 - vacuum database once in a while, maybe have a delete counter
 - dctfeature hash logic seems flawed, needs analysis
-- ~~use metric tree for large dct hash sets, hammingtree misses a lot of matches ~10% on places365~~
-- ffmpeg deprecations
+- ffmpeg deprecations, requires older branch to compile
 - maybe problem with some chars in filenames, dirs ending in "!" are skipped by scanner
 - MGLW jpeg-compression-quality does not work in zip archives
 - MGLW scale-to-fit does not work when diff image enabled
 - MGLW up/down key selection swaps sides (scroll wheel does not)
 - replace & rename a file will not update index (needs to store date-modified and/or size)
-- Windows 10: titlebar/dialogs do not use native theme
+- Windows: titlebar/dialogs do not use native theme
 - MGLW: delete multi-select as one batch
 - MGLW: suppress QIR eof warnings from thread cancellation
-- replace qPrintable() used for file i/o with qUtf8Printable or QString
+- replace qPrintable() used for file path with qUtf8Printable or QString
 - max matches (-p.mm) is off by one in the final result
 - maybe scale up small svg prior to indexing
 - MGLW: load next row loses focus item on some systems (gnome?)
@@ -521,6 +511,9 @@ cd unit/
 
 # recompile, run all tests with coverage
 ./unit.sh -clean -coverage
+
+# build coverage report
+./coverage.sh
 
 # run one test
 qmake <test>.pro -o <test>.pro.make

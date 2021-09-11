@@ -229,3 +229,15 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context, cons
 void qFlushOutput();
 
 extern QThreadStorage<QString> qMessageContext;
+
+class MessageContext {
+  NO_COPY_NO_DEFAULT(MessageContext,QObject);
+ public:
+  MessageContext(const QString& context) {
+    if (qMessageContext.hasLocalData() && !qMessageContext.localData().isEmpty())
+      qWarning() << "overwriting message context"; // todo: save/restore message context
+    qMessageContext.setLocalData(context);
+  }
+  ~MessageContext() {
+    qMessageContext.setLocalData(QString()); }
+};
