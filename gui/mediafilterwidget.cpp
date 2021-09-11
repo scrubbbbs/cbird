@@ -55,7 +55,7 @@ MediaFilterWidget::MediaFilterWidget(QWidget* parent) : QWidget(parent)
 
     layout->addWidget(new QLabel("MinSize:", this));
 
-    // todo: settings
+    // todo: setting for size filter
     QComboBox * sizeFilter = new QComboBox(this);
     sizeFilter->addItem("None");
     sizeFilter->addItem("32");

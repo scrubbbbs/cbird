@@ -222,8 +222,8 @@ class MediaGroupListWidget : public QListWidget {
    * @param all If true, add all items, not just the selected one
    * @return true if successful
    * @details The negative match list (as a filter) is enabled in the search
-   * query options The exclusion list is always available regardless.
-   *          TODO: apply exclusions to the current data
+   * query options. The exclusion list is always available regardless.
+   * todo: apply exclusions to the current data
    */
   bool addNegMatch(bool all);
 

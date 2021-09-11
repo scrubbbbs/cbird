@@ -248,7 +248,6 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& x,
 
   // todo: investigate if it may be possible to prune the search
   // - if a hash has no matches, nearby hashes probably also have no matches
-  // - if a hash has matches, nearby hashes will probably also match
   std::vector<HammingTree::Match> cand[numNeedleHashes];
   for (int j = 0; j < numNeedleHashes; j++)
     _tree->search(nHash[j], params.dctThresh, cand[j]);

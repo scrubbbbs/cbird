@@ -123,7 +123,7 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
 
   const QStringList list = zip.getFileNameList();
   for (const QString& file : list) {
-    // todo: setting
+    // todo: setting for ignored folder names
     if (file.startsWith(".") || file.startsWith("__MACOSX")) {
       _ignoredFiles++;
       continue;
@@ -494,7 +494,7 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
     // note: this should probably only be used
     // for algos without features
     // threshold 20 may be a bit high...
-    // todo: settings
+    // todo: setting for indexer autocrop threshold
     if (_params.algos && _params.autocrop) autocrop(cvImg, 20);
 
     int width = cvImg.cols;

@@ -1400,7 +1400,7 @@ void MediaGroupListWidget::loadRow(int row) {
   // cancel loaders for other rows
   cancelOtherLoaders(row);
 
-  // todo: setting for limit
+  // todo: setting to prevent too many items per page
   const MediaGroup& group = _list[row];
 
   // save/restore selected index

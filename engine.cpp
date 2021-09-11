@@ -88,7 +88,7 @@ void Engine::commit() {
 }
 
 void Engine::update(bool wait) {
-  // find new/updated and removed files
+  // find new and removed files
   // fixme: find modified files
   QSet<QString> skip = db->indexedFiles();
 

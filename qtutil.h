@@ -169,11 +169,11 @@ class MenuHelper {
     int partition = 0;
     QMenu* partMenu = nullptr;
     for (const QFileInfo& entry : list) {
-      // fixme: index dir name from database constant
+      // todo: setting for index dir name
       const QString& path = entry.absoluteFilePath();
       if (path.endsWith("_index")) continue;
 
-      // fixme: detect or configure max popup size
+      // todo: setting or detect max popup size
       const int maxFolders = 100;
       if (list.count() > maxFolders) {
         if (partition == 0) {

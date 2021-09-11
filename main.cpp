@@ -1782,6 +1782,7 @@ int main(int argc, char** argv) {
           queryResult.append({m});
         }
       }
+#ifdef DEPRECATED
     } else if (arg == "-updatemd5") {
       // deprecated: for old indexes that stored sparse md5, update to full md5
       for (const Media& m : selection) {
@@ -1802,6 +1803,7 @@ int main(int argc, char** argv) {
         if (!engine().db->setMd5(copy, hash) || copy.md5() != hash) return -1;
         qInfo() << "updateMd5" << m.path() << m.md5() << hash;
       }
+#endif
     } else if (arg == "-jpeg-repair-script") {
       jpegFixPath = nextArg();
     } else if (arg == "-verify") {
@@ -1830,7 +1832,7 @@ int main(int argc, char** argv) {
       };
 
       // to avoid thrashing, large files are hashed sequentially
-      // todo: IndexParams
+      // todo: setting for anti-thrash file size
       const qint64 largeFileSize = 16 * 1024 * 1024;
 
       for (const auto& m : selection)

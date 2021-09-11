@@ -1038,7 +1038,7 @@ QStringList Media::listArchive(const QString& path) {
 
   const QStringList zipList = zip.getFileNameList();
   for (const QString& file : zipList) {
-    // todo: index settings
+    // todo: setting for ignored dirnames (same as scanner...); or use the same code here
     if (file.startsWith(".") || file.startsWith("__MACOSX")) continue;
 
     list.append(Media::virtualPath(path, file));

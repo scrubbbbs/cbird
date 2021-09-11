@@ -144,7 +144,7 @@ QString fullMd5(QIODevice& io) {
   ioPool.start([&]() {
     while (!io.atEnd()) {
       producer.acquire();
-      QByteArray buf = io.read(128*1024); // todo: settings
+      QByteArray buf = io.read(128*1024); // todo: setting for file i/o buffer size
       {
         QMutexLocker locker(&mutex);
         chunks.append( buf );
@@ -181,6 +181,7 @@ QString fullMd5(QIODevice& io) {
 #endif
 }
 
+#ifdef DEPRECATED
 QString sparseMd5(QIODevice& file) {
   // if the file is small, md5 the whole thing,
   // otherwise, distribute over the first 1MB?
@@ -200,3 +201,4 @@ QString sparseMd5(QIODevice& file) {
 
   return QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex();
 }
+#endif

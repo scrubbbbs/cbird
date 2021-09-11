@@ -769,7 +769,7 @@ QColor DescriptorColor::toQColor() const {
 }
 
 void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
-  // TODO: check descriptor always makes the same output for the same input
+  // todo: there seems to be some randomness in the descriptor with identical input
   if (cvImg.type() != CV_8UC3 && cvImg.type() != CV_8UC4) {
     qWarning("input is not rgb or rgba");
     return;

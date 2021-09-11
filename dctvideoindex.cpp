@@ -322,7 +322,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
 
     int percentNear = nearCount * 100 / num;
 
-    // fixme: setting for this threshold
+    // todo: setting for this threshold
     if (num > 30 && percentNear > 60) {
       // printf("\t%d\t%d%%\n", num, percentNear);
       Index::Match im;
