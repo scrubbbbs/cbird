@@ -163,13 +163,7 @@ class MediaGroupListWidget : public QListWidget {
   void cycleMagFilter();
 
   /// Toggle image-pair differences visualization
-  void toggleAutoDifferenceAction() {
-    if (_autoDifference) removeAnalysis();
-    else addDifferenceAnalysis();
-
-    _autoDifference = !_autoDifference;
-    loadRow(_currentRow);
-  }
+  void toggleAutoDifferenceAction();
 
  private:
   QAction* addAction(const QString& label, const QKeySequence& shortcut,
@@ -254,6 +248,9 @@ class MediaGroupListWidget : public QListWidget {
   /// Estimate additional memory requirement of unloaded or partially loaded row
   float requiredMemory(int row) const;
 
+  /// Try to restore selected item after a layout change
+  void restoreSelectedItem(const QModelIndex& last);
+
   MediaGroupList _list;
   int _flags;
   Database* _db;
@@ -264,7 +261,6 @@ class MediaGroupListWidget : public QListWidget {
   QHash<QString, int> _archiveFileCount; // cache # files in an archive
 
   int _currentRow = -1;
-  int _lastColumn = -1;
   double _zoom = 1.0;
   double _panX = 0, _panY = 0;
   bool _autoDifference = false;

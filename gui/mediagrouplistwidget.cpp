@@ -1371,8 +1371,6 @@ void MediaGroupListWidget::updateItems() {
     } else {
       item = new QListWidgetItem(nullptr, i);
       insertItem(i, item);
-      // keep selection when loading next row
-      if (i == _lastColumn) setCurrentItem(item);
     }
     if (isAnalysis(m)) {
       item->setFlags(Qt::NoItemFlags); // disable selection
@@ -1395,16 +1393,17 @@ void MediaGroupListWidget::loadRow(int row) {
 
   row = qBound(0, row, _list.count() - 1);
 
-  //Media::printGroup(_list[row]);
+  QModelIndex selected;
+  {
+    auto sel = selectedIndexes();
+    if (sel.count() > 0) selected = sel.first();
+  }
 
   // cancel loaders for other rows
   cancelOtherLoaders(row);
 
   // todo: setting to prevent too many items per page
   const MediaGroup& group = _list[row];
-
-  // save/restore selected index
-  QModelIndex lastIndex = currentIndex();
 
   int rowStride = row - _currentRow;
   _currentRow = row;
@@ -1444,9 +1443,9 @@ void MediaGroupListWidget::loadRow(int row) {
                      .arg(_list[row].count())
                      .arg(info));
 
-  if (lastIndex.isValid()) setCurrentIndex(lastIndex);
-
   updateItems();
+
+  if (selected.isValid()) restoreSelectedItem(selected);
 
   // todo: save the last row jump and offset that amount
   bool preloadNextRow = true;
@@ -1508,21 +1507,16 @@ void MediaGroupListWidget::updateCurrentRow(const MediaGroup& group) {
     }
   }
 
+  if (_autoDifference)
+    addDifferenceAnalysis();
+
   loadRow(_currentRow);
-  loadRow(_currentRow + 1);
 }
 
 void MediaGroupListWidget::loadNextRow(bool closeAtEnd) {
-  if (_currentRow < _list.count() - 1) {
-    // save/restore selected index
-    int selectedIndex = -1;
-    const auto& ii = selectedItems();
-    if (ii.count() > 0) selectedIndex = ii[0]->type();
-
+  if (_currentRow < _list.count() - 1)
     loadRow(_currentRow + 1);
-
-    if (selectedIndex >= 0) setCurrentIndex(model()->index(selectedIndex, 0));
-  } else if (closeAtEnd)
+  else if (closeAtEnd)
     close();
 }
 
@@ -1616,15 +1610,11 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
   // remove deleted indices; we cannot remove using
   // path because of renaming
   MediaGroup newGroup;
-  for (int i = 0; i < group.count(); ++i)
+  const int oldCount = group.count();
+  for (int i = 0; i < oldCount; ++i)
     if (!removed.contains(i))
       newGroup.append(group[i]);
   group = newGroup;
-
-  // this is no longer a valid column for this row,
-  // but could be for the next row
-  _lastColumn = *(std::min_element(removed.begin(),removed.end()));
-
   updateCurrentRow(group);
 }
 
@@ -1987,8 +1977,7 @@ void MediaGroupListWidget::reloadAction() {
   // reload current row and forget any uncommitted changes
   for (Media& m : _list[_currentRow]) m.setRoi(QVector<QPoint>());
 
-  // todo: maybe reload images too
-  repaint();
+  updateCurrentRow(_list[_currentRow]);
 }
 
 void MediaGroupListWidget::moveToNextScreenAction() {
@@ -2088,6 +2077,14 @@ void MediaGroupListWidget::cycleMagFilter() {
   repaint();
 }
 
+void MediaGroupListWidget::toggleAutoDifferenceAction() {
+  if (_autoDifference) removeAnalysis();
+  else addDifferenceAnalysis();
+
+  _autoDifference = !_autoDifference;
+  loadRow(_currentRow);
+}
+
 void MediaGroupListWidget::rotateGroup(int row) {
   MediaGroup& group = _list[row];
   int offset = 1;
@@ -2097,17 +2094,28 @@ void MediaGroupListWidget::rotateGroup(int row) {
   updateItems();
 }
 
+void MediaGroupListWidget::restoreSelectedItem(const QModelIndex& last) {
+  const MediaGroup& group = _list.at(_currentRow);
+  int count = std::count_if(group.begin(), group.end(), [](const Media& m) {
+    return !isAnalysis(m);
+  });
+
+  int selIndex = std::min(last.row(), count - 1);
+  if (selIndex >= 0)
+    setCurrentIndex(model()->index(selIndex, 0));
+}
+
 void MediaGroupListWidget::keyPressEvent(QKeyEvent* event) {
-  // up/down key move to the next group if we're on the first/last row
+  // up/down key move to the next group if we're on the first/last row of the group
   QModelIndexList list = selectedIndexes();
-  if (list.count() == 1 && event->modifiers() == 0) switch (event->key()) {
+  if (list.count() == 1 && event->modifiers() == 0)
+    switch (event->key()) {
       case Qt::Key_Down: {
         QModelIndex curr = list[0];
         QModelIndex next = moveCursor(QAbstractItemView::MoveDown, Qt::NoModifier);
 
         if (curr == next && _currentRow + 1 < _list.count()) {
           loadRow(_currentRow + 1);
-          setCurrentIndex(model()->index(model()->rowCount() - 1, 0));
           return;
         }
       } break;
@@ -2117,7 +2125,6 @@ void MediaGroupListWidget::keyPressEvent(QKeyEvent* event) {
 
         if (curr == next && _currentRow - 1 >= 0) {
           loadRow(_currentRow - 1);
-          setCurrentIndex(model()->index(0, 0));
           return;
         }
       }
