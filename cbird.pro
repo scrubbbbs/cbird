@@ -110,7 +110,7 @@ unix: {
       PREFIX="$$APPDIR/cbird" $$QMAKE && \
       make install && \
       cp -auv /usr/local/bin/ff* $$APPDIR/cbird/bin/ && \
-      $$LINUXDEPLOYQT \
+      VERSION=$$VERSION $$LINUXDEPLOYQT \
         $$APPDIR/cbird/share/applications/cbird.desktop \
         -executable=/usr/local/bin/ffmpeg \
         -executable=/usr/local/bin/ffplay \
