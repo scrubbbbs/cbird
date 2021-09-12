@@ -21,6 +21,13 @@ mkdir -p "$PKG_DIR"
 cp -au cbird.exe "$PKG_DIR/"
 #cp -auv $MXE_BIN/ff*.exe "$PKG_DIR/"
 
+echo "termcap..."
+TERMCAP_DIR="$MXE_BIN/../share/terminfo"
+mkdir -p "$PKG_DIR/termcap"
+for cap in "$TERMCAP_DIR/m/ms-"* "$TERMCAP_DIR/c/cyg"*; do
+  cp -auv "$cap" "$PKG_DIR/termcap/"
+done
+
 for exe in cbird.exe; do
 #for exe in cbird.exe ffmpeg.exe ffplay.exe ffprobe.exe; do
     

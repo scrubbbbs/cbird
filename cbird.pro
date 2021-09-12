@@ -121,7 +121,6 @@ unix: {
     QMAKE_EXTRA_TARGETS += appimage
 }
 
-CONFIG -= silent
 message("QT=" $$QT)
 message("CONFIG=" $$CONFIG)
 message("QMAKE_CXXFLAGS=" $$QMAKE_CXXFLAGS)

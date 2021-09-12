@@ -465,7 +465,9 @@ bool DesktopHelper::moveToTrash(const QString& path) {
 // - per-thread context can be added (like what file is being worked on)
 // - special sequences recognized
 //   <NC> - do not write message context, good for progress bars
-//   <PL> - progress line, erase the previous line (like \r)
+//   <PL> - progress line, erase the previous line if text before <PL> matches
+//   <EL> - elided line, text that follows is elided+padded to terminal;
+//          may not come before <PL>
 // - threaded output
 //    * logs choke main thread, really badly on windows
 //    * qFlushOutput() to sync up when needed
@@ -517,6 +519,10 @@ static void exifLogHandler(int level, const char* msg) {
 #include <fcntl.h>
 #endif
 
+extern "C" {
+#include <termcap.h> // terminal width for eliding
+}
+
 class LoggerThread {
  public:
   QThread* thread;
@@ -524,10 +530,32 @@ class LoggerThread {
   QWaitCondition cond;
   volatile bool stop = false;
   QVector<QString> log;
+  int termLines=-1;
+  int termColumns=-1;
+  QString homePath;
 
   LoggerThread() {
     std::set_terminate(qFlushOutput);
     Exiv2::LogMsg::setHandler(exifLogHandler);
+
+    // https://stackoverflow.com/questions/1022957/getting-terminal-width-in-c
+    const char* termType = getenv("TERM");
+
+    if (termType) {
+      char termBuf[2048];
+      int err = tgetent(termBuf, termType);
+      if (err <= 0)
+        printf("tgetent error TERM=%s TERMCAP=%s err=%d\n",
+               termType, getenv("TERMCAP"), err);
+      else {
+        termLines = tgetnum("li");
+        termColumns = tgetnum("co");
+        if (termLines < 0 || termColumns < 0)
+          printf("term: %s %dx%d\n", termType, termColumns, termLines);
+      }
+    }
+
+    homePath = QDir::homePath();
 
 #ifdef Q_OS_WIN
     // disable text mode to speed up console
@@ -557,19 +585,33 @@ class LoggerThread {
 
           lastInput = line;
 
-          QString output;
+          QString output = line;
+          output.replace(homePath, "~");
+
+          pl = output.indexOf("<PL>"); // must come after replacements!
+          output.replace("<PL>", "");
+
+          // elide and pad following text to terminal width
+          int elide = output.indexOf("<EL>"); // must come after <PL>!
+          if (elide > 0) {
+            if (termColumns > 0) {
+              QString toElide = output.mid(elide+4);
+              QString elided=qElide(toElide, termColumns-elide);
+              output = output.midRef(0, elide) + elided;
+              output += QString().fill(' ', termColumns-output.length());
+            }
+            else
+              output.replace("<EL>", "");
+          }
 
           if (pl > 0) {
-            output = line;
-            output.replace("<PL>", "");
             if (lastInput.startsWith(line.midRef(0, pl)))
               output = "\r" + output;
           }
           else {
             if (!lastOutput.endsWith("\n"))
-              output = "\n" + line + "\n";
-            else
-              output = line + "\n";
+              output = "\n" + output;
+            output += "\n";
           }
 
           lastOutput = output;

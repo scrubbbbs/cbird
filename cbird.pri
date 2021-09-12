@@ -80,6 +80,7 @@ LIBS *= -lpng # for cimg
 LIBS *= -ljpeg # for cimg
 LIBS *= -lavcodec -lavformat -lavutil -lswscale
 LIBS *= -lexiv2
+LIBS *= -ltermcap
 
 # LIBS *= lib/vptree/lib/libvptree.a
 

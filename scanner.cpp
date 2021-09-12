@@ -180,15 +180,10 @@ QMutex* Scanner::staticMutex() {
 void Scanner::scanProgress(const QString& path) const {
   const QString elided = qElide(path.mid(_topDirPath.length()+1), 80);
 
-  // <PL> means erase the previous line IIF text before <PL> matches the last log line
-  // (so it cannot erase unrelated lines)
   QString status = QString::asprintf(
-  //fflush(stdout);
-  //fprintf(stdout,
-              "<NC>%s<PL> i:%d v:%d ign:%d mod:%d ok:%d %s",
+          "<NC>%s<PL> i:%d v:%d ign:%d mod:%d ok:%d <EL>%s",
           qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(), _ignoredFiles,
          _modifiedFiles, _existingFiles, qUtf8Printable(elided));
-  //fflush(stdout);
   qInfo().noquote() << status;
 }
 
