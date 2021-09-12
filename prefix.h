@@ -21,7 +21,6 @@
 #define HAVE_PCH
 
 #define CBIRD_PROGNAME "cbird"
-#define CBIRD_VERSION  "0.5.0"
 #define CBIRD_HOMEPAGE "https://github.com/scrubbbbs/cbird"
 
 // portability macros

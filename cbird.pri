@@ -7,6 +7,9 @@ mac {
     CONFIG -= app_bundle
 }
 
+VERSION=0.5.0
+
+QMAKE_CXXFLAGS += '-DCBIRD_VERSION=\\"$$VERSION\\"'
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
 QMAKE_CXXFLAGS += -Werror -Wno-deprecated-declarations
 

@@ -99,7 +99,7 @@ static void printLicense() {
   // clang-format off
   printf(
       H2 "cbird, the Content Based Image Retrieval Database"
-      H2 "Copyright (C) 2021 scrubbbbs (scrubbbbs@gmail.com) "
+      H2 "Copyright (C) 2021 scrubbbbs (esceruebbebbes@gemeaeiel.com =~ s/e//g)"
       H2 CBIRD_HOMEPAGE
       H2 "Licensed to you under the GNU GPL version 2 http://www.gnu.org/licenses"
       H2
@@ -954,7 +954,7 @@ int main(int argc, char** argv) {
       qInfo() << "see -license for software license";
 
     } else if (arg == "-v" || arg == "-version" || arg == "--version") {
-      qInfo() << app->applicationName() << app->applicationVersion();
+      qInfo() << app->applicationName() << app->applicationVersion() << CBIRD_GITVERSION;
     } else if (arg == "-license" || arg == "--license") {
       printLicense();
 #ifndef Q_OS_WIN

@@ -13,7 +13,7 @@ CONFIG += release
 
 include(cbird.pri)
 
-CONFIG += precompile_header silent
+CONFIG += precompile_header
 
 PRECOMPILED_HEADER=prefix.h
 precompile_header {
