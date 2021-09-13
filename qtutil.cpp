@@ -167,11 +167,11 @@ void DesktopHelper::runProgram(QStringList& args, bool wait,
           p.setProgram(appProg);
         }
       }
-      //#ifdef Q_OS_WIN
-      //      p.setNativeArguments(args.mid(1).join(" "));
-      //#else
+#ifdef Q_OS_WIN
+      p.setNativeArguments(args.mid(1).join(" "));
+#else
       p.setArguments(args.mid(1));
-      //#endif
+#endif
       if (!wait) {
         if (!p.startDetached())
           qWarning() << prog << "failed to start, is it installed?";
@@ -284,13 +284,16 @@ void DesktopHelper::openVideo(const QString& path, double seekSeconds) {
     openVideoSeek += QStringList{{"Default", "DesktopServices"}};
 #ifdef Q_OS_WIN
     openVideoSeek +=
-        QStringList{{"VLC", "C:/Program Files (x86)/VideoLan/VLC/vlc.exe",
-                     "--start-time=%seek", "%1"}};
+        QStringList{{"VLC", "\"C:/Program Files (x86)/VideoLan/VLC/vlc.exe\"",
+                     "--start-time=%seek", "\"%1\""}};
     openVideoSeek +=
-        QStringList{{"FFplay", "ffplay.exe", "-ss", "%seek", "%1"}};
+        QStringList{{"FFplay", "ffplay.exe", "-ss", "%seek", "\"%1\""}};
+    openVideoSeek += QStringList{{"MPlayer", "mplayer.exe", "-ss", "%seek", "\"%1\""}};
+    openVideoSeek += QStringList{{"MPV", "mpv.exe", "--start=%seek", "\"%1\""}};
 #else
     openVideoSeek += QStringList{
         {"Celluloid", "celluloid", "--mpv-options=--start=%seek", "%1"}};
+    openVideoSeek += QStringList{{"FFplay", "ffplay", "-ss", "%seek", "%1"}};
     openVideoSeek += QStringList{{"MPlayer", "mplayer", "-ss", "%seek", "%1"}};
     openVideoSeek += QStringList{{"MPV", "mpv", "--start=%seek", "%1"}};
     openVideoSeek +=
@@ -618,7 +621,13 @@ class LoggerThread {
 
           QByteArray utf8 = output.toUtf8();
           fwrite(utf8.data(), utf8.length(), 1, stdout);
-          if (pl > 0) fflush(stdout);
+          // we only need to flush if \r is present;
+          // windows always flushes, or it buffers forever
+#ifndef Q_OS_WIN
+          if (pl > 0)
+#endif
+            fflush(stdout);
+
           locker.relock();
         }
     });
