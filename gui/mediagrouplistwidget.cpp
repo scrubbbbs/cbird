@@ -115,11 +115,14 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
     addAction(a);
   }
 
-  WidgetHelper::addAction("Close Window", Qt::CTRL | Qt::Key_W,
+  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+  settings.beginGroup(this->metaObject()->className() + QString(".shortcuts"));
+
+  WidgetHelper::addAction(settings, "Close Window", Qt::CTRL | Qt::Key_W,
                           this, SLOT(close()));
-  WidgetHelper::addAction("Close Window (Alt)", Qt::Key_Escape,
+  WidgetHelper::addAction(settings, "Close Window (Alt)", Qt::Key_Escape,
                           this, SLOT(close()));
-  WidgetHelper::addAction("Choose Selected", Qt::Key_Return,
+  WidgetHelper::addAction(settings, "Choose Selected", Qt::Key_Return,
                           this, SLOT(chooseAction()));
 
   setContextMenuPolicy(Qt::ActionsContextMenu);
@@ -672,85 +675,88 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   connect(this, &QWidget::customContextMenuRequested,
           this, &MediaGroupListWidget::execContextMenu);
 
-  addAction("Rename", Qt::Key_F2, SLOT(renameFileAction()))
+  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+  settings.beginGroup(this->metaObject()->className() + QString(".shortcuts"));
+
+  WidgetHelper::addAction(settings, "Rename", Qt::Key_F2, this, SLOT(renameFileAction()))
       ->setEnabled(_db != nullptr);
-  addAction("Copy Name", Qt::SHIFT | Qt::Key_F2, SLOT(copyNameAction()))
+  WidgetHelper::addAction(settings, "Copy Name", Qt::SHIFT | Qt::Key_F2, this, SLOT(copyNameAction()))
       ->setEnabled(_db != nullptr);
-  addAction("Rename Folder", Qt::Key_F3, SLOT(renameFolderAction()))
+  WidgetHelper::addAction(settings, "Rename Folder", Qt::Key_F3, this, SLOT(renameFolderAction()))
       ->setEnabled(true);
 
-  addSeparatorAction();
+  WidgetHelper::addSeparatorAction(this);
 
-  addAction("Rotate", Qt::Key_R, SLOT(rotateAction()));
-  addAction("Toggle Scale-Up", Qt::Key_S, SLOT(normalizeAction()));
-  addAction("Template Match", Qt::Key_T, SLOT(templateMatchAction()));
-  addAction("Quality Score", Qt::Key_Q, SLOT(qualityScoreAction()));
-  addAction("Toggle Compare Images", Qt::Key_X,
+  WidgetHelper::addAction(settings, "Rotate", Qt::Key_R, this, SLOT(rotateAction()));
+  WidgetHelper::addAction(settings, "Toggle Scale-Up", Qt::Key_S, this, SLOT(normalizeAction()));
+  WidgetHelper::addAction(settings, "Template Match", Qt::Key_T, this, SLOT(templateMatchAction()));
+  WidgetHelper::addAction(settings, "Quality Score", Qt::Key_Q, this, SLOT(qualityScoreAction()));
+  WidgetHelper::addAction(settings, "Toggle Compare Images", Qt::Key_X, this,
             SLOT(toggleAutoDifferenceAction()));
-  addAction("Clear", Qt::Key_A, SLOT(clearAction()));
-  addAction("Open File", Qt::Key_O, SLOT(openAction()));
-  addAction("Open Enclosing Folder", Qt::Key_E, SLOT(openFolderAction()));
-  addAction("Compare Videos", Qt::CTRL | Qt::Key_M,
+  WidgetHelper::addAction(settings, "Clear", Qt::Key_A, this, SLOT(clearAction()));
+  WidgetHelper::addAction(settings, "Open File", Qt::Key_O, this, SLOT(openAction()));
+  WidgetHelper::addAction(settings, "Open Enclosing Folder", Qt::Key_E, this, SLOT(openFolderAction()));
+  WidgetHelper::addAction(settings, "Compare Videos", Qt::Key_V, this,
             SLOT(compareVideosAction()));
-  addAction("Compare Audio", Qt::CTRL | Qt::Key_J, SLOT(compareAudioAction()));
-  addAction("Choose Selected", Qt::Key_Return, SLOT(chooseAction()));
-  addAction("Reload", Qt::Key_F5, SLOT(reloadAction()));
+  WidgetHelper::addAction(settings, "Compare Audio", Qt::Key_C, this, SLOT(compareAudioAction()));
+  WidgetHelper::addAction(settings, "Choose Selected", Qt::Key_Return, this, SLOT(chooseAction()));
+  WidgetHelper::addAction(settings, "Reload", Qt::Key_F5, this, SLOT(reloadAction()));
 
-  addSeparatorAction();
+  WidgetHelper::addSeparatorAction(this);
 
-  addAction("Delete", Qt::Key_D, SLOT(deleteAction()))
+  WidgetHelper::addAction(settings, "Delete", Qt::Key_D, this, SLOT(deleteAction()))
       ->setEnabled(!(_flags & FlagDisableDelete));
 
-  addAction("Replace", Qt::Key_G, SLOT(replaceAction()))
+  WidgetHelper::addAction(settings, "Replace", Qt::Key_G, this, SLOT(replaceAction()))
       ->setEnabled(!(_flags & FlagDisableDelete));
 
-  addSeparatorAction();
+  WidgetHelper::addSeparatorAction(this);
 
   // for building test/validation data sets
-  addAction("Record Good Match", Qt::Key_Y, SLOT(recordMatchTrueAction()));
-  addAction("Record Bad Match", Qt::Key_N, SLOT(recordMatchFalseAction()));
+  WidgetHelper::addAction(settings, "Record Good Match", Qt::Key_Y, this, SLOT(recordMatchTrueAction()));
+  WidgetHelper::addAction(settings, "Record Bad Match", Qt::Key_N, this, SLOT(recordMatchFalseAction()));
 
-  addSeparatorAction();
+  WidgetHelper::addSeparatorAction(this);
 
-  addAction("Add to Negative Matches", Qt::Key_Minus, SLOT(negMatchAction()))
+  WidgetHelper::addAction(settings, "Add to Negative Matches", Qt::Key_Minus, this, SLOT(negMatchAction()))
       ->setEnabled(_db != nullptr);
-  addAction("Add All to Negative Matches", Qt::SHIFT | Qt::Key_Minus,
-            SLOT(negMatchAllAction()))
+  WidgetHelper::addAction(settings, "Add All to Negative Matches", Qt::SHIFT | Qt::Key_Minus,
+            this, SLOT(negMatchAllAction()))
       ->setEnabled(_db != nullptr);
 
-  addSeparatorAction();
+  WidgetHelper::addSeparatorAction(this);
 
-  addAction("Zoom In", Qt::Key_9, SLOT(zoomInAction()));
-  addAction("Zoom Out", Qt::Key_7, SLOT(zoomOutAction()));
-  addAction("Pan Left", Qt::Key_4, SLOT(panLeftAction()));
-  addAction("Pan Right", Qt::Key_6, SLOT(panRightAction()));
-  addAction("Pan Up", Qt::Key_8, SLOT(panUpAction()));
-  addAction("Pan Down", Qt::Key_2, SLOT(panDownAction()));
-  addAction("Reset Zoom", Qt::Key_5, SLOT(resetZoomAction()));
-  addAction("Cycle Min Filter", Qt::Key_1, SLOT(cycleMinFilter()));
-  addAction("Cycle Max Filter", Qt::Key_3, SLOT(cycleMagFilter()));
+  WidgetHelper::addAction(settings, "Zoom In", Qt::Key_9, this, SLOT(zoomInAction()));
+  WidgetHelper::addAction(settings, "Zoom Out", Qt::Key_7, this, SLOT(zoomOutAction()));
+  WidgetHelper::addAction(settings, "Pan Left", Qt::Key_4, this, SLOT(panLeftAction()));
+  WidgetHelper::addAction(settings, "Pan Right", Qt::Key_6, this, SLOT(panRightAction()));
+  WidgetHelper::addAction(settings, "Pan Up", Qt::Key_8, this, SLOT(panUpAction()));
+  WidgetHelper::addAction(settings, "Pan Down", Qt::Key_2, this, SLOT(panDownAction()));
+  WidgetHelper::addAction(settings, "Reset Zoom", Qt::Key_5, this, SLOT(resetZoomAction()));
+  WidgetHelper::addAction(settings, "Cycle Min Filter", Qt::Key_1, this, SLOT(cycleMinFilter()));
+  WidgetHelper::addAction(settings, "Cycle Max Filter", Qt::Key_3, this, SLOT(cycleMagFilter()));
 
-  addSeparatorAction();
+  WidgetHelper::addSeparatorAction(this);
 
-  addAction("Forward", Qt::ALT | Qt::Key_Down, SLOT(nextGroupAction()))
+  WidgetHelper::addAction(settings, "Forward", Qt::ALT | Qt::Key_Down, this, SLOT(nextGroupAction()))
       ->setEnabled(_list.count() > 1);
-  addAction("Back", Qt::ALT | Qt::Key_Up, SLOT(prevGroupAction()))
+  WidgetHelper::addAction(settings, "Back", Qt::ALT | Qt::Key_Up, this, SLOT(prevGroupAction()))
       ->setEnabled(_list.count() > 1);
-  addAction("Jump Forward", Qt::Key_PageDown, SLOT(jumpForwardAction()))
+  WidgetHelper::addAction(settings, "Jump Forward", Qt::Key_PageDown, this, SLOT(jumpForwardAction()))
       ->setEnabled(_list.count() > 1);
-  addAction("Jump Back", Qt::Key_PageUp, SLOT(jumpBackAction()))
+  WidgetHelper::addAction(settings, "Jump Back", Qt::Key_PageUp, this, SLOT(jumpBackAction()))
       ->setEnabled(_list.count() > 1);
-  addAction("Jump to Start", Qt::Key_Home, SLOT(jumpToStartAction()))
+  WidgetHelper::addAction(settings, "Jump to Start", Qt::Key_Home, this, SLOT(jumpToStartAction()))
       ->setEnabled(_list.count() > 1);
-  addAction("Jump to End", Qt::Key_End, SLOT(jumpToEndAction()))
+  WidgetHelper::addAction(settings, "Jump to End", Qt::Key_End, this, SLOT(jumpToEndAction()))
       ->setEnabled(_list.count() > 1);
 
-  addSeparatorAction();
+  WidgetHelper::addSeparatorAction(this);
 
-  addAction("Move to Next Screen", Qt::SHIFT | Qt::Key_F11,
-            SLOT(moveToNextScreenAction()));
-  addAction("Close Window", Qt::CTRL | Qt::Key_W, SLOT(close()));
-  addAction("Close Window (Alt)", Qt::Key_Escape, SLOT(close()));
+  WidgetHelper::addAction(settings, "Move to Next Screen", Qt::SHIFT | Qt::Key_F11,
+            this, SLOT(moveToNextScreenAction()));
+  WidgetHelper::addAction(settings, "Close Window", Qt::CTRL | Qt::Key_W, this, SLOT(close()));
+  WidgetHelper::addAction(settings, "Close Window (Alt)", Qt::Key_Escape, this, SLOT(close()));
 
   _maximized = WidgetHelper::restoreGeometry(this);
 }
@@ -758,24 +764,6 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 MediaGroupListWidget::~MediaGroupListWidget() {
   WidgetHelper::saveGeometry(this);
   qDebug("~MediaGroupListWidget");
-}
-
-QAction* MediaGroupListWidget::addAction(const QString& label,
-                                         const QKeySequence& shortcut,
-                                         const char* slot) {
-  QAction* a = new QAction(label, this);
-  connect(a, SIGNAL(triggered(bool)), this, slot);
-  a->setShortcut(shortcut);
-  a->setShortcutVisibleInContextMenu(true);
-  super::addAction(a);
-  return a;
-}
-
-QAction* MediaGroupListWidget::addSeparatorAction() {
-  QAction* sep = new QAction(this);
-  sep->setSeparator(true);
-  super::addAction(sep);
-  return sep;
 }
 
 void MediaGroupListWidget::close() {

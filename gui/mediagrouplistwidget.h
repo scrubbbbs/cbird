@@ -166,10 +166,6 @@ class MediaGroupListWidget : public QListWidget {
   void toggleAutoDifferenceAction();
 
  private:
-  QAction* addAction(const QString& label, const QKeySequence& shortcut,
-                     const char* slot);
-  QAction* addSeparatorAction();
-
   void closeEvent(QCloseEvent* event);
   void keyPressEvent(QKeyEvent* event);
   void wheelEvent(QWheelEvent* event);

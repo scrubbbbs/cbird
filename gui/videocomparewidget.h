@@ -35,8 +35,8 @@ class VideoCompareWidget : public QWidget {
 
  public:
   /**
-   * @param left   first video
-   * @param right  second video
+   * @param left   first video (A)
+   * @param right  second video (B)
    * @param range  matching frames if known for initial seekpoint (src=left,
    * dst=right)
    * @param parent
@@ -55,12 +55,11 @@ class VideoCompareWidget : public QWidget {
 
  private:
   void paintEvent(QPaintEvent* event) override;
-  void keyPressEvent(QKeyEvent* event) override;
   void wheelEvent(QWheelEvent* event) override;
 
   void loadFrameIfNeeded(int frame);
   void findQualityScores();
-  void alignTemporally(bool forward);
+  void alignTemporally();
   void alignSpatially();
   void seekFrame(int frame);
   void shiftFrames(int offset);

@@ -459,6 +459,180 @@ bool DesktopHelper::moveToTrash(const QString& path) {
   return ok;
 }
 
+QKeySequence WidgetHelper::getShortcut(QSettings& settings, const QString& label,
+                                       const QKeySequence& defaultShortcut) {
+  QString key = label.toLower();
+  key = key.replace(QRegExp("[^a-z0-9-\\+]+"), "_");
+
+  if (!settings.contains(key)) settings.setValue(key, defaultShortcut);
+  return settings.value(key, defaultShortcut).toString();
+}
+
+void WidgetHelper::saveGeometry(const QWidget *w, const char *id) {
+  if (!id) id = w->metaObject()->className();
+  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+  settings.beginGroup(id);
+  settings.setValue("geometry", w->saveGeometry());
+  settings.setValue("maximized", w->isMaximized());
+  settings.endGroup();
+}
+
+bool WidgetHelper::restoreGeometry(QWidget *w, const char *id) {
+  if (!id) id = w->metaObject()->className();
+  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+  settings.beginGroup(id);
+  if (!w->restoreGeometry(settings.value("geometry").toByteArray()))
+    w->setGeometry(100, 100, 1024, 768);
+
+  return settings.value("maximized").toBool();
+}
+
+QAction* WidgetHelper::addAction(QSettings& settings,
+                                 const QString& label,
+                                 const QKeySequence& shortcut,
+                                 QWidget* target,
+                                 const char* slot) {
+  QAction* a = new QAction(label, target);
+  target->connect(a, SIGNAL(triggered(bool)), target, slot);
+  a->setShortcut(getShortcut(settings, label, shortcut));
+  a->setShortcutVisibleInContextMenu(true);
+  target->addAction(a);
+  return a;
+}
+
+QAction* WidgetHelper::addAction(QSettings& settings,
+                                 const QString& label,
+                                 const QKeySequence& shortcut, QWidget* target,
+                                 std::function<void()> fn) {
+  QAction* a = new QAction(label, target);
+  target->connect(a, &QAction::triggered, fn);
+  a->setShortcut(getShortcut(settings, label, shortcut));
+  a->setShortcutVisibleInContextMenu(true);
+  target->addAction(a);
+  return a;
+}
+
+QAction* WidgetHelper::addSeparatorAction(QWidget* parent) {
+  QAction* sep = new QAction(parent);
+  sep->setSeparator(true);
+  parent->addAction(sep);
+  return sep;
+}
+
+void WidgetHelper::drawRichText(QPainter *painter, const QRect &r, const QString &text) {
+  // todo: external stylesheet
+  QTextDocument td;
+
+  td.setDefaultStyleSheet(
+        "table { color:rgba(255,255,255,192); font-size:16px; }"
+        "tr.even { background-color:rgba(96,96,96,128); }" // even rows of table
+        "tr.odd  { background-color:rgba(64,64,64,128); }" // odd rows of table
+        ".more { color:#9F9; }"   // value is >
+        ".less { color:#F99; }"   // value is <
+        ".same { color:#99F; }"   // value is ==
+        ".time { color:#FF9; }"   // value is a timecode or duration
+        ".video { color:#9FF; }"  // value describes video properties
+        ".audio { color:#F9F; }"  // value describes audio properties
+        ".none { color:#000; }"   // "hide" value by matching background color
+        ".archive { color:#FF9; }"// value is an archive/zip file
+        ".file { color:#FFF; }"   // value is normal file
+        ".default { color:#FFF; }"   // normal text
+        );
+
+  td.setHtml(text);
+  td.setDocumentMargin(0);
+
+  painter->save();
+  painter->translate(r.x(), r.y());
+
+  QRect rect1 = QRect(0, 0, r.width(), r.height());
+  td.drawContents(painter, rect1);
+  painter->restore();
+}
+
+QDateTime DBHelper::lastModified(const QSqlDatabase &db) {
+  // this only works with local file database drivers, like sqlite
+  QString dbPath = db.databaseName();
+  Q_ASSERT( !dbPath.isEmpty() );
+
+  QFileInfo dbInfo(dbPath);
+  if (!dbInfo.exists()) return QDateTime::fromSecsSinceEpoch(INT64_MAX);
+
+  return dbInfo.lastModified();
+}
+
+
+QMenu *MenuHelper::dirMenu(const QString &root, QObject *target, const char *slot) {
+  QMenu* menu = makeDirMenu(root, target, slot);
+
+  QAction* action = new QAction("*new folder*", menu);
+  action->connect(action, SIGNAL(triggered(bool)), target, slot);
+  action->setData(";newfolder;");
+  menu->insertAction(menu->actions()[0], action);
+
+  return menu;
+}
+
+QMenu *MenuHelper::makeDirMenu(const QString &root, QObject *target, const char *slot) {
+  QMenu* menu = new QMenu;
+  QAction* action = menu->addAction(".");
+  action->setData(root);
+  action->connect(action, SIGNAL(triggered(bool)), target, slot);
+
+  const auto& list =
+      QDir(root).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+  int partition = 0;
+  QMenu* partMenu = nullptr;
+  for (const QFileInfo& entry : list) {
+    // todo: setting for index dir name
+    const QString& path = entry.absoluteFilePath();
+    if (path.endsWith("_index")) continue;
+
+    // todo: setting or detect max popup size
+    const int maxFolders = 100;
+    if (list.count() > maxFolders) {
+      if (partition == 0) {
+        const QString name = entry.fileName();
+        partMenu = new QMenu;
+        partMenu->setTitle(name + "...");
+        menu->addMenu(partMenu);
+      }
+      partition = (partition + 1) % maxFolders;
+    } else
+      partMenu = menu;
+
+    if (QDir(path).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot).count() >
+        0) {
+      QMenu* subMenu = makeDirMenu(path, target, slot);
+      subMenu->setTitle(entry.fileName());
+      partMenu->addMenu(subMenu);
+    } else {
+      action = partMenu->addAction(entry.fileName());
+      action->setData(path);
+      action->connect(action, SIGNAL(triggered(bool)), target, slot);
+    }
+  }
+
+  return menu;
+}
+
+QString qElide(const QString &str, int maxLen) {
+  QString tmp;
+  if (str.length() > maxLen) {
+    int half = maxLen / 2 - 3;
+    tmp = str.mid(0, half) + "..." + str.mid(str.length() - half);
+  } else
+    tmp = str;
+
+  return tmp;
+}
+
+double qRotationAngle(const QMatrix &mat) {
+  QPointF p0 = mat.map(QPointF(0, 0));
+  QPointF p1 = mat.map(QPointF(1, 0));
+  return 180.0 / M_PI * atan((p1.y() - p0.y()) / (p1.x() - p0.x()));
+}
+
 //
 // Custom logger magic!
 //
@@ -807,3 +981,10 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
     //        qPrintable(shortFunction), localMsg.constData(), reset);
   }
 }
+
+MessageContext::MessageContext(const QString &context) {
+  if (qMessageContext.hasLocalData() && !qMessageContext.localData().isEmpty())
+    qWarning() << "overwriting message context"; // todo: save/restore message context
+  qMessageContext.setLocalData(context);
+}
+

@@ -207,8 +207,8 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   setWindowTitle("Compare Videos: " + prefix);
 
   setStyleSheet(
-      "QWidget { "
-      "  background-color: #111; "
+      "VideoCompareWidget { "
+      "  background-color: #000; "
       "  font-size: 16px; "
       "  color: white; "
       "}");
@@ -218,6 +218,93 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(this->metaObject()->className());
   _interleaved = settings.value("interleaved", false).toBool();
+  settings.endGroup();
+
+  settings.beginGroup(this->metaObject()->className() + QString(".shortcuts"));
+
+  WidgetHelper::addAction(settings, "Play/Pause", Qt::Key_Space, this,
+                          [&]() { _scrub = _scrub ? 0 : 1; repaint();});
+  WidgetHelper::addAction(settings, "Play Backward", Qt::SHIFT|Qt::Key_Space, this,
+                          [&]() { _scrub = -1; repaint();});
+
+  WidgetHelper::addAction(settings, "Goto Start", Qt::Key_Home, this,
+                          [&]() { loadFrameIfNeeded(0); repaint();});
+  WidgetHelper::addAction(settings, "Goto End", Qt::Key_End, this,
+                          [&]() { loadFrameIfNeeded(_range.len-1); repaint();});
+
+  WidgetHelper::addAction(settings, "Forward", Qt::Key_Right, this,
+                          [&]() { loadFrameIfNeeded(_selectedFrame + 1); repaint();});
+  WidgetHelper::addAction(settings, "Backward", Qt::Key_Left, this,
+                          [&]() { loadFrameIfNeeded(_selectedFrame + 1); repaint();});
+  WidgetHelper::addAction(settings, "Skip Forward", Qt::Key_Down, this,
+                          [&]() { loadFrameIfNeeded(_selectedFrame + 30); repaint();});
+  WidgetHelper::addAction(settings, "Skip Backward", Qt::Key_Up, this,
+                          [&]() { loadFrameIfNeeded(_selectedFrame - 30); repaint();});
+  WidgetHelper::addAction(settings, "Jump Forward", Qt::Key_PageDown, this,
+                          [&]() { loadFrameIfNeeded(_selectedFrame + 300); repaint();});
+  WidgetHelper::addAction(settings, "Jump Backward", Qt::Key_PageUp, this,
+                          [&]() { loadFrameIfNeeded(_selectedFrame - 300); repaint(); });
+
+  WidgetHelper::addSeparatorAction(this);
+
+  WidgetHelper::addAction(settings, "Offset +1", Qt::SHIFT|Qt::Key_Right, this,
+                          [&]() { shiftFrames(1); repaint(); });
+  WidgetHelper::addAction(settings, "Offset -1", Qt::SHIFT|Qt::Key_Left, this,
+                          [&]() { shiftFrames(-1); repaint(); });
+  WidgetHelper::addAction(settings, "Offset +30", Qt::SHIFT|Qt::Key_Down, this,
+                          [&]() { shiftFrames(30); repaint(); });
+  WidgetHelper::addAction(settings, "Offset -30", Qt::SHIFT|Qt::Key_Up, this,
+                          [&]() { shiftFrames(-30); repaint(); });
+  WidgetHelper::addAction(settings, "Offset +300", Qt::SHIFT|Qt::Key_PageDown, this,
+                          [&]() { shiftFrames(+300); repaint(); });
+  WidgetHelper::addAction(settings, "Offset -300", Qt::SHIFT|Qt::Key_PageUp, this,
+                          [&]() { shiftFrames(-300); repaint(); });
+
+  WidgetHelper::addSeparatorAction(this);
+
+  WidgetHelper::addAction(settings, "Toggle Scaling", Qt::Key_S, this,
+                          [&]() { _sameSize=!_sameSize; repaint(); });
+  WidgetHelper::addAction(settings, "Toggle Interleave", Qt::Key_I, this,
+                          [&]() { _interleaved=!_interleaved; repaint(); });
+  WidgetHelper::addAction(settings, "Swap Sides", Qt::Key_R, this,
+                          [&]() { _swap=!_swap; repaint(); });
+  WidgetHelper::addAction(settings, "Toggle Crop A", Qt::Key_BracketLeft, this,
+                          [&]() { _cropLeft=!_cropLeft; repaint(); });
+  WidgetHelper::addAction(settings, "Toggle Crop B", Qt::Key_BracketRight, this,
+                          [&]() { _cropRight=!_cropRight; repaint(); });
+
+  WidgetHelper::addAction(settings, "Zoom In", Qt::Key_9, this,
+                          [&]() { _zoom = qMin(_zoom+0.1, 0.9); repaint();});
+  WidgetHelper::addAction(settings, "Zoom Out", Qt::Key_7, this,
+                          [&]() { _zoom = qMin(_zoom-0.1, 0.9); repaint();});
+  WidgetHelper::addAction(settings, "Zoom Reset", Qt::Key_5, this,
+                          [&]() { _zoom = 0; repaint();});
+
+  WidgetHelper::addSeparatorAction(this);
+
+  WidgetHelper::addAction(settings, "Align Temporally", Qt::Key_A, this,
+                          [&]() { alignTemporally(); });
+  WidgetHelper::addAction(settings, "Align Spatially", Qt::Key_Z, this,
+                          [&]() { alignSpatially(); });
+  WidgetHelper::addAction(settings, "Quality Score", Qt::Key_Q, this,
+                          [&]() { findQualityScores(); });
+  WidgetHelper::addAction(settings, "Cycle Quality Visual", Qt::Key_V, this, [&]() {
+    if (_leftQualityVisual.count() > 0) {
+      _visualIndex++;
+      _visualIndex %= _leftQualityVisual.count() + 1;
+      repaint();
+    }
+  });
+
+  WidgetHelper::addSeparatorAction(this);
+
+  WidgetHelper::addAction(settings, "Play Side-by-Side", Qt::Key_P, this,
+                          [&]() { playSideBySide(); });
+
+  WidgetHelper::addAction(settings, "Close", Qt::CTRL|Qt::Key_W, this, SLOT(close()));
+  WidgetHelper::addAction(settings, "Close (Alt)", Qt::Key_Escape, this, SLOT(close()));
+
+  setContextMenuPolicy(Qt::ActionsContextMenu);
 }
 
 VideoCompareWidget::~VideoCompareWidget() {
@@ -322,7 +409,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
   const VideoContext::Metadata& rmd = _rightFrames->ctx().metadata();
 
   QString leftText = QString::asprintf(
-      "<div class=\"default\">%s<br/>%s<br/>%dx%d (%.2f) %.2f<br/>In:[%d%+d] "
+      "<div class=\"default\">A: %s<br/>%s<br/>%dx%d (%.2f) %.2f<br/>In:[%d%+d] "
       "Out:[%d]<br/>Hash:%" PRIx64 "",
       qPrintable(_leftLabel), qPrintable(lmd.toString(true)), leftImage.width(),
       leftImage.height(), _leftFrames->ctx().aspect(), _leftFrames->ctx().fps(),
@@ -331,7 +418,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
       leftFrame.hash);
 
   QString rightText = QString::asprintf(
-      "<div class=\"default\">%s<br/>%s<br/>%dx%d (%.2f) %.2f <br/>In:[%d] Out:[%d]<br/>Hash:%" PRIx64
+      "<div class=\"default\">B: %s<br/>%s<br/>%dx%d (%.2f) %.2f <br/>In:[%d] Out:[%d]<br/>Hash:%" PRIx64
       " (%d)",
       qPrintable(_rightLabel), qPrintable(rmd.toString(true)),
       rightImage.width(), rightImage.height(), _rightFrames->ctx().aspect(),
@@ -463,8 +550,7 @@ void VideoCompareWidget::alignSpatially() {
   repaint();
 }
 
-void VideoCompareWidget::alignTemporally(bool forward) {
-  (void)forward;
+void VideoCompareWidget::alignTemporally() {
   int windowSize = 5;
   int64_t minSad = INT64_MAX;
 
@@ -519,132 +605,6 @@ void VideoCompareWidget::alignTemporally(bool forward) {
 }
 
 void VideoCompareWidget::shiftFrames(int offset) { _frameOffset += offset; }
-
-void VideoCompareWidget::keyPressEvent(QKeyEvent* event) {
-  const bool shift = event->modifiers() & Qt::ShiftModifier;
-  const bool control = event->modifiers() & Qt::ControlModifier;
-  //    const bool alt = event->modifiers() & Qt::AltModifier;
-
-  switch (event->key()) {
-    case Qt::Key_Space:
-      if (_scrub)
-        _scrub = 0;
-      else if (shift)
-        _scrub = -1;
-      else
-        _scrub = 1;
-      repaint();
-      break;
-
-    case Qt::Key_Right:
-      if (shift)
-        shiftFrames(1);
-      else
-        loadFrameIfNeeded(_selectedFrame + 1);
-      repaint();
-      break;
-    case Qt::Key_Left:
-      if (shift)
-        shiftFrames(-1);
-      else
-        loadFrameIfNeeded(_selectedFrame - 1);
-      repaint();
-      break;
-    case Qt::Key_Down:
-      if (shift)
-        shiftFrames(+30);
-      else
-        loadFrameIfNeeded(_selectedFrame + 30);
-      repaint();
-      break;
-    case Qt::Key_Up:
-      if (shift)
-        shiftFrames(-30);
-      else
-        loadFrameIfNeeded(_selectedFrame - 30);
-      repaint();
-      break;
-    case Qt::Key_PageDown:
-      if (shift)
-        shiftFrames(+300);
-      else
-        loadFrameIfNeeded(_selectedFrame + 300);
-      repaint();
-      break;
-    case Qt::Key_PageUp:
-      if (shift)
-        shiftFrames(-300);
-      else
-        loadFrameIfNeeded(_selectedFrame - 300);
-      repaint();
-      break;
-    case Qt::Key_Home:
-      loadFrameIfNeeded(0);
-      repaint();
-      break;
-    case Qt::Key_S:
-      _sameSize = !_sameSize;
-      repaint();
-      break;
-    case Qt::Key_A:
-      alignTemporally(!shift);
-      break;
-    case Qt::Key_Z:
-      alignSpatially();
-      break;
-    case Qt::Key_Q:
-      findQualityScores();
-      break;
-    case Qt::Key_Escape:
-      close();
-      break;
-    case Qt::Key_R:
-      _swap = !_swap;
-      repaint();
-      break;
-    case Qt::Key_I:
-      _interleaved = !_interleaved;
-      repaint();
-      break;
-    case Qt::Key_P:
-      playSideBySide();
-      break;
-    case Qt::Key_W:
-      if (control) close();
-      break;
-    case Qt::Key_V:
-      if (_leftQualityVisual.count() > 0) {
-        _visualIndex++;
-        _visualIndex %= _leftQualityVisual.count() + 1;
-        repaint();
-      }
-      break;
-    case Qt::Key_9:
-      _zoom += 0.1;
-      _zoom = qMin(_zoom, 0.9);
-      repaint();
-      break;
-    case Qt::Key_7:
-      _zoom -= 0.1;
-      _zoom = qMax(_zoom, 0.0);
-      repaint();
-      break;
-    case Qt::Key_5:
-      _zoom = 0.0;
-      repaint();
-      break;
-    case Qt::Key_BracketLeft:
-      _cropLeft = !_cropLeft;
-      repaint();
-      break;
-    case Qt::Key_BracketRight:
-      _cropRight = !_cropRight;
-      repaint();
-      break;
-    default:
-      QWidget::keyPressEvent(event);
-  }
-}
 
 void VideoCompareWidget::wheelEvent(QWheelEvent* event) {
   // fixme: not getting reliable shift modifier (or with keyboardModifiers()
