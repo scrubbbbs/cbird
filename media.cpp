@@ -676,11 +676,12 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
   while (video.nextFrame(img)) {
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (now - then > 5000) {
-      qDebug("%dx%d (%dx%d) %3d%% %3d:1 %5dfps %s(%d)", _width, _height,
-            img.cols, img.rows, numFrames * 100 / std::max(totalFrames, 1),
+      qDebug("%dx%d %dpx %d:1 %s(%d) %dfps %d%% ", _width, _height,
+             qMax(img.cols, img.rows),
             numFrames / std::max(numFrames - nearFrames, 1),
+             (video.isHardware() ? "GPU" : "CPU"), video.threadCount(),
             int(curFrames * 1000 / (now - then)),
-            (video.isHardware() ? "HW" : "SW"), video.threadCount());
+             numFrames * 100 / std::max(totalFrames, 1));
       curFrames = 0;
       then = now;
     }
