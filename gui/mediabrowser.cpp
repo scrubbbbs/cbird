@@ -28,7 +28,9 @@
 
 extern Engine& engine();
 
-#define MB_TEXT_MAXLEN (40) // max char width of item text
+#define MB_TEXT_MAXLEN (40)  // max char width of item text
+#define MB_MAX_PER_PAGE (36) // fixme: use -max-per-page
+#define MB_THUMB_SIZE (480)
 
 // hack to snoop events, signals/slot invocations
 #ifdef DEBUG_EVENT_FILTER
@@ -149,7 +151,10 @@ int MediaBrowser::showFolders(const MediaGroupList& list,
     QString key = keys[i];
     GroupStats& s = stats[key];
     QString newKey = key + QString(" [x%1]").arg(s.itemCount);
-    _matchSets[newKey].append(list[i]);
+    auto& set = _matchSets[newKey];
+    const auto& group = list[i];
+    const auto split = Media::splitGroup(group,MB_MAX_PER_PAGE);
+    set.append(split);
   }
 
   qInfo() << "loading thumbnails...";
@@ -163,7 +168,7 @@ int MediaBrowser::showFolders(const MediaGroupList& list,
       if (ref.type() == Media::TypeVideo)
         img = VideoContext::frameGrab(ref.path(), -1, true);
       else
-        img = ref.loadImage(QSize(480, 0));
+        img = ref.loadImage(QSize(MB_THUMB_SIZE, 0));
       m.setImage(img);
       m.readMetadata();
       return m;
@@ -241,7 +246,7 @@ int MediaBrowser::showSets(const MediaGroupList& list,
       // add the dummy item to index
       Media m(key);
       if (!index.contains(m)) {
-        m.setImage(_matchSets[key][0][0].loadImage());
+        m.setImage(_matchSets[key][0][0].loadImage(QSize(MB_THUMB_SIZE, 0)));
         m.readMetadata();
         index.append(m);
       }

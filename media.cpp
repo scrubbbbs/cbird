@@ -267,10 +267,9 @@ QString Media::greatestPathPrefix(const MediaGroup& group) {
   return greatestPrefix(list);
 }
 
-MediaGroupList Media::splitGroup(const MediaGroup& group, int numPartitions) {
+MediaGroupList Media::splitGroup(const MediaGroup& group, int chunkSize) {
   MediaGroupList list;
-  int chunkSize = group.count() / numPartitions;
-  for (int i = 0; i < chunkSize; i += chunkSize)
+  for (int i = 0; i < group.count(); i += chunkSize)
     list.append(group.mid(i, chunkSize));
   return list;
 }

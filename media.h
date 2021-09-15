@@ -167,7 +167,7 @@ class Media {
   static QString greatestPathPrefix(const MediaGroupList& list);
 
   static MediaGroupList splitGroup(const MediaGroup& group,
-                                   int numPartitions = 1);
+                                   int chunkSize = 1);
 
   /**
    * @return function that evaluates expr with Media argument
