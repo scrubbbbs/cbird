@@ -261,7 +261,6 @@ class MediaGroupListWidget : public QListWidget {
   double _panX = 0, _panY = 0;
   bool _autoDifference = false;
   bool _maximized = false;
-  bool _skipDeleteConfirmation = false;
 
   QTimer _updateTimer;
 };

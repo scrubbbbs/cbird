@@ -790,6 +790,35 @@ void MediaGroupListWidget::execContextMenu(const QPoint& p) {
     QMenu* dirs =
         MenuHelper::dirMenu(_db->path(), this, SLOT(moveFileAction()));
 
+
+    QSet<QString> groupDirs;
+    const auto& group = _list[_currentRow];
+
+    int selectedIndex = -1;
+    const QModelIndex index = currentIndex();
+    if (index.isValid()) selectedIndex = index.row();
+
+    for (int i = 0; i < group.count(); ++i)
+      if (i != selectedIndex)
+        groupDirs.insert(group[i].parentPath());
+
+    const auto& keys = groupDirs.values();
+    QList<QAction*> actions;
+    for (auto& dirPath : keys) {
+      QDir dir(dirPath);
+      auto count = dir.entryList(QDir::Files|QDir::NoDotAndDotDot).count();
+      auto name = dir.dirName() + QString(" [x%1]").arg(count);
+      auto* a = new QAction(name, this);
+      a->setData(dirPath);
+      connect(a, &QAction::triggered, this, &self::moveFileAction);
+      actions.append(a);
+    }
+    if (actions.count() > 0) {
+      QAction* first = dirs->actions().first();
+      first = dirs->insertSeparator(first);
+      dirs->insertActions(first, actions);
+    }
+
     QAction* act = new QAction("Move to Folder", this);
     act->setMenu(dirs);
     menu->addAction(act);
@@ -1545,6 +1574,7 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
       }
 
       if (deleteFiles) {
+        static bool skipDeleteConfirmation = false;
         int button = 0;
         if (m.isArchived()) {
           QString zipPath = _db ? path.mid(_db->path().length()+1) : path;
@@ -1554,7 +1584,7 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
                                      ).arg(zipPath),
                                "&No", "&Yes");
         }
-        else if (_skipDeleteConfirmation) {
+        else if (skipDeleteConfirmation) {
           button = 2;
         }
         else {
@@ -1565,7 +1595,7 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
         }
 
         if (button == 0) return;
-        if (button == 2) _skipDeleteConfirmation = true;
+        if (button == 2) skipDeleteConfirmation = true;
       }
 
       if (!DesktopHelper::moveToTrash(path)) return;
