@@ -462,7 +462,7 @@ bool DesktopHelper::moveToTrash(const QString& path) {
 QKeySequence WidgetHelper::getShortcut(QSettings& settings, const QString& label,
                                        const QKeySequence& defaultShortcut) {
   QString key = label.toLower();
-  key = key.replace(QRegExp("[^a-z0-9-\\+]+"), "_");
+  key = key.replace(QRegExp("[^a-z0-9-\\+\\%]+"), "_");
 
   if (!settings.contains(key)) settings.setValue(key, defaultShortcut);
   return settings.value(key, defaultShortcut).toString();

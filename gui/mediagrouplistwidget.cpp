@@ -231,9 +231,9 @@ class MediaItemDelegate : public QAbstractItemDelegate {
   void setZoom(double zoom) { _zoom = zoom; }
   void setPan(const QPointF& pan) { _pan = pan; }
   void setTextHeight(int height) { _textHeight = height; }
-  void setScaleToFit(bool enable) { _scaleToFit = enable; }
 
-  bool scaleToFit() const { return _scaleToFit; }
+  void toggleScaleToFit() { _scaleToFit = !_scaleToFit; }
+  void toggleActualSize() { _actualSize = !_actualSize; }
 
   void cycleMinFilter() { _minFilter = (_minFilter + 1) % _filters.count(); }
   void cycleMagFilter() { _magFilter = (_magFilter + 1) % _filters.count(); }
@@ -255,7 +255,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
     double sw = double(itemRect.width()) / imgRect.width();
     double sh = double(itemRect.height()) / imgRect.height();
-    scale = qMin(sw, sh);
+    scale = _actualSize ? 1.0 : qMin(sw, sh);
 
     // scale-to-fit mode disabled and magnification needed, limit to 100% scale
     if (!_scaleToFit && scale > 1.0) scale = 1.0;
@@ -422,7 +422,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
       QString info = QString("%1% %2(%3) %4")
                          .arg(int(totalScale * 100))
-                         .arg(_scaleToFit ? "[Fit] " : "")
+                         .arg(_actualSize ? "[1:1]" : _scaleToFit ? "[Fit] " : "")
                          .arg(_filters[filterIndex].name)
                          .arg(isRoi ?
                                     QString("[ROI] %1\xC2\xB0").arg(rotation, 0, 'f', 1)
@@ -596,6 +596,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
   bool _scaleToFit = false;
   int _textHeight = 100;
   bool _debug = false;
+  bool _actualSize = false;
 };
 
 MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
@@ -728,6 +729,10 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 
   WidgetHelper::addAction(settings, "Zoom In", Qt::Key_9, this, SLOT(zoomInAction()));
   WidgetHelper::addAction(settings, "Zoom Out", Qt::Key_7, this, SLOT(zoomOutAction()));
+  WidgetHelper::addAction(settings, "Zoom 100%", Qt::Key_0, this, [&]() {
+    _itemDelegate->toggleActualSize();
+    repaint();
+  });
   WidgetHelper::addAction(settings, "Pan Left", Qt::Key_4, this, SLOT(panLeftAction()));
   WidgetHelper::addAction(settings, "Pan Right", Qt::Key_6, this, SLOT(panRightAction()));
   WidgetHelper::addAction(settings, "Pan Up", Qt::Key_8, this, SLOT(panUpAction()));
@@ -1913,7 +1918,7 @@ bool MediaGroupListWidget::addNegMatch(bool all) {
 }
 
 void MediaGroupListWidget::normalizeAction() {
-  _itemDelegate->setScaleToFit(!_itemDelegate->scaleToFit());
+  _itemDelegate->toggleScaleToFit();
   repaint();
 }
 
