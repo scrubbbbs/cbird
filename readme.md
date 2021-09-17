@@ -1,8 +1,3 @@
-readme todo:
-
-- finish 500k indexer stats
-- app download links
-- test data download link
 
 About cbird
 =========================
@@ -110,25 +105,25 @@ Environment Variables
 There are a few for power users.
 
 - `CBIRD_SETTINGS_FILE` overrides the path to the global settings file
-- `CBIRD_TRASH_DIR`overrides the path to trash folder, do not use the system trash bin
+- `CBIRD_TRASH_DIR` overrides the path to trash folder, do not use the system trash bin
 
 Search Algorithms
 ====================
 
 #### Discrete Cosine Transform (DCT) Hash (`-p.alg 0`)
-Stores one 64-bit hash per image, similar to pHash. Very fast and good for rescaled images.
+Uses one 64-bit hash per image, similar to pHash. Very fast and good for rescaled images.
 
 #### DCT Features `-p.alg 1`
-Stores DCT hashes of regions around ORB features, up to 400 per image. Good for heavily cropped images, much faster than ORB features.
+Uses DCT hashes around ORB features, up to 400 per image. Good for heavily cropped images, much faster than ORB features.
 
 #### OpenCV Features `-p.alg 2`
-Stores up to 400 Oriented Rotated Brief (ORB) 256-bit features per image and searches using FLANN-based matcher. Good for rotated, cropped but slow.
+Uses up to 400 Oriented Rotated Brief (ORB) 256-bit features per image and searches using FLANN-based matcher. Good for rotated, cropped but slow.
 
 #### Color Histogram `-p.alg 3`
-Stores a quantized histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` which is too slow except with `-similar-to`
+Uses Reduced-color histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` which is too slow except with `-similar-to`
 
 #### DCT Video Index `-p.alg 4`
-Stores DCT hashes of ()up to 64k) video frames, with temporal compression of similar hashes. Frames are pre-processed to remove letterboxing.
+Uses DCT hashes of video frames, with some compression of nearby similar hashes. Frames are pre-processed to remove letterboxing.
 
 #### Template Matcher `-p.tm 1`
 Not a technically a search algorithm, but helps to refine results. Uses up to 1000 ORB features to find an affine transform between two images, and uses DCT hash of the mapped region to confirm. Since it requires decompressing the source/destination image it is extremely slow. It can help to reduce the maximum number of matches per image with `-p.mm #`
@@ -140,7 +135,7 @@ How it Performs
 
 Indexing happens when `-update` is used. It can take a while the first time, however subsequent updates only consider changes.
 
-Algorithms you do not use can be disabled to speed up indexing or save space. If you have large images, you may as well enable all algorithms because jpeg decompression dominates.
+Unused algorithms can be disabled to speed up indexing or save space. If you have large images, you may as well enable all algorithms because jpeg decompression dominates.
 
 #### Table 1: Indexing 1000 6000px images, 8 GB, SSD
 
@@ -159,7 +154,7 @@ Search speed varies with algorithm. The OpenCV search tree is quite slow compare
 
 #### Table 2: Searching 1000 images
 
-Arguments | Note | Time (ms)
+Arguments         | Note          | Time (ms)
 ------------------|---------------|------ 
 -similar          | dct           | 54
 -p.alg 1 -similar | dct features  | 200
@@ -177,8 +172,8 @@ Arguments | Note | Rate (Img/s) | Time (minutes)
 -i.algos 0 -update  | md5 only       | 861 |  9:41
 -i.algos 1 -update  | +dct           | 683 | 12:11
 -i.algos 3 -update  | +dct features  | 377 | 22:04
--i.algos 7 -update  | +cv features   | --  | 23:56
--i.algos 15 -update | +colors        | --  |
+-i.algos 7 -update  | +cv features   | 348 | 23:56
+-i.algos 15 -update | +colors        | 227 | 36:39
 
 For N^2 search (`-similar`) only DCT hash is practical, and it degrades exponentially as the threshold increases.
 
@@ -219,6 +214,8 @@ Wish List
 - presets for multiple parameters
 - move/link files rather than delete
 - prune groups, keeping/ignoring needle
+- rename folders based on filenames
+- copy or sync exif data with matching images
 
 ### Indexing
 - store date-modified,size for better updating
@@ -234,6 +231,7 @@ Wish List
 ### Search	
 - csv output for other tools, gui wrappers
 - sort groups with closest matches first
+- fast block-averaging template match with threshold
 
 ### GUI
 - barebones index/search gui
@@ -243,6 +241,7 @@ Wish List
 - show results in batches as they are being computed, for slow queries
 - toggle histogram view
 - context menu: copy path
+- when deleting zip, remove all zip contents from viewer
 
 Major Bugs
 ==========================
@@ -335,27 +334,15 @@ make -j8
 sudo make install
 ```
 
-1.6 Setup Environment
+1.6 Install Supporting Files (Optional)
 
 ```
-.bashrc
-
-# make libraries in /usr/local/lib visible
-export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-
-# cbird argument completion
-function _cbird { 
-  OIFS=$IFS
-  IFS='|' 
-  COMPREPLY=($(cbird -complete $COMP_CWORD ${COMP_WORDS[*]}))
-  IFS=$OIFS 
-}
-complete -F _cbird cbird
+cbird -install
 ```
 
 ## Compiling: AppImage
 
-The AppImage is built using linuxdeployqt on ubuntu 18.04 LTS. Core dependencies have to be compiled (maybe PPA can be used for some...)
+The AppImage is built using linuxdeployqt on ubuntu 18.04 LTS. Core dependencies are all compiled (maybe PPA can be used for some...)
 
 Use a virtual machine (I use qemu) with xubuntu 18.04 lts, target CPU "Westmere". The CPU target helps ensure compatibility with older systems.
 
@@ -397,13 +384,17 @@ done
 
 #### ffmpeg
 
-The latest ffmpeg will not work due to deprecations, so checkout a working version.
+The latest ffmpeg will not work due to deprecations, so checkout a working version. For GPU video decoding (Nvidia) we also need nv-codecs-headers and --enable-cuvid.
 
 ```
+git clone https://github.com/FFmpeg/nv-codec-headers.git
+cd nv-codecs-headers
+make && sudo make install
+
 git clone https://github.com/FFmpeg/FFmpeg.git
 cd FFmpeg
 git checkout 358c0b
-./configure --enable-gpl --enable-ffplay --disable-static --enable-shared
+./configure --enable-gpl --enable-ffplay --enable-cuvid --disable-static --enable-shared
 make -j8
 sudo make install
 ```

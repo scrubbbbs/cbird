@@ -8,6 +8,9 @@ git clone https://git.videolan.org/git/x264.git
 hg clone http://hg.videolan.org/x265
 cd build; cmake ../source; 
 
+git clone https://github.com/FFmpeg/nv-codec-headers.git
+make && sudo make install
+
 git clone https://github.com/FFmpeg/FFmpeg
 git checkout 358c0b
 

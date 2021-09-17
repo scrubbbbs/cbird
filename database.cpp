@@ -858,7 +858,7 @@ bool Database::renameDir(const QString& dirPath, const QString& newName) {
   }
 
   if (!dir.exists(newName)) {
-    qWarning("renameDir: desination exists");
+    qWarning("renameDir: destination exists");
     return false;
   }
 
