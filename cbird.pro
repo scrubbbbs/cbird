@@ -9,7 +9,7 @@ QT *= widgets
 CONFIG -= debug_and_release
 CONFIG -= debug_and_release_target
 
-CONFIG += release
+CONFIG += release silent
 
 include(cbird.pri)
 
@@ -103,6 +103,10 @@ unix: {
 
     INSTALLS += desktop icon scripts
 
+    EXTRA_PLUGINS=$$system("ls $$[QT_INSTALL_PLUGINS]/platforms/*wayland* | sed -re 's;.*./plugins/(.*);\1;' | xargs | sed -re 's/ /,/g'")
+    EXTRA_PLUGINS=$$EXTRA_PLUGINS,$$system("ls $$[QT_INSTALL_PLUGINS]/*wayland*/*.so | sed -re 's;.*./plugins/(.*);\1;' | xargs | sed -re 's/ /,/g'")
+    #message($$EXTRA_PLUGINS)
+
     APPDIR=$$OBJECTS_DIR/appimage
     QMAKE=/usr/local/Qt-5.15.2/bin/qmake
     LINUXDEPLOYQT=~/Downloads/linuxdeployqt-continuous-x86_64.AppImage
@@ -110,9 +114,9 @@ unix: {
       PREFIX="$$APPDIR/cbird" $$QMAKE && \
       make install && \
       cp -auv /usr/local/bin/ff* $$APPDIR/cbird/bin/ && \
-      VERSION=$$VERSION $$LINUXDEPLOYQT \
+      LD_LIBRARY_PATH=/usr/local/lib VERSION=$$VERSION $$LINUXDEPLOYQT \
         $$APPDIR/cbird/share/applications/cbird.desktop \
-        -executable=/usr/local/bin/ffmpeg \
+        -extra-plugins=$$EXTRA_PLUGINS \
         -executable=/usr/local/bin/ffplay \
         -executable=/usr/local/bin/ffprobe \
         -qmake=$$QMAKE \
@@ -123,5 +127,4 @@ unix: {
 
 message("QT=" $$QT)
 message("CONFIG=" $$CONFIG)
-message("QMAKE_CXXFLAGS=" $$QMAKE_CXXFLAGS)
-message("QMAKE_CFLAGS=" $$QMAKE_CFLAGS)
+message("CXXFLAGS=" $$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE)
