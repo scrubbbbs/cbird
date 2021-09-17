@@ -116,7 +116,8 @@ class Scanner : public QObject {
    * @note Connect signals to get the results of the scan
    */
   void scanDirectory(const QString& dir, QSet<QString>& expected,
-                     const QDateTime& modifiedSince=QDateTime::fromSecsSinceEpoch(INT64_MAX));
+                     const QDateTime& modifiedSince=
+                         QDateTime::fromSecsSinceEpoch(0).addYears(1000));
 
   /**
    * process compressed image

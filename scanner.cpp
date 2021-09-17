@@ -405,6 +405,8 @@ void Scanner::processOne() {
             _videoQueue.removeFirst();
           }
         }
+        else
+          _videoQueue.removeFirst(); // failed to open
         //printf("v");
         //fflush(stdout);
       }

@@ -20,6 +20,7 @@ class TestScanner : public QObject {
   void testSkipListPresent();
   void testSkipListMissing();
   void test1VideoDir();
+  void test1ImageDir();
   void testCorruptedFiles();
 
   void mediaProcessed(const Media& m);
@@ -40,7 +41,6 @@ void TestScanner::cleanupTestCase() {}
 void TestScanner::init() { _filesAdded.clear(); }
 
 void TestScanner::mediaProcessed(const Media& m) {
-  //qDebug() << "mediaProcesssed" << m.path();
   _filesAdded.insert(m.path());
 }
 
@@ -63,13 +63,13 @@ void TestScanner::testEmptyDir() {
 }
 
 void TestScanner::test200FilesDir() {
-  // test the slot was called 200 times
+  // test mediaProcessed was emitted 200 times
   QCOMPARE(_filesAdded.count(), 0);
   Scanner scanner;
   QSet<QString> skip;
   connect(&scanner, &Scanner::mediaProcessed, this,
           &TestScanner::mediaProcessed);
-  scanner.scanDirectory(_dataDir + "/scanner/200images", skip);
+  scanner.scanDirectory(_dataDir + "/40x5-sizes", skip);
   scanner.finish();
   QCOMPARE(_filesAdded.count(), 200);
 }
@@ -77,55 +77,46 @@ void TestScanner::test200FilesDir() {
 void TestScanner::testDestructor() {
   // test the destructor blocks to flush the work queue
   QCOMPARE(_filesAdded.count(), 0);
-
   {
     Scanner scanner;
     QSet<QString> skip;
     connect(&scanner, &Scanner::mediaProcessed, this,
             &TestScanner::mediaProcessed);
-    scanner.scanDirectory(_dataDir + "/scanner/200images", skip);
+    scanner.scanDirectory(_dataDir + "/40x5-sizes", skip);
 
     // implicit flush; since we didn't enter event loop, no threads
     // started, nothing should be returned
   }
-
   QCOMPARE(_filesAdded.count(), 0);
 }
 
 void TestScanner::testSkipListPresent() {
-  // test that scanDir ignores any path in the list and removes it from the list
+  // test that scanner ignores any path in the skip list
+  // and also removes it from the list
   QCOMPARE(_filesAdded.count(), 0);
 
-  {
+  QSet<QString> skip;
+  auto scan = [&]() {
     Scanner scanner;
-    QSet<QString> skip;
     connect(&scanner, &Scanner::mediaProcessed, this,
             &TestScanner::mediaProcessed);
-    scanner.scanDirectory(_dataDir + "/scanner/200images", skip);
+    scanner.scanDirectory(_dataDir + "/40x5-sizes", skip);
     scanner.finish();
-  }
+  };
 
+  scan();
+  QCOMPARE(skip.count(), 0);
   QCOMPARE(_filesAdded.count(), 200);
 
   // add first 10 files to skip list
-  QSet<QString> skip;
-  for (const QString& path : _filesAdded) {
+  skip.clear();
+  for (const QString& path : _filesAdded)
     if (skip.count() < 10) skip.insert(path);
-  }
-
   QCOMPARE(skip.count(), 10);
 
   // run it again, this time we get 190 files
   _filesAdded.clear();
-
-  {
-    Scanner scanner;
-    connect(&scanner, &Scanner::mediaProcessed, this,
-            &TestScanner::mediaProcessed);
-    // scanner.setRecursive(true);
-    scanner.scanDirectory(_dataDir + "/scanner/200images", skip);
-    scanner.finish();
-  }
+  scan();
 
   // skip list is zero since all files existed
   QCOMPARE(skip.count(), 0);
@@ -138,24 +129,21 @@ void TestScanner::testSkipListMissing() {
   // test skip list unmodified if files do not exist
 
   QSet<QString> skip;
-
   skip.insert("bogus1.jpg");
   skip.insert("dummy/bogus2.jpg");
 
   QCOMPARE(skip.count(), 2);
-
   {
     Scanner scanner;
     scanner.scanDirectory(_dataDir + "/scanner/emptydir", skip);
     scanner.finish();
   }
-
   QCOMPARE(skip.count(), 2);
 }
 
 void TestScanner::test1VideoDir() {
+  // test dir containing one video
   QCOMPARE(_filesAdded.count(), 0);
-
   {
     Scanner scanner;
     QSet<QString> skip;
@@ -164,13 +152,26 @@ void TestScanner::test1VideoDir() {
     scanner.scanDirectory(_dataDir + "/scanner/1video", skip);
     scanner.finish();
   }
+  QCOMPARE(_filesAdded.count(), 1);
+}
 
+void TestScanner::test1ImageDir() {
+  // test dir containing one video
+  QCOMPARE(_filesAdded.count(), 0);
+  {
+    Scanner scanner;
+    QSet<QString> skip;
+    connect(&scanner, &Scanner::mediaProcessed, this,
+            &TestScanner::mediaProcessed);
+    scanner.scanDirectory(_dataDir + "/scanner/1image", skip);
+    scanner.finish();
+  }
   QCOMPARE(_filesAdded.count(), 1);
 }
 
 void TestScanner::testCorruptedFiles() {
+  // test various corrupted files do not cause a problem
   QCOMPARE(_filesAdded.count(), 0);
-
   {
     Scanner scanner;
     QSet<QString> skip;
