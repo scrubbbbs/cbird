@@ -594,8 +594,10 @@ static void install(const QString& argv0, const QString& prefix) {
     printf("install: cbird doesn't seem to be in your PATH, bash completions cannot work\n");
   if (0 != system("trash-put --version >/dev/null 2>&1"))
     printf("install: trash-cli is not installed, required for file deletion\n");
-  if (0 != system("ffplay -version >/dev/null 2>&1"))
-    printf("install: ffplay is not installed, recommended for video compare tool\n");
+
+  // this is bundled now
+  //if (0 != system("ffplay -version >/dev/null 2>&1"))
+  //  printf("install: ffplay is not installed, recommended for video compare tool\n");
 
   const QString shell = getenv("SHELL");
   if (shell == "/bin/bash") {
@@ -1400,7 +1402,7 @@ int main(int argc, char** argv) {
           int funcClose = newName.indexOf("}", funcOpen+1);
           while (funcOpen >= 0 && (funcClose-funcOpen) > 1) {
             auto funcs = newName.mid(funcOpen+1, funcClose-funcOpen-1).split(":");
-            qWarning() << "rename: function:" << funcs;
+            //qWarning() << "rename: function:" << funcs;
             if (funcs.count() > 0) {
               QVariant result = funcs[0];
               funcs.removeFirst();
@@ -1409,7 +1411,7 @@ int main(int argc, char** argv) {
                 result = (Media::unaryFunc(funcs[0]))(result);
                 funcs.removeFirst();
               }
-              qDebug() << result;
+              //qDebug() << result;
               replacements.append( {funcOpen, funcClose+1, result.toString() });
             }
             else {
@@ -1926,7 +1928,6 @@ int main(int argc, char** argv) {
       MediaBrowser::show(l, params, showMode);
     } else if (arg == "-test-video-decoder") {
       QString path = nextArg();
-      VideoContext video;
       VideoContext::DecodeOptions opt;
 
       opt.rgb = 0;
@@ -1934,12 +1935,25 @@ int main(int argc, char** argv) {
       opt.threads = indexParams.decoderThreads;
       opt.maxH = 128;
       opt.maxW = 128;
-      Q_ASSERT(0 == video.open(path, opt));
+
+      bool display = false;
+      bool loop = false;
+      while (args.count() > 0) {
+        arg = nextArg();
+        if (arg == "-show") display = true;
+        else if (arg == "-loop") loop = true;
+        else if (arg == "-rgb") opt.rgb = 1;
+        else if (arg == "-maxw") opt.maxW = intArg(nextArg());
+        else if (arg == "-maxh") opt.maxH = intArg(nextArg());
+        else if (arg == "-device") opt.deviceIndex = intArg(nextArg());
+        else if (arg == "-fast") opt.fast = true;
+        else qFatal("unknown arg to -test-video-decoder");
+      }
 
       int numFrames = 0;
-      qint64 then = QDateTime::currentMSecsSinceEpoch();
+      qint64 then;
 
-      while (video.decodeFrame()) {
+      auto timing=[&]() {
         numFrames++;
         if (numFrames > 100) {
           qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -1947,7 +1961,36 @@ int main(int argc, char** argv) {
           then = now;
           numFrames = 0;
         }
+      };
+
+      if (display) {
+        QLabel* label = new QLabel;
+        QImage img;
+        do {
+          VideoContext video;
+          Q_ASSERT(0 == video.open(path, opt));
+          then = QDateTime::currentMSecsSinceEpoch();
+          numFrames = 0;
+          while (video.nextFrame(img)) {
+            label->setPixmap(QPixmap::fromImage(img));
+            label->show();
+            qApp->processEvents();
+            timing();
+          }
+        } while (loop);
+
+        continue;
       }
+
+      do {
+        VideoContext video;
+        Q_ASSERT(0 == video.open(path, opt));
+        then = QDateTime::currentMSecsSinceEpoch();
+        numFrames = 0;
+        while (video.decodeFrame()) timing();
+        video.seekFast(0);
+      } while(loop);
+
     } else if (arg == "-test-video") {
       VideoContext vc;
       VideoContext::DecodeOptions opt;
