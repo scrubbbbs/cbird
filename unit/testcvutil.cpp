@@ -295,7 +295,7 @@ void TestCvUtil::testAutocrop() {
     QString failImg =
         QString("%1/fail/%2").arg(_dataRoot).arg(QFileInfo(file).fileName());
 
-    printf("write fail image: %s\n", qPrintable(failImg));
+    qWarning("write fail image: %s\n", qPrintable(failImg));
     cv::imwrite(qCString(failImg), cropped);
     QFAIL(qCString(failImg));
   }
@@ -435,7 +435,7 @@ void TestCvUtil::testGrayscale() {
   cv::Mat cmp = cv::imread(qCString(result), CV_LOAD_IMAGE_UNCHANGED);
 
   if (!compare(gray, cmp)) {
-    printf("write fail image: %s\n", qPrintable(fail));
+    qWarning("write fail image: %s\n", qPrintable(fail));
 
     cv::imwrite(qCString(fail), gray);
 
@@ -644,14 +644,14 @@ void TestCvUtil::testDctHashCvDissimilarity_init() {
     cv::Mat img = cv::imread(qCString(original), cv::IMREAD_GRAYSCALE);
 
     uint64_t origHash = dctHash64(img);
-
+/*
     for (int i = 0; i < 64; i++)
       if (origHash & (1 << i))
         printf("1");
       else
         printf("0");
     printf("\n");
-
+*/
     _hashes.append(origHash);
   }
 }

@@ -1,21 +1,23 @@
 #!/bin/bash
 
 option=$1
+testArgs=()
 while [ ! -z $option ]; do 
   shift 1
-  echo $option
-  if [ $option = "-clean" ]; then rm -rfv _build runtest-* *.make; fi
-  if [ $option = "-coverage" ]; then export COVERAGE=1; fi
+  if [ $option = "-clean" ]; then rm -rfv _build runtest-* *.make Makefile.*
+  elif [ $option = "-coverage" ]; then export COVERAGE=1
+  else testArgs+=" $option"
+  fi
   option=$1
 done
 
 for project in test*.pro; do
   echo ============================================================
   echo $project
-  qmake -o "$project".make "$project" && make -f "$project.make" -j
+  qmake -o "$project".make "$project" && make -f "$project.make" -j8
 done
 
 for test in runtest-*; do
-  ./$test
+  ./$test ${testArgs[@]}
 done
 

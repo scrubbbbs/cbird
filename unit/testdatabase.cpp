@@ -16,8 +16,9 @@ class TestDatabase : public TestIndexBase {
 
  private slots:
   void initTestCase() {
-    baseInitTestCase(new DctHashIndex, "40x5-sizes/150x150", false);
+    baseInitTestCase(new DctHashIndex, "40x5-sizes/150x150");
   }
+  void cleanupTestCase() { baseCleanupTestCase(); }
 
   void testRename();
   void testMove();
@@ -26,7 +27,7 @@ class TestDatabase : public TestIndexBase {
 void TestDatabase::testRename() {
   QString bogusPath = "";
   QString origPath = *(_database->indexedFiles().begin());
-  QString otherPath = *(_database->indexedFiles().begin() + 1);
+  QString otherPath = *(++_database->indexedFiles().begin());
 
   // fail, rename not in the db
   Media missing = _database->mediaWithPath(bogusPath);
@@ -55,7 +56,7 @@ void TestDatabase::testRename() {
 void TestDatabase::testMove() {
   QString bogusPath = "";
   QString srcPath = *(_database->indexedFiles().begin());
-  QString otherPath = *(_database->indexedFiles().begin() + 1);
+  QString otherPath = *(++_database->indexedFiles().begin());
 
   QString srcDir = QFileInfo(srcPath).absoluteDir().absolutePath();
   QString dstDir = srcDir + "/newdir";

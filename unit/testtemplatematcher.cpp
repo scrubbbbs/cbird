@@ -12,16 +12,12 @@ class TestTemplateMatcher : public TestIndexBase {
 
  private Q_SLOTS:
   void initTestCase() {
-    baseInitTestCase(new CvFeaturesIndex, "40x-people/cuthbert", false);
+    baseInitTestCase(new CvFeaturesIndex, "40x-people/cuthbert");
   }
-  // void cleanupTestCase() {}
-  // void init() {}              // called before/after each unit test (testXXX
-  // method) void cleanup() {}
+  void cleanupTestCase() { baseCleanupTestCase(); }
 
   void testMatch_data();
   void testMatch();
-
- private:
 };
 
 void TestTemplateMatcher::testMatch_data() {
@@ -32,7 +28,7 @@ void TestTemplateMatcher::testMatch_data() {
     QString op;
     QImage img(file);
 
-    int maxDim = std::max(img.width(), img.height());
+    //int maxDim = std::max(img.width(), img.height());
     int minDim = std::min(img.width(), img.height());
 
     int dx = (img.width() - minDim) / 2;

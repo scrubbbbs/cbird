@@ -18,9 +18,10 @@ LIBS_FFMPEG = -lavcodec -lavformat -lavutil -lswscale
 LIBS_QUAZIP = -lquazip -lz
 LIBS_EXIV2  = -lexiv2
 LIBS_CIMG   = -lpng
+LIBS_TERM   = -ltermcap
 
 # deps for testing Index subclasses
-LIBS_INDEX = $$LIBS_OPENCV $$LIBS_FFMPEG $$LIBS_QUAZIP $$LIBS_EXIV2
+LIBS_INDEX = $$LIBS_OPENCV $$LIBS_FFMPEG $$LIBS_QUAZIP $$LIBS_EXIV2 $$LIBS_TERM
 FILES_INDEX = index ioutil media videocontext cvutil qtutil database scanner templatematcher
 
 # deps for using gui stuff
