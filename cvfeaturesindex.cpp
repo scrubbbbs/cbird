@@ -476,10 +476,7 @@ QVector<Index::Match> CvFeaturesIndex::find(const Media& needle,
       mediaId = it->second;
 
       // we found a deleted/removed item (mediaId == 0)
-      if (!mediaId) {
-        qWarning("no mediaId for index %d", index);
-        continue;
-      }
+      if (!mediaId) continue;
 
       auto& match = matches[mediaId];
 

@@ -92,8 +92,10 @@ class SearchParams {
   QVector<int> resultTypes;  // list of Media::Type to include in result set
   QVector<int> queryTypes;   // list of Media::Type to include in query set
 
-  int skipFramesIn;   // video search: ignore N frames at start of video (intros)
-  int skipFramesOut;  // video search: ignore N frames at end of video (outros)
+  int skipFramesIn;     // video search: ignore N frames at start of video (intros)
+  int skipFramesOut;    // video search: ignore N frames at end of video (outros)
+  int minFramesMatched; // video search: >N frames match between videos
+  int minFramesNear;    // video search: >N% of frames that matched are near each other
 
   bool filterSelf;    // remove media that matched itself
   bool filterGroups;  // remove duplicate groups from results (a matches (b,c,d)
@@ -122,6 +124,8 @@ class SearchParams {
     target = 0;
     skipFramesIn = 300;
     skipFramesOut = 300;
+    minFramesMatched = 30;
+    minFramesNear = 60;
     filterSelf = true;
     filterGroups = true;
     expandGroups = false;
@@ -140,12 +144,18 @@ class SearchParams {
     bool ok = false;
     switch (algo) {
       case AlgoCVFeatures:
+        ok = needle.id() != 0 || needle.keyPointDescriptors().rows > 0;
+        break;
       case AlgoDCTFeatures:
         ok = needle.id() != 0 || needle.keyPointHashes().size() > 0;
+        break;
+      case AlgoColor:
+        ok = needle.id() != 0 || needle.colorDescriptor().numColors > 0;
         break;
       case AlgoVideo:
         ok = needle.type() == Media::TypeVideo || needle.dctHash() != 0;
         break;
+
       default:
         ok = needle.dctHash() != 0;
     }

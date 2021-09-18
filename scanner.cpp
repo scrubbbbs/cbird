@@ -285,7 +285,7 @@ void Scanner::flush(bool wait) {
 
   // in case this is called for no reason
   if (cancelled <= 0 && _activeWork.count() <= 0)
-    qWarning() << "nothing to flush, is there a scan running?";
+    qDebug() << "nothing to flush, is there a scan running?";
 
   if (wait) {
     // it isn't ideal to block, but the nature of flush() is that it must,

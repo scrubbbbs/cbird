@@ -133,9 +133,32 @@ void DctVideoIndex::save(QSqlDatabase& db, const QString& cachePath) {
   (void)cachePath;
 }
 
-void DctVideoIndex::add(const MediaGroup& media) { (void)media; }
+void DctVideoIndex::add(const MediaGroup& media) {
+  for (auto& m : media)
+    _mediaId.push_back(m.id());
+  delete _tree;
+  _tree = nullptr;
+}
 
-void DctVideoIndex::remove(const QVector<int>& id) { (void)id; }
+void DctVideoIndex::remove(const QVector<int>& ids) {
+  QSet<int> set;
+  for (auto& id : ids) set.insert(id);
+
+  decltype(_mediaId) copy;
+  for (auto& id : qAsConst(_mediaId))
+    if (!set.contains(id)) {
+      copy.push_back(id);
+    } else {
+      auto it = _cachedIndex.find(id);
+      if (it != _cachedIndex.end()) {
+        _cachedIndex.erase(it);
+        delete it->second;
+      }
+    }
+  _mediaId = copy;
+  delete _tree;
+  _tree = nullptr;
+}
 
 QVector<Index::Match> DctVideoIndex::find(const Media& needle,
                                           const SearchParams& params) {
@@ -187,7 +210,13 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle,
     queryIndex = _tree;
   }
 
+  QVector<Index::Match> results;
+
   uint64_t hash = needle.dctHash();
+  if (hash == 0) {
+    qWarning("needle has no dct hash");
+    return results;
+  }
 
   std::vector<HammingTree::Match> matches;
 
@@ -216,8 +245,6 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle,
     } else
       nearest.insert(mediaIndex, match);
   }
-
-  QVector<Index::Match> results;
 
   for (const auto& match : nearest) {
     uint32_t dstFrame = match.value.index & 0xFFFF;
@@ -288,7 +315,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
       uint32_t mediaIndex = match.value.index >> 16;
 
       uint32_t id = _mediaId[mediaIndex];
-      if (id != uint32_t(needle.id())) {
+      if (!params.filterSelf || id != uint32_t(needle.id())) {
         int srcFrame = srcIndex.frames[i];
         if (srcFrame < params.skipFramesIn ||
             srcFrame > (lastFrame - params.skipFramesOut))
@@ -323,7 +350,8 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
     int percentNear = nearCount * 100 / num;
 
     // todo: setting for this threshold
-    if (num > 30 && percentNear > 60) {
+    if (num > params.minFramesMatched &&
+        percentNear > params.minFramesNear) {
       // printf("\t%d\t%d%%\n", num, percentNear);
       Index::Match im;
       im.mediaId = it.key();
@@ -336,6 +364,10 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
       im.range.len = std::max(srcLen, dstLen);
 
       results.append(im);
+    }
+    else if (params.verbose) {
+      qDebug() << "reject id" << it.key() << "matches:" <<
+          num << "%nearby:" << percentNear;
     }
   }
 

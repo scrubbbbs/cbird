@@ -42,7 +42,7 @@ class DctVideoIndex : public Index {
                     const QString& dataPath);
   virtual void save(QSqlDatabase& db, const QString& cachePath);
   virtual void add(const MediaGroup& media);
-  virtual void remove(const QVector<int>& id);
+  virtual void remove(const QVector<int>& ids);
   virtual QVector<Index::Match> find(const Media& m, const SearchParams& p);
   virtual Index* slice(const QSet<uint32_t>& mediaIds) const;
 

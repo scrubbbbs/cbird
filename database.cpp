@@ -114,13 +114,26 @@ void Database::disconnect() {
     auto it = cons.find(thread);
     if (it != cons.end()) {
       QString connName = *it;
-      QString dbName = QSqlDatabase::database(*it).databaseName();
+      QString dbName = QSqlDatabase::database(connName).databaseName();
       qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread),
              qPrintable(connName), qPrintable(dbName));
-
       cons.remove(thread);
-
       // must be last, after cons() gives up its reference
+      QSqlDatabase::removeDatabase(connName);
+    }
+  }
+}
+
+void Database::disconnectAll() {
+  QMutexLocker locker(&dbMutex());
+  auto& dbs = dbConnections();
+  for (auto& cons : dbs.values()) {
+    for (auto& thread : cons.keys()) {
+      QString connName = cons[thread];
+      QString dbName = QSqlDatabase::database(connName).databaseName();
+      qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread),
+             qPrintable(connName), qPrintable(dbName));
+      cons.remove(thread);
       QSqlDatabase::removeDatabase(connName);
     }
   }
@@ -372,7 +385,6 @@ void Database::add(const MediaGroup& inMedia) {
   uint64_t w0 = now-then;
   then=now;
 
-  MediaGroup added;
   {
     QSqlQuery query(connect());
     if (!query.prepare("insert into media "
@@ -450,11 +462,6 @@ void Database::add(const MediaGroup& inMedia) {
             QString("%1/%2.vdx").arg(videoPath()).arg(m.id());
         m.videoIndex().save(indexPath);
       }
-
-
-//      Media copy = m;
-//      copy.setId(mediaId.toInt());
-//      added.append(copy);
     }
 
     query.bindValue(":id", id);
@@ -481,7 +488,7 @@ void Database::add(const MediaGroup& inMedia) {
   uint64_t w2 = now-then;
   then=now;
 
-  for (Index* index : _algos) index->add(added);
+  for (Index* index : _algos) index->add(media);
 
   connect().commit();
   for (Index* i : _algos) connect(i->databaseId()).commit();
@@ -538,6 +545,11 @@ void Database::remove(const MediaGroup& group) {
 
 void Database::remove(const QVector<int>& ids) {
   if (ids.size() <= 0) return;
+  for (auto& id : ids)
+    if (id == 0) {
+      qWarning() << "attempt to remove media id=0 ignored";
+      return;
+    }
 
   QWriteLocker locker(&_rwLock);
   QLockFile dbLock(indexPath() + "/write.lock");
@@ -1364,7 +1376,6 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
         if (result.count() > 0) {
           Media needle = m;
-
           // set the dstIn frame number of the needle
           // to the frame matched in the first search result
           for (const Media& m : result)
@@ -1397,7 +1408,8 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   MediaGroupList list;
   for (MediaGroup& match : results)
-    if (match.count() > 0 && !filterMatch(params, match)) list.append(match);
+    if (match.count() > 0 && !filterMatch(params, match))
+      list.append(match);
 
   filterMatches(params, list);
 

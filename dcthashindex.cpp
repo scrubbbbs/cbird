@@ -52,7 +52,7 @@ void DctHashIndex::unload() {
 
 size_t DctHashIndex::memoryUsage() const {
   // todo: tree->memoryUsage
-  return (sizeof(*_hashes) + sizeof(_mediaId)) * size_t(_numHashes);
+  return (sizeof(*_hashes) + sizeof(*_mediaId)) * size_t(_numHashes);
 }
 
 void DctHashIndex::buildTree() {
@@ -121,8 +121,6 @@ void DctHashIndex::save(QSqlDatabase& db, const QString& cachePath) {
 }
 
 void DctHashIndex::add(const MediaGroup& media) {
-  (void)media;
-
   if (!isLoaded()) return;
 
   int end = _numHashes;

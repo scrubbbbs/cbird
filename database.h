@@ -169,6 +169,10 @@ class Database {
   /// Defragment sql databases, optimize indexes
   void vacuum();
 
+  /// unit testing only: close all database connections (all threads),
+  /// when called there must not be any live instances of Database
+  static void disconnectAll();
+
  private:
   /**
    * @return database connection for the current thread
