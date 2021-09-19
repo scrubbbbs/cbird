@@ -1069,6 +1069,10 @@ Media Database::mediaWithId(int id) {
 
 Media Database::mediaWithPath(const QString& path) {
   QString relPath = path;
+  QFileInfo info(path);
+  if (info.exists())
+    relPath = info.absoluteFilePath(); // takes care of ./ ../ etc
+
   if (relPath.startsWith(this->path())) relPath = relPath.mid(this->path().length() + 1);
 
   MediaGroup media = mediaWithSql(

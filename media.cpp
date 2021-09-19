@@ -116,8 +116,8 @@ void Media::print(const Media& media) {
   qInfo() << "path  =" << media.path();
   qInfo() << "md5   =" << media.md5();
   qInfo() << "dct   =" << media.dctHash();
-  qInfo() << "width =" << media.width();
-  qInfo() << "height=" << media.height();
+  qInfo() << "size  =" << media.width() << "x" << media.height();
+  qInfo() << "type  =" << media.type();
 
   qInfo("score = %d rangeIn={%d, %d, %d}", media.score(),
         media.matchRange().srcIn, media.matchRange().dstIn,

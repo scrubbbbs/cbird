@@ -1061,6 +1061,7 @@ int main(int argc, char** argv) {
 
       const QString ext = info.suffix();
       const bool isArchive = scanner->archiveTypes().contains(ext);
+      const bool isVideo = scanner->videoTypes().contains(ext);
 
       if (info.isFile() && !isArchive) {
         if (params.queryTypes.contains(Media::TypeImage) &&
@@ -1072,7 +1073,7 @@ int main(int argc, char** argv) {
           }
           search.needle = result.media;
         } else if (params.queryTypes.contains(Media::TypeVideo) &&
-                   scanner->videoTypes().contains(ext)) {
+                   isVideo) {
           search.needle = engine().db->mediaWithPath(to);
 
           // doesn't exist in the database, search by frame grabbing
@@ -1151,9 +1152,12 @@ int main(int argc, char** argv) {
             continue;
           }
         } else {
-          qCritical(
-              "similar-to: invalid query type or not a known filetype: %s",
+          qWarning(
+              "similar-to: invalid query type (-p.qt) or not a known filetype: %s",
               qPrintable(to));
+          if (isVideo)
+            qInfo("similar-to: for video search, use -p.qt 2[,1] -p.alg 4");
+
           continue;
         }
 
@@ -1178,7 +1182,7 @@ int main(int argc, char** argv) {
         // index temporarily
         if (needles.count() <= 0)
           qWarning()
-              << "nothing selected, external directory search unsupported";
+              << "similar-to: nothing selected, external directory search unsupported";
 
         // this not the same as similar-in... which is a subset query
         QList<QFuture<MediaSearch>> work;

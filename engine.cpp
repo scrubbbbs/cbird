@@ -175,7 +175,7 @@ MediaSearch Engine::query(const MediaSearch& search_) {
 
   if (!params.mediaReady(needle)) {
     // todo: state why
-    qWarning() << "unqueryable" << needle.path();
+    qWarning() << needle.path() << "unqueryable with algo" << params.algo;
     return search;
   }
 

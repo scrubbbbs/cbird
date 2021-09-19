@@ -153,9 +153,10 @@ class SearchParams {
         ok = needle.id() != 0 || needle.colorDescriptor().numColors > 0;
         break;
       case AlgoVideo:
-        ok = needle.type() == Media::TypeVideo || needle.dctHash() != 0;
+        ok = needle.id() != 0 ||
+             (needle.type() == Media::TypeVideo && needle.videoIndex().hashes.size()>0) ||
+             (needle.type() == Media::TypeImage && needle.dctHash() != 0);
         break;
-
       default:
         ok = needle.dctHash() != 0;
     }
