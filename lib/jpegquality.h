@@ -18,4 +18,4 @@ public:
     JpegQuality() : ok(false), isReliable(false), quality(-1) {}
 };
 
-JpegQuality EstimateJpegQuality(const QString& filePath);
+JpegQuality EstimateJpegQuality(QIODevice *io);

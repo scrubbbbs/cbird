@@ -1876,7 +1876,7 @@ void MediaGroupListWidget::qualityScoreAction() {
         m.setAttribute("quality-score", QString::number(score));
 
         // jpeg codec quality factor
-        const JpegQuality jq = EstimateJpegQuality(m.path());
+        const JpegQuality jq = EstimateJpegQuality(m.ioDevice());
         if (jq.ok && jq.isReliable)
           m.setAttribute("jpeg-quality", QString::number(jq.quality));
       });

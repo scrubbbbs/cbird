@@ -261,7 +261,6 @@ Minor Bugs
 - ffmpeg deprecations, requires older branch to compile
 - replace qPrintable() used for file path with qUtf8Printable or QString
 - maybe problem with some chars in filenames, dirs ending in "!" are skipped by scanner
-- MGLW jpeg-compression-quality does not work in zip archives
 - MGLW scale-to-fit does not work when diff image enabled
 - MGLW up/down key selection swaps sides (scroll wheel does not)
 - MGLW: delete multi-select as one batch

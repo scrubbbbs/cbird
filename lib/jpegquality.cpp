@@ -61,6 +61,13 @@ void	Usage	(char *Name)
 } /* Usage() */
 #endif
 
+/// fgetc() equivalent
+static int qgetc(QIODevice* io) {
+  unsigned char ch = 0;
+  if (1 != io->read((char*)&ch, 1)) return EOF;
+  return ch;
+}
+
 /***************************************************
  ReadJpegMarker(): Jpeg is a weird protocol.
  There are markers in the stream.
@@ -68,23 +75,20 @@ void	Usage	(char *Name)
  by 0x00 or 0xff.
  This function reads the next marker.
  ***************************************************/
-static int	ReadJpegMarker	(FILE *Fin)
+static int	ReadJpegMarker	(QIODevice* io)
 {
     int B1,B2;
-    long Pos;
-    long Len;
+    long Len = 0;
 
-    Pos = ftell(Fin); Len=0;
-    (void)Pos;
 ReadAgainB1:
-    B1 = fgetc(Fin); Len++;
-    while(!feof(Fin) && (B1 != 0xff))
+    B1 = qgetc(io); Len++;
+    while(!io->atEnd() && (B1 != 0xff))
     {
-        B1 = fgetc(Fin); Len++;
+      B1 = qgetc(io); Len++;
     }
-    if (feof(Fin)) return(0);
+    if (io->atEnd()) return(0);
 ReadAgainB2:
-    B2 = fgetc(Fin); Len++;
+    B2 = qgetc(io); Len++;
     if (B2 == 0xff)  goto ReadAgainB2;
     if (B2 == 0x00)  goto ReadAgainB1;
     return(B1*256+B2);
@@ -94,7 +98,7 @@ ReadAgainB2:
  ProcessJPEG(): Process a JPEG for comments
  Returns:  0=processed JPEG    1=not a JPEG!
  ***************************************************/
-static void ProcessJPEG	(FILE *Fin, JpegQuality& result)
+static void ProcessJPEG	(QIODevice* io, JpegQuality& result)
 {
     int Header[15];
     int i;
@@ -139,7 +143,7 @@ static void ProcessJPEG	(FILE *Fin, JpegQuality& result)
     /* read the initial header */
     for(i=0; i<2; i++)
     {
-        Header[i] = fgetc(Fin);
+        Header[i] = qgetc(io);
     }
 
     /* Check the header */
@@ -154,11 +158,11 @@ static void ProcessJPEG	(FILE *Fin, JpegQuality& result)
     result.isReliable = true;
 
     /* Now, search for the quantization tables. */
-    while(!feof(Fin))
+    while(!io->atEnd())
     {
         /* All "Type" markers begin with "FF" and are followed by anything
        except 0x00 or 0xFF.  (Very weird standard.) */
-        Type = ReadJpegMarker(Fin);
+        Type = ReadJpegMarker(io);
         if (Type==0)
         {
             qWarning("EstimateJpegQuality: Invalid type marker");
@@ -167,7 +171,7 @@ static void ProcessJPEG	(FILE *Fin, JpegQuality& result)
 
         /* If it got here, then it is a quantization table, but validate the
        length just to be sure. */
-        Length = fgetc(Fin) * 256 + fgetc(Fin); /* 2 bytes */
+        Length = qgetc(io) * 256 + qgetc(io); /* 2 bytes */
         /** The length is always too long by 2 bytes.  Weird standard. **/
         Length = Length - 2;
         if (Length < 0) Length=0;
@@ -175,7 +179,7 @@ static void ProcessJPEG	(FILE *Fin, JpegQuality& result)
         if (Type != 0xffdb)
         {
             /* not a quantization table */
-            for(i=0; i<Length; i++) fgetc(Fin);
+            for(i=0; i<Length; i++) qgetc(io);
                 continue;
         }
 
@@ -194,7 +198,7 @@ static void ProcessJPEG	(FILE *Fin, JpegQuality& result)
         specified by the lower four bits **/
         while(Length > 0)
         {
-            Precision = fgetc(Fin);
+            Precision = qgetc(io);
             Length--;
             Index = Precision & 0x0f;
             //Precision = (Precision & 0xf0) / 16;
@@ -206,7 +210,7 @@ static void ProcessJPEG	(FILE *Fin, JpegQuality& result)
             TotalNum=0;
             while((Length > 0) && (TotalNum<64))
             {
-                i = fgetc(Fin);
+                i = qgetc(io);
                 if (TotalNum!=0) Total += i; /* ignore first value */
                 Length--;
                 /* Show quantization table */
@@ -313,21 +317,13 @@ int	main	(int argc, char *argv[])
 } /* main() */
 #else
 
-JpegQuality EstimateJpegQuality(const QString& filePath)
+JpegQuality EstimateJpegQuality(QIODevice* io)
 {
     JpegQuality result;
-
-    QFile qFile(filePath);
-    if (qFile.open(QFile::ReadOnly))
-    {
-        FILE* fp = fdopen(qFile.handle(), "rb");
-        if (fp)
-        {
-            ProcessJPEG(fp, result);
-            fclose(fp);
-        }
-    }
-
+    if (!io->isOpen())
+      Q_ASSERT(io->open(QIODevice::ReadOnly));
+    ProcessJPEG(io, result);
+    delete io;
     return result;
 }
 
