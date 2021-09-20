@@ -1231,10 +1231,10 @@ void MediaGroupListWidget::updateItems() {
 
   for (int i = 0; i < group.count(); i++) {
     const Media& m = group[i];
-    QString fmt;
+    //QString fmt;
     bool isVideo = m.type() == Media::TypeVideo;
-    if (isVideo)
-      fmt = " :: " + m.attributes().value("vformat");
+    //if (isVideo)
+    //  fmt = " :: " + m.attributes().value("vformat");
 
     int64_t size = m.originalSize();
     int pixels = m.resolution();
@@ -1316,7 +1316,7 @@ void MediaGroupListWidget::updateItems() {
     // elide the first row text, tricky... since there is no html attribute for it,
     // pass via item->data() to the item paint()...then must assume
     // drawRichText() uses similar font metrics
-    QString title = path + fmt + QString(" [x%1] ").arg(fileCount);
+    QString title = path + QString(" [x%1] ").arg(fileCount);
 
     //
     // todo: convert this to some kind of loadable/configurable template with variable replacement
@@ -1876,9 +1876,16 @@ void MediaGroupListWidget::qualityScoreAction() {
         m.setAttribute("quality-score", QString::number(score));
 
         // jpeg codec quality factor
-        const JpegQuality jq = EstimateJpegQuality(m.ioDevice());
+        if (m.type() != Media::TypeImage || // ok; file header is checked too
+            isAnalysis(m))                  // raw image, no i/o device possible
+          return;
+
+        auto* io = m.ioDevice();
+        if (!io) return;
+
+        const JpegQuality jq = EstimateJpegQuality(io);
         if (jq.ok && jq.isReliable)
-          m.setAttribute("jpeg-quality", QString::number(jq.quality));
+            m.setAttribute("jpeg-quality", QString::number(jq.quality));
       });
 
   qApp->setOverrideCursor(QCursor(Qt::WaitCursor));
