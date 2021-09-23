@@ -209,9 +209,10 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
     entry.setFile(path);
 
     if (expected.contains(path)) {
-      // use metadataChangeTime() since lastModified() would not see
-      // a change when an old file is renamed.
-      if (entry.metadataChangeTime() < _modifiedSince) {
+      // fixme: database should store modification date?
+      // metadataChangeTime() could be used but will re-index
+      // anything we touch ourselves
+      if (entry.lastModified() < _modifiedSince) {
         expected.remove(path);
         _existingFiles++;
         continue;
