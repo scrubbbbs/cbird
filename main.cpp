@@ -243,16 +243,20 @@ static int printUsage(int argc, char** argv) {
 
         H3 "dht   dct hash threshold (0-64), lower=more similar [5]"
         H3 "cvt   cv feature matcher threshold, lower=more similar [25]"
+        H3 "mn    min matches to require [1]"
         H3 "mm    max matches to show after sorting [5]"
         H3 "tm    validate matches with high-resolution affine template match [0]"
-        H3 "nf    number of needle features for template match [100]"
-        H3 "hf    number of haystack features for template match [1000]"
-        H3 "stat  enable statistics, 1=timing [0]"
+        H3 "tnf   number of needle features for template match [100]"
+        H3 "thf   number of haystack features for template match [1000]"
+        H3 "diag  diagnostic/more verbose output [0]"
         H3 "neg   remove negative matches [0]"
+        H3 "crop  de-letterbox (autocrop) the needle [0]"
         H3 "refl  generated and search for mirrored/reflected images ([0]=none,1=h,2=v,4=h+v,all=7)"
         H3 "qt    query types (CSV) [1]=image,2=video,3=audio"
         H3 "rt    result types (CSV) 1=image,2=video,3=audio [1,2]"
         H3 "vpad  frames to skip at start/end of videos from search [300]"
+        H3 "vfm   minimum number of frames to match between videos [30]"
+        H3 "vfn   minimum percent of matching frames that are nearby [60]"
         H3 "fg    filter-groups: remove duplicate groups {a,b}=={b,a} (same items with different order) [1]"
         H3 "fp    filter-parent: remove groups with all items in the same parent directory [0]"
         H3 "fs    filter-self: remove needle matching itself [1]"
@@ -416,14 +420,15 @@ int printCompletions(const char* argv0, const QStringList& args) {
   const QStringList fileOrDirArg{"-similar-to", "-select-path"};
   cmds << fileOrDirArg;
 
-  const QStringList paramKeys = {"alg",  "dht",  "cvt", "mm",    "tm", "nf",
-                                 "hf",   "stat", "neg", "refl", "qt", "rt",
-                                 "vpad", "fg",   "fp",  "fs",    "mg", "eg"};
+  const QStringList paramKeys = {"alg", "dht", "cvt",  "mn",  "mm",   "tm",
+                                 "tnf", "thf", "diag", "neg", "crop", "refl",
+                                 "qt",  "rt",  "vpad", "vfm", "vfn",  "fg",
+                                 "fp",  "fs",  "mg",   "eg"};
   for (auto& k : paramKeys) oneArg << ("-p." + k);
 
-  const QStringList indexKeys = {"rec",    "algos",  "crop", "types", "hwdec",
-                                 "decthr", "idxthr", "ljf",  "dry", "bsize",
-                                 "msize"};
+  const QStringList indexKeys = {"rec",   "algos",  "crop",   "types",
+                                 "hwdec", "decthr", "idxthr", "ljf",
+                                 "dry",   "bsize",  "msize"};
   for (auto& k : indexKeys) oneArg << ("-i." + k);
   cmds << oneArg;
 
@@ -858,12 +863,13 @@ int main(int argc, char** argv) {
       else if (key == "cvt") params.cvThresh = intVal;
       else if (key == "alg") params.algo = intVal;
       else if (key == "mn") params.minMatches = intVal;
-      else if (key == "mm")  params.maxMatches = intVal;
-      else if (key == "nf") params.needleFeatures = intVal;
-      else if (key == "hf") params.haystackFeatures = intVal;
+      else if (key == "mm") params.maxMatches = intVal;
+      else if (key == "tnf") params.needleFeatures = intVal;
+      else if (key == "thf") params.haystackFeatures = intVal;
       else if (key == "tm") params.templateMatch = intVal;
-      else if (key == "stat") params.verbose = intVal;
+      else if (key == "diag") params.verbose = intVal;
       else if (key == "neg") params.negativeMatch = intVal;
+      else if (key == "crop") params.autoCrop = intVal;
       else if (key == "refl") params.mirrorMask = intVal;
       else if (key == "vpad") params.skipFramesIn = params.skipFramesOut = intVal;
       else if (key == "fg") params.filterGroups = intVal;
@@ -871,6 +877,8 @@ int main(int argc, char** argv) {
       else if (key == "fp") params.filterParent = intVal;
       else if (key == "fs") params.filterSelf = intVal;
       else if (key == "eg") params.expandGroups = intVal;
+      else if (key == "vfm") params.minFramesMatched = intVal;
+      else if (key == "vfn") params.minFramesNear = intVal;
       else if (key == "qt" || key=="rt")  {
 
           QVector<int> types;
