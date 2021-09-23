@@ -37,17 +37,6 @@
 
 #include <algorithm>  // std::max
 
-// globals for lazy init
-QString& indexPath() {
-  static auto* s = new QString;
-  return *s;
-}
-
-Engine& engine() {
-  static auto* e = new Engine(indexPath(), IndexParams());
-  return *e;
-}
-
 // for checking the build, don't want to release version
 // with avx enabled (probably)
 static QStringList buildFlags() {
@@ -144,6 +133,7 @@ static int printUsage(int argc, char** argv) {
         H1 "Setup"
         HR
         H2 "-use <dir>                       set index location, in <dir>/_index, default current directory"
+        H2 "-create                          create index if there is not one already, otherwise prompt"
         H2 "-update                          create/refresh index"
         H2 "-headless                        enable most operations without a window manager (must be first argument)"
         H2 "-about                           system information"
@@ -398,7 +388,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
       "-nuke",           "-rename",        "-sets",          "-folders",
       "-exit-on-select", "-show",          "-help",          "-version",
       "-about",          "-verify",        "-vacuum",        "-select-result"
-      "-license"};
+      "-license",        "-cwd",           "-init"};
   cmds << noArgs;
 
   QStringList oneArg{"-select-id", "-select-type", "-select-sql",  "-sort",
@@ -701,6 +691,31 @@ class Comparator {
   bool compareTo(const QVariant& value) const { return _operator(value); }
 };
 
+// globals for lazy init
+static bool checkIndexPathExists = true;
+
+QString& indexPath() {
+  static auto* s = new QString;
+  return *s;
+}
+
+Engine& engine() {
+  static Engine* e = nullptr;
+  QDir dir(indexPath());
+  if (e == nullptr && checkIndexPathExists &&
+      !dir.exists("_index")) {
+    qFlushOutput();
+    printf("cbird: No index found. Pass -use <dir> to a valid location,\n"
+           "       or pass -create/-update to skip this prompt.\n\n");
+    printf("cbird: Create index in {%s} ? [Y]/n : ",
+           qUtf8Printable(dir.absolutePath()));
+    char choice = inputChar('Y');
+    if (choice != 'Y' && choice != 'y') exit(0);
+  }
+  e = new Engine(indexPath(), IndexParams());
+  return *e;
+}
+
 int main(int argc, char** argv) {
   // parse args ourselves, so we can choose which
   // QApplication type; gui type needed for -show
@@ -922,11 +937,13 @@ int main(int argc, char** argv) {
       const QString path = nextArg();
       if (!QFileInfo(path).isDir())
         qFatal("-use: \"%s\" is not a directory", qPrintable(path));
-
       indexPath() = path;
+    } else if (arg == "-create") {
+      checkIndexPathExists = false;
     } else if (arg == "-headless") {
       qInfo("selected headless mode");
     } else if (arg == "-update") {
+      checkIndexPathExists = false;
       int threads = indexParams.indexThreads;
       if (threads <= 0) threads = QThread::idealThreadCount();
 
@@ -1190,7 +1207,8 @@ int main(int argc, char** argv) {
         // index temporarily
         if (needles.count() <= 0)
           qWarning()
-              << "similar-to: nothing selected, external directory search unsupported";
+              << "similar-to: invalid selection, is"
+              << to << "a valid file path or selector?";
 
         // this not the same as similar-in... which is a subset query
         QList<QFuture<MediaSearch>> work;
