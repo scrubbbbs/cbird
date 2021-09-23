@@ -221,8 +221,6 @@ bool ColorDescIndex::findIndexData(Media& m) const {
 }
 
 Index* ColorDescIndex::slice(const QSet<uint32_t>& mediaIds) const {
-  Q_ASSERT(isLoaded());
-
   ColorDescIndex* chunk = new ColorDescIndex;
   chunk->_count = mediaIds.count();
   chunk->_descriptors = strict_malloc(chunk->_descriptors, chunk->_count);
@@ -236,6 +234,7 @@ Index* ColorDescIndex::slice(const QSet<uint32_t>& mediaIds) const {
       chunk->_mediaId[j] = _mediaId[i];
       j++;
     }
+  chunk->_count = j;
 
   return chunk;
 }

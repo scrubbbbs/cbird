@@ -163,7 +163,7 @@ QVector<Index::Match> DctHashIndex::find(const Media& m,
 
   uint64_t target = hashForMedia(m);
   if (!target) {
-    qWarning() << "needle isn't initialized:" << m.path();
+    qWarning() << "no hash for needle:" << m.path();
     return results;
   }
 // todo: maybe use brute if threshold is high
@@ -199,6 +199,12 @@ Index* DctHashIndex::slice(const QSet<uint32_t>& mediaIds) const {
       chunk->_mediaId[j] = _mediaId[i];
       j++;
     }
+
+  // don't use unitialized values
+  chunk->_numHashes = j;
+
+  // tree may not like empty array
+  if (chunk->_numHashes <= 0) return chunk;
 
   chunk->_tree = new DctTree;
   chunk->_tree->create(chunk->_hashes, chunk->_mediaId, chunk->_numHashes);
