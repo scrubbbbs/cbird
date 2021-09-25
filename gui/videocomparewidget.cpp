@@ -235,7 +235,7 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   WidgetHelper::addAction(settings, "Forward", Qt::Key_Right, this,
                           [&]() { loadFrameIfNeeded(_selectedFrame + 1); repaint();});
   WidgetHelper::addAction(settings, "Backward", Qt::Key_Left, this,
-                          [&]() { loadFrameIfNeeded(_selectedFrame + 1); repaint();});
+                          [&]() { loadFrameIfNeeded(_selectedFrame - 1); repaint();});
   WidgetHelper::addAction(settings, "Skip Forward", Qt::Key_Down, this,
                           [&]() { loadFrameIfNeeded(_selectedFrame + 30); repaint();});
   WidgetHelper::addAction(settings, "Skip Backward", Qt::Key_Up, this,
@@ -370,14 +370,31 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
 
   QPainter painter(this);
 
-  QFuture<Frame*> thread =
+  QElapsedTimer timer;
+  timer.start();
+
+  QFuture<Frame*> work[2] = {
       QtConcurrent::run(_leftFrames, &FrameCache::frame,
-                        _range.srcIn + _selectedFrame + _frameOffset);
+                        _range.srcIn + _selectedFrame + _frameOffset),
+      QtConcurrent::run(_rightFrames, &FrameCache::frame,
+                        _range.dstIn + _selectedFrame)};
 
-  const Frame& rightFrame = *_rightFrames->frame(_range.dstIn + _selectedFrame);
+  bool waitCursor = false;
+  for (auto& w : work) {
+    while (!waitCursor && !w.isFinished()) {
+      if (timer.elapsed() > 100) {
+        qApp->setOverrideCursor(QCursor(Qt::WaitCursor));
+        waitCursor = true;
+      }
+      QThread::msleep(1);
+    }
+    if (waitCursor) w.waitForFinished();
+  }
 
-  thread.waitForFinished();
-  const Frame& leftFrame = *thread.result();
+  if (waitCursor) qApp->restoreOverrideCursor();
+
+  const Frame& leftFrame = *work[0].result();
+  const Frame& rightFrame = *work[1].result();
 
   int dist = 0;
 
