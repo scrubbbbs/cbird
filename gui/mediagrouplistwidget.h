@@ -247,6 +247,9 @@ class MediaGroupListWidget : public QListWidget {
   /// Try to restore selected item after a layout change
   void restoreSelectedItem(const QModelIndex& last);
 
+  /// Return true if there is a pair displayed and one is selected
+  bool selectedPair(Media **selected, Media **other);
+
   MediaGroupList _list;
   int _flags;
   Database* _db;

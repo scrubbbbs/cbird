@@ -58,6 +58,11 @@ static Media newDifferenceAnalysis() {
   Media m(id+"-diff***", Media::TypeImage);
   return m;
 }
+static int countNonAnalysis(const MediaGroup& group) {
+  return std::count_if(group.begin(), group.end(), [](const Media& m) {
+    return !isAnalysis(m);
+  });
+}
 
 MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
                                              const QString& basePath,
@@ -790,7 +795,6 @@ void MediaGroupListWidget::execContextMenu(const QPoint& p) {
     QMenu* dirs =
         MenuHelper::dirMenu(_db->path(), this, SLOT(moveFileAction()));
 
-
     QSet<QString> groupDirs;
     const auto& group = _list[_currentRow];
 
@@ -800,7 +804,8 @@ void MediaGroupListWidget::execContextMenu(const QPoint& p) {
 
     for (int i = 0; i < group.count(); ++i)
       if (i != selectedIndex)
-        groupDirs.insert(group[i].parentPath());
+        if (!isAnalysis(group[i]))
+          groupDirs.insert(group[i].parentPath());
 
     const auto& keys = groupDirs.values();
     QList<QAction*> actions;
@@ -1251,8 +1256,10 @@ void MediaGroupListWidget::updateItems() {
 
     // truncate display name if contained on disk or index
     // bug: broken for zip file contents not yet indexed
-    if (fileInfo.isFile() || (m.isValid()))
+    if (fileInfo.isFile() || (m.isValid())) {
       path = path.mid(prefix.length());
+      if (size == 0) size = fileInfo.size();
+    }
 
     if (m.isArchived()) {
       // can be slow for large archives, we can cache since
@@ -1510,9 +1517,7 @@ void MediaGroupListWidget::loadRow(int row) {
 void MediaGroupListWidget::updateCurrentRow(const MediaGroup& group) {
   // if there is one non-analysis image left, remove the group
   // if there are no groups left, close the viewer
-  long count = std::count_if(group.begin(), group.end(), [](const Media& m) {
-    return !isAnalysis(m);
-  });
+  int count = countNonAnalysis(group);
 
   if (count <= 1) {
     qInfo() << "auto remove row" << _currentRow << "with one item left";
@@ -1553,6 +1558,10 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
   // guard against deleting everything
   if (deleteFiles && items.count() == group.count()) {
     qWarning() << "preventing accidental deletion of entire group";
+    return;
+  }
+  if (deleteFiles && replace && items.count()==1 && countNonAnalysis(group) != 2) {
+    qWarning() << "delete+replace is only possible with 1 selection in 2 items";
     return;
   }
 
@@ -1606,9 +1615,10 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
             _db->remove(zipGroup);
         } else {
           _db->remove(group[index].id());
-          if (replace && group.count() == 2) {
+          if (replace && countNonAnalysis(group)==2) {
             int otherIndex = (index + 1) % 2;
             Media& other = group[otherIndex];
+            Q_ASSERT(!isAnalysis(other));
             const QFileInfo info(path);
             const QFileInfo otherInfo(other.path());
 
@@ -1700,8 +1710,6 @@ void MediaGroupListWidget::renameFileAction() {
       if (_db->rename(m, newName)) updateMedia(path, m);
     }
   }
-
-  updateItems();
 }
 
 void MediaGroupListWidget::renameFolderAction() {
@@ -1754,27 +1762,32 @@ void MediaGroupListWidget::renameFolderAction() {
   }
 }
 
-void MediaGroupListWidget::copyNameAction() {
+bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
   // fixme: doesn't work when analysis image enabled
   auto& group = _list[_currentRow];
   const auto& selection = selectedItems();
-  if (selection.count() != 1 || group.count() != 2) return;
+  if (selection.count() != 1 || countNonAnalysis(group) != 2) return false;
 
   int selIndex = selection[0]->type();
-  Media& target = group[selIndex];
-  const Media& other = group[!selIndex];
-  const QString newName = QFileInfo(other.path()).completeBaseName() + "." + QFileInfo(target.path()).suffix();
-  const QString oldPath = target.path();
-  if (_db->rename(target, newName)) {
-    updateMedia(oldPath, target);
+  int otherIndex = !selIndex;
 
-    // todo: common move to next page while keeping selected row/col if possible
-    if (_currentRow + 1 < _list.count()) {
-      auto cur = currentIndex();
-      loadRow(_currentRow + 1);
-      setCurrentIndex(model()->index(cur.row(), cur.column()));
-    }
-  }
+  // assumes we keep analysis images at the end
+  Q_ASSERT( !isAnalysis(group[otherIndex]) );
+
+  *selected = &group[selIndex];
+  *other = &group[!selIndex];
+  return true;
+}
+
+void MediaGroupListWidget::copyNameAction() {
+  Media *selected, *other;
+  if (!selectedPair(&selected, &other)) return;
+
+  const QString newName = QFileInfo(other->path()).completeBaseName() +
+                          "." + QFileInfo(selected->path()).suffix();
+  const QString oldPath = selected->path();
+  if (_db && _db->rename(*selected, newName))
+    updateMedia(oldPath, *selected);
 }
 
 void MediaGroupListWidget::moveFileAction() {
@@ -1791,10 +1804,15 @@ void MediaGroupListWidget::moveFileAction() {
 
   for (Media& m : selectedMedia()) {
     QString path = m.path();
-    if (_db && _db->move(m, dirPath)) updateMedia(path, m);
+    bool ok = false;
+    if (_db && m.isValid()) ok = _db->move(m, dirPath);
+    else {
+      const QString newPath = dirPath+"/"+QFileInfo(path).completeBaseName();
+      ok = QFile::rename(path, newPath);
+      if (ok) m.setPath(newPath);
+    }
+    if (ok) updateMedia(path, m);
   }
-
-  updateItems();
 }
 
 MediaGroup MediaGroupListWidget::selectedMedia() {
@@ -2126,10 +2144,7 @@ void MediaGroupListWidget::rotateGroup(int row) {
 
 void MediaGroupListWidget::restoreSelectedItem(const QModelIndex& last) {
   const MediaGroup& group = _list.at(_currentRow);
-  int count = std::count_if(group.begin(), group.end(), [](const Media& m) {
-    return !isAnalysis(m);
-  });
-
+  int count = countNonAnalysis(group);
   int selIndex = std::min(last.row(), count - 1);
   if (selIndex >= 0)
     setCurrentIndex(model()->index(selIndex, 0));
@@ -2205,4 +2220,5 @@ void MediaGroupListWidget::updateMedia(const QString& path, const Media& m) {
   for (MediaGroup& group : _list)
     for (Media& media : group)
       if (media.path() == path) media = m;
+  updateItems();
 }
