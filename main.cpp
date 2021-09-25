@@ -407,7 +407,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
                            "-similar-in", "-move"};
   cmds << dirArg;
 
-  const QStringList fileOrDirArg{"-similar-to", "-select-path"};
+  const QStringList fileOrDirArg{"-similar-to", "-select-path", "-select-files"};
   cmds << fileOrDirArg;
 
   const QStringList paramKeys = {"alg", "dht", "cvt",  "mn",  "mm",   "tm",
@@ -700,9 +700,9 @@ QString& indexPath() {
 }
 
 Engine& engine() {
-  static Engine* e = nullptr;
+  static Engine* instance = nullptr;
   QDir dir(indexPath());
-  if (e == nullptr && checkIndexPathExists &&
+  if (!instance && checkIndexPathExists &&
       !dir.exists("_index")) {
     qFlushOutput();
     printf("cbird: No index found. Pass -use <dir> to a valid location,\n"
@@ -712,8 +712,9 @@ Engine& engine() {
     char choice = inputChar('Y');
     if (choice != 'Y' && choice != 'y') exit(0);
   }
-  e = new Engine(indexPath(), IndexParams());
-  return *e;
+  if (!instance)
+    instance = new Engine(indexPath(), IndexParams());
+  return *instance;
 }
 
 int main(int argc, char** argv) {
