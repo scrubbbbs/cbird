@@ -88,7 +88,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
 
   // if all images pairs are cached, return immediately
   if (notCached.count() == 0) {
-    qDebug("all cached");
+    if (params.verbose) qDebug("all cached");
     group = good;
     std::sort(group.begin(), group.end());
     return;
@@ -107,9 +107,10 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
   tmplMedia.makeKeyPoints(tmplImg, params.needleFeatures);
   tmplMedia.makeKeyPointDescriptors(tmplImg);
 
-  qInfo("query kp=%d descriptors=%d (max %d)",
-        int(tmplMedia.keyPoints().size()),
-        int(tmplMedia.keyPointDescriptors().cols), params.needleFeatures);
+  if (params.verbose)
+    qInfo("query kp=%d descriptors=%d (max %d)",
+          int(tmplMedia.keyPoints().size()),
+          int(tmplMedia.keyPointDescriptors().cols), params.needleFeatures);
 
   if (tmplMedia.keyPointDescriptors().cols <= 0) {
     qWarning("no keypoints in template %s", qPrintable(tmplMedia.path()));
@@ -191,12 +192,13 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
 
     PROFILE(timing.targetFeatures);
 
-    qInfo("(%d) candidate scale=%.2f kp=%d descriptors=%d (max %d)", i,
-          double(candScale), int(m.keyPoints().size()),
-          int(m.keyPointDescriptors().rows), params.haystackFeatures);
+    if (params.verbose)
+      qInfo("(%d) candidate scale=%.2f kp=%d descriptors=%d (max %d)", i,
+            double(candScale), int(m.keyPoints().size()),
+            int(m.keyPointDescriptors().rows), params.haystackFeatures);
 
     if (m.keyPointDescriptors().cols <= 0) {
-      qInfo("(%d): no keypoints in candidate", i);
+      if (params.verbose) qInfo("(%d): no keypoints in candidate", i);
       continue;
     }
 
@@ -222,7 +224,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
       }
 
     if (nMatches <= 0) {
-      qInfo("(%d): no keypoint matches", i);
+      if (params.verbose) qInfo("(%d): no keypoint matches", i);
       QWriteLocker locker(&_lock);
       _cache[cacheKey] = INT_MAX;
       continue;
@@ -247,7 +249,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
 
     // need at least 3 points to estimate transform
     if (tmplPoints.size() < 3) {
-      qInfo("(%d): less than 3 keypoint matches", i);
+      if (params.verbose) qInfo("(%d): less than 3 keypoint matches", i);
       QWriteLocker locker(&_lock);
       _cache[cacheKey] = INT_MAX;
       continue;
@@ -261,7 +263,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
     PROFILE(timing.estimateTransform);
 
     if (transform.empty()) {
-      qInfo("(%d): no transform found", i);
+      if (params.verbose) qInfo("(%d): no transform found", i);
       QWriteLocker locker(&_lock);
       _cache[cacheKey] = INT_MAX;
       continue;
@@ -354,7 +356,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
     if (dist < params.dctThresh)
       good.append(m);
     else {
-      qInfo("(%d): dct hash on transform doesn't match: score %d", i, dist);
+      if (params.verbose) qInfo("(%d): dct hash on transform doesn't match: score %d", i, dist);
 
       // show the images that we hashed side by side
       if (getenv("TEMPLATE_MATCHER_DEBUG")) {
@@ -384,7 +386,8 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
   uint64_t now = nanoTime();
   uint64_t total = now - then;
 
-  qInfo(
+  if (params.verbose)
+    qInfo(
       "%d/%d %dms:tot %dms:ea | tl=%.2f tr=%.2f tk=%.2f "
       "tf=%.2f rm=%.2f ms=%.2f ert=%.2f mr=%.2f mp=%.2f ttl=%.2f",
       good.count(), notCached.count(), int(total) / 1000000,
