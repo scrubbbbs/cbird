@@ -31,20 +31,29 @@
 # cycle audio track between left/right
 #
 if [ $# -lt 4 ]; then
-  file1=$1
-  file2=$2
+  file1="$1"
+  file2="$2"
   seek1=0
   seek2=0
 else
-  file1=$1
-  seek1=$2
-  file2=$3
-  seek2=$4
+  file1="$1"
+  seek1="$2"
+  file2="$3"
+  seek2="$4"
 fi
 
 if [ -z $TMPDIR ]; then
   TMPDIR=/tmp
 fi
+
+echo f1: $file1
+echo f2: $file2
+
+# drop chars that might be a problem for drawtext
+name1=$(basename "$file1"  | sed -re "s/[=:'\"]+/_/g")
+name2=$(basename "$file2" | sed -re  "s/[=:'\"]+/_/g")
+#name1="A"
+#name2="B"
 
 input1=$TMPDIR/sbsLeft.avi
 input2=$TMPDIR/sbsRight.avi
@@ -72,8 +81,8 @@ ffmpeg -ss "$seek1" -i "$file1" -f wav          -y $audio1 2>/dev/null &
 ffmpeg -ss "$seek2" -i "$file2" -f yuv4mpegpipe -y $video2 2>/dev/null &
 ffmpeg -ss "$seek2" -i "$file2" -f wav          -y $audio2 2>/dev/null &
 
-height1=`ffprobe -show_streams "$file1" 2>/dev/null | grep ^height | sed s/height=//`
-height2=`ffprobe -show_streams "$file2" 2>/dev/null | grep ^height | sed s/height=//`
+height1=$(ffprobe -show_streams "$file1" 2>/dev/null | grep ^height | sed s/height=//)
+height2=$(ffprobe -show_streams "$file2" 2>/dev/null | grep ^height | sed s/height=//)
 
 echo h1: $height1
 echo h2: $height2
@@ -113,13 +122,15 @@ scale="scale=w=$iw:h=$ih"
 # note: new ffmpeg has crop="" and hstack="" so it is
 # simpler to do a center-cropped sbs
 
+drawtext="x=w/2-text_w/2:y=10:box=1:boxcolor=black:boxborderw=5:fontsize=16:fontcolor=white:alpha=0.75"
+
 ffmpeg -f lavfi -i "\
 movie=$video1  [left]; \
 amovie=$audio1 [out0]; \
 movie=$video2  [right]; \
 amovie=$audio2 [out1]; \
-[right]$scale,crop=$iw/2:$ih [rs];\
-[left]$scale,crop=$iw/2:$ih [ls]; [ls][rs]hstack [out2]" \
+[right]$scale,crop=$iw/2:$ih,drawtext=text=$name2:$drawtext [rs];\
+ [left]$scale,crop=$iw/2:$ih,drawtext=text=$name1:$drawtext [ls]; [ls][rs]hstack [out2]" \
 -map 0:v -c:v rawvideo -map 0:a:0 -c:a pcm_s16le -map 0:a:1 -c:a pcm_s16le -f matroska -v quiet - | ffplay -window_title 'ffplay: side-by-side' -
 
 rm -f $video1 $video2 $audio1 $audio2
