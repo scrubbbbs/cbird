@@ -1036,10 +1036,12 @@ QStringList Media::listArchive(const QString& path) {
     return list;
   }
 
-  const QStringList zipList = zip.getFileNameList();
-  for (const QString& file : zipList) {
-    // todo: setting for ignored dirnames (same as scanner...); or use the same code here
-    if (file.startsWith(".") || file.startsWith("__MACOSX")) continue;
+  const auto zipList = zip.getFileNameList();
+  for (auto& file : zipList) {
+    // todo: setting for ignored dirnames (same as scanner...);
+    if (file.endsWith("/") || file.startsWith(".") ||
+        file.startsWith("__MACOSX"))
+      continue;
 
     list.append(Media::virtualPath(path, file));
   }

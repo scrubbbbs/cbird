@@ -1290,22 +1290,30 @@ int main(int argc, char** argv) {
         args.pop_front();
 
         const QFileInfo info(arg);
-        if (!info.exists()) {
+        if (!Media::isArchived(arg) && !info.exists()) {
           qWarning() << "select-files: file not found:" << arg;
           continue;
         }
         QString ext = info.suffix().toLower();
 
+        if (info.isDir()) {
+          qDebug() << "selected-files: listing dir (recursive):" << arg;
+          const auto paths = QDir(arg).entryList(
+              QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
+              QDir::DirsFirst | QDir::Reversed);
+          for (auto& path : paths) args.push_front(arg + "/" + path);
+          continue;
+        }
+
         if (engine().scanner->archiveTypes().contains(ext)) {
-          // take the first item in the zip
-          auto list = Media::listArchive(arg);
-          for (auto& path : list)
-            if (engine().scanner->imageTypes().contains(
-                    QFileInfo(path).suffix().toLower())) {
-              arg = path;
-              ext = QFileInfo(arg).suffix();
-              break;
-            }
+          const auto list = Media::listArchive(arg);
+          QStringList zippedFiles;
+          for (auto& path : list) zippedFiles.append(path);
+
+          std::sort(zippedFiles.begin(), zippedFiles.end(),
+                    std::greater<QString>());
+          for (auto& path : qAsConst(zippedFiles)) args.push_front(path);
+          continue;
         }
 
         int type = 0;
