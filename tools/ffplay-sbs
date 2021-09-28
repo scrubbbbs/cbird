@@ -49,11 +49,13 @@ fi
 echo f1: $file1
 echo f2: $file2
 
-# drop chars that might be a problem for drawtext
-name1=$(basename "$file1"  | sed -re "s/[=:'\"]+/_/g")
-name2=$(basename "$file2" | sed -re  "s/[=:'\"]+/_/g")
+# drop chars that will be a problem for drawtext
+name1=$(basename "$file1" | sed -re "s/[,=:'\"]+/_/g")
+name2=$(basename "$file2" | sed -re  "s/[,=:'\"]+/_/g")
 #name1="A"
 #name2="B"
+echo n1: $name1
+echo n2: $name2
 
 input1=$TMPDIR/sbsLeft.avi
 input2=$TMPDIR/sbsRight.avi
