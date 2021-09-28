@@ -48,6 +48,11 @@ DEFINES += ENABLE_OPENCV
 #INCLUDEPATH += $$(HOME)/sw/include
 #INCLUDEPATH += /usr/local/include
 
+# private headers for DebugEventFilter
+QTCORE_PRIVATE_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include/QtCore/$$QT_VERSION"
+message($$QTCORE_PRIVATE_HEADERS)
+INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
+
 win32 {
     INCLUDEPATH += windows/build-opencv/install/include
     LIBS *= -L windows/build-opencv/install/x64/mingw/lib

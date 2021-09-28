@@ -988,3 +988,33 @@ MessageContext::MessageContext(const QString &context) {
   qMessageContext.setLocalData(context);
 }
 
+// bad form, but only way to get to metacallevent
+// this header won't be found unless foo is added to qmake file
+#include "QtCore/private/qobject_p.h"
+
+DebugEventFilter::DebugEventFilter() : QObject() {}
+DebugEventFilter::~DebugEventFilter() {}
+
+bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
+  static int counter = 0;
+
+  qWarning() << counter++ << event << event->spontaneous();
+
+  // hack to snoop events, signals/slot invocations
+  if (event->type() == QEvent::MetaCall) {
+    QMetaCallEvent* mc = (QMetaCallEvent*)event;
+    QMetaMethod slot = object->metaObject()->method(mc->id());
+    const char* senderClass = "unknown";
+    const char* recvClass = "unknown";
+
+    if (mc->sender() && mc->sender()->metaObject())
+      senderClass = mc->sender()->metaObject()->className();
+    if (object->metaObject())
+      recvClass = object->metaObject()->className();
+
+    qCritical("%d meta call event: sender=%s receiver=%s method=%s\n", counter++,
+             senderClass, recvClass, qPrintable(slot.methodSignature()));
+  }
+
+  return QObject::eventFilter(object, event);
+}

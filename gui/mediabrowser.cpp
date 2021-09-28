@@ -32,42 +32,6 @@ extern Engine& engine();
 #define MB_MAX_PER_PAGE (36) // fixme: use -max-per-page
 #define MB_THUMB_SIZE (480)
 
-// hack to snoop events, signals/slot invocations
-#ifdef DEBUG_EVENT_FILTER
-
-#include "QtCore/5.4.0/QtCore/private/qobject_p.h"
-
-class DebugFilter : public QObject {
- public:
-  DebugFilter() : QObject(){};
-  virtual ~DebugFilter(){};
-
-  bool eventFilter(QObject* object, QEvent* event) {
-    static int counter = 0;
-
-    qDebug("event %d: object=%p event=%p type=%d spontaneous=%d\n", counter++,
-           object, event, event->type(), event->spontaneous());
-
-    if (event->type() == QEvent::MetaCall) {
-      QMetaCallEvent* mc = (QMetaCallEvent*)event;
-      QMetaMethod slot = object->metaObject()->method(mc->id());
-      const char* senderClass = "unknown";
-      const char* recvClass = "unknown";
-
-      if (mc->sender() && mc->sender()->metaObject())
-        senderClass = mc->sender()->metaObject()->className();
-      if (object->metaObject()) recvClass = object->metaObject()->className();
-      qDebug("meta call event: sender=%s receiver=%s method=%s\n", senderClass,
-             recvClass, qPrintable(slot.methodSignature()));
-
-      // return true;
-    }
-
-    return QObject::eventFilter(object, event);
-  }
-};
-#endif
-
 static QMap<QString, MediaGroupList> _matchSets;
 
 MediaBrowser::MediaBrowser(const SearchParams& params, bool sets,
@@ -80,13 +44,7 @@ MediaBrowser::MediaBrowser(const SearchParams& params, bool sets,
 int MediaBrowser::showList(const MediaGroupList& list,
                            const SearchParams& params, int selectionMode) {
   MediaBrowser browser(params, false, selectionMode);
-
-#ifdef DEBUG_EVENT_FILTER
-  qApp->installEventFilter(new DebugFilter());
-#endif
-
   browser.show(list);
-
   return qApp->exec();
 }
 
@@ -265,10 +223,6 @@ int MediaBrowser::showSets(const MediaGroupList& list,
     browser.show(list);
   else
     browser.showIndex(index, "");
-
-#ifdef DEBUG_EVENT_FILTER
-  qApp->installEventFilter(new DebugFilter());
-#endif
 
   return qApp->exec();
 }

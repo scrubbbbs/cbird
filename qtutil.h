@@ -130,3 +130,11 @@ class MessageContext {
   MessageContext(const QString& context);
   ~MessageContext() { qMessageContext.setLocalData(QString()); }
 };
+
+class DebugEventFilter : public QObject {
+ public:
+  DebugEventFilter();;
+  virtual ~DebugEventFilter();
+
+  bool eventFilter(QObject* object, QEvent* event);
+};
