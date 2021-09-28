@@ -997,6 +997,8 @@ static void loadImage(ImageWork* work, bool fastSeek) {
 
   if (!img.isNull()) {
     m.setImage(img);
+    m.setWidth(img.width());
+    m.setHeight(img.height());
     m.readMetadata();
   }
 
@@ -2185,9 +2187,12 @@ void MediaGroupListWidget::wheelEvent(QWheelEvent* event) {
       loadRow(_currentRow - 1);
     else
       loadRow(_currentRow + 1);
-
+    event->accept();
   } else if (orientation == Qt::Horizontal) {
-    if (delta > 0) rotateAction();
+    if (delta > 0) {
+      rotateAction();
+      event->accept();
+    }
   }
 }
 
