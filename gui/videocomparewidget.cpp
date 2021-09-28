@@ -47,6 +47,7 @@ class Frame {
 class FrameCache {
  public:
   FrameCache(const Media& m) {
+    MessageContext mctx(m.path().split("/").last());
     VideoContext::DecodeOptions opt;
     opt.rgb = true;
     opt.threads = QThread::idealThreadCount();
@@ -121,6 +122,8 @@ class FrameCache {
   }
 
   Frame* frame(int pos) {
+    MessageContext mctx(_ctx.path().split("/").last());
+
     if (_cache.contains(pos)) {
       Frame& f = _cache[pos];
       f.uses++;

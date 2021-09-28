@@ -152,6 +152,7 @@ MediaSearch Engine::query(const MediaSearch& search_) {
 
   if (!params.mediaReady(needle))
     if (!needle.image().isNull()) {
+      // fixme: we only need to process for the given algo
       qWarning() << "processImage:" << needle.path();
       IndexResult result =
           scanner->processImage(needle.path(), "", needle.image());
@@ -175,7 +176,7 @@ MediaSearch Engine::query(const MediaSearch& search_) {
 
   if (!params.mediaReady(needle)) {
     // todo: state why
-    qWarning() << needle.path() << "unqueryable with algo" << params.algo;
+    qWarning() << needle.path() << "unindexed or unqueryable with algo" << params.algo;
     return search;
   }
 

@@ -531,8 +531,7 @@ bool Database::setMd5(Media& m, const QString& md5) {
 }
 
 void Database::remove(int id) {
-  QVector<int> ids;
-  ids.append(id);
+  QVector<int> ids{id};
   remove(ids);
 }
 
@@ -584,18 +583,18 @@ void Database::remove(const QVector<int>& ids) {
       SQL_FATAL(exec);
 
   now = nanoTime();
-  qInfo("delete media   =%dms", int((now - then) / 1000000));
+  qInfo("<PL>delete media   =%dms", int((now - then) / 1000000));
   then = now;
 
-  qInfo("committing txn...");
+  qInfo("<PL>committing txn...");
   connect().commit();
 
   now = nanoTime();
-  qInfo("finished       =%dms", int((now - then) / 1000000));
+  qInfo("<PL>finished       =%dms", int((now - then) / 1000000));
   then = now;
 
   for (Index* i : _algos) {
-    qInfo("algo: %d deleting", i->id());
+    qInfo("<PL>algo: %d deleting", i->id());
 
     QSqlDatabase db = connect(i->databaseId());
     if (!db.transaction())
@@ -603,17 +602,18 @@ void Database::remove(const QVector<int>& ids) {
 
     i->removeRecords(db, ids);
 
-    qInfo("algo: %d committing...", i->id());
+    qInfo("<PL>algo: %d committing...", i->id());
     if (!db.commit())
       qFatal("commit transaction: %s", qPrintable(db.lastError().text()));
 
     now = nanoTime();
 
-    qInfo("algo: %d commit=%dms", i->id(), int((now - then) / 1000000));
+    qInfo("<PL>algo: %d commit=%dms", i->id(), int((now - then) / 1000000));
     then = now;
   }
 
   // if it's a video, delete the hash file
+  // todo: this could be in removeRecords()
   for (int id : ids) {
     QString hashFile =
         QString::asprintf("%s/%d.vdx", qPrintable(videoPath()), id);
@@ -828,7 +828,7 @@ bool Database::rename(Media& old, const QString& newName) {
   Media m = mediaWithId(old.id());
 
   if (!m.isValid()) {
-    qWarning() << "skipping update since item is not in the database" << m.id();
+    qWarning() << "skipping update since item is not in database" << m.id();
     return true;
   }
 

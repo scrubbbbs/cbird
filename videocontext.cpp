@@ -843,12 +843,12 @@ bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
         return false;
       }
 
-      qDebug() << "scaling from: "
-              << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
-              << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height)
-              << "to:" << av_get_pix_fmt_name(AVPixelFormat(fmt))
-              << QString("@%1x%2").arg(w).arg(h)
-              << "fast=" << _opt.fast;
+//      qDebug() << "scaling from: "
+//              << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
+//              << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height)
+//              << "to:" << av_get_pix_fmt_name(AVPixelFormat(fmt))
+//              << QString("@%1x%2").arg(w).arg(h)
+//              << "fast=" << _opt.fast;
 
       _p->scaler = sws_getContext(
           _p->frame->width, _p->frame->height, AVPixelFormat(_p->frame->format),
