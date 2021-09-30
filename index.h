@@ -21,6 +21,7 @@
 #pragma once
 
 #include "media.h"
+#include "params.h"
 
 /// dir name for index database
 #define INDEX_DIRNAME "_index"
@@ -28,6 +29,7 @@
 /// report sql error with context & detail
 #define SQL_FATAL(x) \
   qFatal("QSqlQuery." #x ": %s", qPrintable(query.lastError().text()));
+
 
 /**
  * @class SearchParams
@@ -38,7 +40,7 @@
  * @note only Engine::query incorporates all parameters, other functions
  * use the applicable parameters.
  */
-class SearchParams {
+class SearchParams : public Params {
  public:
   /**
    * list of available media search algorithms/indexing methods
@@ -55,113 +57,72 @@ class SearchParams {
   /**
    * mirror modes/orientations
    * @note currently no index recognizes mirrored images,
-   * a mirrored query image will be created
+   * a mirrored query/needle image will be created
    */
   enum {
-    MirrorNone = 0,
-    MirrorHorizontal = 1,
-    MirrorVertical = 2,
-    MirrorBoth = 4,
+    MirrorNone = 0,      /// Do not flip needle
+    MirrorHorizontal = 1,/// Flip needle horizontally
+    MirrorVertical = 2,  /// Flip needle vertically
+    MirrorBoth = 4,      /// Flip needle both h & v
   };
 
-  int algo,        // AlgoXXX
-      dctThresh,   // threshold for DCT hash hamming distance
-      cvThresh,    // threshold for ORB descriptors distance
-      minMatches,  // minimum number of matches required
-      maxMatches,  // maximum number of matches to return (after sort by lowest
-                   // score)
-      needleFeatures,    // number of features to generate for needle image
-                         // (template matcher)
-      haystackFeatures,  // number of features to generate for haystack image
-                         // (template matcher)
-      mirrorMask;        // MirrorXXX flags
+  /**
+   * media type flags
+   */
+  enum {
+    FlagImage = 1<<(Media::TypeImage - 1),
+    FlagVideo = 1<<(Media::TypeVideo - 1),
+    FlagAudio = 1<<(Media::TypeAudio - 1)
+  };
 
-  bool templateMatch,  // remove results that don't pass the template matcher
-      negativeMatch,   // remove results in the negative matches (blacklist)
-      autoCrop,        // de-letterbox prior to search
-      verbose;         // show more information about what the query is doing
+  int algo = AlgoDCT, // AlgoXXX
+      dctThresh = 5,  // threshold for DCT hash hamming distance
+      cvThresh = 25,  // threshold for ORB descriptors distance
+      minMatches = 1, // minimum number of matches required
+      maxMatches = 5, // maximum number of matches after sort by score
+      needleFeatures = 100,    // template match: number of needle features
+      haystackFeatures = 1000, // template match: number of haystack features
+      mirrorMask = MirrorNone; // MirrorXXX flags for mirror search
 
-  QString path;  // subdirectory to search or accept/reject results from
-  bool inPath;   // true==accept results from, false=reject results from
+  bool templateMatch = false,  // remove results that don't pass the template matcher
+      negativeMatch = false,   // remove results in the negative matches (blacklist)
+      autoCrop = false,        // de-letterbox prior to search
+      verbose = false;         // show more information about what the query is doing
 
-  MediaGroup set;  // subset to search within (using Index::slice())
-  bool inSet;      // true==use subset
+  QString path;        // subdirectory to search or accept/reject results from
+  bool inPath = false; // true==accept results from, false=reject results from
 
-  uint32_t target;  // specify a media id to search in/for (Media::id())
+  MediaGroup set;     // subset to search within (using Index::slice())
+  bool inSet = false; // true==use subset
 
-  QVector<int> resultTypes;  // list of Media::Type to include in result set
-  QVector<int> queryTypes;   // list of Media::Type to include in query set
+  uint32_t target = 0; // specify a media id to search in/for (Media::id())
 
-  int skipFramesIn;     // video search: ignore N frames at start of video (intros)
-  int skipFramesOut;    // video search: ignore N frames at end of video (outros)
-  int minFramesMatched; // video search: >N frames match between videos
-  int minFramesNear;    // video search: >N% of frames that matched are near each other
+  //QVector<int> resultTypes{Media::TypeImage,Media::TypeVideo};  // list of Media::Type to include in result set
+  //QVector<int> queryTypes{Media::TypeImage};   // list of Media::Type to include in query set
+  int queryTypes=FlagImage;
 
-  bool filterSelf;    // remove media that matched itself
-  bool filterGroups;  // remove duplicate groups from results (a matches (b,c,d)
-                      // and b matches (a,c,d) omit second one)
-  int mergeGroups;    // merge n-connected groups (value = # of connections) (a
-                      // matches b and b matches c, then a matches (b,c)
-  bool filterParent;  // remove matches with the same parent directory as needle
-  bool expandGroups;  // expand group a,b,c,d by making (a,b), (a,c) and (a,d)
-  int progressInterval;  // number of items searched between progress updates
+  int skipFrames = 300;
+  //int skipFramesIn = 300;    // video search: ignore N frames at start of video (intros)
+  //int skipFramesOut = 300;   // video search: ignore N frames at end of video (outros)
+  int minFramesMatched = 30; // video search: >N frames match between videos
+  int minFramesNear = 60;    // video search: >N% of frames that matched are near each other
 
-  SearchParams() {
-    dctThresh = 5;
-    cvThresh = 25;
-    algo = AlgoDCT;
-    minMatches = 1;
-    maxMatches = 5;
-    needleFeatures = 100;
-    haystackFeatures = 1000;
-    templateMatch = false;
-    verbose = false;
-    negativeMatch = false;
-    autoCrop = false;
-    mirrorMask = MirrorNone;
-    resultTypes << Media::TypeImage << Media::TypeVideo;
-    queryTypes << Media::TypeImage;
-    target = 0;
-    skipFramesIn = 300;
-    skipFramesOut = 300;
-    minFramesMatched = 30;
-    minFramesNear = 60;
-    filterSelf = true;
-    filterGroups = true;
-    expandGroups = false;
-    mergeGroups = 0;
-    inPath = true;
-    filterParent = false;
-    inSet = false;
-    progressInterval = 1000;
-  }
+  bool filterSelf = true;    // remove media that matched itself
+  bool filterGroups = true;  // remove duplicate groups from results (a matches (b,c,d)
+                             //   and b matches (a,c,d) omit second one)
+  bool filterParent = false;  // remove matches with the same parent directory as needle
+  bool expandGroups = false;  //   expand group a,b,c,d by making (a,b), (a,c) and (a,d)
+  int mergeGroups = 0;        // merge n-connected groups (value = # of connections) (a
+                              //   matches b and b matches c, then a matches (b,c)
+  int progressInterval = 1000; // number of items searched between progress updates
 
   /**
    * @return true if the needle is is indexed to allow a search
-   * with the given parameters to occur
+   * with these parameters
    */
-  bool mediaReady(const Media& needle) const {
-    bool ok = false;
-    switch (algo) {
-      case AlgoCVFeatures:
-        ok = needle.id() != 0 || needle.keyPointDescriptors().rows > 0;
-        break;
-      case AlgoDCTFeatures:
-        ok = needle.id() != 0 || needle.keyPointHashes().size() > 0;
-        break;
-      case AlgoColor:
-        ok = needle.id() != 0 || needle.colorDescriptor().numColors > 0;
-        break;
-      case AlgoVideo:
-        ok = needle.id() != 0 ||
-             (needle.type() == Media::TypeVideo && needle.videoIndex().hashes.size()>0) ||
-             (needle.type() == Media::TypeImage && needle.dctHash() != 0);
-        break;
-      default:
-        ok = needle.dctHash() != 0;
-    }
-    return ok;
-  }
+  bool mediaReady(const Media& needle) const;
+
+  SearchParams();
 
   // int cvMatchMatches; // cv features: default:10 max number of near features
   // to consider with knn search on descriptors
@@ -169,15 +130,6 @@ class SearchParams {
   // float haystackScaleFactor; // template matching: default:2.0 maximum size
   // of candidate image relative to target image,
   //                               rescale candidate prior to feature detection
-
-  // int minMatchLength;      // video-to-video: minimum number of frames found
-  // between two videos to consider it a match
-
-  // int minPercentContigous: // video-to-video: of frames matched, minimum
-  // percentage of frames that are contiguous to consider it a match
-
-  // int contiguousThresh:    // video-to-video: frame numbers < this are
-  // considered neighboring frames
 };
 
 /// Generic interface for a searchable index

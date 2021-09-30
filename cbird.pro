@@ -52,9 +52,7 @@ QMAKE_EXTRA_TARGETS += git
 
 
 # Input
-HEADERS += $$files(*.h) \
-    tree/dcttree.h \
-    tree/vptree.h
+HEADERS += $$files(*.h)
 HEADERS += $$files(gui/*.h)
 HEADERS += $$files(lib/*.h)
 HEADERS += $$files(tree/*.h)

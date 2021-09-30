@@ -1313,7 +1313,17 @@ MediaGroupList Database::similar(const SearchParams& params) {
     // e.g. for image-only indexes, query type should be images
     //      for video index, query type can be video, image, or (future) audio
     QStringList queryTypes;
-    for (int type : params.queryTypes) queryTypes << QString::number(type);
+    int flags=params.queryTypes;
+    int type=1;
+    while (flags) {
+      if (flags & 1)
+        queryTypes << QString::number(type);
+      type++;
+      flags >>= 1;
+    }
+    qWarning() << queryTypes;
+//    for (int type : params.queryTypes)
+//      queryTypes << QString::number(type);
 
     QSqlQuery query(connect());
     query.setForwardOnly(true);

@@ -62,9 +62,9 @@ void DctVideoIndex::insertHashes(int mediaIndex, HammingTree* tree,
 
     // drop begin/end frames if there are enough left over
     int lastFrame = index.frames[index.frames.size() - 1];
-    if (lastFrame > (params.skipFramesIn + params.skipFramesOut) * 2) {
-      if (index.frames[j] < params.skipFramesIn ||
-          index.frames[j] > lastFrame - params.skipFramesOut)
+    if (lastFrame > (params.skipFrames * 2)) {
+      if (index.frames[j] < params.skipFrames ||
+          index.frames[j] > lastFrame - params.skipFrames)
         continue;
     }
 
@@ -92,10 +92,9 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
       insertHashes(int(i), tree, params);
 
     HammingTree::Stats stats = tree->stats();
-    qInfo("%d/%d hashes %.1f MB, nodes=%d maxHeight=%d inSkip=%d outSkip=%d",
+    qInfo("%d/%d hashes %.1f MB, nodes=%d maxHeight=%d skip=%d",
           count(), stats.numValues, stats.memory / 1024.0 / 1024.0,
-          stats.numNodes, stats.maxHeight, params.skipFramesIn,
-          params.skipFramesOut);
+          stats.numNodes, stats.maxHeight, params.skipFrames);
 
     _tree = tree;
   }
@@ -317,8 +316,8 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
       uint32_t id = _mediaId[mediaIndex];
       if (!params.filterSelf || id != uint32_t(needle.id())) {
         int srcFrame = srcIndex.frames[i];
-        if (srcFrame < params.skipFramesIn ||
-            srcFrame > (lastFrame - params.skipFramesOut))
+        if (srcFrame < params.skipFrames ||
+            srcFrame > (lastFrame - params.skipFrames))
           continue;
 
         cand[id].push_back(MatchRange(srcFrame, int(dstFrame), 1));

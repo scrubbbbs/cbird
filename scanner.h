@@ -21,15 +21,16 @@
 #pragma once
 
 #include "media.h"
+#include "params.h"
 
 /// settings to control scanning/indexing
-class IndexParams {
+class IndexParams : public Params {
  public:
   /// indexable types
   /// @note to speed up scanning, types can be disabled
-  enum { TypeImage = 1, TypeVideo = 2, TypeAudio = 4, TypeAll = 0xF };
+  enum { TypeImage = 1, TypeVideo = 2, TypeAudio = 4, TypeAll = 7 };
 
-  int algos = 0xFFFFFFF;        // enabled search algorithms
+  int algos = 31;               // enabled search algorithms
   int types = TypeAll;          // enabled media types
   bool recursive = true;        // scan subdirs
   bool autocrop = true;         // detect and crop borders prior to processing
@@ -49,6 +50,8 @@ class IndexParams {
   bool showUnsupported = false;  // show unsupported filetype errors
   bool dryRun = false;           // scan for changes but do not process
   bool followSymlinks = false;   // follow symlinks to files/dirs
+
+  IndexParams();
 };
 
 /// Stores result of image/video processing, prior to saving

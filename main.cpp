@@ -114,15 +114,14 @@ static void printLicense() {
 static int printUsage(int argc, char** argv) {
   (void)argc;
   // clang-format off
-
-    printf(
+  const char* usage =
         BR
         H2 "    „__„                     CBIRD"
         H2 "    {o,o}     Content Based Image Retrieval Database"
         H2 "    |)__)       "       CBIRD_HOMEPAGE
         H2 "    -“–“-        license: GPLv2 (see: -license)"
         H2 ""
-        BR "Usage: %s [args...]"
+        BR "Usage: %1 [args...]"
         BR
         H2 "* Arguments are positional, and may be given multiple times"
         H2 "* Operations occur in the order given, can often be chained"
@@ -215,43 +214,17 @@ static int printUsage(int argc, char** argv) {
         H2 "-test-video <file>               test video search"
         H2 "-vacuum                          compact/optimize database files"
 
-
         H1 "Search Parameters (for -similar*)"
         HR
         H2 "-p.<key> value                   set search parameters"
         H2 "-p:<key> value                   (alternate)"
-        H2 "*all values are integer (0=disable, 1=enable)"
-        H2 "*default value in [ ]"
-        H2 "*must appear before -similar or other queries to take effect"
-        H2 "*keys:"
-        H3 "alg   search algorithm ([0]=dct,1=dctFeatures,2=cvFeatures,3=histogramHash,4=dctVideo)"
-        H3 "  *dct            discrete cosine transform hash (scale)"
-        H3 "  *dctFeatures    dct hashes of features         (scale, crop)"
-        H3 "  *cvFeatures     opencv features                (scale, crop, rotate)"
-        H3 "  *colorHistogram histogram of colors            (scale, crop, rotate, mirror)"
-        H3 "  *dctVideo       dct hashes of video frames     (scale)"
+        H2 "* default value in [ ]"
+        H2 "* alternate value in ( )"
+        H2 "* flag names are combined with +, e.g. -p.refl h+v+b == -p.refl 7"
+        H2 "* must appear before -similar or other queries to take effect"
 
-        H3 "dht   dct hash threshold (0-64), lower=more similar [5]"
-        H3 "cvt   cv feature matcher threshold, lower=more similar [25]"
-        H3 "mn    min matches to require [1]"
-        H3 "mm    max matches to show after sorting [5]"
-        H3 "tm    validate matches with high-resolution affine template match [0]"
-        H3 "tnf   number of needle features for template match [100]"
-        H3 "thf   number of haystack features for template match [1000]"
-        H3 "diag  diagnostic/more verbose output [0]"
-        H3 "neg   remove negative matches [0]"
-        H3 "crop  de-letterbox (autocrop) the needle [0]"
-        H3 "refl  generated and search for mirrored/reflected images ([0]=none,1=h,2=v,4=h+v,all=7)"
-        H3 "qt    query types (CSV) [1]=image,2=video,3=audio"
-        H3 "rt    result types (CSV) 1=image,2=video,3=audio [1,2]"
-        H3 "vpad  frames to skip at start/end of videos from search [300]"
-        H3 "vfm   minimum number of frames to match between videos [30]"
-        H3 "vfn   minimum percent of matching frames that are nearby [60]"
-        H3 "fg    filter-groups: remove duplicate groups {a,b}=={b,a} (same items with different order) [1]"
-        H3 "fp    filter-parent: remove groups with all items in the same parent directory [0]"
-        H3 "fs    filter-self: remove needle matching itself [1]"
-        H3 "mg    merge-groups: merge n-connected groups (currently only 1 supported) [0]"
-        H3 "eg    expand-groups: if a matches {b,c}, make two groups {a,b} and {a,c} [0]"
+        H2 "* keys:"
+        "%2"
 
         H1 "Index Parameters (for -update)"
         HR
@@ -259,18 +232,9 @@ static int printUsage(int argc, char** argv) {
         H2 "-i:<key> value                  (alternate)"
         H2 "* all values are integers (0=disable, 1=enable)"
         H2 "* default value in [ ]"
+        H2 "* alternate value in ( )"
         H2 "* must appear before -update to take effect"
-        H3 "rec    enable/disable recursive scan [1]"
-        H3 "algos  enabled search algos mask [15]"
-        H3 "crop   enable/disable border detection/cropping of video prior to indexing [1]"
-        H3 "types  enabled media types mask (1=image, 2=video) [3]"
-        H3 "hwdec  enable hardware video decoder [0]"
-        H3 "decthr max thread count for one video decoder (0==idxthr) [0]"
-        H3 "idxthr max thread count for index jobs (0==auto) [0]"
-        H3 "ljf    video only: estimate job cost and process longest jobs first [1]"
-        H3 "dry    enable dry-run, only show what would be updated [0]"
-        H3 "bsize  size of database write batches to hide write latency [1024]"
-        H3 "msize  minimum file size, skip file smaller than this (bytes) [1024]"
+        "%3"
 
         H1 "Definitions"
         HR
@@ -359,11 +323,35 @@ static int printUsage(int argc, char** argv) {
         H2 "find near duplicates (video)    cbird -update -p.alg 4 -p.dht 7 -p.qt 2 -p.vpad 1000 -similar -show"
         H2 "group photo sets by month       cbird -select-type 1 -group-by exif:Photo.DateTimeOriginal:month -folders -show"
         H2 "browse items, 16 per page       cbird -select-all -max-per-page 16 -show"
-        BR
-        ,argv[0]
-        );
-
+        BR;
   // clang-format on
+  QString paramsUsage;
+
+  auto formatParams = [](const Params& params) {
+    QString lines;
+    for (auto& key : params.keys()) {
+      auto v = params.getValue(key);
+      lines += QString(H3 "%1 %2 %3 [%4]")
+                   .arg(key, -6)
+                   .arg(QString("<") + v.typeName() + ">", -6)
+                   .arg(v.label)
+                   .arg(v.toString());
+      const auto& nv = v.namedValues();
+      if (nv.count() > 0)
+        for (auto& n : nv)
+          lines += QString(H3 "  %1 (%2) %3")
+                       .arg(n.shortName, -6)
+                       .arg(n.value)
+                       .arg(n.description);
+    }
+    return lines;
+  };
+
+  auto str = QString(usage)
+                 .arg(argv[0])
+                 .arg(formatParams(SearchParams()))
+                 .arg(formatParams(IndexParams()));
+  printf("%s\n", qUtf8Printable(str));
   return 0;
 }
 
@@ -379,56 +367,61 @@ int printCompletions(const char* argv0, const QStringList& args) {
     exit(0);
   }
 
-  QStringList cmds;
+  QSet<QString> cmds; // everything starting with "-"
 
-  const QStringList noArgs{
+  const QSet<QString> noArgs{
       "-update",         "-headless",      "-dups",          "-similar",
       "-select-none",    "-select-all",    "-select-errors", "-first",
       "-chop",           "-first-sibling", "-sort-similar",  "-remove",
       "-nuke",           "-rename",        "-sets",          "-folders",
       "-exit-on-select", "-show",          "-help",          "-version",
-      "-about",          "-verify",        "-vacuum",        "-select-result"
-      "-license",        "-cwd",           "-init"};
-  cmds << noArgs;
+      "-about",          "-verify",        "-vacuum",        "-select-result",
+      "-license",        "-cwd",           "-init",          "-list-search-params",
+      "-list-index-params",
+      };
+  cmds += noArgs;
 
-  QStringList oneArg{"-select-id", "-select-type", "-select-sql",  "-sort",
-                     "-sort-rev",  "-group-by",    "-max-per-page"};
+  QSet<QString> oneArg{"-select-id", "-select-type", "-select-sql",  "-sort",
+                       "-sort-rev",  "-group-by",    "-max-per-page"};
+  cmds += oneArg;
 
-  const QStringList twoArg{"-with", "-without", "-merge", "-rename",
-                           "-compare-videos"};
-  cmds << twoArg;
+  const QSet<QString> twoArg{"-with", "-without", "-merge", "-rename",
+                             "-compare-videos"};
+  cmds += twoArg;
 
-  const QStringList fileArg{"-select-one",         "-jpeg-repair-script",
-                            "-view-image",         "-test-csv",
-                            "-test-video-decoder", "-select-grid"};
-  cmds << fileArg;
+  const QSet<QString> fileArg{"-select-one",         "-jpeg-repair-script",
+                              "-view-image",         "-test-csv",
+                              "-test-video-decoder", "-select-grid"};
+  cmds += fileArg;
 
-  const QStringList dirArg{"-use",        "-dups-in", "-dup-nuke",
-                           "-similar-in", "-move"};
-  cmds << dirArg;
+  const QSet<QString> dirArg{"-use", "-dups-in", "-dup-nuke", "-similar-in",
+                             "-move"};
+  cmds += dirArg;
 
-  const QStringList fileOrDirArg{"-similar-to", "-select-path", "-select-files"};
-  cmds << fileOrDirArg;
+  const QSet<QString> fileOrDirArg{"-similar-to", "-select-path", "-select-files"};
+  cmds += fileOrDirArg;
 
-  const QStringList paramKeys = {"alg", "dht", "cvt",  "mn",  "mm",   "tm",
-                                 "tnf", "thf", "diag", "neg", "crop", "refl",
-                                 "qt",  "rt",  "vpad", "vfm", "vfn",  "fg",
-                                 "fp",  "fs",  "mg",   "eg"};
-  for (auto& k : paramKeys) oneArg << ("-p." + k);
+  const SearchParams searchParams;
+  const auto sk = searchParams.keys();
+  const QSet<QString> paramKeys(sk.begin(),sk.end());
+  QSet<QString> searchParamArg;
+  for (auto& k : paramKeys) searchParamArg << ("-p." + k);
+  cmds += searchParamArg;
 
-  const QStringList indexKeys = {"rec",   "algos",  "crop",   "types",
-                                 "hwdec", "decthr", "idxthr", "ljf",
-                                 "dry",   "bsize",  "msize"};
-  for (auto& k : indexKeys) oneArg << ("-i." + k);
-  cmds << oneArg;
+  const IndexParams indexParams;
+  const auto ik = indexParams.keys();
+  const QSet<QString> indexKeys(ik.begin(),ik.end());
+  QSet<QString> indexParamArg;
+  for (auto& k : indexKeys) indexParamArg << ("-i." + k);
+  cmds += indexParamArg;
 
-  const QStringList argTypeFile{"-compare-videos"};
-  cmds.sort();
+  const QSet<QString> argTypeFile{"-compare-videos"};
+  cmds += argTypeFile;
 
   // cword is the $CWORD variable in bash... index of the cursor (in words)
   int cword = args.at(2).toInt() + 3;
 
-  // completions write to stdout so we cannot log there
+  // completions must write to stdout so we cannot log there
 #if DEBUG_COMPLETIONS
   QFile log(QDir::tempPath() + "/cbird-completions.log");
   Q_ASSERT(log.open(QFile::WriteOnly | QFile::Append));
@@ -491,12 +484,33 @@ int printCompletions(const char* argv0, const QStringList& args) {
     }
   };
 
+  auto completeParam = [&](const Params& params) {
+    auto key = prev.mid(prev.indexOf('.')+1);
+    auto v = params.getValue(key);
+    const auto& nv = v.namedValues();
+    for (auto& n : nv) {
+      QString str(n.shortName);
+      if (curr.isEmpty() || str.startsWith(curr))
+        completions << n.shortName;
+    }
+    if (v.type == Params::Value::Bool) {
+      const QStringList sym{"true", "false", "0", "1"};
+      for (auto& s: sym)
+        if (curr.isEmpty() || s.startsWith(curr))
+          completions << s;
+    }
+  };
+
   if (fileOrDirArg.contains(prev)) {
     completePath(QDir::Files | QDir::Dirs);
   } else if (dirArg.contains(prev)) {
     completePath(QDir::Dirs);
   } else if (fileArg.contains(prev)) {
     completePath(QDir::Files);
+  } else if (searchParamArg.contains(prev)) {
+    completeParam(searchParams);
+  } else if (indexParamArg.contains(prev)) {
+    completeParam(indexParams);
   } else if (oneArg.contains(prev) || twoArg.contains(prev)) {
     if (argTypeFile.contains(prev)) completePath(QDir::Files);
   } else if (twoArg.contains(prev1)) {
@@ -567,7 +581,7 @@ static void install(const QString& argv0, const QString& prefix) {
 
     QVector<QStringList> binaries{{"cbird", argv0}};
 
-    // this does not work; permission denied
+// we can run these from within the appimage now
 //    const QString appDir = getenv("APPDIR");
 //    if (!appDir.isEmpty()) {
 //      binaries.append({"ffplay-sbs", appDir+"/cbird/bin/ffplay-sbs"});
@@ -873,65 +887,22 @@ int main(int argc, char** argv) {
       const QString val = nextArg();
       const QChar sep = arg[2];
       const QString key = arg.split(sep)[1];
-      int intVal = val.contains(",") ? 0 : intArg(val);
-
-      if      (key == "dht") params.dctThresh = intVal;
-      else if (key == "cvt") params.cvThresh = intVal;
-      else if (key == "alg") params.algo = intVal;
-      else if (key == "mn") params.minMatches = intVal;
-      else if (key == "mm") params.maxMatches = intVal;
-      else if (key == "tnf") params.needleFeatures = intVal;
-      else if (key == "thf") params.haystackFeatures = intVal;
-      else if (key == "tm") params.templateMatch = intVal;
-      else if (key == "diag") params.verbose = intVal;
-      else if (key == "neg") params.negativeMatch = intVal;
-      else if (key == "crop") params.autoCrop = intVal;
-      else if (key == "refl") params.mirrorMask = intVal;
-      else if (key == "vpad") params.skipFramesIn = params.skipFramesOut = intVal;
-      else if (key == "fg") params.filterGroups = intVal;
-      else if (key == "mg") params.mergeGroups = intVal;
-      else if (key == "fp") params.filterParent = intVal;
-      else if (key == "fs") params.filterSelf = intVal;
-      else if (key == "eg") params.expandGroups = intVal;
-      else if (key == "vfm") params.minFramesMatched = intVal;
-      else if (key == "vfn") params.minFramesNear = intVal;
-      else if (key == "qt" || key=="rt")  {
-
-          QVector<int> types;
-          for (QString tok : val.split(",")) types << QString(tok).toInt();
-
-          if (key == "qt")
-            params.queryTypes = types;
-          else
-            params.resultTypes = types;
-      }
-      else {
-        qCritical() << "invalid search parameter:" << key;
-        ::exit(1);
-      }
+      params.setValue(key, val);
     }
     else if (arg.startsWith("-i.") || arg.startsWith("-i:")) {
-      const int intVal = intArg(nextArg());
+      const QString val = nextArg();
       const QChar sep = arg[2];
       const QString key = arg.split(sep)[1];
-
-      // todo: implement all index params
-      if      (key == "rec")   indexParams.recursive = intVal;
-      else if (key == "algos") indexParams.algos = intVal;
-      else if (key == "crop")  indexParams.autocrop = intVal;
-      else if (key == "types") indexParams.types = intVal;
-      else if (key == "hwdec") indexParams.useHardwareDec = intVal;
-      else if (key == "decthr") indexParams.decoderThreads = intVal;
-      else if (key == "idxthr") indexParams.indexThreads = intVal;
-      else if (key == "ljf")    indexParams.estimateCost = intVal;
-      else if (key == "bsize")  indexParams.writeBatchSize = intVal;
-      else if (key == "dry")    indexParams.dryRun = intVal;
-      else if (key == "msize")  indexParams.minFileSize = intVal;
-      else {
-          qCritical() << "invalid index parameter:" << key;
-          ::exit(1);
-      }
+      indexParams.setValue(key, val);
       engine().scanner->setIndexParams(indexParams);
+    }
+    else if (arg == "-list-search-params") {
+      MessageContext mc("SearchParams");
+      params.print();
+    }
+    else if (arg == "-list-index-params") {
+      MessageContext mc("IndexParams");
+      indexParams.print();
     }
     // clang-format on
     else if (arg == "-use") {
@@ -1090,7 +1061,7 @@ int main(int argc, char** argv) {
       const bool isVideo = scanner->videoTypes().contains(ext);
 
       if (info.isFile() && !isArchive) {
-        if (params.queryTypes.contains(Media::TypeImage) &&
+        if (params.queryTypes & SearchParams::FlagImage &&
             scanner->imageTypes().contains(ext)) {
           IndexResult result = scanner->processImageFile(to);
           if (!result.ok) {
@@ -1098,7 +1069,7 @@ int main(int argc, char** argv) {
             continue;
           }
           search.needle = result.media;
-        } else if (params.queryTypes.contains(Media::TypeVideo) &&
+        } else if (params.queryTypes & SearchParams::FlagVideo &&
                    isVideo) {
           search.needle = engine().db->mediaWithPath(to);
 
@@ -2169,8 +2140,8 @@ int main(int argc, char** argv) {
 
       // adjust for vpad
       results = results.mid(
-          params.skipFramesIn,
-          results.length() - params.skipFramesIn - params.skipFramesOut);
+          params.skipFrames,
+          results.length() - 2*params.skipFrames);
 
       int found, bad, poor, none;
       found = bad = poor = none = 0;

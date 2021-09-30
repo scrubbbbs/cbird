@@ -785,3 +785,78 @@ IndexResult Scanner::processVideoFile(const QString& path) const {
 
   return result;
 }
+
+#include "paramsdefs.h"
+
+IndexParams::IndexParams() {
+  static const QVector<NamedValue> emptyValues;
+  static const QVector<int> emptyRange;
+  //static const QVector<int> percent{1, 100};
+  static const QVector<int> positive{0, INT_MAX};
+  static const QVector<int> nonzero{1, INT_MAX};
+
+  int counter = 0;
+  {
+    // note: identical to SearchParams::algo except bit shift
+    static const QVector<NamedValue> bits{
+      {1<<SearchParams::AlgoDCT, "dct", "DCT image hash"},
+      {1<<SearchParams::AlgoDCTFeatures, "fdct", "DCT image hashes of features"},
+      {1<<SearchParams::AlgoCVFeatures, "orb", "ORB descriptors of features"},
+      {1<<SearchParams::AlgoColor, "color", "Color histogram"},
+      {1<<SearchParams::AlgoVideo, "video", "DCT image hashes of video frames"}};
+    add({"algos", "Enabled algorithms", Value::Flags, counter++,
+         SET_FLAGS("algos", algos, bits), GET(algos), GET_CONST(bits), NO_RANGE});
+  }
+
+  {
+    static const QVector<NamedValue> bits{
+        {TypeImage, "i", "Image files"},
+        {TypeVideo, "v", "Video files"},
+        {TypeAudio, "a", "Audio files"}};
+    add({"types", "Enabled media types", Value::Flags, counter++,
+         SET_FLAGS("types", types, bits), GET(types), GET_CONST(bits), NO_RANGE});
+  }
+
+  add({"dirs", "Enable indexing of subdirectories", Value::Bool, counter++,
+       SET_BOOL(recursive),GET(recursive),NO_NAMES, NO_RANGE});
+
+  add({"links", "Follow symlinks to files and directories", Value::Bool, counter++,
+       SET_BOOL(followSymlinks), GET(followSymlinks), NO_NAMES, NO_RANGE});
+
+  add({"ljf", "Estimate job cost and process longest jobs first", Value::Bool, counter++,
+       SET_BOOL(estimateCost), GET(estimateCost), NO_NAMES, NO_RANGE});
+
+  add({"dryrun", "Dry run, only show what would be done", Value::Bool, counter++,
+       SET_BOOL(dryRun), GET(dryRun), NO_NAMES, NO_RANGE});
+
+  add({"fsize", "Minimum file size in bytes, ignore smaller files", Value::Int, counter++,
+       SET_INT(minFileSize), GET(minFileSize), NO_NAMES, GET_CONST(positive)});
+
+  add({"bsize", "Size of database write batches", Value::Int, counter++,
+       SET_INT(writeBatchSize), GET(writeBatchSize), NO_NAMES, GET_CONST(nonzero)});
+
+  add({"crop", "Enable border detect/crop of video", Value::Bool, counter++,
+       SET_BOOL(autocrop), GET(autocrop), NO_NAMES, NO_RANGE});
+
+  add({"nfeat", "Number of features per image", Value::Int, counter++,
+       SET_INT(numFeatures), GET(numFeatures), NO_NAMES, GET_CONST(positive)});
+
+  add({"rsize", "Dimension for prescaling images before processing", Value::Int, counter++,
+       SET_INT(resizeLongestSide), GET(resizeLongestSide), NO_NAMES, GET_CONST(nonzero)});
+
+  add({"vht", "Video index threshold for discarding hashes", Value::Int, counter++,
+       SET_INT(videoThreshold), GET(videoThreshold), NO_NAMES, GET_CONST(nonzero)});
+
+  add({"gpu", "Enable gpu video decoding (Nvidia)", Value::Bool, counter++,
+       SET_BOOL(useHardwareDec), GET(useHardwareDec),
+       NO_NAMES, NO_RANGE});
+
+  add({"decthr", "Max threads for video decoding (0==auto)", Value::Int, counter++,
+       SET_INT(decoderThreads), GET(decoderThreads), NO_NAMES, GET_CONST(positive)});
+
+  add({"idxthr", "Max threads for all jobs (0==auto)", Value::Int, counter++,
+       SET_INT(indexThreads), GET(indexThreads), NO_NAMES, GET_CONST(positive)});
+
+  add({"gputhr", "Max decoders per gpu", Value::Int, counter++,
+       SET_INT(gpuThreads), GET(gpuThreads), NO_NAMES, GET_CONST(nonzero)});
+}

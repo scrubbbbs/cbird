@@ -110,19 +110,19 @@ There are a few for power users.
 Search Algorithms
 ====================
 
-#### Discrete Cosine Transform (DCT) Hash (`-p.alg 0`)
+#### Discrete Cosine Transform (DCT) Hash (`-p.alg dct`)
 Uses one 64-bit hash per image, similar to pHash. Very fast and good for rescaled images.
 
-#### DCT Features `-p.alg 1`
+#### DCT Features `-p.alg fdct`
 Uses DCT hashes around ORB features, up to 400 per image. Good for heavily cropped images, much faster than ORB features.
 
-#### OpenCV Features `-p.alg 2`
-Uses up to 400 Oriented Rotated Brief (ORB) 256-bit features per image and searches using FLANN-based matcher. Good for rotated, cropped but slow.
+#### Oriented Rotated Brief (ORB) Features `-p.alg orb`
+Uses up to 400 256-bit features per image and searches using FLANN-based matcher. Good for rotated, cropped but slow.
 
-#### Color Histogram `-p.alg 3`
+#### Color Histogram `-p.alg color`
 Uses Reduced-color histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` which is too slow except with `-similar-to`
 
-#### DCT Video Index `-p.alg 4`
+#### DCT Video Index `-p.alg video`
 Uses DCT hashes of video frames, with some compression of nearby similar hashes. Frames are pre-processed to remove letterboxing.
 
 #### Template Matcher `-p.tm 1`
@@ -145,21 +145,21 @@ Arguments | Note | Time (seconds)
 -i.algos 0  -update | md5 only       | 2
 -i.algos 1  -update | +dct           | 41
 -i.algos 3  -update | +dct features  | 44
--i.algos 7  -update | +cv features   | 44
+-i.algos 7  -update | +orb features  | 44
 -i.algos 15 -update | +color hist    | 46
 
 ### Searching
 
-Search speed varies with algorithm. The OpenCV search tree is quite slow compared to others. It is better suited for `similar-to` to search a subset.
+Search speed varies with algorithm. The OpenCV search tree for ORB is quite slow compared to others. It is better suited for `similar-to` to search a subset.
 
 #### Table 2: Searching 1000 images
 
-Arguments         | Note          | Time (ms)
-------------------|---------------|------ 
--similar          | dct           | 54
--p.alg 1 -similar | dct features  | 200
--p.alg 2 -similar | cv features   | 9000
--p.alg 3 -similar | colors        | 450
+Arguments             | Note          | Time (ms)
+----------------------|---------------|------ 
+-similar              | dct           | 54
+-p.alg fdct -similar  | dct features  | 200
+-p.alg orb -similar   | orb features  | 9000
+-p.alg color -similar | colors        | 450
 
 ### Large Datasets
 
@@ -172,7 +172,7 @@ Arguments | Note | Rate (Img/s) | Time (minutes)
 -i.algos 0 -update  | md5 only       | 861 |  9:41
 -i.algos 1 -update  | +dct           | 683 | 12:11
 -i.algos 3 -update  | +dct features  | 377 | 22:04
--i.algos 7 -update  | +cv features   | 348 | 23:56
+-i.algos 7 -update  | +orb features  | 348 | 23:56
 -i.algos 15 -update | +colors        | 227 | 36:39
 
 For N^2 search (`-similar`) only DCT hash is practical, and it degrades exponentially as the threshold increases.
@@ -189,16 +189,16 @@ Arguments | Note | Time (s)
 
 For K*N (K needle images, N haystack images) the slower algorithms can be practical even for large datasets. For a quick test we can select and search for the first 10 items:
 
-`cbird -p.alg 1 -select-sql "select * from media limit 10"  -similar-to @`
+`cbird -p.alg fdct -select-sql "select * from media limit 10"  -similar-to @`
 
 #### Table 5: Searching for 10 images in 500k dataset:
 
 Arguments | Note | Time (s)
 -----|------|------ 
--p.alg 0 -p.dht 2  | dct, threshold 2           | 1.3
--p.alg 1 -p.dht 7  | dct-features, threshold 7  | 1.5
--p.alg 2           | cv-features                | 84.4**
--p.alg 3           | colors                     | --
+-p.alg dct -p.dht 2  | dct, threshold 2           | 1.3
+-p.alg fdct -p.dht 7 | dct-features, threshold 7  | 1.5
+-p.alg orb           | orb-features               | 84.4**
+-p.alg color         | colors                     | --
 
 **OpenCV search tree is not cached on disk, slow to start
 

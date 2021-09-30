@@ -7,6 +7,11 @@ TEST = $$system("basename $$_PRO_FILE_ | sed -re 's/\.pro$//'")
 TARGET = runtest-$$TEST
 
 INCLUDEPATH += . .. ../..
+
+QTCORE_PRIVATE_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include/QtCore/$$QT_VERSION"
+message($$QTCORE_PRIVATE_HEADERS)
+INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
+
 MOC_DIR = _build 
 OBJECTS_DIR = _build
 
@@ -22,7 +27,7 @@ LIBS_TERM   = -ltermcap
 
 # deps for testing Index subclasses
 LIBS_INDEX = $$LIBS_OPENCV $$LIBS_FFMPEG $$LIBS_QUAZIP $$LIBS_EXIV2 $$LIBS_TERM
-FILES_INDEX = index ioutil media videocontext cvutil qtutil database scanner templatematcher
+FILES_INDEX = index ioutil media videocontext cvutil qtutil database scanner templatematcher params
 
 # deps for using gui stuff
 LIBS_GUI = $$LIBS_CIMG
