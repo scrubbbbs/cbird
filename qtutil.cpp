@@ -679,7 +679,6 @@ double qRotationAngle(const QMatrix &mat) {
 #if !defined(QT_MESSAGELOGCONTEXT)
 #error qColorMessageOutput requires QT_MESSAGELOGCONTEXT
 #endif
-QThreadStorage<QString> qMessageContext;
 
 static void exifLogHandler(int level, const char* msg) {
   const int nLevels = 4;
@@ -691,7 +690,6 @@ static void exifLogHandler(int level, const char* msg) {
     qColorMessageOutput(levelToType[level], context, QString(msg).trimmed());
 }
 
-
 #ifdef Q_OS_WIN
 #include <fcntl.h>
 #endif
@@ -700,8 +698,8 @@ extern "C" {
 #include <termcap.h> // terminal width for eliding
 }
 
-class LoggerThread {
- public:
+class MessageLog {
+ private:
   QThread* thread;
   QMutex mutex;
   QWaitCondition cond;
@@ -711,134 +709,26 @@ class LoggerThread {
   int termColumns=-1;
   QString homePath;
 
-  LoggerThread() {
-    std::set_terminate(qFlushOutput);
-    Exiv2::LogMsg::setHandler(exifLogHandler);
+  MessageLog();
+  ~MessageLog();
 
-    // https://stackoverflow.com/questions/1022957/getting-terminal-width-in-c
-    const char* termType = getenv("TERM");
-
-    if (termType) {
-      char termBuf[2048];
-      int err = tgetent(termBuf, termType);
-      if (err <= 0)
-        printf("tgetent error TERM=%s TERMCAP=%s err=%d\n",
-               termType, getenv("TERMCAP"), err);
-      else {
-        termLines = tgetnum("li");
-        termColumns = tgetnum("co");
-        if (termLines < 0 || termColumns < 0)
-          printf("term: %s %dx%d\n", termType, termColumns, termLines);
-      }
-    }
-
-    homePath = QDir::homePath();
-
-#ifdef Q_OS_WIN
-    // disable text mode to speed up console
-    _setmode( _fileno(stdout), _O_BINARY );
-#endif
-    thread = QThread::create([this]() {
-      QString lastInput, lastOutput;
-      int repeats = 0;
-      QMutexLocker locker(&mutex);
-      while (!stop && cond.wait(&mutex))
-        while (log.count() > 0) {
-          const QString line = log.takeFirst();
-          // do not compress progress lines
-          int pl = line.indexOf("<PL>");
-          if (pl <= 0 && lastInput == line) {
-            repeats++;
-            continue;
-          }
-          locker.unlock();
-
-          if (repeats > 0) {
-            QString output = lastInput + " [x" + QString::number(repeats) + "]\n";
-            QByteArray utf8 = output.toUtf8();
-            fwrite(utf8.data(), utf8.length(), 1, stdout);
-            repeats = 0;
-          }
-
-          lastInput = line;
-
-          QString output = line;
-          output.replace(homePath, "~");
-
-          pl = output.indexOf("<PL>"); // must come after replacements!
-          output.replace("<PL>", "");
-
-          // elide and pad following text to terminal width
-          int elide = output.indexOf("<EL>"); // must come after <PL>!
-          if (elide > 0) {
-            if (termColumns > 0) {
-              QString toElide = output.mid(elide+4);
-              QString elided=qElide(toElide, termColumns-elide);
-              output = output.midRef(0, elide) + elided;
-              output += QString().fill(' ', termColumns-output.length());
-            }
-            else
-              output.replace("<EL>", "");
-          }
-
-          if (pl > 0) {
-            if (lastInput.startsWith(line.midRef(0, pl)))
-              output = "\r" + output;
-          }
-          else {
-            if (!lastOutput.endsWith("\n"))
-              output = "\n" + output;
-            output += "\n";
-          }
-
-          lastOutput = output;
-
-          QByteArray utf8 = output.toUtf8();
-          fwrite(utf8.data(), utf8.length(), 1, stdout);
-          // we only need to flush if \r is present;
-          // windows always flushes, or it buffers forever
-#ifndef Q_OS_WIN
-          if (pl > 0)
-#endif
-            fflush(stdout);
-
-          locker.relock();
-        }
-    });
-    thread->start();
+ public:
+  static MessageLog& instance() {
+    static MessageLog logger;
+    return logger;
   }
-  ~LoggerThread() {
-    //fprintf(stdout, "~LoggerThread\n");
-    stop = true;
-    cond.wakeAll();
-    thread->wait();
-    qFlushOutput();
-    fprintf(stdout, "\n"); // last output might have no trailing "\n"
-    fflush(stdout);
-  };
-  void append(const QString& msg) {
-    {
-      QMutexLocker locker(&mutex);
-      log.append(msg);
-    }
-    cond.wakeAll();
+
+  static QThreadStorage<QString>& context() {
+    static QThreadStorage<QString> context;
+    return context;
   }
-  void flush() {
-    QMutexLocker locker(&mutex);
-    QByteArray utf8;
-    while (log.count() > 0)
-      utf8 += (log.takeFirst() + "\n").toUtf8();
-    fwrite(utf8.data(), utf8.length(), 1, stdout);
-    fflush(stdout);
-  }
+  void append(const QString& msg);
+  void flush();
 };
 
-/// global logger, use static destruction to flush the log!
-static LoggerThread logger;
+void qFlushOutput() { MessageLog::instance().flush(); }
 
-void qFlushOutput() {
-  logger.flush();
-}
+QThreadStorage<QString>& qMessageContext() { return MessageLog::context(); }
 
 void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
                          const QString& msg) {
@@ -849,9 +739,10 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
   const char* color = VT_WHT;
   const char* reset = VT_RESET;
 
+  const auto& perThreadContext = MessageLog::context();
   QString threadContext;
-  if (qMessageContext.hasLocalData())
-    threadContext = qMessageContext.localData();
+  if (perThreadContext.hasLocalData())
+    threadContext = perThreadContext.localData();
 
   switch (type) {
     case QtDebugMsg:
@@ -966,7 +857,7 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
                           .arg(msg)
                           .arg(reset);
 
-    logger.append(logLine);
+    MessageLog::instance().append(logLine);
 
     if (type == QtFatalMsg) { // we are going to abort() next or debug break
       qFlushOutput();
@@ -982,11 +873,14 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
   }
 }
 
-MessageContext::MessageContext(const QString &context) {
-  if (qMessageContext.hasLocalData() && !qMessageContext.localData().isEmpty())
+MessageContext::MessageContext(const QString& context) {
+  auto& threadContext = MessageLog::context();
+  if (threadContext.hasLocalData() && !threadContext.localData().isEmpty())
     qWarning() << "overwriting message context"; // todo: save/restore message context
-  qMessageContext.setLocalData(context);
+  threadContext.setLocalData(context);
 }
+
+MessageContext::~MessageContext() { MessageLog::context().setLocalData(QString()); }
 
 // bad form, but only way to get to metacallevent
 // this header won't be found unless foo is added to qmake file
@@ -1017,4 +911,127 @@ bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
   }
 
   return QObject::eventFilter(object, event);
+}
+
+MessageLog::MessageLog() {
+  std::set_terminate(qFlushOutput);
+  Exiv2::LogMsg::setHandler(exifLogHandler);
+
+  // https://stackoverflow.com/questions/1022957/getting-terminal-width-in-c
+  const char* termType = getenv("TERM");
+
+  if (termType) {
+    char termBuf[2048];
+    int err = tgetent(termBuf, termType);
+    if (err <= 0)
+      printf("tgetent error TERM=%s TERMCAP=%s err=%d\n",
+             termType, getenv("TERMCAP"), err);
+    else {
+      termLines = tgetnum("li");
+      termColumns = tgetnum("co");
+      if (termLines < 0 || termColumns < 0)
+        printf("term: %s %dx%d\n", termType, termColumns, termLines);
+    }
+  }
+
+  homePath = QDir::homePath();
+
+#ifdef Q_OS_WIN
+  // disable text mode to speed up console
+  _setmode( _fileno(stdout), _O_BINARY );
+#endif
+  thread = QThread::create([this]() {
+    QString lastInput, lastOutput;
+    int repeats = 0;
+    QMutexLocker locker(&mutex);
+    while (!stop && cond.wait(&mutex))
+      while (log.count() > 0) {
+        const QString line = log.takeFirst();
+        // do not compress progress lines
+        int pl = line.indexOf("<PL>");
+        if (pl <= 0 && lastInput == line) {
+          repeats++;
+          continue;
+        }
+        locker.unlock();
+
+        if (repeats > 0) {
+          QString output = lastInput + " [x" + QString::number(repeats) + "]\n";
+          QByteArray utf8 = output.toUtf8();
+          fwrite(utf8.data(), utf8.length(), 1, stdout);
+          repeats = 0;
+        }
+
+        lastInput = line;
+
+        QString output = line;
+        output.replace(homePath, "~");
+
+        pl = output.indexOf("<PL>"); // must come after replacements!
+        output.replace("<PL>", "");
+
+        // elide and pad following text to terminal width
+        int elide = output.indexOf("<EL>"); // must come after <PL>!
+        if (elide > 0) {
+          if (termColumns > 0) {
+            QString toElide = output.mid(elide+4);
+            QString elided=qElide(toElide, termColumns-elide);
+            output = output.midRef(0, elide) + elided;
+            output += QString().fill(' ', termColumns-output.length());
+          }
+          else
+            output.replace("<EL>", "");
+        }
+
+        if (pl > 0) {
+          if (lastInput.startsWith(line.midRef(0, pl)))
+            output = "\r" + output;
+        }
+        else {
+          if (!lastOutput.endsWith("\n"))
+            output = "\n" + output;
+          output += "\n";
+        }
+
+        lastOutput = output;
+
+        QByteArray utf8 = output.toUtf8();
+        fwrite(utf8.data(), utf8.length(), 1, stdout);
+        // we only need to flush if \r is present;
+        // windows always flushes, or it buffers forever
+#ifndef Q_OS_WIN
+        if (pl > 0)
+#endif
+          fflush(stdout);
+
+        locker.relock();
+      }
+  });
+  thread->start();
+}
+
+MessageLog::~MessageLog() {
+  stop = true;
+  cond.wakeAll();
+  thread->wait();
+  qFlushOutput();
+  fprintf(stdout, "\n"); // last output might have no trailing "\n"
+  fflush(stdout);
+}
+
+void MessageLog::append(const QString &msg) {
+  {
+    QMutexLocker locker(&mutex);
+    log.append(msg);
+  }
+  cond.wakeAll();
+}
+
+void MessageLog::flush() {
+  QMutexLocker locker(&mutex);
+  QByteArray utf8;
+  while (log.count() > 0)
+    utf8 += (log.takeFirst() + "\n").toUtf8();
+  fwrite(utf8.data(), utf8.length(), 1, stdout);
+  fflush(stdout);
 }

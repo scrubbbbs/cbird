@@ -1090,7 +1090,7 @@ QIODevice* Media::ioDevice() const {
 QImage Media::loadImage(const QByteArray& data, const QSize& size,
                         const QString& name, QFuture<void>* future) {
 
-  qMessageContext.setLocalData("QImageReader: " + QFileInfo(name).fileName());
+  qMessageContext().setLocalData("QImageReader: " + QFileInfo(name).fileName());
 
   // safe to cast away const since we do not write the buffer
   QBuffer* buffer = new QBuffer(const_cast<QByteArray*>(&data));
@@ -1137,7 +1137,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   // in incorrect rotation
   long exifOrientation = 0;
   if (format == "jpeg" && reader.transformation() != 0) {
-    qMessageContext.setLocalData(QFileInfo(name).fileName());
+    qMessageContext().setLocalData(QFileInfo(name).fileName());
 
     auto exif = Exiv2::ImageFactory::open(
         reinterpret_cast<const Exiv2::byte*>(data.constData()), data.size());
@@ -1149,7 +1149,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
     }
   }
 
-  qMessageContext.setLocalData(QString());
+  qMessageContext().setLocalData(QString());
 
   // fixme: skipping exif mirror orientations (2,4,5,7)
   qreal rotate = 0;

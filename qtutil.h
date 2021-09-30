@@ -121,20 +121,20 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
 /// flush log messages before using printf/scanf etc
 void qFlushOutput();
 
-extern QThreadStorage<QString> qMessageContext;
+/// log message extra context
+QThreadStorage<QString>& qMessageContext();
 
+/// scoped log message extra context (preferred method)
 class MessageContext {
   NO_COPY_NO_DEFAULT(MessageContext, QObject);
-
  public:
   MessageContext(const QString& context);
-  ~MessageContext() { qMessageContext.setLocalData(QString()); }
+  ~MessageContext();
 };
 
 class DebugEventFilter : public QObject {
  public:
-  DebugEventFilter();;
+  DebugEventFilter();
   virtual ~DebugEventFilter();
-
   bool eventFilter(QObject* object, QEvent* event);
 };

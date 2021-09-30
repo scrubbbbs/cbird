@@ -896,10 +896,11 @@ void VideoContext::avLogger(void* ptr, int level, const char* fmt, va_list vl) {
       fileName = QString("cwd={") + path + "}";
   }
 
-  if (qMessageContext.hasLocalData()) {
-    QString ctx = qMessageContext.localData();
+  auto& msgCtx = qMessageContext();
+  if (msgCtx.hasLocalData()) {
+    QString ctx = msgCtx.localData();
     if (ctx == "")
-      qMessageContext.setLocalData(fileName);
+      msgCtx.setLocalData(fileName);
   }
 
   char buf[1024] = {0};
