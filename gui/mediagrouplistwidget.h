@@ -117,6 +117,9 @@ class MediaGroupListWidget : public QListWidget {
   /// Reset changes to the current row
   void reloadAction();
 
+  /// Copy image to clipboard
+  void copyImageAction();
+
   /// Record positive match to csv file
   void recordMatchTrueAction() { recordMatch(true); }
 

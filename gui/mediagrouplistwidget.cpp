@@ -707,6 +707,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addAction(settings, "Compare Audio", Qt::Key_C, this, SLOT(compareAudioAction()));
   WidgetHelper::addAction(settings, "Choose Selected", Qt::Key_Return, this, SLOT(chooseAction()));
   WidgetHelper::addAction(settings, "Reload", Qt::Key_F5, this, SLOT(reloadAction()));
+  WidgetHelper::addAction(settings, "Copy Image", Qt::CTRL|Qt::Key_C, this, SLOT(copyImageAction()));
 
   WidgetHelper::addSeparatorAction(this);
 
@@ -2028,6 +2029,13 @@ void MediaGroupListWidget::reloadAction() {
   for (Media& m : _list[_currentRow]) m.setRoi(QVector<QPoint>());
 
   updateCurrentRow(_list[_currentRow]);
+}
+
+void MediaGroupListWidget::copyImageAction() {
+  auto sel = selectedMedia();
+  if (sel.count() <= 0) return;
+  const Media&m = sel[0];
+  qApp->clipboard()->setImage(m.image());
 }
 
 void MediaGroupListWidget::moveToNextScreenAction() {
