@@ -81,6 +81,9 @@ class MediaGroupListWidget : public QListWidget {
   /// Move selected file to subdir of its index
   void moveFileAction();
 
+  /// Move folder/zip of selected file to subdir
+  void moveFolderAction();
+
   /// Rename selected file
   void renameFileAction();
 
@@ -168,7 +171,7 @@ class MediaGroupListWidget : public QListWidget {
   /// Toggle image-pair differences visualization
   void toggleAutoDifferenceAction();
 
- private:
+private:
   void closeEvent(QCloseEvent* event);
   void keyPressEvent(QKeyEvent* event);
   void wheelEvent(QWheelEvent* event);
@@ -252,6 +255,15 @@ class MediaGroupListWidget : public QListWidget {
 
   /// Return true if there is a pair displayed and one is selected
   bool selectedPair(Media **selected, Media **other);
+
+  /// Warn about renaming w/o database present
+  bool renameWarning();
+
+  /// Move parent of child(file) to newName
+  void moveDatabaseDir(const Media& child, const QString& newName);
+
+  /// Menu tree for moving stuff
+  QMenu* dirMenu(const char* slot);
 
   MediaGroupList _list;
   int _flags;

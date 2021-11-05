@@ -499,6 +499,9 @@ class Media {
     return parent + ":" + child;
   }
 
+  /// test if path is a zip
+  static bool isArchive(const QString& path) { return path.endsWith(".zip"); }
+
   /// test if path is a zip file member
   static bool isArchived(const QString& path) { return path.contains(".zip:"); }
   bool isArchived() const { return isArchived(_path); }

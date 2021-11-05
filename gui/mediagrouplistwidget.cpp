@@ -684,13 +684,9 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(this->metaObject()->className() + QString(".shortcuts"));
 
-  WidgetHelper::addAction(settings, "Rename", Qt::Key_F2, this, SLOT(renameFileAction()))
-      ->setEnabled(_db != nullptr);
-  WidgetHelper::addAction(settings, "Copy Name", Qt::SHIFT | Qt::Key_F2, this, SLOT(copyNameAction()))
-      ->setEnabled(_db != nullptr);
-  WidgetHelper::addAction(settings, "Rename Folder", Qt::Key_F3, this, SLOT(renameFolderAction()))
-      ->setEnabled(true);
-
+  WidgetHelper::addAction(settings, "Rename", Qt::Key_F2, this, SLOT(renameFileAction()));
+  WidgetHelper::addAction(settings, "Copy Name", Qt::SHIFT | Qt::Key_F2, this, SLOT(copyNameAction()));
+  WidgetHelper::addAction(settings, "Rename Folder", Qt::Key_F3, this, SLOT(renameFolderAction()));
   WidgetHelper::addSeparatorAction(this);
 
   WidgetHelper::addAction(settings, "Rotate", Qt::Key_R, this, SLOT(rotateAction()));
@@ -789,43 +785,54 @@ void MediaGroupListWidget::closeEvent(QCloseEvent* event) {
   this->deleteLater();
 }
 
+QMenu* MediaGroupListWidget::dirMenu(const char* slot) {
+  QMenu* dirs = MenuHelper::dirMenu(_db->path(), this, slot);
+
+  QSet<QString> groupDirs;
+  const auto& group = _list[_currentRow];
+
+  // add shortcuts for dirs in the current row,
+  // in case they are buried it is nice to have
+  int selectedIndex = -1;
+  const QModelIndex index = currentIndex();
+  if (index.isValid()) selectedIndex = index.row();
+
+  for (int i = 0; i < group.count(); ++i)
+    if (i != selectedIndex)
+      if (!isAnalysis(group[i])) groupDirs.insert(group[i].parentPath());
+
+  const auto& keys = groupDirs.values();
+  QList<QAction*> actions;
+  for (auto& dirPath : keys) {
+    QDir dir(dirPath);
+    auto count = dir.entryList(QDir::Files | QDir::NoDotAndDotDot).count();
+    auto name = dir.dirName() + QString(" [x%1]").arg(count);
+    auto* a = new QAction(name, this);
+    a->setData(dirPath);
+    connect(a, SIGNAL(triggered()), this, slot);
+    actions.append(a);
+  }
+
+  if (actions.count() > 0) {
+    QAction* first = dirs->actions().first();
+    first = dirs->insertSeparator(first);
+    dirs->insertActions(first, actions);
+  }
+
+  return dirs;
+}
+
 void MediaGroupListWidget::execContextMenu(const QPoint& p) {
   // add the move-to folder action
   QMenu* menu = new QMenu;
   if (_db) {
-    QMenu* dirs =
-        MenuHelper::dirMenu(_db->path(), this, SLOT(moveFileAction()));
+    QMenu* dirs = dirMenu(SLOT(moveFileAction()));
+    QAction* act = new QAction("Move File to ...", this);
+    act->setMenu(dirs);
+    menu->addAction(act);
 
-    QSet<QString> groupDirs;
-    const auto& group = _list[_currentRow];
-
-    int selectedIndex = -1;
-    const QModelIndex index = currentIndex();
-    if (index.isValid()) selectedIndex = index.row();
-
-    for (int i = 0; i < group.count(); ++i)
-      if (i != selectedIndex)
-        if (!isAnalysis(group[i]))
-          groupDirs.insert(group[i].parentPath());
-
-    const auto& keys = groupDirs.values();
-    QList<QAction*> actions;
-    for (auto& dirPath : keys) {
-      QDir dir(dirPath);
-      auto count = dir.entryList(QDir::Files|QDir::NoDotAndDotDot).count();
-      auto name = dir.dirName() + QString(" [x%1]").arg(count);
-      auto* a = new QAction(name, this);
-      a->setData(dirPath);
-      connect(a, &QAction::triggered, this, &self::moveFileAction);
-      actions.append(a);
-    }
-    if (actions.count() > 0) {
-      QAction* first = dirs->actions().first();
-      first = dirs->insertSeparator(first);
-      dirs->insertActions(first, actions);
-    }
-
-    QAction* act = new QAction("Move to Folder", this);
+    dirs = dirMenu(SLOT(moveFolderAction()));
+    act = new QAction("Move Folder to ...", this);
     act->setMenu(dirs);
     menu->addAction(act);
   }
@@ -1257,9 +1264,8 @@ void MediaGroupListWidget::updateItems() {
     QString path = m.path();
     const QFileInfo fileInfo(path);
 
-    // truncate display name if contained on disk or index
-    // bug: broken for zip file contents not yet indexed
-    if (fileInfo.isFile() || (m.isValid())) {
+    // truncate display name to common prefix
+    if (fileInfo.isFile() || m.isArchived()) {
       path = path.mid(prefix.length());
       if (size == 0) size = fileInfo.size();
     }
@@ -1666,33 +1672,47 @@ void MediaGroupListWidget::addDifferenceAnalysis() {
       g.append(newDifferenceAnalysis());
 }
 
+static void maybeAppend(QStringList& sl, const QString& s) {
+  if (!sl.contains(s)) sl.append(s);
+}
+
+static void maybeAppend(QStringList& sl, const QStringList& s) {
+  for (const auto& str : s) maybeAppend(sl, str);
+}
+
 void MediaGroupListWidget::renameFileAction() {
   const MediaGroup& group = _list[_currentRow];
 
-  for (auto& m : selectedMedia()) {
-    QFileInfo info(m.path());
-    if (m.isValid() && m.isArchived()) {
-      qWarning() << "rename archive member unsupported";
-      return;
-    }
+  if (renameWarning()) return;
 
-    if (!info.exists()) {
-      qWarning() << "file does not exist";
+  for (auto& m : selectedMedia()) {
+    if (m.isArchived()) {
+      qWarning() << "rename archive member unsupported";
       continue;
     }
 
-    bool ok = false;
+    const QFileInfo info(m.path());
+    if (!info.isFile()) {
+      qWarning() << "path is not a file:" << info.path();
+      continue;
+    }
 
     QStringList completions;
     completions += info.fileName();
 
     // names of matches
-    for (auto& m2 : group)
-      if (m2.path() != m.path())
-        completions.append( m2.path().split("/").last() );
+    for (auto& m2 : group) {
+        if (m2.isArchived()) {
+          QString z,c;
+          m2.archivePaths(z,c);
+          maybeAppend(completions, c);
+        }
+        else
+          maybeAppend(completions, m2.name());
+    }
 
     // also files in same directory
-    completions += info.absoluteDir().entryList(QDir::Files, QDir::Name);
+    maybeAppend(completions, info.absoluteDir().entryList(QDir::Files, QDir::Name));
 
     // replace suffix to match the source
     const auto suffix = info.suffix();
@@ -1705,12 +1725,25 @@ void MediaGroupListWidget::renameFileAction() {
 
     int index = completions.indexOf(info.fileName());
 
+    bool ok = false;
     QString newName = QInputDialog::getItem(this, "Rename File", "New Name",
                                             completions, index, true, &ok);
 
     if (ok && newName != info.fileName()) {
       QString path = m.path();
-      if (_db->rename(m, newName)) updateMedia(path, m);
+      if (_db) {
+        if (_db->rename(m, newName)) updateMedia(path, m);
+        else qWarning() << "rename via database failed";
+      }
+      else {
+        QDir parentDir = info.dir();
+        if (parentDir.rename(info.fileName(), newName)) {
+          m.setPath(parentDir.absoluteFilePath(newName));
+          updateMedia(path, m);
+        }
+        else
+          qWarning() << "rename via filesystem failed";
+      }
     }
   }
 }
@@ -1719,50 +1752,47 @@ void MediaGroupListWidget::renameFolderAction() {
   const auto sel = selectedMedia();
   if (sel.count() != 1) return;
 
+  if (renameWarning()) return;
+
   const Media& m = sel[0];
 
   QStringList completions;
-  for (const auto& m : _list[_currentRow]) {
-    const auto it = m.attributes().find("group");
-    if (it != m.attributes().end()) completions += it.value();
-  }
 
-  for (const auto& m_ : _list[_currentRow])
-    if (QFile(m_.path()).exists() && m.path() != m_.path()) {
-      if (m.isArchived()) {
-        QString p, c;
-        m_.archivePaths(p, c);
-        completions += p;
-      } else {
-        completions += QFileInfo(m_.path()).dir().dirName();
-      }
+  if (m.isArchived()) { // first completion is selection
+    QString z, c;
+    m.archivePaths(z,c);
+    completions += QFileInfo(z).fileName();
+  }
+  else
+    completions += QFileInfo(m.path()).dir().dirName();
+
+//  for (const auto& ii : qAsConst(_list[_currentRow])) {
+//    const auto it = ii.attributes().find("group");
+//    if (it != ii.attributes().end())
+//      maybeAppend(completions, it.value());
+//  }
+
+  for (const auto& ii : qAsConst(_list[_currentRow])) {
+    if (ii.isArchived()) {
+      QString zipPath, childPath;
+      ii.archivePaths(zipPath, childPath);
+      const QFileInfo info(zipPath);
+      QString zipName = QFileInfo(zipPath).fileName();
+      if (!m.isArchived()) zipName = zipName.mid(0,zipName.lastIndexOf("."));
+      maybeAppend(completions, zipName);
+    } else {
+      QString dirName = QFileInfo(ii.path()).dir().dirName();
+      if (m.isArchived()) dirName += ".zip";
+      maybeAppend(completions, dirName);
     }
+  }
 
   bool ok = false;
-  QString newName = QInputDialog::getItem(this, "Rename Folder", "New Name",
+  QString newName = QInputDialog::getItem(this, "Rename Folder/Zip", "New Name",
                                           completions, 0, true, &ok);
-  if (m.isArchived()) {
-    QMessageBox::warning(this, "Unsupported", "Rename zip is unsupported");
-    return;
-  }
+  if (!ok) return;
 
-  QDir dir = QFileInfo(m.path()).dir();
-  if (ok) {
-    // if (_db && !_db->renameDir(dir.absolutePath(), newName))
-    //    QMessageBox::warning(this, "Rename Folder Failed", "Rename folder via
-    //    database failed, check log");
-    // else {
-
-    const QString oldName = dir.dirName();
-    if (dir.cdUp() && dir.rename(oldName, newName))
-      QMessageBox::information(
-          this, "Index Update Required",
-          "Folder was directly renamed and index must be updated");
-    else
-      QMessageBox::warning(this, "Rename Folder Failed",
-                           "Rename folder via filesystem failed, check log");
-    //}
-  }
+  moveDatabaseDir(m, newName);
 }
 
 bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
@@ -1782,18 +1812,60 @@ bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
   return true;
 }
 
+bool MediaGroupListWidget::renameWarning() {
+  if (!_db) {
+    auto button = QMessageBox::warning(
+        this, "Rename Without Database?",
+        "Renaming without a database will invalidate the index.",
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (button != QMessageBox::Yes) return true;
+  }
+  return false;
+}
+
 void MediaGroupListWidget::copyNameAction() {
   Media *selected, *other;
   if (!selectedPair(&selected, &other)) return;
 
-  const QString newName = QFileInfo(other->path()).completeBaseName() +
-                          "." + QFileInfo(selected->path()).suffix();
+  if (renameWarning()) return;
+
+  if (selected->isArchived()) {
+    qWarning() << "renaming archived files unsupported";
+    return;
+  }
+
+  const QFileInfo info(selected->path());
+  QString otherName;
+  if (other->isArchived()) {
+    QString zipPath;
+    other->archivePaths(zipPath,otherName);
+  }
+  else
+    otherName = other->name(); // fixme: should name() work with archives?
+
+  QString newName = QFileInfo(otherName).completeBaseName() +
+                          "." + info.suffix();
   const QString oldPath = selected->path();
-  if (_db && _db->rename(*selected, newName))
-    updateMedia(oldPath, *selected);
+  if (_db) {
+    if (_db->rename(*selected, newName))
+      updateMedia(oldPath, *selected);
+    else
+      qWarning() << "rename via database failed";
+  }
+  else {
+    QDir dir = info.dir();
+    if (dir.rename(oldPath, newName)) {
+      selected->setPath( dir.absoluteFilePath(newName) );
+      updateMedia(oldPath, *selected);
+    }
+    else
+      qWarning() << "rename via filesystem failed";
+  }
 }
 
 void MediaGroupListWidget::moveFileAction() {
+  Q_ASSERT(_db); // w/o db we don't have dir menu actions
+
   QAction* action = dynamic_cast<QAction*>(sender());
   if (!action) return;
 
@@ -1807,14 +1879,92 @@ void MediaGroupListWidget::moveFileAction() {
 
   for (Media& m : selectedMedia()) {
     QString path = m.path();
-    bool ok = false;
-    if (_db && m.isValid()) ok = _db->move(m, dirPath);
-    else {
-      const QString newPath = dirPath+"/"+QFileInfo(path).completeBaseName();
-      ok = QFile::rename(path, newPath);
-      if (ok) m.setPath(newPath);
+    if (_db->move(m, dirPath))
+      updateMedia(path, m);
+  }
+}
+
+void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& newName) {
+  QDir dir = QFileInfo(child.path()).dir();
+
+  QString newPath = newName;
+  QString absSrcPath = dir.absolutePath();
+  if (child.isArchived()) {
+    QString childPath;
+    child.archivePaths(absSrcPath, childPath);
+    dir = QFileInfo(absSrcPath).dir(); // dir otherwise may refer to a zip dir
+    if (!newPath.endsWith(".zip"))
+      newPath += ".zip";
+  }
+  else if (!dir.cdUp()) {
+    // use parent for direct rename/updating
+    qWarning() << "cdUp() failed";
+    return;
+  }
+
+  qDebug() << absSrcPath << "=>" << newPath;
+  QString absDstPath;
+  if (_db) {
+    absDstPath = QDir(_db->path()).absoluteFilePath(newPath);
+    if (!_db->moveDir(absSrcPath, newPath)) {
+      qWarning() << "rename folder via database failed";
+      return;
     }
-    if (ok) updateMedia(path, m);
+  } else {
+    // if newPath is relative assume it is a dir name,
+    // if newPath is a relative path we have a problem
+    QFileInfo newInfo(newPath);
+    if (newPath != newInfo.fileName()) {
+      qWarning() << "I don't know what dst path is relative to, use abs path?";
+      return;
+    }
+    absDstPath = dir.absoluteFilePath(newPath);
+    if (!dir.rename(absSrcPath, absDstPath)) {
+      qWarning() << "rename folder via filesystem failed" << absSrcPath << absDstPath;
+      return;
+    }
+  }
+
+  for (auto& g : _list)
+    for (auto& m : g)
+      if (m.path().startsWith(absSrcPath))
+        m.setPath(absDstPath + m.path().mid(absSrcPath.length()));
+
+  // updateItems() won't work since we may have changed window title
+  loadRow(_currentRow);
+}
+
+void MediaGroupListWidget::moveFolderAction() {
+  Q_ASSERT(_db); // w/o db we don't have dir menu actions
+
+  QAction* action = dynamic_cast<QAction*>(sender());
+  if (!action) return;
+
+  QString dirPath = action->data().toString();
+
+  if (dirPath == ";newfolder;")
+    dirPath =
+        QFileDialog::getExistingDirectory(this, "Choose Folder", _db->path());
+
+  if (dirPath.isEmpty()) return;
+
+  QSet<QString> moved;
+
+  for (Media& m : selectedMedia()) {
+    QString srcPath;
+    if (m.isArchived()) {
+      QString child;
+      m.archivePaths(srcPath, child);
+    }
+    else
+      srcPath = m.parentPath();
+
+    if (moved.contains(srcPath)) // already moved
+      continue;
+
+    const QString dstPath = dirPath + "/" + QFileInfo(srcPath).fileName();
+    moveDatabaseDir(m, dstPath);
+    moved += srcPath;
   }
 }
 

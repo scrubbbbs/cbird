@@ -75,14 +75,14 @@ class Database {
    */
   bool setMd5(Media& m, const QString& md5);
 
-  /// Move file without re-indexing
-  bool move(Media& m, const QString& newDir);
+  /// Move file to existing dir, preserving index
+  bool move(Media& m, const QString& dstDir);
 
-  /// Rename file without re-indexing
+  /// Rename file, preserving index
   bool rename(Media& m, const QString& newName);
 
-  /// Rename all files under a dir without re-indexing
-  bool renameDir(const QString& dirPath, const QString& newName);
+  /// move/rename dir or zip, preserving index
+  bool moveDir(const QString& dirPath, const QString& newName);
 
   /// Fast test if index contains file
   bool mediaExists(const QString& path);
@@ -173,7 +173,7 @@ class Database {
   /// when called there must not be any live instances of Database
   static void disconnectAll();
 
- private:
+private:
   /**
    * @return database connection for the current thread
    * @param id which database to use
@@ -228,8 +228,14 @@ class Database {
   /// @return the new path after moving file
   QString moveFile(const QString& srcPath, const QString& dstDir);
 
+  /// @return the new path after renaming file
+  QString renameFile(const QString& path, const QString& newName);
+
   /// write timestamp for modification detection
   void writeTimestamp();
+
+  /// modify paths in database and update the group
+  bool updatePaths(const MediaGroup& group, const QStringList& newPaths);
 
   /// Directory containing the indexed files and database file
   QString _indexDir;

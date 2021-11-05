@@ -661,8 +661,8 @@ void Database::vacuum() {
 }
 
 QString Database::moveFile(const QString& srcPath, const QString& dstDir) {
-  QFileInfo srcInfo(srcPath);
-  QFileInfo dstInfo(dstDir);
+  const QFileInfo srcInfo(srcPath);
+  const QFileInfo dstInfo(dstDir);
 
   if (!srcInfo.exists()) {
     qWarning() << "move failed: original does not exist:"
@@ -703,183 +703,180 @@ QString Database::moveFile(const QString& srcPath, const QString& dstDir) {
 }
 
 bool Database::move(Media& old, const QString& dstDir) {
-  Media m = mediaWithId(old.id());
-  if (!m.isValid()) return false;
-
-  // if file is archived, move *all* contents of archive
-  if (m.isArchived()) {
-    QString archivePath, childName;
-    m.archivePaths(archivePath, childName);
-    QString newArchivePath = moveFile(archivePath, dstDir);
-    if (newArchivePath.isEmpty()) return false;
-
-    const QString relOld = archivePath.mid(path().length() + 1);
-    QString like = relOld;
-    like.replace("%", "\\%").replace("_", "\\_");
-    like += ":%";
-    const MediaGroup g = mediaWithPathLike(like);
-
-    QSqlDatabase db(connect());
-    if (!db.transaction()) qFatal("db.transaction");
-
-    QSqlQuery query(db);
-
-    const QString relNew = newArchivePath.mid(path().length() + 1);
-
-    for (auto& mg : g) {
-      Q_ASSERT(mg.isArchived());
-
-      // db errors are non-fatal, recoverable since a re-index should pick up
-      // the moved files, assuming the error condition can be solved
-      if (!query.prepare("update media set path=:path where id=:id;")) {
-        qCritical() << "db update failed after move (prepare): %s"
-                    << query.lastError().text();
-        return false;
-      }
-
-      QString oldArchive, oldChild;
-      mg.archivePaths(oldArchive, oldChild);
-      QString newFilePath = Media::virtualPath(relNew, oldChild);
-
-      query.bindValue(":id", mg.id());
-      query.bindValue(":path", newFilePath);
-
-      if (!query.exec()) {
-        qCritical() << "db update failed after move (exec): %s"
-                    << query.lastError().text();
-        return false;
-      }
-
-      qInfo() << mg.path() << "=>" << newFilePath;
-    }
-
-    if (!db.commit()) {
-      qCritical() << "db.commit" << db.lastError().text();
-      return false;
-    }
-
-    old.setPath( Media::virtualPath(newArchivePath, childName) );
-
-  } else {
-    const QString newPath = moveFile(old.path(), dstDir);
-    if (newPath.isEmpty()) return false;
-
-    const QString relPath = newPath.mid(path().length() + 1);
-    QSqlQuery query(connect());
-
-    // db errors are non-fatal, recoverable since a re-index should pick up the
-    // moved files, assuming the error condition can be solved
-    if (!query.prepare("update media set path=:path where id=:id;")) {
-      qCritical() << "db update failed after move (prepare): %s"
-                  << query.lastError().text();
-      return false;
-    }
-
-    query.bindValue(":id", m.id());
-    query.bindValue(":path", relPath);
-
-    if (!query.exec()) {
-      qCritical() << "db update failed after move (exec): %s"
-                  << query.lastError().text();
-      return false;
-    }
-
-    old.setPath(newPath);
+  if (old.isArchived()) {
+    qWarning("archive member unsupported");
+    return false;
   }
 
-  return true;
+  const QString newPath = moveFile(old.path(), dstDir);
+  if (newPath.isEmpty()) return false;
+
+  const Media m = mediaWithId(old.id());
+  if (!m.isValid()) {
+    qWarning() << "skipping update since item is not in database" << m.id();
+    old.setPath(newPath);
+    return true;
+  }
+
+  const QString relPath = newPath.mid(path().length() + 1);
+
+  bool ok = updatePaths({m}, {relPath});
+  if (ok) old.setPath(newPath);
+  return ok;
 }
 
-bool Database::rename(Media& old, const QString& newName) {
-  QFileInfo info(old.path());
-
-  if (old.isArchived()) {
-    qWarning("cannot rename: archive member unsupported");
-    return false;
-  }
+QString Database::renameFile(const QString& srcPath, const QString& newName) {
+  const QFileInfo info(srcPath);
 
   if (!info.exists()) {
-    qWarning() << "cannot rename: original does not exist" << info.fileName();
-    return false;
+    qWarning() << "original does not exist" << info.fileName();
+    return "";
   }
 
   if (!info.path().startsWith(path())) {
-    qWarning("cannot rename: original is not a subfile of index");
-    return false;
+    qWarning("original is not a subfile of index");
+    return "";
   }
 
   QDir parent = info.dir();
   if (parent.exists(newName)) {
-    qWarning() << "cannot rename: new name exists " << parent.absoluteFilePath(newName) ;
-    return false;
+    qWarning() << "new name exists " << parent.absoluteFilePath(newName) ;
+    return "";
   }
 
   if (!parent.rename(info.fileName(), newName)) {
-    qCritical("rename failed: file system error");
-    return false;
+    qCritical("file system error");
+    return "";
   }
 
   qInfo() << "renamed file" << info.fileName() << "=>" << newName;
 
-  QString newPath = parent.absoluteFilePath(newName);
-  Q_ASSERT(newPath.startsWith(path()));
-  old.setPath(newPath);
+  return parent.absoluteFilePath(newName);
+}
+
+bool Database::rename(Media& old, const QString& newName) {
+  if (old.isArchived()) {
+    qWarning("archive member unsupported");
+    return false;
+  }
+
+  const QString absNewPath = renameFile(old.path(), newName);
+  if (absNewPath.isEmpty()) return false;
 
   Media m = mediaWithId(old.id());
 
   if (!m.isValid()) {
     qWarning() << "skipping update since item is not in database" << m.id();
+    old.setPath(absNewPath);
     return true;
   }
 
-  // store path relative to index root
-  newPath = newPath.mid(path().length() + 1);
+  const QString relNewPath = absNewPath.mid(path().length() + 1);
 
-  QSqlQuery query(connect());
+  bool ok = updatePaths({m}, {relNewPath});
+  if (ok) old.setPath(absNewPath);
+  return ok;
+}
 
-  if (!query.prepare("update media set path=:path where id=:id;")) {
-    qCritical() << "db update failed after rename (prepare): %s"
-                << query.lastError().text();
-    return false;
+bool Database::updatePaths(const MediaGroup& group, const QStringList& newPaths) {
+  // todo:: write locker
+  QSqlDatabase db(connect());
+  if (!db.transaction()) qFatal("db.transaction");
+
+  QSqlQuery query(db);
+
+  for (int i = 0; i < group.count(); ++i) {
+    const Media& m = group.at(i);
+    const QString& newPath = newPaths[i];
+    qDebug() << m.path() << "=>" << newPath;
+
+    if (!query.prepare("update media set path=:path where id=:id;")) {
+      qCritical() << "prepare failed: %s" << query.lastError().text();
+      qInfo() << "rollback:" << db.rollback();
+      return false;
+    }
+
+    query.bindValue(":id", m.id());
+    query.bindValue(":path", newPath);
+
+    if (!query.exec()) {
+      qCritical() << "exec failed: %s" << query.lastError().text();
+      qInfo() << "rollback:" << db.rollback();
+      return false;
+    }
   }
 
-  query.bindValue(":id", m.id());
-  query.bindValue(":path", newPath);
-
-  if (!query.exec()) {
-    qCritical() << "db update failed after rename (exec): %s"
-                << query.lastError().text();
+  if (!db.commit()) {
+    qCritical() << "db.commit" << db.lastError().text();
     return false;
   }
 
   return true;
 }
 
-bool Database::renameDir(const QString& dirPath, const QString& newName) {
-  QDir dir(dirPath);
+bool Database::moveDir(const QString& dirPath, const QString& newName) {
+  const QFileInfo info(dirPath);
+  QDir parent = info.dir();
+  // any relative path is presumed to be relative to the index
+  const QString absSrc = QDir(path()).absoluteFilePath(dirPath);
 
-  if (!dir.exists()) {
-    qWarning("renameDir: dir doesn't exist");
+  bool isZip = info.isFile() && Media::isArchive(dirPath);
+
+  if ( !info.exists() || !(info.isDir() || isZip) ) {
+    qWarning("src doesn't exist or is not a dir/zip");
     return false;
   }
 
-  // check new name doesn't exist
-  if (!dir.cdUp()) {
-    qWarning("renameDir: parent dir doesn't exist");
+  if (isZip && !Media::isArchive(newName)) {
+    qWarning("src is zip but dst is not a zip");
     return false;
   }
 
-  if (!dir.exists(newName)) {
-    qWarning("renameDir: destination exists");
+  if (!parent.exists()) {
+    qWarning("parent dir of src doesn't exist");
     return false;
   }
 
-  if (!dirPath.startsWith(path())) {
-    qWarning("renameDir: path isn't a subdir of index");
+  if (parent.exists(newName)) {
+    qWarning("dst exists");
     return false;
   }
 
-  return false;
+  if (!absSrc.startsWith(path())) {
+    qWarning("src is not a subdir of index");
+    return false;
+  }
+
+  const QString absDst = QDir(path()).absoluteFilePath(newName);
+  if (!absDst.startsWith(path())) {
+    qWarning() << "dst cannot be a subpath of index:" << absDst;
+    return false;
+  }
+
+  if (!parent.rename(absSrc, absDst)) {
+    qCritical() << "failed to rename dir/zip: filesystem error src=" << absSrc
+                << "dst=" << absDst;
+    return false;
+  }
+  qInfo() << "renamed: " << dirPath << "=>" << newName;
+
+  QDir indexDir(path());
+  QString oldPrefix = indexDir.relativeFilePath(absSrc);
+  QString newPrefix = indexDir.relativeFilePath(absDst);
+
+  // !! if prefix has wildcards we could update invalid items !!
+  QString like = oldPrefix;
+  like.replace("%", "\\%").replace("_", "\\_");
+  like += isZip ? ":%" : "/%";
+
+  MediaGroup oldNames = mediaWithPathLike(like);
+  if (oldNames.count() <= 0) return true;
+
+  QStringList newPaths;
+  for (auto& m : oldNames)
+    newPaths += newPrefix + m.path().mid(absSrc.length());
+
+  return updatePaths(oldNames, newPaths);
 }
 
 void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
@@ -1321,9 +1318,6 @@ MediaGroupList Database::similar(const SearchParams& params) {
       type++;
       flags >>= 1;
     }
-    qWarning() << queryTypes;
-//    for (int type : params.queryTypes)
-//      queryTypes << QString::number(type);
 
     QSqlQuery query(connect());
     query.setForwardOnly(true);
@@ -1412,7 +1406,6 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   f.waitForFinished();
   delete slice;
-
 
   qInfo("searched %d items and found %d matches in %dms", haystackSize,
          results.count(), int(QDateTime::currentMSecsSinceEpoch() - start));
