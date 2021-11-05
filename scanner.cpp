@@ -438,7 +438,7 @@ void Scanner::processOne() {
   // fixme: seems delay is no longer needed
   int delay = -1;
   if (!_videoQueue.empty())
-    delay = 1000;
+    delay = 10;
   else if (!_imageQueue.empty()) {
     // if we did not queue an image, sleep 1ms to reduce polling,
     // otherwise run immediately to top-up queue

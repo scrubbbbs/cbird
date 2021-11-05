@@ -641,7 +641,10 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
     do {
       int err = av_seek_frame(_p->format, _p->videoStream->index, seekTime,
                               AVSEEK_FLAG_BACKWARD);
-      Q_ASSERT(err >= 0);
+      if (err < 0) {
+        qCritical("av_seek_frame error %d", err);
+        return false;
+      }
 
       avcodec_flush_buffers(_p->videoStream->codec);
 

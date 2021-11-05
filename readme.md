@@ -37,7 +37,7 @@ Use Cases
 
 Format Support
 =========================
-Qt is used for images and FFmpeg is used for video. The formats available will depend on the configuration of Qt and FFmpeg.
+Qt is used for images and FFmpeg is used for videos. The formats available will depend on the configuration of Qt and FFmpeg.
 
 `cbird -about` lists the image and video extensions. Note that video extensions are not checked against FFmpeg at runtime, and codecs are not listed.
 
@@ -53,14 +53,18 @@ Installing
 =========================
 
 #### Linux AppImage 64-bit:
-- Download:
-- Chmod
-- foo.AppImage -install
+
+```
+wget https://
+chmod +x cbird-0.5.0-AppImage
+cbird-0.5.0-AppImage -install # optional, for tab completion
+```
+
 - Required packages: trash-cli
 - Optional packages: ocenaudio
 
 #### Windows 7+ 64-bit
-- Download: TODO
+- Download: https://
 - Unzip the distribution file and run the program
 - Install helpers (optional): vlc
 
@@ -111,13 +115,13 @@ Search Algorithms
 ====================
 
 #### Discrete Cosine Transform (DCT) Hash (`-p.alg dct`)
-Uses one 64-bit hash per image, similar to pHash. Very fast and good for rescaled images.
+Uses one 64-bit hash per image, similar to pHash. Very fast and good for rescaled images and lightly cropped images.
 
 #### DCT Features `-p.alg fdct`
-Uses DCT hashes around ORB features, up to 400 per image. Good for heavily cropped images, much faster than ORB features.
+Uses DCT hashes around features, up to 400 per image. Good for heavily cropped images, much faster than ORB.
 
 #### Oriented Rotated Brief (ORB) Features `-p.alg orb`
-Uses up to 400 256-bit features per image and searches using FLANN-based matcher. Good for rotated, cropped but slow.
+Uses up to 400 256-bit feature descriptors per image and searches using FLANN-based matcher. Good for rotated and cropped images, but slow.
 
 #### Color Histogram `-p.alg color`
 Uses Reduced-color histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` which is too slow except with `-similar-to`
@@ -126,7 +130,7 @@ Uses Reduced-color histogram of up to 32 colors (256-byte) per image. Sometimes 
 Uses DCT hashes of video frames, with some compression of nearby similar hashes. Frames are pre-processed to remove letterboxing.
 
 #### Template Matcher `-p.tm 1`
-Not a technically a search algorithm, but helps to refine results. Uses up to 1000 ORB features to find an affine transform between two images, and uses DCT hash of the mapped region to confirm. Since it requires decompressing the source/destination image it is extremely slow. It can help to reduce the maximum number of matches per image with `-p.mm #`
+Not a technically a search algorithm, but helps to refine results. Uses up to 1000 features to find an affine transform between two images, then uses DCT hash of the mapped region to validate. Since it requires decompressing the source/destination image it is extremely slow. It can help to reduce the maximum number of matches per image with `-p.mm #`
 
 How it Performs
 ====================
@@ -227,6 +231,7 @@ Wish List
 - console progress bar
 - error-log to file
 - removing items breaks symlinks to that item... ideally also track symlinks and update them
+- use idct scaling to speed up jpeg decompress
 
 ### Search	
 - csv output for other tools, gui wrappers
@@ -267,6 +272,7 @@ Minor Bugs
 - MGLW: suppress QIR eof warnings from thread cancellation
 - MGLW: load next row loses focus item on some systems (gnome?)
 - MGLW: template match (T) hides diff image / doesn't restore after reset (F5)
+- MGLW: rename folder doesn't update all affected viewer paths
 - Windows: titlebar/dialogs do not use native theme
 
 Compiling

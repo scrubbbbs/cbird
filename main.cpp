@@ -230,9 +230,9 @@ static int printUsage(int argc, char** argv) {
         HR
         H2 "-i.<key> value                  set index parameters"
         H2 "-i:<key> value                  (alternate)"
-        H2 "* all values are integers (0=disable, 1=enable)"
         H2 "* default value in [ ]"
         H2 "* alternate value in ( )"
+        H2 "* flag names are combined with +, e.g. -p.types i+v == -p.types 3"
         H2 "* must appear before -update to take effect"
         "%3"
 
@@ -257,7 +257,7 @@ static int printUsage(int argc, char** argv) {
         H2 "    <template>                  - replace entire string, must contain at least one capture"
         H2 "    <string>                    - replace whole-words/strings, may not contain any capture"
         H2 "    #0 #1 .. #n                 - capture: the nth capture from <find>, #0 captures the entire string"
-        H2 "    %%1                          - special: the sequence number, with automatic zero-padding"
+        H2 "    %n                          - special: the sequence number, with automatic zero-padding"
         H2 "    {arg:<func>[:<func>]...}    - special: transform arg (after capture/special expansion) with function(s)"
         H2 "<binop>                         logical operators for expressions (comparator)"
         H2 "    ==                          - equal to"
@@ -320,7 +320,7 @@ static int printUsage(int argc, char** argv) {
         H2 "create index in cwd             cbird -update"
         H2 "find exact duplicates           cbird -update -dups -show"
         H2 "find near duplicates            cbird -update -similar -show"
-        H2 "find near duplicates (video)    cbird -update -p.alg 4 -p.dht 7 -p.qt 2 -p.vpad 1000 -similar -show"
+        H2 "find near duplicates (video)    cbird -update -p.alg 4 -p.dht 7 -p.types 2 -p.vtrim 1000 -similar -show"
         H2 "group photo sets by month       cbird -select-type 1 -group-by exif:Photo.DateTimeOriginal:month -folders -show"
         H2 "browse items, 16 per page       cbird -select-all -max-per-page 16 -show"
         BR;
@@ -566,7 +566,7 @@ static void install(const QString& argv0, const QString& prefix) {
     "##### </cbird-completions> #####\n\n"
     ;
 
-  printf("install: Install cbird into %s ? Y/[N]: ",
+  printf("install: Install cbird into %s ? [y/N]: ",
           qUtf8Printable(prefix));
   char ch = inputChar('N');
   if (ch == 'Y' || ch == 'y') {
@@ -610,7 +610,7 @@ static void install(const QString& argv0, const QString& prefix) {
 
   const QString shell = getenv("SHELL");
   if (shell == "/bin/bash") {
-    printf("install: You seem to be using bash, install completions in ~/.bashrc? Y/[N]: ");
+    printf("install: You seem to be using bash, install completions in ~/.bashrc? [y/N]: ");
     char ch = inputChar('N');
     if ((ch == 'Y' || ch == 'y')) {
       QFile bashrc(QDir::home().filePath(".bashrc"));
@@ -721,7 +721,7 @@ Engine& engine() {
     qFlushOutput();
     printf("cbird: No index found. Pass -use <dir> to a valid location,\n"
            "       or pass -create/-update to skip this prompt.\n\n");
-    printf("cbird: Create index in {%s} ? [Y]/n : ",
+    printf("cbird: Create index in {%s} ? [Y/n] : ",
            qUtf8Printable(dir.absolutePath()));
     char choice = inputChar('Y');
     if (choice != 'Y' && choice != 'y') exit(0);
@@ -972,6 +972,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-dups-in") {
       params.set = selectPath(nextArg());
       params.inSet = true;
+      selection.clear();
       queryResult = engine().db->dupsByMd5(params);
       qInfo("dups-in: %d groups found", queryResult.count());
     } else if (arg == "-dup-nuke") {
@@ -995,11 +996,11 @@ int main(int argc, char** argv) {
       qInfo() << "dup-nuke: trashing (at most) one item from each group";
 
       qFlushOutput();
-      fprintf(stdout, "dup-nuke: %d items will be trashed, proceed Y/[N]: ", filtered.count());
+      fprintf(stdout, "dup-nuke: %d items will be trashed, proceed [y/N]: ", filtered.count());
       fflush(stdout);
       fflush(stdin);
       char ch = inputChar('N');
-      if (ch == 'Y') {
+      if (ch == 'Y' || ch == 'y') {
         int nuked = 0;
         MediaGroup toRemove;
         for (const MediaGroup& group : filtered) {
@@ -1023,11 +1024,11 @@ int main(int argc, char** argv) {
 
       if (selection.count() > 0) {
         qFlushOutput();
-        fprintf(stdout, "nuke: about to move %d items to trash, proceed? Y/[N]: ", selection.count());
+        fprintf(stdout, "nuke: about to move %d items to trash, proceed? [y/N]: ", selection.count());
         fflush(stdout);
         fflush(stdin);
         char ch = inputChar('N');
-        if (ch == 'Y') {
+        if (ch == 'Y' || ch == 'y') {
           engine().db->remove(selection);
 
           for (auto& m : selection)
@@ -1042,6 +1043,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-similar-in") {
       params.set = selectPath(nextArg());
       params.inSet = true;
+      selection.clear();
       queryResult = engine().db->similar(params);
     } else if (arg == "-similar-to") {
       const QString to = nextArg();
@@ -1214,6 +1216,7 @@ int main(int argc, char** argv) {
 
         Media::sortGroupList(list, "path");
       }
+      selection.clear();
       queryResult = list;
     } else if (arg == "-select-none") {
       selection.clear();
@@ -1265,8 +1268,6 @@ int main(int argc, char** argv) {
           qWarning() << "select-files: file not found:" << arg;
           continue;
         }
-        QString ext = info.suffix().toLower();
-
         if (info.isDir()) {
           qDebug() << "selected-files: listing dir (recursive):" << arg;
           const auto paths = QDir(arg).entryList(
@@ -1275,6 +1276,8 @@ int main(int argc, char** argv) {
           for (auto& path : paths) args.push_front(arg + "/" + path);
           continue;
         }
+
+        QString ext = info.suffix().toLower();
 
         if (engine().scanner->archiveTypes().contains(ext)) {
           const auto list = Media::listArchive(arg);
@@ -1295,7 +1298,7 @@ int main(int argc, char** argv) {
         else
           qWarning() << "select-files: unknown file type:" << arg;
 
-        if (type) selection.append(Media(arg, type));
+        if (type) selection.append(Media(info.absoluteFilePath(), type));
       }
     } else if (arg == "-select-grid") {
       const Media grid(nextArg());
@@ -1371,9 +1374,9 @@ int main(int argc, char** argv) {
         QString newName;
         if (findReplace) {
           newName = oldName;
-          newName = newName.replace(QRegularExpression(srcPat), dstPat);
-          if (newName.contains("%1"))
-            newName = newName.arg(num, pad, 10, QChar('0'));
+          newName.replace(QRegularExpression(srcPat), dstPat);
+          if (newName.contains("%n"))
+            newName.replace("%n", QString("%1").arg(num, pad, 10, QChar('0')));
           else if (newName == oldName) {
             if (options.indexOf("v") >= 0)
               qWarning("rename: <find> text (%s) doesn't match: <%s>",
@@ -1396,8 +1399,8 @@ int main(int argc, char** argv) {
             newName = newName.replace(placeholder, captured[i]);
           }
 
-          if (newName.contains("%1"))
-            newName = newName.arg(num, pad, 10, QChar('0'));
+          if (newName.contains("%n"))
+            newName.replace("%n", QString("%1").arg(num, pad, 10, QChar('0')));
         }
 
 
@@ -1465,7 +1468,7 @@ int main(int argc, char** argv) {
         qDebug() << m.path() << "->" << newNames[i];
         if (options.indexOf("x") < 0) continue;
         if (!engine().db->rename(m, newNames[i].split("/").back()))
-          qFatal("rename failed, update index?");
+          qFatal("rename failed, maybe index is stale...");
       }
 
       if (options.indexOf("x") >= 0)

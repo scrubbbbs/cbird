@@ -107,7 +107,7 @@ bool Params::Value::setFlags(const QVariant& v,
     int flags = intVal;
     for (auto& n : nv) flags &= ~n.value;
     if (!flags) {
-      member = flags;
+      member = intVal;
       return true;
     }
     symbols.append(QString::number(intVal));

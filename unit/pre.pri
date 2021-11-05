@@ -9,7 +9,6 @@ TARGET = runtest-$$TEST
 INCLUDEPATH += . .. ../..
 
 QTCORE_PRIVATE_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include/QtCore/$$QT_VERSION"
-message($$QTCORE_PRIVATE_HEADERS)
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
 MOC_DIR = _build 

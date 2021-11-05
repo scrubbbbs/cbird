@@ -55,7 +55,7 @@ class Params {
   void setValue(const QString& key, const QVariant& val) {
     auto it = _params.find(key);
     if (it == _params.end()) qWarning() << "invalid param:" << key;
-    if (!it->set(val)) qWarning() << "failed to set:" << key << "to:" << val;
+    else if (!it->set(val)) qWarning() << "failed to set:" << key << "to:" << val;
   }
 
   void print() const;

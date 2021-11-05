@@ -49,8 +49,11 @@ DEFINES += ENABLE_OPENCV
 #INCLUDEPATH += /usr/local/include
 
 # private headers for DebugEventFilter
-QTCORE_PRIVATE_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include/QtCore/$$QT_VERSION"
-message($$QTCORE_PRIVATE_HEADERS)
+QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
+!exists( $$QTCORE_PRIVATE_HEADERS ) {
+    message("$${QTCORE_PRIVATE_HEADERS}/")
+    error("Can't find path to qtcore private headers")
+}
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
 win32 {
