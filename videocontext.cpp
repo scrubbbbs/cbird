@@ -330,11 +330,13 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
   // av_dump_p->format(fmt, 0, NULL, 0);
   int videoStreamIndex = -1;
+  int audioStreamIndex = -1;
   for (unsigned int i = 0; i < _p->format->nb_streams; i++) {
     AVStream* stream = _p->format->streams[i];
     const AVCodecContext* context = stream->codec;
 
     if (context->codec_type == AVMEDIA_TYPE_VIDEO) {
+      if (videoStreamIndex >= 0) continue;
       videoStreamIndex = int(i);
       _metadata.isEmpty = false;
 
@@ -347,6 +349,8 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       if (vCodec) _metadata.videoCodec = vCodec->name;
 
     } else if (context->codec_type == AVMEDIA_TYPE_AUDIO) {
+      if (audioStreamIndex >= 0) continue;
+      audioStreamIndex = int(i);
       _metadata.isEmpty = false;
       _metadata.audioBitrate = int(context->bit_rate);
       _metadata.sampleRate = context->sample_rate;
