@@ -453,6 +453,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       PAIR(isArchived),
       PAIR(archiveCount),
       { "res",     [](const Media& m) { return qMax(m.width(),m.height()); } },
+      { "relPath", [](const Media& m) { return QDir().relativeFilePath(m.path()); }},
       { "archive", [](const Media& m) {
           if (m.isArchived()) {
             QString a, t;
@@ -461,6 +462,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
           }
           return QString();
       }},
+
       /// todo: attr(), VideoContext::metadata
   });
 
