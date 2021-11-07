@@ -107,10 +107,14 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
     flush(false);
   }
 
-  if (_imageQueue.count() > 0 || _videoQueue.count() > 0)
+  if (_imageQueue.count() > 0 || _videoQueue.count() > 0) {
+    qInfo() << "scan completed, indexing additions...";
     QTimer::singleShot(1, this, &Scanner::processOne);
-  else
+  }
+  else {
+    qInfo() << "scan completed, nothing to index";
     QTimer::singleShot(1, this, [&] { emit scanCompleted(); });
+  }
 }
 
 void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
@@ -217,8 +221,10 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         _existingFiles++;
         continue;
       }
-      else
+      else {
+        //qDebug() << "modified:" << path;
         _modifiedFiles++;
+      }
     }
 
     if (entry.isFile() && !_activeWork.contains(path)) {
@@ -489,7 +495,7 @@ void Scanner::processFinished() {
   w->deleteLater();
 
   if (_activeWork.empty() && _imageQueue.empty() && _videoQueue.empty()) {
-    qInfo() << "scan completed";
+    qInfo() << "indexing completed";
     emit scanCompleted();
   }
 }

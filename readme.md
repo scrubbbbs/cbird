@@ -124,7 +124,7 @@ Uses DCT hashes around features, up to 400 per image. Good for heavily cropped i
 Uses up to 400 256-bit feature descriptors per image and searches using FLANN-based matcher. Good for rotated and cropped images, but slow.
 
 #### Color Histogram `-p.alg color`
-Uses Reduced-color histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` which is too slow except with `-similar-to`
+Uses histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` which is too slow except with `-similar-to`
 
 #### DCT Video Index `-p.alg video`
 Uses DCT hashes of video frames, with some compression of nearby similar hashes. Frames are pre-processed to remove letterboxing.
@@ -154,7 +154,7 @@ Arguments | Note | Time (seconds)
 
 ### Searching
 
-Search speed varies with algorithm. The OpenCV search tree for ORB is quite slow compared to others. It is better suited for `similar-to` to search a subset.
+Search speed varies with algorithm. The OpenCV search tree for ORB is quite slow compared to others. It is better suited for `-similar-to` to search a subset.
 
 #### Table 2: Searching 1000 images
 
@@ -167,7 +167,7 @@ Arguments             | Note          | Time (ms)
 
 ### Large Datasets
 
-Indexing large sets benefits from disabling algorithms.
+Indexing large sets of smaller images benefits from disabling algorithms.
 
 #### Table 3: Indexing 500k 400px images in 100 zip files, 39GB, NAS
 

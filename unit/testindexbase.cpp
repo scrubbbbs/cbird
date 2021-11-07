@@ -93,8 +93,9 @@ void TestIndexBase::baseTestEmpty(Index* index) {
 
   const QString path = indexDir.path() + "/empty.png";
   Media m = (Scanner().processImage(path, "md5", img)).media;
-  db.add({m});
-  m = db.mediaWithPath(path);
+  MediaGroup g{m};
+  db.add(g);
+  m = g[0];
   QVERIFY(m.id() != 0);
 
   db.remove(m.id());

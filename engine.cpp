@@ -84,23 +84,40 @@ void Engine::commit() {
   // add the same file. If processes work on different subtrees this won't happen.
   if (_batch.count() > 0) {
      db->add(_batch);
+     //for (const auto& m : qAsConst(_batch))
+     //  qDebug() << "added id: " << m.id() << m.path();
     _batch.clear();
   }
 }
 
 void Engine::update(bool wait) {
-  // find new and removed files
-  // fixme: find modified files
   QSet<QString> skip = db->indexedFiles();
 
+  // if the stored database paths are not canonical there
+  // is a bug somewhere, though not fatal it will prevent
+  // updating correctly
+  for (auto& path : qAsConst(skip)) {
+    QFileInfo info(path);
+    if ( (info.exists() && info.canonicalFilePath() != path) ||
+        path.contains("//") ) {
+      qCritical("invalid path in database:\n\tcanonical=%s\n\tdatabase =%s",
+             qUtf8Printable(QFileInfo(path).canonicalFilePath()), qUtf8Printable(path));
+    }
+  }
   scanner->scanDirectory(db->path(), skip, db->lastAdded());
 
   QVector<int> toRemove;
-
   if (skip.count() > 0) {
     qInfo("removing %d files from index", skip.count());
-    for (const QString& path : skip)
-      toRemove.append(db->mediaWithPath(path).id());
+    for (const auto& path : qAsConst(skip)) {
+      const Media m = db->mediaWithPath(path);
+      if (!m.isValid()) {
+        qWarning() << "attempting to remove non-indexed path:" << path;
+        continue;
+      }
+      //qDebug() << "removing id:" << m.id() << path;
+      toRemove.append(m.id());
+    }
   }
 
   // check for missing external index data, (currently only video index)
