@@ -1620,7 +1620,10 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
 
       if (_db) {
         if (m.isArchived()) {
-            MediaGroup zipGroup = _db->mediaWithPathLike(path + "%");
+            QString like = path;
+            like.replace("%", "\\%").replace("_", "\\_");
+            like += ":%";
+            MediaGroup zipGroup = _db->mediaWithPathLike(like);
             _db->remove(zipGroup);
         } else {
           _db->remove(group[index].id());
@@ -1757,15 +1760,21 @@ void MediaGroupListWidget::renameFolderAction() {
   const Media& m = sel[0];
 
   QStringList completions;
+  QDir parentDir;
 
   if (m.isArchived()) { // first completion is selection
     QString z, c;
     m.archivePaths(z,c);
-    completions += QFileInfo(z).fileName();
+    QFileInfo info(z);
+    completions += info.fileName();
+    parentDir = info.dir();
   }
-  else
-    completions += QFileInfo(m.path()).dir().dirName();
-
+  else {
+    QFileInfo info(m.path());
+    completions += info.dir().dirName();
+    parentDir = info.dir();
+    parentDir.cdUp();
+  }
 //  for (const auto& ii : qAsConst(_list[_currentRow])) {
 //    const auto it = ii.attributes().find("group");
 //    if (it != ii.attributes().end())
@@ -1792,7 +1801,9 @@ void MediaGroupListWidget::renameFolderAction() {
                                           completions, 0, true, &ok);
   if (!ok) return;
 
-  moveDatabaseDir(m, newName);
+  // new path is not index-relative...pass absolute
+  QString newPath = parentDir.absoluteFilePath(newName);
+  moveDatabaseDir(m, newPath);
 }
 
 bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
