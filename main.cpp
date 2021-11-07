@@ -277,6 +277,7 @@ static int printUsage(int argc, char** argv) {
         H2 "    type                        - 1=image,2=video,3=audio"
         H2 "    path                        - file path"
         H2 "    parentPath                  - parent path (dirpath)"
+        H2 "    relPath                     - relative file path to cwd"
         H2 "    name                        - file name"
         H2 "    archivePath                 - archive/zip path, or empty"
         H2 "    suffix                      - file suffix"
@@ -708,7 +709,7 @@ class Comparator {
 // globals for lazy init
 static bool checkIndexPathExists = true;
 
-QString& indexPath() {
+static QString& indexPath() {
   static auto* s = new QString;
   return *s;
 }
@@ -729,6 +730,35 @@ Engine& engine() {
   if (!instance)
     instance = new Engine(indexPath(), IndexParams());
   return *instance;
+}
+
+static void nuke(const MediaGroup& group) {
+  engine().db->remove(group);
+  QSet<QString> zips;  // ask to delete each zip once
+  bool yesAll = false; // don't ask again
+  for (auto& m : qAsConst(group)) {
+    QString path = m.path();
+    if (m.isArchived()) {
+      QString child;
+      m.archivePaths(path, child);
+
+      if (zips.contains(path)) continue;
+      zips.insert(path);
+
+      if (!yesAll) {
+        qFlushOutput();
+        fprintf(stdout, "\nnuke: %s\nnuke: zips cannot be modified, trash entire zip? [y/N/a]: ",
+                qUtf8Printable(m.path()));
+        fflush(stdout);
+        fflush(stdin);
+        char ch = inputChar('N');
+        if (ch == 'a' || ch == 'A') yesAll = true;
+        else if (ch != 'Y' && ch != 'y') continue;
+      }
+    }
+    if (!DesktopHelper::moveToTrash(path)) exit(-1);
+  }
+  qInfo() << group.count() << "nuked";
 }
 
 int main(int argc, char** argv) {
@@ -990,10 +1020,8 @@ int main(int argc, char** argv) {
         for (const Media& m : g)
           if (m.path().startsWith(path)) filtered.append(g);
 
-      qInfo() << "dup-nuke:" << filtered.count() << "duplicate groups";
+      qInfo() << "dup-nuke:" << filtered.count() << "duplicates";
       if (filtered.count() <= 0) continue;
-
-      qInfo() << "dup-nuke: trashing (at most) one item from each group";
 
       qFlushOutput();
       fprintf(stdout, "dup-nuke: %d items will be trashed, proceed [y/N]: ", filtered.count());
@@ -1010,11 +1038,11 @@ int main(int argc, char** argv) {
           for (const Media& m : group)
             if (m.path().startsWith(path)) {
               toRemove.append(m);
-              DesktopHelper::moveToTrash(m.path());
-              nuked++;
               break;
             }
         }
+
+        nuke(toRemove);
 
         qInfo("dup-nuke: %d nuked, updating db", nuked);
         engine().db->remove(toRemove);
@@ -1024,17 +1052,13 @@ int main(int argc, char** argv) {
 
       if (selection.count() > 0) {
         qFlushOutput();
-        fprintf(stdout, "nuke: about to move %d items to trash, proceed? [y/N]: ", selection.count());
+        fprintf(stdout, "\nnuke: about to move %d items to trash, proceed? [y/N]: ", selection.count());
         fflush(stdout);
         fflush(stdin);
         char ch = inputChar('N');
         if (ch == 'Y' || ch == 'y') {
-          engine().db->remove(selection);
-
-          for (auto& m : selection)
-            if (!DesktopHelper::moveToTrash(m.path())) exit(-1);
-
-          qInfo() << selection.count() << "nuked";
+          nuke(selection);
+          selection.clear();
         }
       } else
         qInfo() << "-nuke: nothing selected";
@@ -1926,7 +1950,8 @@ int main(int argc, char** argv) {
       engine().db->vacuum();
     } else if (arg == "-test-add-video") {
       IndexResult result = engine().scanner->processVideoFile(nextArg());
-      if (result.ok) engine().db->add({result.media});
+      MediaGroup media{result.media};
+      if (result.ok) engine().db->add(media);
     } else if (arg == "-compare-videos") {
       Media left(nextArg(), Media::TypeVideo);
       Media right = left;
