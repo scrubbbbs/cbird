@@ -59,7 +59,7 @@ class Database {
    * @note all-or-nothing operation, using sql transactions
    * @note larger groups seem to be more efficient, usually
    */
-  void add(const MediaGroup& media);
+  void add(MediaGroup& media);
 
   /**
    * Remove media from the index, physical media is not deleted

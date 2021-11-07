@@ -333,7 +333,7 @@ void Database::writeTimestamp() {
   f.write(qPrintable(date));
 }
 
-void Database::add(const MediaGroup& inMedia) {
+void Database::add(MediaGroup& inMedia) {
 
   uint64_t then = nanoTime();
   uint64_t now;
@@ -361,7 +361,7 @@ void Database::add(const MediaGroup& inMedia) {
   }
 
   MediaGroup media;
-  for (const Media& m : inMedia) {
+  for (const Media& m : qAsConst(inMedia)) {
     Q_ASSERT(!m.path().isEmpty());
     Q_ASSERT(!m.md5().isEmpty());
     Q_ASSERT(m.path().startsWith(path()));
@@ -371,7 +371,7 @@ void Database::add(const MediaGroup& inMedia) {
     //if (existingPaths.contains(m.path()))
     //  qWarning() << "attempt to add existing path, ignoring" << m.path();
     //else
-      media.append(m);
+    media.append(m);
   }
 
   std::sort(media.begin(), media.end(), [](const Media& a, const Media& b) {
@@ -394,8 +394,6 @@ void Database::add(const MediaGroup& inMedia) {
 
     QVariantList id, type, relPath, width, height, md5, dctHash;
     for (Media& m : media) {
-      //    uint64_t then = nanoTime();
-
       m.setId(mediaId);
       mediaId++;
 
@@ -406,30 +404,6 @@ void Database::add(const MediaGroup& inMedia) {
       height.append(m.height());
       md5.append(m.md5());
       dctHash.append(qlonglong(m.dctHash()));
-
-      /*
-      //QString relPath = m.path().mid(path().length() + 1);
-
-      query.bindValue(":type", m.type());
-      query.bindValue(":path", relPath);
-      query.bindValue(":width", m.width());
-      query.bindValue(":height", m.height());
-      query.bindValue(":md5", m.md5());
-      query.bindValue(":phash_dct", qlonglong(m.dctHash()));
-
-      if (!query.exec()) {
-        qCritical("\n\n--------- query error ---------\n\n");
-        Media::print(m);
-        SQL_FATAL(exec);
-      }
-
-      if (!query.lastInsertId().isValid())
-        qFatal("query.lastInsertId doesn't work");
-
-      QVariant mediaId = query.lastInsertId();
-      */
-
-
 
   #ifdef ENABLE_KEYPOINTS_DB
       foreach (const cv::KeyPoint& kp, m.keyPoints()) {
@@ -475,6 +449,8 @@ void Database::add(const MediaGroup& inMedia) {
     if (!query.execBatch()) SQL_FATAL(exec)
   }
 
+  inMedia = media;
+
   now = nanoTime();
   uint64_t w1 = now-then;
   then=now;
@@ -506,8 +482,6 @@ void Database::add(const MediaGroup& inMedia) {
               (int)(w2/1000000),
               (int)(w3/1000000),
               (int)((w0+w1+w2+w3)/1000000));
-
-  return;
 }
 
 bool Database::setMd5(Media& m, const QString& md5) {
@@ -779,6 +753,13 @@ bool Database::rename(Media& old, const QString& newName) {
 }
 
 bool Database::updatePaths(const MediaGroup& group, const QStringList& newPaths) {
+
+  for (auto& path : newPaths)
+    if (newPaths.contains("//")) { // relative, canonical path required!
+      qCritical() << "invalid path:" << path;
+      return false;
+    }
+
   // todo:: write locker
   QSqlDatabase db(connect());
   if (!db.transaction()) qFatal("db.transaction");
