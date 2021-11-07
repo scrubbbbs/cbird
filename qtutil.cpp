@@ -998,7 +998,7 @@ MessageLog::MessageLog() {
         QByteArray utf8 = output.toUtf8();
         fwrite(utf8.data(), utf8.length(), 1, stdout);
         // we only need to flush if \r is present;
-        // windows always flushes, or it buffers forever
+        // windows buffers forever until flushed
 #ifndef Q_OS_WIN
         if (pl > 0)
 #endif
@@ -1028,10 +1028,18 @@ void MessageLog::append(const QString &msg) {
 }
 
 void MessageLog::flush() {
+  // prefer thread to write the logs since it handles things
   QMutexLocker locker(&mutex);
+  while (log.count() > 0 && thread->isRunning()) {
+    locker.unlock();
+    qApp->processEvents();
+    locker.relock();
+  }
+  // ensure all logs are written
   QByteArray utf8;
   while (log.count() > 0)
     utf8 += (log.takeFirst() + "\n").toUtf8();
   fwrite(utf8.data(), utf8.length(), 1, stdout);
+
   fflush(stdout);
 }
