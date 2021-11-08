@@ -1,7 +1,7 @@
 
 About cbird
 =========================
-cbird is a command-line program for managing a media collection, with focus on Content-Based Image Retrieval (Computer Vision) methods for de-duplication.
+cbird is a command-line program for managing a media collection, with focus on Content-Based Image Retrieval (Computer Vision) methods for finding duplicates.
 
 The main features are:
 
@@ -52,19 +52,21 @@ cbird is free software under the GPL v2. See COPYING file for details.
 Installing
 =========================
 
+### Binary Packages
+
+	https://github.com/scrubbbbs/cbird/releases
+
 #### Linux AppImage 64-bit:
 
 ```
-wget https://
-chmod +x cbird-0.5.0-AppImage
-cbird-0.5.0-AppImage -install # optional, for tab completion
+chmod +x cbird-linux-0.5.0-x86_64.AppImage
+./cbird-linux-0.5.0-AppImage -install # install to /usr/local
 ```
 
 - Required packages: trash-cli
 - Optional packages: ocenaudio
 
 #### Windows 7+ 64-bit
-- Download: https://
 - Unzip the distribution file and run the program
 - Install helpers (optional): vlc
 
@@ -73,6 +75,8 @@ Running
 
 #### Get Help
 
+ [CLI reference (v0.5.0)](https://gist.github.com/scrubbbbs/4c65058c054822d4f279c00f53ddd3aa)
+ 
 `cbird -help | less`
 
 #### Index the files in `<path>`
@@ -354,7 +358,7 @@ Use a virtual machine (I use qemu) with xubuntu 18.04 lts, target CPU "Westmere"
 #### apt packages
 
 ```
-sudo apt-get install bison build-essential gperf flex ruby python git mercurial cmake nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev libncurses5-dev
+sudo apt-get install bison build-essential gperf flex ruby python git mercurial cmake nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev libncurses5-dev libfribidi-dev
 
 sudo apt-get install libxcb*-dev libx11*-dev libxext-dev libxfixes-dev libxi-dev libxcd*-dev libxkb*-dev libxrender-dev libfontconfig1-dev libfreetype6-dev libdrm-dev libegl1-mesa-dev libxcursor-dev libxcomposite-dev libxdamage-dev libxrandr-dev libfontconfig1-dev libxss-dev libevent-dev 
 ```
@@ -399,7 +403,7 @@ make && sudo make install
 git clone https://github.com/FFmpeg/FFmpeg.git
 cd FFmpeg
 git checkout 358c0b
-./configure --enable-gpl --enable-ffplay --enable-cuvid --disable-static --enable-shared
+./configure --enable-gpl --enable-ffplay --enable-cuvid --enable-libfontconfig --enable-libfreetype --enable-libfribidi  --disable-static --enable-shared
 make -j8
 sudo make install
 ```
