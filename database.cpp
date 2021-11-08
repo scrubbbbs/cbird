@@ -267,6 +267,9 @@ Database::Database(const QString& path_) {
   QDir dir = QDir::current();
   if (path_ != "") dir = QDir(path_);
 
+  if (!dir.exists())
+    qFatal("directory does not exist: \"%s\"",
+           qUtf8Printable(dir.absolutePath()));
   _indexDir = dir.absolutePath();
 
   qDebug() << "loading from" << _indexDir;
@@ -275,9 +278,11 @@ Database::Database(const QString& path_) {
   // an index for columns of the "media" table (in setup())
   memset(&_mediaIndex, 0xFF, sizeof(_mediaIndex));
 
-  Q_ASSERT(dir.mkpath(path()));
+  if (!dir.mkpath(indexPath()))
+    qFatal("failed to create index folder: \"%s\"",
+           qUtf8Printable(indexPath()));
+
   Q_ASSERT(dir.mkpath(cachePath()));
-  // Q_ASSERT(dir.mkpath(tmpPath()));
   Q_ASSERT(dir.mkpath(videoPath()));
 }
 
