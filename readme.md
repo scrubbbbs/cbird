@@ -1,3 +1,4 @@
+![](screenshot.png)
 
 About cbird
 =========================
