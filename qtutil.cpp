@@ -857,11 +857,14 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
                           .arg(msg)
                           .arg(reset);
 
-    MessageLog::instance().append(logLine);
-
-    if (type == QtFatalMsg) { // we are going to abort() next or debug break
+    // we are going to abort() next or debug break; we cannot
+    // rely on qFlushOutput to work after appending the line
+    if (type == QtFatalMsg) {
       qFlushOutput();
-      fprintf(stdout, "\n\n");
+      fprintf(stdout, "\n%s\n\n", qUtf8Printable(logLine));
+    }
+    else {
+      MessageLog::instance().append(logLine);
     }
 
     // logLine += "\n";
@@ -1014,7 +1017,7 @@ MessageLog::~MessageLog() {
   stop = true;
   cond.wakeAll();
   thread->wait();
-  qFlushOutput();
+  flush();
   fprintf(stdout, "\n"); // last output might have no trailing "\n"
   fflush(stdout);
 }
@@ -1032,6 +1035,7 @@ void MessageLog::flush() {
   QMutexLocker locker(&mutex);
   while (log.count() > 0 && thread->isRunning()) {
     locker.unlock();
+    cond.wakeAll();
     qApp->processEvents();
     locker.relock();
   }
