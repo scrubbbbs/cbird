@@ -254,16 +254,15 @@ QString Media::greatestPathPrefix(const MediaGroupList& gl) {
   QStringList list;
   // fixme: path could be http:// or @tag or data-url://
   for (const MediaGroup& g : gl)
-    for (const Media& m : g)
-      if (m.path().startsWith("/")) list.append(m.path());
+    list.append(greatestPathPrefix(g));
   return greatestPrefix(list);
 }
 
-QString Media::greatestPathPrefix(const MediaGroup& group) {
+QString Media:: greatestPathPrefix(const MediaGroup& group) {
   // fixme: path could be http:// or @tag or data-url://
   QStringList list;
   for (const Media& m : group)
-    if (m.path().startsWith("/")) list.append(m.path());
+    if (QFileInfo(m.path()).isAbsolute()) list.append(m.path());
   return greatestPrefix(list);
 }
 
