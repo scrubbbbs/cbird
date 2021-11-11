@@ -1896,7 +1896,7 @@ int main(int argc, char** argv) {
             QString path = it.key();
             if (!Media(path).isArchived()) {
               path = path.replace("\"", "\\\"");
-              QString cmd = QString("%s \"%1\"").arg(jpegFixPath).arg(path);
+              QString cmd = QString("%1 \"%2\"").arg(jpegFixPath).arg(path);
               if (0 != system(qPrintable(cmd)))
                 qWarning() << "jpeg repair script failed";
             }
