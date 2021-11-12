@@ -57,8 +57,11 @@ size_t DctHashIndex::memoryUsage() const {
 
 void DctHashIndex::buildTree() {
   delete _tree;
-  _tree = new DctTree;
-  _tree->create(_hashes, _mediaId, _numHashes);
+  _tree = nullptr;
+  if (_numHashes > 0) {
+    _tree = new DctTree;
+    _tree->create(_hashes, _mediaId, _numHashes);
+  }
 }
 
 void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath,
@@ -164,6 +167,11 @@ QVector<Index::Match> DctHashIndex::find(const Media& m,
   uint64_t target = hashForMedia(m);
   if (!target) {
     qWarning() << "no hash for needle:" << m.path();
+    return results;
+  }
+
+  if (!_tree) {
+    qWarning() << "empty/null tree";
     return results;
   }
 // todo: maybe use brute if threshold is high
