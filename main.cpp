@@ -1976,15 +1976,19 @@ int main(int argc, char** argv) {
 
       bool display = false;
       bool loop = false;
+      bool scale = false;
+      bool crop = false;
       while (args.count() > 0) {
         arg = nextArg();
-        if (arg == "-show") display = true;
+        if (arg == "-show") { display = true; scale = true; }
         else if (arg == "-loop") loop = true;
         else if (arg == "-rgb") opt.rgb = 1;
         else if (arg == "-maxw") opt.maxW = intArg(nextArg());
         else if (arg == "-maxh") opt.maxH = intArg(nextArg());
         else if (arg == "-device") opt.deviceIndex = intArg(nextArg());
         else if (arg == "-fast") opt.fast = true;
+        else if (arg == "-scale") scale = true;
+        else if (arg == "-crop") { crop = true; scale = true; }
         else qFatal("unknown arg to -test-video-decoder");
       }
 
@@ -1993,7 +1997,7 @@ int main(int argc, char** argv) {
 
       auto timing=[&]() {
         numFrames++;
-        if (numFrames > 100) {
+        if (numFrames > 1000) {
           qint64 now = QDateTime::currentMSecsSinceEpoch();
           qInfo() << numFrames * 1000.0f / (now - then) << "frames/second";
           then = now;
@@ -2001,31 +2005,35 @@ int main(int argc, char** argv) {
         }
       };
 
-      if (display) {
-        QLabel* label = new QLabel;
-        QImage img;
-        do {
-          VideoContext video;
-          Q_ASSERT(0 == video.open(path, opt));
-          then = QDateTime::currentMSecsSinceEpoch();
-          numFrames = 0;
-          while (video.nextFrame(img)) {
-            label->setPixmap(QPixmap::fromImage(img));
-            label->show();
-            qApp->processEvents();
-            timing();
-          }
-        } while (loop);
-
-        continue;
-      }
+      QLabel* label = nullptr;
+      if (display) label = new QLabel;
 
       do {
         VideoContext video;
         Q_ASSERT(0 == video.open(path, opt));
         then = QDateTime::currentMSecsSinceEpoch();
         numFrames = 0;
-        while (video.decodeFrame()) timing();
+        if (scale) {
+          QImage img;
+          QImage out;
+          while (video.nextFrame(img)) {
+            if (crop) {
+              cv::Mat m1;
+              qImageToCvImg(img, m1);
+              autocrop(m1);
+              cvImgToQImage(m1, out);
+            }
+            else out = img;
+            if (display) {
+              label->setPixmap(QPixmap::fromImage(out));
+              label->show();
+              qApp->processEvents();
+            }
+            timing();
+          }
+        }
+        else
+          while (video.decodeFrame()) timing();
         video.seekFast(0);
       } while(loop);
 
