@@ -441,6 +441,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       PAIR(path),
       PAIR(parentPath),
       PAIR(name),
+      PAIR(completeBaseName),
       PAIR(suffix),
       PAIR(score),
       PAIR(width),

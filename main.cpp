@@ -92,7 +92,7 @@ static void printLicense() {
       H2 CBIRD_HOMEPAGE
       H2 "Licensed to you under the GNU GPL version 2 http://www.gnu.org/licenses"
       H2
-      H2 "cbird is free software; you are free to modify an distribute it."
+      H2 "cbird is free software; you are free to modify and distribute it."
       H2 "There is NO WARRANTY, to the extent permitted by law."
       H2
       HR
@@ -279,6 +279,7 @@ static int printUsage(int argc, char** argv) {
         H2 "    parentPath                  - parent path (dirpath)"
         H2 "    relPath                     - relative file path to cwd"
         H2 "    name                        - file name"
+        H2 "    completeBaseName            - file name w/o suffix"
         H2 "    archivePath                 - archive/zip path, or empty"
         H2 "    suffix                      - file suffix"
         H2 "    isArchived                  - 1 if archive member"

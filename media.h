@@ -255,6 +255,7 @@ class Media {
   QString parentPath() const { return path().left(path().lastIndexOf("/")); }
   QString name() const { return path().mid(path().lastIndexOf("/") + 1); }
   QString suffix() const { return path().mid(path().lastIndexOf(".") + 1); }
+  QString completeBaseName() const { QString s=name(); return s.mid(0, s.lastIndexOf(".")); }; // w/o suffix
 
   /**
    * MIME content type, provided by the source
