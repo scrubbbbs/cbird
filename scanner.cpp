@@ -68,6 +68,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   _existingFiles = 0;
   _ignoredFiles = 0;
   _modifiedFiles = 0;
+  _processedFiles = 0;
   _modifiedSince = modifiedSince;
   readDirectory(path, expected);
   scanProgress(path);
@@ -362,8 +363,9 @@ void Scanner::processOne() {
   if (_videoQueue.empty()) {
     queueLimit = _params.writeBatchSize;
 
-    if (_activeWork.count() < _params.indexThreads &&
-        _imageQueue.size() > queueLimit)
+    if (_activeWork.count() < _params.indexThreads && // not enough work queued
+        _imageQueue.size() > queueLimit && // there is enough available
+        _processedFiles > queueLimit) // we have already processed some
       qWarning() << "worker starvation, maybe increase writeBatchSize (-i.bsize)";
   }
 
@@ -465,7 +467,8 @@ void Scanner::processFinished() {
     // if cancelled we cannot call .result()
     result.path = w->property("path").toString();
     result.ok = false;
-  } else {
+  } else {    
+    _processedFiles++;
     result = w->future().result();
     Media& m = result.media;
     if (result.ok) emit mediaProcessed(m);

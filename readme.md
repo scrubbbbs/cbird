@@ -215,13 +215,11 @@ Wish List
 =========================
 
 ### Command-Line
-- "-require" to abort if there is no index present, or "-create" to enable creation
-- "-use" special ****to find root index in the parent (tree)
-- symbolic names for enumerations (e.g. "v" == video)
+- "-use" special notation to find root index in the parent (tree)
+- symbolic names for all enumerations (e.g. "v" == video)
 - disable/reduce logging (-verbose, -quiet etc)
-- display current (applicable?) parameter values (-params)
 - presets for multiple parameters
-- move/link files rather than delete
+- move/link files rather than delete/rename
 - prune groups, keeping/ignoring needle
 - rename folders based on filenames
 - copy or sync exif data with matching images
@@ -237,11 +235,19 @@ Wish List
 - error-log to file
 - removing items breaks symlinks to that item... ideally also track symlinks and update them
 - use idct scaling to speed up jpeg decompress
+- file/directory name filters for inclusion/exclusion
+- hard links handling
+	- isJunction() exclusion from index
+	- exclusion from index (map inodes during scan)
+- see if `skip_loop_filter` for h264 decoding is a good idea: about 20% faster decoding, unknown affect on hash quality
+- same with `SWS_AREA` rescaler instead of `SWS_BICUBIC`
+
 
 ### Search	
 - csv output for other tools, gui wrappers
 - sort groups with closest matches first
 - fast block-averaging template match with threshold
+- filter for hard/soft links
 
 ### GUI
 - barebones index/search gui
@@ -252,6 +258,8 @@ Wish List
 - toggle histogram view
 - context menu: copy path
 - when deleting zip, remove all zip contents from viewer
+- remember past deletions and optionally replay them in the future should they reappear (via traal)
+- detect breaking of symlinks on deletion
 
 Major Bugs
 ==========================
@@ -279,6 +287,7 @@ Minor Bugs
 - MGLW: template match (T) hides diff image / doesn't restore after reset (F5)
 - MGLW: rename folder doesn't update all affected viewer paths
 - Windows: titlebar/dialogs do not use native theme
+- Windows: white flash when MGLW is displayed
 
 Compiling
 =========================
