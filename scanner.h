@@ -218,14 +218,11 @@ class Scanner : public QObject {
   // additional set for fast lookup
   QSet<QString> _queuedWork;
 
-  QTimer _timer;
-
   // separate pools to manage number of threads used
   QThreadPool _gpuPool;
   QThreadPool _videoPool;
-  //QThreadPool _imagePool;
 
   QString _topDirPath;
-  int _existingFiles, _ignoredFiles, _modifiedFiles;
+  int _existingFiles, _ignoredFiles, _modifiedFiles, _processedFiles;
   QDateTime _modifiedSince;
 };
