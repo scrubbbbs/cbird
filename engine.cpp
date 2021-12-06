@@ -109,7 +109,14 @@ void Engine::update(bool wait) {
   QVector<int> toRemove;
   if (skip.count() > 0) {
     qInfo("removing %d files from index", skip.count());
-    for (const auto& path : qAsConst(skip)) {
+    QList<QString> sorted = skip.values();
+    std::sort(sorted.begin(),sorted.end());
+    int i = 0;
+    // todo: this takes a long time for big removals...could be threaded
+    for (const auto& path : qAsConst(sorted)) {
+      i++;
+      if ( i % 100 == 0 )
+        qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << path;
       const Media m = db->mediaWithPath(path);
       if (!m.isValid()) {
         qWarning() << "attempting to remove non-indexed path:" << path;
