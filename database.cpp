@@ -1213,33 +1213,27 @@ bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
     match = tmp;
   }
 
-  // remove match if all in the same directory
+  // remove match if in the same directory/zip as needle
   if (params.filterParent && match.count() > 1) {
-    auto parent = match[0].path().splitRef("/");
-    parent.pop_back();
-    int i;
-    for (i = 1; i < match.count(); i++) {
-      auto tmp = match[i].path().splitRef("/");
-      tmp.pop_back();
-      if (tmp != parent) break;
+    if (match[0].isArchived()) {
+      QString parent, tmp;
+      match[0].archivePaths(parent, tmp);
+      for (int i = 1; i < match.count(); ++i)
+        if (match[i].isArchived()) {
+          QString p;
+          match[i].archivePaths(p, tmp);
+          if (p == parent) { match.remove(i); --i; }
+        }
     }
-    if (i == match.count()) return true;
-  }
-
-  // remove match if all in the same zip file
-  if (params.filterParent && match.count() > 1 && match[0].isArchived()) {
-    QString parent, tmp;
-    match[0].archivePaths(parent, tmp);
-
-    int i;
-    for (i = 1; i < match.count(); i++)
-      if (match[i].isArchived()) {
-        QString p;
-        match[i].archivePaths(p, tmp);
-        if (p != parent) break;
+    else {
+      auto parent = match[0].path().splitRef("/");
+      parent.pop_back();
+      for (int i = 1; i < match.count(); ++i) {
+        auto tmp = match[i].path().splitRef("/");
+        tmp.pop_back();
+        if (tmp == parent) { match.remove(i); --i; }
       }
-
-    if (i == match.count()) return true;
+    }
   }
 
   // accept if there are enough matches after filtering
@@ -1288,6 +1282,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
     qWarning() << "reflected images unsupported, use -similar-to";
 
   // note: if set is provided, it is assumed to contain relevant media type(s)
+  // fixme: should be ok to filter set to relevant type of the query index
   MediaGroup haystack;
   if (params.inSet)
     haystack = params.set;

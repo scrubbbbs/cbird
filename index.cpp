@@ -111,7 +111,7 @@ SearchParams::SearchParams() {
   add({"fg", "Filter Groups: remove duplicate groups from result: {a,b}=={b,a}", Value::Bool, counter++,
        SET_BOOL(filterGroups), GET(filterGroups), NO_NAMES, NO_RANGE});
 
-  add({"fp", "Filter Parent: remove groups with all items in the same directory", Value::Bool, counter++,
+  add({"fp", "Filter Parent: remove items in the same directory as needle", Value::Bool, counter++,
        SET_BOOL(filterParent), GET(filterParent), NO_NAMES, NO_RANGE});
 
   add({"fs", "Filter Self: remove item that matched itself", Value::Bool, counter++,
