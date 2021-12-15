@@ -719,7 +719,7 @@ Engine& engine() {
   static Engine* instance = nullptr;
   QDir dir(indexPath());
   if (!instance && checkIndexPathExists &&
-      !dir.exists("_index")) {
+      !dir.exists(INDEX_DIRNAME)) {
     qFlushOutput();
     printf("cbird: No index found. Pass -use <dir> to a valid location,\n"
            "       or pass -create/-update to skip this prompt.\n\n");
@@ -1294,11 +1294,13 @@ int main(int argc, char** argv) {
           continue;
         }
         if (info.isDir()) {
-          qDebug() << "selected-files: listing dir (recursive):" << arg;
+          qDebug() << "selected-files: listing dir:" << arg;
           const auto paths = QDir(arg).entryList(
               QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
               QDir::DirsFirst | QDir::Reversed);
-          for (auto& path : paths) args.push_front(arg + "/" + path);
+          for (auto& path : paths)
+            if (path != INDEX_DIRNAME)
+              args.push_front(arg + "/" + path);
           continue;
         }
 
@@ -1535,11 +1537,10 @@ int main(int argc, char** argv) {
           if (m.attributes()["filter"] == ":yes") {
             m.setAttribute("filter", key + " " + value);
             tmp.append(m);
-            // qDebug() << m.attributes();
           }
         }
-        qInfo() << "filter:" << tmp.count() << "/" << selection.count()
-                << "items";
+        qInfo().noquote() << "filter:{" << arg << key << value << "} removed"
+                          << selection.count()- tmp.count() << "of" << selection.count() << "items";
         selection = tmp;
       }
 
@@ -1966,19 +1967,15 @@ int main(int argc, char** argv) {
       MediaGroupList l{{m}};
       MediaBrowser::show(l, params, showMode);
     } else if (arg == "-test-video-decoder") {
-      QString path = nextArg();
-      VideoContext::DecodeOptions opt;
+      const QString path = nextArg();
 
-      opt.rgb = 0;
+      VideoContext::DecodeOptions opt;
       opt.gpu = indexParams.useHardwareDec;
       opt.threads = indexParams.decoderThreads;
-      opt.maxH = 128;
+      opt.maxH = 128; // 128 is used for video hashing
       opt.maxW = 128;
 
-      bool display = false;
-      bool loop = false;
-      bool scale = false;
-      bool crop = false;
+      bool display = false, loop = false, scale = false, crop = false, zoom = false;
       while (args.count() > 0) {
         arg = nextArg();
         if (arg == "-show") { display = true; scale = true; }
@@ -1990,6 +1987,7 @@ int main(int argc, char** argv) {
         else if (arg == "-fast") opt.fast = true;
         else if (arg == "-scale") scale = true;
         else if (arg == "-crop") { crop = true; scale = true; }
+        else if (arg == "-zoom") { zoom = true; }
         else qFatal("unknown arg to -test-video-decoder");
       }
 
@@ -2006,8 +2004,50 @@ int main(int argc, char** argv) {
         }
       };
 
+      static bool quit = false;
+      class CloseFilter : public QObject {
+       public:
+        bool eventFilter(QObject* obj, QEvent* event) override {
+          (void)obj;
+          if (event->type() == QEvent::Close ||
+              (event->type() == QEvent::KeyPress &&
+               static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape)) {
+            qInfo() << "quit event";
+            quit = true;
+          }
+          return false;
+        }
+      };
+
       QLabel* label = nullptr;
-      if (display) label = new QLabel;
+      int zoomSize = opt.maxH * 10;
+      QRect screenRect;
+      if (display) {
+        if (qApp->testAttribute(Qt::AA_EnableHighDpiScaling))
+          qApp->setAttribute(Qt::AA_DisableHighDpiScaling);
+
+        if (!qEnvironmentVariableIsEmpty("QT_SCALE_FACTOR"))
+          qWarning() << "display scaling is enabled, may introduce artifacts";
+
+        QWidget* window = new QWidget;
+        QLayout* layout = new QHBoxLayout(window);
+        layout->addItem(new QSpacerItem(1,1,QSizePolicy::Expanding));
+        label = new QLabel(window);
+        label->setAlignment(Qt::AlignHCenter|Qt::AlignVCenter);
+        label->setScaledContents(false);
+        layout->addWidget(label);
+        layout->addItem(new QSpacerItem(1,1,QSizePolicy::Expanding));
+
+        screenRect = QGuiApplication::primaryScreen()->availableGeometry();
+        if (zoom) {
+          zoomSize = int(screenRect.height()*0.95 / opt.maxH) * opt.maxH;
+          qInfo() << "zoom in (nearest neighbor) :" << zoomSize;
+        }
+
+        window->setGeometry(screenRect);
+        window->installEventFilter(new CloseFilter);
+        window->show();
+      }
 
       do {
         VideoContext video;
@@ -2018,6 +2058,7 @@ int main(int argc, char** argv) {
           QImage img;
           QImage out;
           while (video.nextFrame(img)) {
+            if (quit) return 0;
             if (crop) {
               cv::Mat m1;
               qImageToCvImg(img, m1);
@@ -2026,9 +2067,11 @@ int main(int argc, char** argv) {
             }
             else out = img;
             if (display) {
+              if (zoom)
+                out = out.scaled(zoomSize, zoomSize, Qt::KeepAspectRatio, Qt::FastTransformation);
+              label->setGeometry(0,0,out.width(),out.height());
               label->setPixmap(QPixmap::fromImage(out));
-              label->show();
-              qApp->processEvents();
+              qApp->processEvents(); // repaint
             }
             timing();
           }

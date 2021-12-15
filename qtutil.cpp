@@ -586,7 +586,7 @@ QMenu *MenuHelper::makeDirMenu(const QString &root, QObject *target, const char 
   for (const QFileInfo& entry : list) {
     // todo: setting for index dir name
     const QString& path = entry.absoluteFilePath();
-    if (path.endsWith("_index")) continue;
+    if (path.endsWith(INDEX_DIRNAME)) continue;
 
     // todo: setting or detect max popup size
     const int maxFolders = 100;

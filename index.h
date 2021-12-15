@@ -23,9 +23,6 @@
 #include "media.h"
 #include "params.h"
 
-/// dir name for index database
-#define INDEX_DIRNAME "_index"
-
 /// report sql error with context & detail
 #define SQL_FATAL(x) \
   qFatal("QSqlQuery." #x ": %s", qPrintable(query.lastError().text()));

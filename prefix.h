@@ -22,6 +22,7 @@
 
 #define CBIRD_PROGNAME "cbird"
 #define CBIRD_HOMEPAGE "https://github.com/scrubbbbs/cbird"
+#define INDEX_DIRNAME  "_index"
 
 // portability macros
 #ifdef __WIN32__
