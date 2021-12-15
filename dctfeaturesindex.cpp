@@ -218,9 +218,9 @@ Index* DctFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
   return chunk;
 }
 
-QVector<Index::Match> DctFeaturesIndex::find(const Media& x,
+QVector<Index::Match> DctFeaturesIndex::find(const Media& needle,
                                              const SearchParams& params) {
-  KeyPointHashList hashes = x.keyPointHashes();
+  KeyPointHashList hashes = needle.keyPointHashes();
 
   //
   // for each needle hash
@@ -232,11 +232,11 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& x,
   if (hashes.size() <= 0) {
     // if we don't have hashes for the needle,
     // we can get them from tree
-    if (x.id() > 0)
-      _tree->findIndex(x.id(), hashes);
+    if (needle.id() > 0)
+      _tree->findIndex(needle.id(), hashes);
 
     if (hashes.size() <= 0) {
-      qWarning() << "no hashes for needle id" << x.id() << x.path();
+      qWarning() << "no hashes for needle id" << needle.id() << needle.path();
       return QVector<Index::Match>();
     }
   }
@@ -279,7 +279,8 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& x,
         scores[mediaId] = match.distance;
       }
 
-      maxMatches = std::max(matches[mediaId], maxMatches);
+      if (needle.id() != mediaId)
+        maxMatches = std::max(matches[mediaId], maxMatches);
     }
   }
 
@@ -299,7 +300,10 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& x,
 
       float avgScore = (float)scores[mediaId] / matches[mediaId];
 
-      //	printf("score=%.2f matches =%d\n", avgScore, matches[mediaId]);
+      // qDebug("score=%.2f matches=%d maxMatches=%d", avgScore, matches[mediaId], maxMatches);
+      if (mediaId == uint32_t(needle.id()))
+        match.score = -1;
+      else
       if (maxMatches == 1) {
         // only one match, use the avg score
         match.score = 10 * avgScore;
