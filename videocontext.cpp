@@ -209,7 +209,7 @@ QImage VideoContext::frameGrab(const QString& path, int frame, bool fast) {
   VideoContext::DecodeOptions options;
   options.rgb = true;
   options.threads = QThread::idealThreadCount();
-
+  options.fast = true;
   QImage img;
 
   // note: hardware decoder is much slower to open, not worthwhile
@@ -457,6 +457,17 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     }
   }
 
+  if (opt.fast) {
+    // it seems safe to enable this, about 20% boost.
+    // the downscaler will smooth out any artifacts
+    av_dict_set(&codecOptions, "skip_loop_filter", "all", 0);
+
+    // grayscale decoding is not built-in to ffmpeg usually,
+    // performance improvement is 5-10%
+    //if (!opt.rgb)
+    // av_dict_set(&codecOptions, "flags", "gray", 0);
+  }
+
   // if (_p->codec->capabilities & CODEC_CAP_TRUNCATED)
   //    _p->context->flags|= CODEC_FLAG_TRUNCATED; // we do not send complete
   //    frames
@@ -500,9 +511,10 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     }
   }
 
-  qDebug("using %d threads (requested %d) active_type=%d",
+  qDebug("%s using %d threads (requested %d) threads=%s",
+         _p->codec->name,
          _p->context->thread_count, _numThreads,
-         _p->context->active_thread_type);
+         _p->context->active_thread_type == FF_THREAD_FRAME ? "frame" : "slice");
 
   _p->frame = av_frame_alloc();
   if (!_p->frame) {
@@ -850,16 +862,28 @@ bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
         return false;
       }
 
-//      qDebug() << "scaling from: "
-//              << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
-//              << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height)
-//              << "to:" << av_get_pix_fmt_name(AVPixelFormat(fmt))
-//              << QString("@%1x%2").arg(w).arg(h)
-//              << "fast=" << _opt.fast;
+      // area filter seems the best for downscaling
+      // - faster than bicubic with fewer artifacts
+      // - less artifacts than bilinear
+      int fastFilter = SWS_AREA;
+      int fw = _p->frame->width;
+      int fh = _p->frame->height;
+      if (w > fw || h > fh) {
+        if (fh == h) fastFilter = SWS_FAST_BILINEAR;  // bilinear in one direction
+        else fastFilter = SWS_BILINEAR;
+      }
+
+      qDebug() << "scaling from: "
+              << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
+              << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height)
+              << "to:" << av_get_pix_fmt_name(AVPixelFormat(fmt))
+              << QString("@%1x%2").arg(w).arg(h)
+               << "fast=" << _opt.fast << "fast filter" << fastFilter;
+
 
       _p->scaler = sws_getContext(
           _p->frame->width, _p->frame->height, AVPixelFormat(_p->frame->format),
-          w, h, AVPixelFormat(fmt), _opt.fast ? SWS_FAST_BILINEAR : SWS_BICUBIC,
+          w, h, AVPixelFormat(fmt), _opt.fast ? fastFilter : SWS_BICUBIC,
           nullptr, nullptr, nullptr);
 
       avLoggerSetFileName(_p->scaler, QFileInfo(_path).fileName());

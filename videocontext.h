@@ -82,7 +82,7 @@ class VideoContext {
     int maxW;  // maximum frame w/h (forces rescale)
     int maxH;
     bool rgb;   // color or yuv/grayscale output
-    bool fast;  // use the faster but lower quality scaler ("Fast Bilinear")
+    bool fast;  // faster but lower quality, maybe suitable for indexing
 
     int threads;      // max # of threads
     bool gpu;         // try gpu decoding
