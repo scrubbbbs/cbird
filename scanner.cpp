@@ -716,6 +716,7 @@ VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu,
   opt.deviceIndex = deviceIndex;
   opt.maxH = 128;                 // need just enough to detect/crop borders
   opt.maxW = 128;
+  opt.fast = true;                // enable speeds ok for indexing
   if (video->open(path, opt) < 0) {
     setError(path, ErrorLoad);
     delete video;
