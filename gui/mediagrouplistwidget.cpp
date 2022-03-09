@@ -1444,6 +1444,11 @@ void MediaGroupListWidget::loadRow(int row) {
   const MediaGroup& group = _list[row];
 
   int rowStride = row - _currentRow;
+  if (rowStride == 0) {
+    // if we deleted a row, _currentRow doesn't change
+    // but we want to preload the next row
+    rowStride = _currentRow == _list.count()-1 ? -1 : 1;
+  }
   _currentRow = row;
   clear();
 
