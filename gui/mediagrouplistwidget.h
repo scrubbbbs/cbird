@@ -132,7 +132,7 @@ class MediaGroupListWidget : public QListWidget {
   /// Add first item and selected items to negative matches
   void negMatchAction() {
     addNegMatch(false);
-    nextGroupAction();
+    removeSelection(false);
   }
 
   /// Add all items to negative matches
