@@ -85,6 +85,7 @@ static QStringList buildFlags() {
 #define H3 "\n  "
 
 static void printLicense() {
+  qFlushOutput();
   // clang-format off
   printf(
       H2 "cbird, the Content Based Image Retrieval Database"
@@ -775,15 +776,31 @@ int main(int argc, char** argv) {
 
   (void)qInstallMessageHandler(qColorMessageOutput);
 
-  args.pop_front();  // discard program name
+  // if we are pretty sure there is no display connected we can
+  // enable headless mode
+  bool noDisplay = false;
+#if defined(Q_OS_LINUX)
+  if (!args.contains("-headless") &&
+      !args.contains("-platform") &&  // qt5 built-in
+      !args.contains("-display") &&   // qt5 built-in
+      getenv("WAYLAND_DISPLAY") == nullptr &&
+      getenv("DISPLAY") == nullptr) {
+    noDisplay = true;
+    qInfo() << "no DISPLAY environment, assuming -headless";
+  }
+#endif
+
   QScopedPointer<QCoreApplication> app;
-  if (args.contains("-headless"))
+  if (args.contains("-headless") || noDisplay)
     app.reset(new QCoreApplication(argc, argv));
   else
     app.reset(new QApplication(argc, argv));
 
   app->setApplicationName(CBIRD_PROGNAME);
   app->setApplicationVersion(CBIRD_VERSION);
+
+  args = app->arguments(); // args after qt strips out its own stuff
+  args.removeFirst();
 
   if (args.count() <= 0) {
     printUsage(argc, argv);
@@ -969,6 +986,7 @@ int main(int argc, char** argv) {
       qInfo() << "build:" << buildFlags();
       qInfo() << "settings:" << DesktopHelper::settingsFile();
       qInfo() << "Qt" << qVersion() << "compiled:" << QT_VERSION_STR;
+      qInfo() << "Qt Platform" << qApp->platformName();
       qInfo() << "FFmpeg" << ff[0] << "compiled:" << ff[1];
       qInfo() << "OpenCV" << cv[0] << "compiled:" << cv[1];
       qInfo() << "Exiv2" << ev[0] << "compiled:" << ev[1];
