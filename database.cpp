@@ -1530,11 +1530,36 @@ MediaGroup Database::searchIndex(Index* index, const Media& needle,
 
   QVector<Index::Match> matches = index->find(needle, params);
 
+  // increase threshold until is match is found or maxThresh is exceeded
+  if (params.maxThresh > 0) {
+    SearchParams tmp = params;
+    while (matches.count() <= params.minMatches) {
+      switch (params.algo) {
+        case SearchParams::AlgoDCT:
+        case SearchParams::AlgoDCTFeatures:
+        case SearchParams::AlgoVideo:
+          tmp.dctThresh++;
+          if (tmp.dctThresh > params.maxThresh) goto DONE;
+          break;
+        case SearchParams::AlgoCVFeatures:
+          tmp.cvThresh+=5;
+          if (tmp.cvThresh > params.maxThresh) goto DONE;
+          break;
+        case SearchParams::AlgoColor: goto DONE; // no thresholding
+        default:
+          qWarning() << "maxThresh: unsupported algorithm";
+          goto DONE;
+      }
+      matches = index->find(needle, tmp);
+    }
+  }
+DONE:
+
   // sort matches by score and limit the number returned
   std::sort(matches.begin(), matches.end());
 
-  if (matches.count() > params.maxMatches)
-    matches.erase(matches.begin() + params.maxMatches, matches.end());
+  if (matches.count() > (params.maxMatches+1))
+    matches.erase(matches.begin() + params.maxMatches + 1, matches.end());
 
   MediaGroup group;
 

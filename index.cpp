@@ -56,6 +56,9 @@ SearchParams::SearchParams() {
          SET_INT(cvThresh), GET(cvThresh), NO_NAMES, GET_CONST(range)});
   }
 
+  add({"mt", "Maximum threshold to try, until minMatches are found", Value::Int, counter++,
+       SET_INT(maxThresh), GET(maxThresh), NO_NAMES, GET_CONST(positive)});
+
   add({"mn", "Minimum matches per needle", Value::Int, counter++,
        SET_INT(minMatches), GET(minMatches), NO_NAMES, GET_CONST(nonzero)});
 
