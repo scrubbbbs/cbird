@@ -1088,6 +1088,7 @@ int main(int argc, char** argv) {
       params.inSet = true;
       selection.clear();
       queryResult = engine().db->similar(params);
+      qInfo() << "similar-in: " << queryResult.count() << "result(s)";
     } else if (arg == "-similar-to") {
       const QString to = nextArg();
       const QFileInfo info(to);
@@ -1261,6 +1262,7 @@ int main(int argc, char** argv) {
       }
       selection.clear();
       queryResult = list;
+      qInfo() << "similar-to:" << queryResult.count() << "result(s)";
     } else if (arg == "-select-none") {
       selection.clear();
     } else if (arg == "-select-all") {
