@@ -1434,6 +1434,8 @@ MediaGroup Database::similarTo(const Media& needle,
 
   delete slice;
 
+  Q_ASSERT(result.count() <= params.maxMatches);
+
   // needle needs to be first for filter function,
   // but cannot include it in results
   result.prepend(needle);
@@ -1444,9 +1446,11 @@ MediaGroup Database::similarTo(const Media& needle,
   }
   if (result.count() > 0) result.removeFirst();
 
-  if (params.verbose)
+  if (params.verbose) {
+    MessageContext mc(needle.path().mid(path().length()+1));
     qInfo("%d results in %dms", result.count(),
           int(QDateTime::currentMSecsSinceEpoch() - start));
+  }
 
   // set match flags
   for (Media& m : result) {
@@ -1555,18 +1559,16 @@ MediaGroup Database::searchIndex(Index* index, const Media& needle,
   }
 DONE:
 
-  // sort matches by score and limit the number returned
+  // sort by score
   std::sort(matches.begin(), matches.end());
-
-  if (matches.count() > (params.maxMatches+1))
-    matches.erase(matches.begin() + params.maxMatches + 1, matches.end());
 
   MediaGroup group;
 
   for (const Index::Match& match : matches) {
-    // database queries can be expensive, if the media matched
-    // itself do not query
+    // index does not store complete Media info, we need to query it
+    // mediaWithId is slow, so try to avoid it
     if (params.filterSelf && int(match.mediaId) == needle.id()) continue;
+    if (group.count() >= params.maxMatches) break;
 
     // static QAtomicInt num;
 
