@@ -79,15 +79,19 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   // - little difference if there are a lot of jobs
   if (_params.estimateCost && _videoQueue.count() <= _params.indexThreads) {
     QMap<QString, float> cost;
-    for (auto path : _videoQueue) {
+    for (auto& path : qAsConst(_videoQueue)) {
+      cost[path] = -1.0f;
+
+      const QString context = path.mid(_topDirPath.length()+1);
+      const MessageContext mc(context);
+
       // todo: cost could be better by considering codec/decoder
       VideoContext v;
       VideoContext::DecodeOptions opt;
       opt.threads = _params.decoderThreads;
-      v.open(path, opt);
+      if (v.open(path, opt) < 0) continue;
+
       VideoContext::Metadata d = v.metadata();
-      // qDebug("Scanner::scanDirectory: duration=%d fps=%.2f w=%d h=%d",
-      // d.duration, d.frameRate, d.frameSize.width(), d.frameSize.height());
       cost[path] = (d.frameRate * d.duration * d.frameSize.width() *
                     d.frameSize.height()) /
                    v.threadCount();
