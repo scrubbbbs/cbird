@@ -44,7 +44,7 @@ class VideoCompareWidget : public QWidget {
    */
   VideoCompareWidget(const Media& left, const Media& right,
                      const MatchRange& range = MatchRange(),
-                     QWidget* parent = nullptr, Qt::WindowFlags f = 0);
+                     QWidget* parent = nullptr);
 
   ~VideoCompareWidget();
 
@@ -57,38 +57,57 @@ class VideoCompareWidget : public QWidget {
   void paintEvent(QPaintEvent* event) override;
   void wheelEvent(QWheelEvent* event) override;
 
-  void loadFrameIfNeeded(int frame);
+  void moveCursor(int pos) { _cursor = pos; }
+  void seekFrame(int pos) {
+    moveCursor(pos);
+    update();
+  };
+  void skipSeconds(int seconds) {
+    seekFrame(seconds * floorf(_fps + 0.5) + _cursor);
+  };
+
+  void offsetCursor(int offset) { _video[0].offset += offset; }
+  void offsetFrames(int frames) {
+    offsetCursor(frames);
+    update();
+  };
+  void offsetSeconds(int seconds) {
+    offsetFrames(seconds * floorf(_fps + 0.5));
+  };
+
   void findQualityScores();
   void alignTemporally();
   void alignSpatially();
-  void seekFrame(int frame);
-  void shiftFrames(int offset);
   void playSideBySide();
 
-  Media _left, _right;
-  MatchRange _range;
-  QString _leftLabel, _rightLabel;
-  int _lastFrame = -1;
-  int _selectedFrame = 0;
+  void drawFrame(QPainter& painter, const FrameCache& cache, const QImage& img,
+                 int iw, int ih, int matchIn, int matchLen, int currPos,
+                 const QString& text, int x, int y, int w, int h) const;
 
-  FrameCache* _leftFrames;
-  FrameCache* _rightFrames;
+  int64_t sad128(int i) const;
 
-  QVector<QImage> _leftQualityVisual;  // visualization images from analysis
-  QVector<QImage> _rightQualityVisual;
+  int _cursor = 0; // displayed frame number
+  int _endPos = 0; // end frame number of range or shortest video
+  float _fps = 0;  // fps of highest-fps video
 
-  int _visualIndex = 0;   // 0==disable, >0 => analysis image index-1
-  int _visualFrame = -1;  // frame number of left side corresponding to visual
+  struct {
+    Media media;             // source media
+    QString label, side;     // file name and A/B side label
+    QVector<QImage> visual;  // analysis visual
+    int visualFrame;  // frame number of corresponding to analysis visuals
+    bool crop;        // if true enable de-letterbox cropping
+    int in, offset;   // match range and cursor offset (temporal align)
+    const VideoContext::Metadata* meta;  // video metadata (fps/codec etc)
+    std::unique_ptr<FrameCache> cache;   // decoder/frame cache
+  } _video[2];
 
-  QFuture<Frame*> _leftThread, _rightThread;
-  int _frameOffset = 0;       // add offset to left video to align temporally
-  bool _interleaved = false;  // show one video and flip between them
-  bool _sameSize = false;     // scale right to match left
-  bool _swap = false;         // swap left/right side
-  float _alignX = 0, _alignY = 0;  // align spatially
+  int _visualIndex = 0;  // 0==disable, >0 => analysis image index-1
+
+  bool _stacked = false;       // show one video and flip between them manually
+  bool _sameSize = false;          // scale right to match left
+  bool _swap = false;              // swap left/right side
+  float _alignX = 0, _alignY = 0;  // spatial alignment, factor of image width/height
   int _scrub = 0;           // scrub forward or backward until a key is pressed
   bool _maximized = false;  // use to restore maximized window
   double _zoom = 0.0;       // zoom in
-  bool _cropLeft = false;   // auto-crop left/right (remove black bars)
-  bool _cropRight = false;
 };
