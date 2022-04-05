@@ -86,9 +86,9 @@ static void avImgToQImg(uint8_t *planes[4], int linesizes[4], int width,
   }
 }
 
-static void avImgToCvImg(uint8_t *planes[4], int linesizes[4], int width, int height,
-                             cv::Mat& dst,
-                             AVPixelFormat fmt = AV_PIX_FMT_YUV420P) {
+static void avImgToCvImg(uint8_t* planes[4], int linesizes[4], int width,
+                         int height, cv::Mat& dst,
+                         AVPixelFormat fmt = AV_PIX_FMT_YUV420P) {
   const QSize size(width, height);
   const uchar* const data = planes[0];
   int skip = linesizes[0];
@@ -145,11 +145,6 @@ static void avFrameToCvImg(const AVFrame& frame, cv::Mat& dst) {
       dstLine++;
     }
   }
-}
-
-static int pts2frame(int64_t pts, int64_t firstPTS, double frameRate,
-                     double timeBase) {
-  return int(floor((pts - firstPTS) * timeBase * frameRate + 0.5));
 }
 
 void VideoContext::loadLibrary() {
@@ -247,7 +242,7 @@ VideoContext::VideoContext() {
   _errorCount = 0;
   _deviceIndex = -1;
   _isHardware = false;
-  _flush = false;
+  _eof = false;
   _numThreads = 1;
 }
 
@@ -262,7 +257,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   _firstPts = AV_NOPTS_VALUE;
   _deviceIndex = -1;
   _isHardware = false;
-  _flush = false;
+  _eof = false;
   av_init_packet(&_p->packet);
 
   QMutexLocker locker(&_mutex);
@@ -284,19 +279,28 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   }
 
   // firstPts is needed for seeking
-  // read a few frames, they could be out of order
+  // read a few packets to find it
   _p->format->flags |= AVFMT_FLAG_GENPTS;
   for (int i = 0; i < 5;) {
     if (0 > av_read_frame(_p->format, &_p->packet)) break;
 
-    if (_p->format->streams[_p->packet.stream_index]->codec->codec_type ==
-        AVMEDIA_TYPE_VIDEO) {
-      if (_firstPts == AV_NOPTS_VALUE)
-        _firstPts = _p->packet.pts;
-      else
-        _firstPts = std::min(_firstPts, _p->packet.pts);
-      i++;
-    }
+    const auto* stream = _p->format->streams[_p->packet.stream_index];
+    if (stream->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) continue;
+    if (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) continue;
+
+    // todo: if this is reliable we don't need this loop...
+//    if (stream->start_time != AV_NOPTS_VALUE) {
+//      _firstPts = stream->start_time;
+//      qDebug() << "stream start_time" << _firstPts;
+//      break;
+//    }
+
+    if (_firstPts == AV_NOPTS_VALUE)
+      _firstPts = _p->packet.pts;
+    else
+      _firstPts = std::min(_firstPts, _p->packet.pts);
+    i++;
+
     av_packet_unref(&_p->packet);
   }
 
@@ -305,7 +309,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
   err=0;
   if (_firstPts == AV_NOPTS_VALUE) {
-    AV_CRITICAL("no PTS was found");
+    AV_CRITICAL("no first PTS was found");
     return -1;
   }
 
@@ -333,30 +337,32 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   int audioStreamIndex = -1;
   for (unsigned int i = 0; i < _p->format->nb_streams; i++) {
     AVStream* stream = _p->format->streams[i];
-    const AVCodecContext* context = stream->codec;
+    const AVCodecParameters* codec = stream->codecpar;
 
-    if (context->codec_type == AVMEDIA_TYPE_VIDEO) {
+    if (codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+      if (stream->disposition &  AV_DISPOSITION_ATTACHED_PIC) continue;
       if (videoStreamIndex >= 0) continue;
+
       videoStreamIndex = int(i);
       _metadata.isEmpty = false;
 
       AVRational fps = stream->r_frame_rate;
       _metadata.frameRate = float(av_q2d(fps));
-      _metadata.frameSize = QSize(context->width, context->height);
-      _metadata.videoBitrate = int(context->bit_rate);
+      _metadata.frameSize = QSize(codec->width, codec->height);
+      _metadata.videoBitrate = int(codec->bit_rate);
 
-      AVCodec* vCodec = avcodec_find_decoder(context->codec_id);
+      AVCodec* vCodec = avcodec_find_decoder(codec->codec_id);
       if (vCodec) _metadata.videoCodec = vCodec->name;
 
-    } else if (context->codec_type == AVMEDIA_TYPE_AUDIO) {
+    } else if (codec->codec_type == AVMEDIA_TYPE_AUDIO) {
       if (audioStreamIndex >= 0) continue;
       audioStreamIndex = int(i);
       _metadata.isEmpty = false;
-      _metadata.audioBitrate = int(context->bit_rate);
-      _metadata.sampleRate = context->sample_rate;
-      _metadata.channels = context->channels;
+      _metadata.audioBitrate = int(codec->bit_rate);
+      _metadata.sampleRate = codec->sample_rate;
+      _metadata.channels = codec->channels;
 
-      AVCodec* aCodec = avcodec_find_decoder(context->codec_id);
+      AVCodec* aCodec = avcodec_find_decoder(codec->codec_id);
       if (aCodec) _metadata.audioCodec = aCodec->name;
     }
   }
@@ -536,23 +542,6 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   _p->packet.size = 0;
   _p->packet.data = nullptr;
 
-  // avLoggerSetFileName(_p->codec, "codec-name");
-  // avLoggerSetFileName(_p->videoStream, "stream-name");
-
-  //    printf("_metadata.title=%s\n", qUtf8Printable(_metadata.title));
-  //    printf("_metadata.duration=%d\n", _metadata.duration);
-  //
-  //    printf("_metadata.frameRate=%.2f\n", _metadata.frameRate);
-  //    printf("_metadata.frameSize=%dx%d\n", _metadata.frameSize.width(),
-  //    _metadata.frameSize.height()); printf("_metadata.videoCodec=%s\n",
-  //    qUtf8Printable(_metadata.videoCodec)); printf("_metadata.videoBitrate=%d\n",
-  //    _metadata.videoBitrate);
-  //
-  //    printf("_metadata.audioCodec=%s\n", qPrintable(_metadata.audioCodec));
-  //    printf("_metadata.audioBitrate=%d\n", _metadata.audioBitrate);
-  //    printf("_metadata.sampleRate=%d\n", _metadata.sampleRate);
-  //    printf("_metadata.channels=%d\n", _metadata.channels);
-
   return 0;
 }
 
@@ -582,6 +571,18 @@ void VideoContext::close() {
   _p->init();
 }
 
+int VideoContext::ptsToFrame(int64_t pts) const {
+  auto timeBase = av_q2d(_p->videoStream->time_base);
+  auto frameRate = av_q2d(_p->videoStream->r_frame_rate);
+  return floor((pts - _firstPts) * timeBase * frameRate + 0.5);
+}
+
+int64_t VideoContext::frameToPts(int frame) const {
+  auto timeBase = av_q2d(_p->videoStream->time_base);
+  auto frameRate = av_q2d(_p->videoStream->r_frame_rate);
+  return floor(frame / frameRate / timeBase + 0.5) + _firstPts;
+}
+
 bool VideoContext::seekDumb(int frame) {
   AV_WARNING("seek dumb decodes all frames");
   QImage tmp;
@@ -593,23 +594,11 @@ bool VideoContext::seekDumb(int frame) {
 bool VideoContext::seekFast(int frame) {
   if (frame <= 0) return true;
 
-  // av_dump_format(_p->format, _p->videoStream->index, NULL, 0);
+  const int64_t target = frameToPts(frame);
 
-  const AVRational timeBase = _p->videoStream->time_base;
-  const AVRational frameRate = _p->videoStream->r_frame_rate;
+  qDebug("frame=%d pts=(%" PRIi64 ")", frame, target);
 
-  const double fps = av_q2d(frameRate);
-  const double tb = av_q2d(timeBase);
-
-  const double startSeconds = frame / fps;
-
-  const int64_t targetTS = int64_t(floor(startSeconds / tb + 0.5)) + _firstPts;
-
-  qDebug("frame=%d time=%.2f tb=(%" PRIi64 ")", frame, startSeconds,
-         targetTS);
-
-  // seek <= where we want to go
-  int err = av_seek_frame(_p->format, _p->videoStream->index, targetTS,
+  int err = av_seek_frame(_p->format, _p->videoStream->index, target,
                           AVSEEK_FLAG_BACKWARD);
   if (err < 0) {
     AV_WARNING("seek error") << err;
@@ -618,37 +607,23 @@ bool VideoContext::seekFast(int frame) {
 
   avcodec_flush_buffers(_p->videoStream->codec);
 
+  _eof = false;
+
   return true;
 }
 
-bool VideoContext::seek(int frame, const DecodeOptions& opt,
-                        QVector<QImage>* decoded) {
-  if (frame <= 0) {
-    close();
-    open(_path, opt);
-    return true;
-  }
+bool VideoContext::seek(int frame, QVector<QImage>* decoded, int* maxDecoded) {
 
-  // av_dump_format(_p->format, _p->videoStream->index, NULL, 0);
+  const double frameDuration = 1.0 / av_q2d(_p->videoStream->time_base);
+  const int64_t target = frameToPts(frame);
 
-  const AVRational timeBase = _p->videoStream->time_base;
-  const AVRational frameRate = _p->videoStream->r_frame_rate;
+  qDebug("frame=%d pts=(%" PRIi64 ") pts=(%" PRIi64 ")", frame, target, target-_firstPts);
 
-  const double fps = av_q2d(frameRate);
-  const double tb = av_q2d(timeBase);
+  int seekedFrame = 0; // frame number we actually seeked to
 
-  int framesSeeked = 0;
-
-  const double startSeconds = frame / fps;
-
-  const int64_t targetTS = int64_t(floor(startSeconds / tb + 0.5)) + _firstPts;
-
-  qDebug("frame=%d time=%.2f tb=(%" PRIi64 ")",
-         frame, startSeconds, targetTS);
-
-  if (startSeconds / tb > _firstPts) {
+  if (target > _firstPts) { // do not seek before first pts; decode frames instead
     bool isKeyframe = false;
-    int64_t seekTime = targetTS;
+    int64_t seekTime = target;
     int tries = 0;
 
     // seek <= where we want to go, and try to get a keyframe
@@ -661,76 +636,79 @@ bool VideoContext::seek(int frame, const DecodeOptions& opt,
         qCritical("av_seek_frame error %d", err);
         return false;
       }
+      Q_ASSERT(_p->videoStream->codec == _p->context);
+      avcodec_flush_buffers(_p->context);
+      _eof = false;
 
-      avcodec_flush_buffers(_p->videoStream->codec);
-
-      // we might not get a keyframe (stream corruption, or eos?)
+      // check for keyframe (stream corruption, or eos?)
       do {
         if (!readPacket()) break;
 
         Q_ASSERT(_p->packet.pts != AV_NOPTS_VALUE);
 
         isKeyframe = _p->packet.flags & AV_PKT_FLAG_KEY;
-        if (!isKeyframe)
-          AV_WARNING("not a keyframe");
+        //if (!isKeyframe)
+        //  AV_WARNING("miss: seek to non-keyframe");
 
         err = avcodec_send_packet(_p->context, &_p->packet);
         if (err != 0) {
-          AV_WARNING("send_packet error") << Qt::hex << err;
+          AV_WARNING("miss: send_packet error") << Qt::hex << err;
           break;
         }
 
-      } while (!isKeyframe && _p->packet.pts < targetTS);
+      } while (!isKeyframe && _p->packet.pts < target);
 
       tries++;
-      if (tries > 1)
-        AV_WARNING("try loop: ") << tries << isKeyframe << seekTime - _p->packet.pts;
+      if (!isKeyframe || _p->packet.pts > target) {
+        AV_WARNING("try:") << tries << "key:" << isKeyframe << "dist:" << seekTime - _p->packet.pts;
 
-      // guess the next time try; if we back up too much we pay the price
-      // of decoding a lot of frames; not enough and we never get there...
+        // guess the next time try; if we back up too much we pay the price
+        // of decoding a lot of frames; not enough and we never get there...
 
-      //seekTime -= 1.0 / tb; // back up one frame
+        // back up half the amount we missed, plus one frame
+        seekTime = (seekTime + (seekTime - _p->packet.pts)/2.0 - frameDuration);
 
-      // back up half as much each time we miss
-      seekTime = (seekTime + (seekTime - _p->packet.pts)/2.0 - 1.0/tb);
-
-      if (tries > 10) {
-        AV_WARNING("failed after 10 attempts, seeking dumb");
-        close();
-        open(_path, opt);
-        seekDumb(frame);
-        return true;
+        if (tries > 10) {
+          AV_WARNING("failed after 10 attempts, seeking dumb");
+          close();
+          open(_path, _opt);
+          seekDumb(frame);
+          return true;
+        }
       }
 
-      // assuming we missed, next seek time should be before last try
-      //if (isKeyframe && _p->packet.pts)
-      //  seekTime = _p->packet.pts - seekTime
+    } while (!isKeyframe || _p->packet.pts > target);
 
-    } while (!isKeyframe || _p->packet.pts > targetTS);
-
-    framesSeeked = pts2frame(_p->packet.pts, _firstPts, fps, tb);
+    seekedFrame = ptsToFrame(_p->packet.pts);
+  }
+  else {
+    // to read frames from the start we have to reopen
+    AV_WARNING("reopening stream for seek < first pts");
+    close();
+    if (0 != open(_path, _opt)) return false;
   }
 
+  // accurate seek requires decoding some frames
   _consumed = 0;
-  int framesLeft = frame - framesSeeked;
-  AV_DEBUG("decoding frames :") << framesLeft;
+  int framesLeft = frame - seekedFrame;
+  if (framesLeft > 0)
+    AV_DEBUG("decoding") << framesLeft << "interframes";
 
+  if (maxDecoded)
+    *maxDecoded = framesLeft;
+
+  int i = 0;
   while (framesLeft--)
     if (decodeFrame()) {
-      // store the intermediate frames if so desired
-      if (decoded && decoded->count() < 400) {
-        if (decoded->count() >= 399) // this can blow up and use all memory
-          AV_WARNING("too many decoded frames, keeping the first 400");
-
-        QImage tmp;
-        int w, h, fmt;
-
-        if (convertFrame(w, h, fmt)) {
-          //avPictureToQImg(*_p->scaled, w, h, tmp, AVPixelFormat(fmt));
-          avImgToQImg(_p->scaled.data, _p->scaled.linesize, w, h, tmp, AVPixelFormat(fmt));
-          decoded->append(tmp);
-        } else
-          AV_WARNING("failed to convert frame");
+      // store the intermediate frames, useful for backwards scrub
+      if (decoded) {
+        if (framesLeft < decoded->count()) {
+          QImage& img = (*decoded)[ i++ ];
+          frameToQImg(img);
+        }
+        else if (decoded->count()) {
+          AV_WARNING("insufficient frames supplied" << decoded->count());
+        }
       }
     } else {
       // no longer valid since we couldn't get the target
@@ -751,6 +729,7 @@ bool VideoContext::readPacket() {
     if (err < 0) {
       if (err != AVERROR_EOF)
         AV_CRITICAL("av_read_frame");
+      _eof = true;
       return false;
     }
 
@@ -775,9 +754,8 @@ bool VideoContext::decodeFrame() {
       break;
     }
 
-    if (!_flush) {
+    if (!_eof) {
       if (!readPacket()) {
-        _flush = true;
         avcodec_send_packet(_p->context, nullptr);
         continue;
       }
@@ -873,12 +851,12 @@ bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
         else fastFilter = SWS_BILINEAR;
       }
 
-      qDebug() << "scaling from: "
+      qDebug() << "scaling from:"
               << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
               << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height)
               << "to:" << av_get_pix_fmt_name(AVPixelFormat(fmt))
               << QString("@%1x%2").arg(w).arg(h)
-               << "fast=" << _opt.fast << "fast filter" << fastFilter;
+               << "fast=" << _opt.fast << "fast-filter" << fastFilter;
 
 
       _p->scaler = sws_getContext(
@@ -968,86 +946,37 @@ void VideoContext::avLoggerUnsetFileName(void* ptr) {
   pointerToFileName().remove(ptr);
 }
 
-#if 0
-int VideoContext::avExecute(AVCodecContext* c,
-                            int (*func)(AVCodecContext*, void*), void* arg2,
-                            int* ret, int count, int size) {
-  qDebug() << count;
-  Q_ASSERT(0);
-  QVector<QFuture<int>> work;
-  for (int i = 0; i < count; ++i)
-    work.append(QtConcurrent::run(
-        [=]() { return func(c, static_cast<char*>(arg2) + i * size); }));
-  for (int i = 0; i < count; ++i) {
-    auto& w = work[i];
-    w.waitForFinished();
-    ret[i] = w.result();
-  }
-  return 0;
-}
-
-int VideoContext::avExecute2(AVCodecContext* c, AvExec2Callback func,
-                             void* arg2, int* ret, int count) {
-  //
-  // this cannot work as written
-  // - threadNumber must be (0 - c->thread_count] which QThreadPool cannot
-  // guarantee,
-  //   it will allocate more than maxThreadCount threads for some reason
-  //
-  //    qDebug() << count;
-  //    Q_ASSERT(0);
-
-  QHash<QThread*, int> threads;
-  QMutex mutex;
-  int numThreads = 0;
-
-  QVector<int> results;
-  for (int i = 0; i < count; ++i) results.append(i);
-
-  QFuture<void> f =
-      QtConcurrent::map(results.begin(), results.end(),
-                        [=, &mutex, &numThreads, &threads](int i) {
-                          int threadNumber = -1;
-                          {
-                            QMutexLocker locker(&mutex);
-                            QThread* thread = QThread::currentThread();
-                            auto it = threads.find(thread);
-                            if (it != threads.end())
-                              threadNumber = it.value();
-                            else {
-                              threadNumber = numThreads++;
-                              threads.insert(thread, threadNumber);
-                            }
-                          }
-                          //                    qDebug() << arg2 << i <<
-                          //                    threadNumber << c->thread_count;
-                          Q_ASSERT(threadNumber < c->thread_count);
-
-                          // emms_c();
-                          int val = func(c, arg2, i, threadNumber);
-                          // emms_c();
-                          return val;
-                        });
-
-  f.waitForFinished();
-  if (ret)
-    for (int i = 0; i < count; ++i) ret[i] = results[i];
-
-  qDebug() << "finished";
-  return 0;
-}
-#endif
-
-bool VideoContext::nextFrame(QImage& outQImg) {
-  bool gotFrame = decodeFrame();
-
+void VideoContext::frameToQImg(QImage& img) {
   int w, h, fmt;
 
   if (convertFrame(w, h, fmt))
-    avImgToQImg(_p->scaled.data, _p->scaled.linesize, w, h, outQImg, AVPixelFormat(fmt));
+    avImgToQImg(_p->scaled.data, _p->scaled.linesize, w, h, img,
+                AVPixelFormat(fmt));
   else
-    avFrameToQImg(*(_p->frame), outQImg);
+    avFrameToQImg(*(_p->frame), img);
 
+  bool isKey = _p->frame->key_frame ||
+               _p->frame->pict_type == AV_PICTURE_TYPE_I;
+
+  img.setText("isKey", QString::number(isKey));
+
+  auto conv = av_mul_q(_p->videoStream->time_base,
+                                   _p->videoStream->r_frame_rate);
+  auto pts = av_make_q(_p->frame->best_effort_timestamp, 1);
+  int frameNumber = av_q2d(av_mul_q(pts, conv));
+
+  img.setText("frame", QString::number(frameNumber));
+
+  const char* formatName = av_get_pix_fmt_name(AVPixelFormat(_p->frame->format));
+  if (formatName) {
+    img.setText("format", formatName);
+    _metadata.pixelFormat = formatName;
+  }
+}
+
+bool VideoContext::nextFrame(QImage& outQImg) {
+  bool gotFrame = decodeFrame();
+  frameToQImg(outQImg);
   return gotFrame;
 }
 
@@ -1074,4 +1003,25 @@ float VideoContext::aspect() const {
     _p->sar = 1.0f;
   }
   return _p->sar;
+}
+
+QString VideoContext::Metadata::toString(bool styled) const {
+  QString fmt;
+  if (styled)
+    fmt =
+        "<span class=\"time\">%1</span> "
+        "<span class=\"video\">%2fps %3 @ %4k</span> "
+        "<span class=\"audio\">%5khz %6ch %7 @ %8k</span>";
+  else
+    fmt = "%1 %2fps %3 @ %4k / %5khz %6ch %7 @ %8k";
+
+  return QString(fmt)
+      .arg(timeDuration().toString("mm:ss"))
+      .arg(double(frameRate))
+      .arg(videoCodec)
+      .arg(videoBitrate / 1000)
+      .arg(sampleRate / 1000)
+      .arg(channels)
+      .arg(audioCodec)
+      .arg(audioBitrate / 1000);
 }

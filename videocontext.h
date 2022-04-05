@@ -46,6 +46,7 @@ class VideoContext {
     int sampleRate, channels;
     int duration;
     QDateTime creationTime;
+    QString pixelFormat; // only valid after nextFrame()
 
     Metadata() {
       isEmpty = true;
@@ -53,27 +54,8 @@ class VideoContext {
       videoBitrate = audioBitrate = sampleRate = channels = duration = 0;
     }
 
-    /// @return if styled, string for WidgetHelper::drawRichText
-    QString toString(bool styled = false) const {
-      QString fmt;
-      if (styled)
-        fmt =
-            "<span class=\"time\">%1</span> "
-            "<span class=\"video\">%2fps %3 @ %4k</span> "
-            "<span class=\"audio\">%5khz %6ch %7 @ %8k</span>";
-      else
-        fmt = "%1 %2fps %3 @ %4k / %5khz %6ch %7 @ %8k";
-
-      return QString(fmt)
-          .arg(timeDuration().toString("mm:ss"))
-          .arg(double(frameRate))
-          .arg(videoCodec)
-          .arg(videoBitrate / 1000)
-          .arg(sampleRate / 1000)
-          .arg(channels)
-          .arg(audioCodec)
-          .arg(audioBitrate / 1000);
-    }
+    /// @return if styled, return html for WidgetHelper::drawRichText
+    QString toString(bool styled = false) const;
 
     QTime timeDuration() const { return QTime(0, 0).addSecs(duration); }
   };
@@ -139,12 +121,14 @@ class VideoContext {
   bool seekFast(int frame);
 
   /**
-   * accurate seek, seekFast() then seekDumb() until we hit the target
-   * @param opt     options for frame decoding when saving frames
-   * @param decoded optionally store frames between seek point and target
+   * accurate seek, seek to nearest I-frame and decoded frames to the target
+   * @param decoded optionally store otherwise discarded frames,
+   *                in order before the target
+   * @param maxDecoded [in] max number of frames to store
+   *                   [out] number of frames actually decoded
    */
-  bool seek(int frame, const DecodeOptions& opt = DecodeOptions(),
-            QVector<QImage>* decoded = nullptr);
+  bool seek(int frame,
+            QVector<QImage>* decoded = nullptr, int* maxDecoded=nullptr);
 
   /**
    * get the next frame available
@@ -170,23 +154,21 @@ class VideoContext {
   int deviceIndex() const { return _deviceIndex; }
   int threadCount() const { return _numThreads; }
 
+  /// @note only public for benchmarking
   bool decodeFrame();
 
  private:
   bool readPacket();
   bool convertFrame(int& w, int& h, int& fmt);
+  void frameToQImg(QImage& img);
+  int ptsToFrame(int64_t pts) const;
+  int64_t frameToPts(int frame) const;
 
   static QHash<void*, QString>& pointerToFileName();
   static QMutex* avLogMutex();
   static void avLogger(void* ptr, int level, const char* fmt, va_list vl);
   static void avLoggerSetFileName(void* ptr, const QString& name);
   static void avLoggerUnsetFileName(void* ptr);
-
-//  static int avExecute(struct AVCodecContext* c,
-//                       int (*func)(struct AVCodecContext* c2, void* arg),
-//                       void* arg2, int* ret, int count, int size);
-//  static int avExecute2(struct AVCodecContext* c, AvExec2Callback func,
-//                        void* arg2, int* ret, int count);
 
   QString _path;
   VideoContextPrivate* _p;
@@ -200,7 +182,7 @@ class VideoContext {
   int _deviceIndex;        // device index of the decoder
   bool _isHardware;        // using hardware codec
   bool _isHardwareScaled;  // hardware codec also does the scaling
-  bool _flush;             // true when eof on input
+  bool _eof;               // true when eof on input
   int _numThreads;         // max number of threads for decoding
   VideoContext::DecodeOptions _opt;
 };
