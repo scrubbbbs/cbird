@@ -1032,12 +1032,16 @@ int main(int argc, char** argv) {
 
       path = dir.absolutePath();
 
-      const MediaGroupList list = engine().db->dupsByMd5(params);
-
+      MediaGroupList list = engine().db->dupsByMd5(params);
       MediaGroupList filtered;
       for (const MediaGroup& g : list)
         for (const Media& m : g)
-          if (m.path().startsWith(path)) filtered.append(g);
+          if (m.path().startsWith(path)) {
+            filtered.append(g);
+            if (params.verbose)
+              qInfo() << "dup-nuke:" << m.path().mid(engine().db->path().length()+1);
+            break;
+          }
 
       qInfo() << "dup-nuke:" << filtered.count() << "duplicates";
       if (filtered.count() <= 0) continue;
