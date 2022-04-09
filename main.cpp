@@ -149,6 +149,7 @@ static int printUsage(int argc, char** argv) {
         H2 "-similar                         similar items in entire index"
         H2 "-similar-in <selector>           similar items within a subset"
         H2 "-similar-to <file>|<selector>    similar items to a file, directory, or subset, within entire index"
+        H2 "-weeds                           previously deleted files that came back"
 
         H1 "Selections"
         HR
@@ -182,7 +183,6 @@ static int printUsage(int argc, char** argv) {
         H2 "-sort-similar                       sort selection by similarity"
         H2 "-merge <selector> <selector>        merge two selections by similarity, into a new list, assuming first selection is sorted"
 
-
         H1 "Operations on Selection/Results"
         HR
         H2 "-remove                            remove from the index (force re-indexing)"
@@ -200,8 +200,8 @@ static int printUsage(int argc, char** argv) {
         H2 "-sets                            enable group view, group results with the same pair of directories"
         H2 "-exit-on-select                  \"select\" action exits with selected index as exit code, < 0 if canceled"
         H2 "-max-per-page <int>              maximum items on one page [10]"
+        H2 "-track-weeds                     remember deleted files for future detection (-weeds)"
         H2 "-show                            show results browser for the current selection/results"
-
 
         H1 "Miscellaneous"
         HR
@@ -270,32 +270,33 @@ static int printUsage(int argc, char** argv) {
         H2 "<comparator>                    expression to test a value, returns true or false, default operator =="
         H2 "    :<regular-expression>       - pcre matches any part of value"
         H2 "    [<binop>]<string>           - compare using operator, string is converted to value's type"
-        H2 "    ~null                       - tests if value is null/missing vs empty"
+        H2 "    %null                       - true if value is null"
+        H2 "    %!null                      - true if value is not null"
+        H2 "    %empty                      - true if value is empty (after conversion to string)"
+        H2 "    %!empty                     - true if value is not empty (after conversion to string)"
         H2 "<prop>                          item property for sorting, grouping, filtering"
         H2 "    id                          - unique id"
         H2 "    isValid                     - 1 if id != 0"
         H2 "    md5                         - checksum"
         H2 "    type                        - 1=image,2=video,3=audio"
         H2 "    path                        - file path"
-        H2 "    parentPath                  - parent path (dirpath)"
+        H2 "    parentPath                  - archivePath if archive, or dirPath"
+        H2 "    dirPath                     - parent directory path"
         H2 "    relPath                     - relative file path to cwd"
         H2 "    name                        - file name"
         H2 "    completeBaseName            - file name w/o suffix"
-        H2 "    archivePath                 - archive/zip path, or empty"
+        H2 "    archivePath                 - archive/zip path, or empty if non-archive"
         H2 "    suffix                      - file suffix"
         H2 "    isArchived                  - 1 if archive member"
         H2 "    archiveCount                - number of archive members"
-
         H2 "    contentType                 - mime content type"
         H2 "    width                       - pixel width"
         H2 "    height                      - pixel height"
         H2 "    resolution                  - width*height"
         H2 "    res                         - max of width, height"
         H2 "    compressionRatio            - resolution / file size"
-
         H2 "    score                       - match score"
         H2 "    matchFlags                  - match flags (Media::matchFlags)"
-
         H2 "    exif:<tag1[,tagN]>          - comma-separated exif tags, first available tag is used (\"Exif.\" prefix optional)"
         H2 "                                  see: https://www.exiv2.org/tags.html"
         H2 "    ffmeta:<tag1[,tagN]         - comma-separated ffmpeg metadata tags, first available tag is used"
@@ -380,7 +381,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
       "-exit-on-select", "-show",          "-help",          "-version",
       "-about",          "-verify",        "-vacuum",        "-select-result",
       "-license",        "-cwd",           "-init",          "-list-search-params",
-      "-list-index-params",
+      "-list-index-params", "-weeds",      "-track-weeds"
       };
   cmds += noArgs;
 
@@ -686,9 +687,21 @@ class Comparator {
  public:
   Comparator(const QString& valueExp) {
     QString exp;
-    if (valueExp == "~null") {
+    if (valueExp == "%null") {
       _convert = [](const QString& str) { return QVariant(str); };
       _operator = [&](const QVariant& v) { return v.isNull(); };
+      _value = QVariant();
+    } else if (valueExp == "%!null") {
+        _convert = [](const QString& str) { return QVariant(str); };
+        _operator = [&](const QVariant& v) { return !v.isNull(); };
+        _value = QVariant();
+    } else if (valueExp == "%empty") {
+      _convert = [](const QString& str) { return QVariant(str); };
+      _operator = [&](const QVariant& v) { return v.toString().isEmpty(); };
+      _value = QVariant();
+    } else if (valueExp == "%!empty") {
+      _convert = [](const QString& str) { return QVariant(str); };
+      _operator = [&](const QVariant& v) { return !v.toString().isEmpty(); };
       _value = QVariant();
     } else if (valueExp.startsWith(":")) {
       _convert = [](const QString& str) { return QVariant(str); };
@@ -821,8 +834,7 @@ int main(int argc, char** argv) {
 
   // show/display options
   int showMode = MediaBrowser::ShowNormal;
-  int selectMode = MediaBrowser::SelectSearch;
-  int maxPerPage = 10;  // max images on a page (when paging)
+  MediaWidgetOptions widgetOptions;
 
   auto sqlEscapePath = [](const QString& path) {
     return QString(path).replace("%", "\\%").replace("_", "\\_");
@@ -1267,10 +1279,13 @@ int main(int argc, char** argv) {
       selection.clear();
       queryResult = list;
       qInfo() << "similar-to:" << queryResult.count() << "result(s)";
+    } else if (arg == "-weeds") {
+      selection.clear();
+      queryResult = engine().db->weeds();
     } else if (arg == "-select-none") {
       selection.clear();
     } else if (arg == "-select-all") {
-      selection.append(engine().db->mediaWithPathLike("%"));
+      selection.append(engine().db->mediaWithSql("select * from media"));
     } else if (arg == "-select-id") {
       int id = intArg(nextArg());
       Media m = engine().db->mediaWithId(id);
@@ -1607,7 +1622,7 @@ int main(int argc, char** argv) {
         QSet<QString> parents;
         MediaGroup filtered;
         for (auto& m : g) {
-          auto p = m.parentPath();
+          auto p = m.dirPath();
           if (parents.contains(p)) continue;
           filtered.append(m);
           parents.insert(p);
@@ -1626,37 +1641,29 @@ int main(int argc, char** argv) {
       auto future = QtConcurrent::map(selection, getValue);
       future.waitForFinished();
       Media::sortGroup(selection, sortKey, arg == "-sort-rev");
+      for (auto& m : selection) m.setAttribute("sort", sortKey);
     } else if (arg == "-group-by") {
-      const QString arg = nextArg();
-      auto getProperty = Media::propertyFunc(arg);
+      const QString expr = nextArg();
+      const auto getProperty = Media::propertyFunc(expr);
 
-      // mt to fetch the value
-      QVector<QFuture<QVariant>> work;
-      for (auto& m : selection)
-        work.append(QtConcurrent::run([=]() { return getProperty(m); }));
-
-      QHash<QString, MediaGroup> groups;
-      for (auto& m : selection) {
-        auto f = work.front();
-        f.waitForFinished();
-        work.pop_front();
-        qInfo("group-by:<PL> %d/%d", selection.count() - work.count(),
-               selection.count());
-
-        const QString key = f.result().toString();
-
-        // display key for the group in views
-        m.setAttribute("group", arg + " == " + key);
-
-        auto it = groups.find(key);
-        if (it != groups.end())
-          it->append(m);
-        else
-          groups.insert(key, MediaGroup({m}));
+      // note: getProperty can be slow (exif) so thread it
+      // todo: this would be faster for huge lists if items were chunked
+      auto f = QtConcurrent::map(selection, [&](Media& m) {
+        QString attr = expr + " == " + getProperty(m).toString();
+        m.setAttribute("group", attr);
+      });
+      while (f.isRunning()) {
+        qInfo("group-by:<PL> %d/%d", f.progressValue(), selection.count());
+        QThread::msleep(10);
       }
 
-      selection.clear();
+      QHash<QString, MediaGroup> groups;
+      for (const auto& m : qAsConst(selection)) groups[m.attributes()["group"]].append(m);
+
       queryResult = groups.values().toVector();
+      qInfo("group-by: { %s } %d groups from %d items", qUtf8Printable(expr), queryResult.count(),
+            selection.count());
+      selection.clear();
     } else if (arg == "-sort-similar") {
       MediaGroup sorted;
       SearchParams sp = params;
@@ -1702,7 +1709,7 @@ int main(int argc, char** argv) {
 
         // if we did not find anything, what now?
         if (i % 100 == 0)
-          qInfo("sort-similar: <PL>%d / %d", i, selection.count());
+          qInfo("sort-similar:<PL> %d / %d", i, selection.count());
       }
 
       int missed = selection.count() - sorted.count();
@@ -1710,6 +1717,8 @@ int main(int argc, char** argv) {
         qWarning() << "sort-similar: " << missed
                    << " items were not found and dropped, use fuzzier search";
       selection = sorted;
+      for (auto& m : selection) m.setAttribute("sort", "similar");
+
     } else if (arg == "-merge") {
       MediaGroup setA = selectPath(nextArg());
       MediaGroup setB = selectPath(nextArg());
@@ -1780,42 +1789,53 @@ int main(int argc, char** argv) {
         setA.insert(pos, search.needle);
       }
       selection = setA;
+      for (auto& m : selection) m.setAttribute("sort", "merged");
+
     } else if (arg == "-sets") {
       showMode = MediaBrowser::ShowPairs;
     } else if (arg == "-folders") {
       showMode = MediaBrowser::ShowFolders;
     } else if (arg == "-exit-on-select") {
-      selectMode = MediaBrowser::SelectExitCode;
+      widgetOptions.selectionMode = MediaWidgetOptions::SelectExitCode;
     } else if (arg == "-max-per-page") {
-      maxPerPage = intArg(nextArg());
+      widgetOptions.maxPerPage = intArg(nextArg());
+    } else if (arg == "-track-weeds") {
+      widgetOptions.trackWeeds = true;
     } else if (arg == "-show") {
+      widgetOptions.params = params;
+      widgetOptions.db = engine().db;
       if (!queryResult.isEmpty())
-        MediaBrowser::show(queryResult, params, showMode);
+        MediaBrowser::show(queryResult, showMode, widgetOptions);
       else {
-        // note: cannot sort since it fucks up -sort-xxx feature
-        // Media::sortGroup(selection, "path");
+        // sort by folder/archive if no sort was given
+        // note: cannot sort unless there is no sort
+        if (selection.count() && !selection.first().attributes().contains("sort"))
+          Media::sortGroup(selection, "path", false);
 
-        qDebug("make groups of %d", maxPerPage);
+        auto getProp = Media::propertyFunc("parentPath");
+
+        qDebug("make groups of %d", widgetOptions.maxPerPage);
         MediaGroupList list;
         MediaGroup group;
-        QString parent =
-            selection.count() > 0 ? selection[0].parentPath() : QString();
+        QString groupKey =
+            selection.count() > 0 ? getProp(selection[0]).toString() : QString();
         for (const Media& m : selection) {
           bool closeGroup = false;
 
           // split on parent path if using folder view
           // show each video as a separate thumbnail
           if (showMode == MediaBrowser::ShowFolders) {
-            if (parent == m.parentPath() && m.type() != Media::TypeVideo)
+            auto key = getProp(m).toString();
+            if (groupKey == key && m.type() != Media::TypeVideo)
               group.append(m);
             else {
               closeGroup = true;
-              parent = m.parentPath();
+              groupKey = key;
             }
           } else
             group.append(m);
 
-          if (group.count() >= maxPerPage || closeGroup) {
+          if (group.count() >= widgetOptions.maxPerPage || closeGroup) {
             if (group.count() > 0) list.append(group);
             group.clear();
             if (closeGroup) group.append(m);
@@ -1830,8 +1850,8 @@ int main(int argc, char** argv) {
             m.setPosition(pos++);
 
         qDebug("show browser: mode=%d groups=%d", showMode, list.count());
-        int status = MediaBrowser::show(list, params, showMode, selectMode);
-        if (selectMode == MediaBrowser::SelectExitCode) return status - 1;
+        int status = MediaBrowser::show(list, showMode, widgetOptions);
+        if (widgetOptions.selectionMode == MediaWidgetOptions::SelectExitCode) return status - 1;
       }
     } else if (arg == "-qualityscore") {
       IndexResult result = engine().scanner->processImageFile(nextArg());
@@ -1989,7 +2009,8 @@ int main(int argc, char** argv) {
     } else if (arg == "-view-image") {
       Media m(nextArg(), Media::TypeImage);
       MediaGroupList l{{m}};
-      MediaBrowser::show(l, params, showMode);
+      widgetOptions.params = params;
+      MediaBrowser::show(l, showMode, widgetOptions);
     } else if (arg == "-test-video-decoder") {
       const QString path = nextArg();
 
