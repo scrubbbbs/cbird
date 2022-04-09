@@ -29,6 +29,9 @@ class TestDatabase : public TestIndexBase {
   void testMoveDir();
   void testMoveZip();
 
+  void testNegativeMatch();
+  void testWeeds();
+
  private:
   void existingPaths(bool archived, QString& path1, QString& path2);
 };
@@ -192,22 +195,22 @@ void TestDatabase::testRenameDir() {
   QVERIFY(!_database->moveDir("/", "/tmp"));
 
   // rename to itself
-  QVERIFY(!_database->moveDir(first.parentPath(), first.parentPath()));
+  QVERIFY(!_database->moveDir(first.dirPath(), first.dirPath()));
 
   // /tmp1 is not index subdir
-  QVERIFY(!_database->moveDir(first.parentPath(), "/tmp1"));
+  QVERIFY(!_database->moveDir(first.dirPath(), "/tmp1"));
 
   // foo/bar is not a valid name
-  QVERIFY(!_database->moveDir(first.parentPath(), "foo/bar"));
+  QVERIFY(!_database->moveDir(first.dirPath(), "foo/bar"));
 
   // this should work
-  QVERIFY(_database->moveDir(first.parentPath(), newName));
+  QVERIFY(_database->moveDir(first.dirPath(), newName));
 
   QCOMPARE(_database->mediaWithPathLike(newName+"/%").count(),
            dirContents.count());
 
   // move it back, (restore the data dir)
-  QDir dir(first.parentPath());
+  QDir dir(first.dirPath());
   dir.cdUp();
   QString newPath = dir.absoluteFilePath(newName);
   QVERIFY(_database->moveDir(newPath, dirName));
@@ -251,18 +254,18 @@ void TestDatabase::testMoveDir() {
   const QString newName = "otherdir/dir.moved";
 
   // fail, dst dir does not exist
-  QVERIFY(!_database->moveDir(first.parentPath(), "bogusDir/dir.moved"));
+  QVERIFY(!_database->moveDir(first.dirPath(), "bogusDir/dir.moved"));
 
-  QVERIFY(_database->moveDir(first.parentPath(), newName));
+  QVERIFY(_database->moveDir(first.dirPath(), newName));
 
   QCOMPARE(_database->mediaWithPathLike(newName+"/%").count(),
            dirContents.count());
 
   // move it back, (restore the data dir)
-  QDir dir(first.parentPath());
+  QDir dir(first.dirPath());
   dir.cdUp();
   QString newPath = dir.absoluteFilePath(newName);
-  QVERIFY(_database->moveDir(newPath, first.parentPath()));
+  QVERIFY(_database->moveDir(newPath, first.dirPath()));
 
   QCOMPARE(_database->mediaWithPathLike(dirName+"/%").count(),
            dirContents.count());
@@ -298,6 +301,106 @@ void TestDatabase::testMoveZip() {
 
   QCOMPARE(_database->mediaWithPathLike(zipPath+"%").count(),
            zipContents.count());
+}
+
+void TestDatabase::testNegativeMatch() {
+  {
+    Media needle, deleted;
+    _database->addNegativeMatch(needle, deleted);
+    QVERIFY(!_database->isNegativeMatch(needle, deleted));
+  }
+
+  MediaGroupList dups =_database->dupsByMd5(SearchParams());
+  QVERIFY(dups.count() >= 3);
+  MediaGroup& g = dups[0];
+  QVERIFY(g.count() >= 2);
+
+  // fail, same md5
+  _database->addNegativeMatch(g[0], g[1]);
+  QVERIFY(!_database->isNegativeMatch(g[0],g[1]));
+
+  const Media& a = dups[0][0];
+  const Media& b = dups[1][0];
+  const Media& c = dups[2][0];
+
+  QVERIFY(!_database->isNegativeMatch(a,b));
+  QVERIFY(!_database->isNegativeMatch(a,c));
+
+  _database->addNegativeMatch(a, b);
+  _database->addNegativeMatch(b, a);
+  _database->addNegativeMatch(a, c);
+
+  QVERIFY(_database->isNegativeMatch(a,b));
+  QVERIFY(_database->isNegativeMatch(b,a));
+  QVERIFY(_database->isNegativeMatch(c,a));
+
+  _database->unloadNegativeMatches();
+  QVERIFY(_database->isNegativeMatch(a,b));
+  QVERIFY(_database->isNegativeMatch(b,a));
+  QVERIFY(_database->isNegativeMatch(c,a));
+
+  MediaGroup g1({a,b,c});
+  g1 = _database->filterNegativeMatches(g1);
+  Media::printGroup(g1);
+  QVERIFY(g1.count() == 0); // a,b a,c are neg;
+
+  MediaGroup g2({b,c,a});
+  g2 = _database->filterNegativeMatches(g2);
+  QVERIFY(g2.count() == 2); // a removed but not c
+  QVERIFY(g2[0] == b);
+  QVERIFY(g2[1] == c);
+
+  MediaGroup g3({a});
+  g3 = _database->filterNegativeMatches(g3);
+  QVERIFY(g3.count() == 1);
+  QVERIFY(g3[0] == a);
+}
+
+void TestDatabase::testWeeds() {
+
+  {
+    // fail, no md5 sums
+    Media needle, weed;
+    QVERIFY(!_database->addWeed(needle, weed));
+    QVERIFY(!_database->isWeed(needle, weed));
+  }
+
+  MediaGroupList dups =_database->dupsByMd5(SearchParams());
+  QVERIFY(dups.count() >= 3);
+  MediaGroup& g = dups[0];
+  QVERIFY(g.count() >= 2);
+
+  // fail, same md5 sums
+  QVERIFY(!_database->addWeed(g[0], g[1]));
+  QVERIFY(!_database->isWeed(g[0], g[1]));
+
+  // success, different sets of dups
+  const Media& needle = dups[0][0];
+  const Media& dup = dups[1][0];
+  const Media& other = dups[2][0];
+  QVERIFY(!_database->isWeed(needle, dup));
+  QVERIFY(_database->addWeed(needle, dup));
+  QVERIFY(_database->addWeed(dup, other));
+  QVERIFY(_database->isWeed(needle, dup));
+  QVERIFY(_database->isWeed(dup, other));
+
+  // converse should not be true (unlike negative match)
+  QVERIFY(!_database->isWeed(dup, needle));
+
+  // unload/re-load from file
+  _database->unloadWeeds();
+  QVERIFY(_database->isWeed(needle, dup));
+
+  // remove the needle md5 from database and check that
+  // it was also removed from confirmed deletions
+  _database->remove(_database->mediaWithMd5(needle.md5()));
+  qDebug() << needle.id() << needle.md5();
+  QVERIFY(0 == _database->mediaWithMd5(needle.md5()).count());
+
+  QVERIFY(_database->isWeed(needle, dup)); // not removed yet
+  _database->updateWeeds();
+  QVERIFY(!_database->isWeed(needle, dup)); // now removed
+  QVERIFY(_database->isWeed(dup, other)); // not removed
 }
 
 QTEST_MAIN(TestDatabase)

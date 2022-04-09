@@ -137,8 +137,12 @@ void TestTemplateMatcher::testMatch() {
     MediaGroupList list;
     list.append(g);
 
+    MediaWidgetOptions options;
+    options.params = params;
+    options.db = _database;
+
     MediaGroupListWidget* w =
-        new MediaGroupListWidget(list, nullptr, 0, _database);
+        new MediaGroupListWidget(list, options);
     w->show();
     QEventLoop* loop = new QEventLoop;
     loop->processEvents();

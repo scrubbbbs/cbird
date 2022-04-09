@@ -12,7 +12,7 @@ class TestDctVideoIndex : public TestIndexBase {
     baseInitTestCase(new DctVideoIndex, "xiph-video");
     _params.algo = SearchParams::AlgoVideo;
     _params.filterSelf = false;
-    _params.dctThresh = 3;
+    _params.dctThresh = 4;
     _params.minFramesMatched = 10;
     _params.minFramesNear = 50;
     _params.verbose = true;
