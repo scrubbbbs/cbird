@@ -1600,8 +1600,8 @@ QMutex& CVErrorLogger::mutex() {
   return _mutex;
 }
 
-QMap<QThread*, CVErrorLogger*>&  CVErrorLogger::map() {
-  static QMap<QThread*, CVErrorLogger*> _map;
+QHash<QThread*, CVErrorLogger*>&  CVErrorLogger::map() {
+  static QHash<QThread*, CVErrorLogger*> _map;
   return _map;
 }
 

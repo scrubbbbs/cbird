@@ -223,6 +223,7 @@ Wish List
 - prune groups, keeping/ignoring needle
 - rename folders based on filenames
 - copy or sync exif data with matching images
+- aspect ratio property
 
 ### Indexing
 - store date-modified,size for better updating
@@ -261,16 +262,22 @@ Wish List
 - remember past deletions and optionally replay them in the future should they reappear (via traal)
 - detect breaking of symlinks on deletion
 
+### Misc
+- method declartion sweep
+	- unecessary "virtual"
+	- "override"
+	- "const"
+
 Major Bugs
 ==========================
 - might be possible for -remove to corrupt database
   - e.g. -select-type 1 -remove -update
 - sws_scale buffer overflow (264x480 yuv420p)
-- MBW move folder option broken
+- ~~MBW move folder option broken~~ removed in v0.5.1
 
 Minor Bugs
 =========================
-- max matches (-p.mm) is off by one in the final result
+- ~~max matches (-p.mm) is off by one in the final result~~ v0.5.1
 - maybe scale up small svg prior to indexing
 - 64-bit image support
 - colordescriptor somewhat non-deterministic, could be a bug

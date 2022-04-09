@@ -52,7 +52,8 @@ QMAKE_EXTRA_TARGETS += git
 
 
 # Input
-HEADERS += $$files(*.h)
+HEADERS += $$files(*.h) \
+    gui/mediawidget.h
 HEADERS += $$files(gui/*.h)
 HEADERS += $$files(lib/*.h)
 HEADERS += $$files(tree/*.h)

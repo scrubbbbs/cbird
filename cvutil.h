@@ -35,7 +35,7 @@ class CVErrorLogger {
                    const char* err_msg, const char* file_name,
                    int line, void* userData);
   static QMutex& mutex();
-  static QMap<QThread*, CVErrorLogger*>& map();
+  static QHash<QThread*, CVErrorLogger*>& map();
 
   QString _context;
 };

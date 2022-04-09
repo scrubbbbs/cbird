@@ -59,7 +59,6 @@ class Params {
   }
 
   void print() const;
-  //QStringList completions(const char* key);
 
  protected:
   void add(const Value&& v);
