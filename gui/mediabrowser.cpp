@@ -19,53 +19,40 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "mediabrowser.h"
+
+#include "../database.h"
+#include "../engine.h"
+#include "../qtutil.h"
+#include "../videocontext.h"
 #include "mediafolderlistwidget.h"
 #include "mediagrouplistwidget.h"
-#include "../videocontext.h"
-#include "../engine.h"
-#include "../database.h"
-#include "../qtutil.h"
 
+// todo: use widget options to decouple gui from engine()
 extern Engine& engine();
 
-#define MB_TEXT_MAXLEN (40)  // max char width of item text
-#define MB_MAX_PER_PAGE (36) // fixme: use -max-per-page
-#define MB_THUMB_SIZE (480)
+MediaBrowser::MediaBrowser(const MediaWidgetOptions& options) : _options(options) {}
 
-static QMap<QString, MediaGroupList> _matchSets;
-
-MediaBrowser::MediaBrowser(const SearchParams& params, bool sets,
-                           int selectionMode) {
-  _params = params;
-  _sets = sets;
-  _selectionMode = selectionMode;
-}
-
-int MediaBrowser::showList(const MediaGroupList& list,
-                           const SearchParams& params, int selectionMode) {
-  MediaBrowser browser(params, false, selectionMode);
+int MediaBrowser::showList(const MediaGroupList& list, const MediaWidgetOptions& options) {
+  MediaBrowser browser(options);
   browser.show(list);
   return qApp->exec();
 }
 
-int MediaBrowser::show(const MediaGroupList& list, const SearchParams& params,
-                       int mode, int selectionMode) {
+int MediaBrowser::show(const MediaGroupList& list, int mode, const MediaWidgetOptions& options) {
   if (list.count() <= 0) return 0;
   for (auto& g : list)
     if (g.count() <= 0) {
       qCritical() << "empty group in list";
       return 0;
     }
-  if (mode == ShowNormal)
-    return MediaBrowser::showList(list, params, selectionMode);
-  if (mode == ShowPairs) return MediaBrowser::showSets(list, params);
-  if (mode == ShowFolders) return MediaBrowser::showFolders(list, params);
+  if (mode == ShowNormal) return MediaBrowser::showList(list, options);
+  if (mode == ShowPairs) return MediaBrowser::showSets(list, options);
+  if (mode == ShowFolders) return MediaBrowser::showFolders(list, options);
 
   Q_UNREACHABLE();
 }
 
-int MediaBrowser::showFolders(const MediaGroupList& list,
-                              const SearchParams& params) {
+int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptions& options) {
   if (list.count() <= 0) return 0;
 
   QString prefix = Media::greatestPathPrefix(list);
@@ -73,7 +60,7 @@ int MediaBrowser::showFolders(const MediaGroupList& list,
   class GroupStats {
    public:
     int itemCount = 0;
-    //int byteCount = 0;
+    // int byteCount = 0;
   };
 
   QHash<QString, GroupStats> stats;
@@ -84,85 +71,86 @@ int MediaBrowser::showFolders(const MediaGroupList& list,
     Q_ASSERT(g.count() > 0);
     const Media& first = g.at(0);
     QString key, tmp;
-    if (first.isArchived())
-      first.archivePaths(key, tmp);
-    else if (first.type() == Media::TypeVideo)
-      key = first.path();
-    else
-      key = first.parentPath();  // todo: media::parent, media::relativeParent,
-                                 // media::relativePath
-    key = key.mid(prefix.length());
-    key = qElide(key, MB_TEXT_MAXLEN);
+
+    key = first.attributes().value("group"); // from -group-by
+    if (key.isEmpty()) {
+      // path-based grouping
+      if (first.isArchived())
+        first.archivePaths(key, tmp);
+      else if (first.type() == Media::TypeVideo)
+        key = first.path();
+      else
+        key = first.dirPath();  // todo: media::parent, media::relativeParent,
+                                   // media::relativePath
+      key = key.mid(prefix.length());
+    }
+    key = qElide(key, options.iconTextWidth);
     keys.append(key);
 
     GroupStats& s = stats[key];
     s.itemCount += g.count();
-//    for (const Media& m : g) {
-//      Media tmp(m);
-//      tmp.readMetadata();
-//      s.byteCount += tmp.originalSize();
-//    }
+    //    for (const Media& m : g) {
+    //      Media tmp(m);
+    //      tmp.readMetadata();
+    //      s.byteCount += tmp.originalSize();
+    //    }
   }
+
+  QHash<QString, MediaGroupList> folders;
 
   qInfo() << "building folders...";
   for (int i = 0; i < list.count(); i++) {
     QString key = keys[i];
     GroupStats& s = stats[key];
     QString newKey = key + QString(" [x%1]").arg(s.itemCount);
-    auto& set = _matchSets[newKey];
+    auto& set = folders[newKey];
     const auto& group = list[i];
-    const auto split = Media::splitGroup(group,MB_MAX_PER_PAGE);
+    const auto split = Media::splitGroup(group, options.maxPerPage);
     set.append(split);
   }
 
-  qInfo() << "loading thumbnails...";
-  QVector<QFuture<Media>> work;
   MediaGroup index;
-  for (auto key : _matchSets.keys()) {
-    work.append(QtConcurrent::run([key] {
-      Media m(key);
-      const Media& ref = _matchSets[key][0][0];
-      QImage img;
-      if (ref.type() == Media::TypeVideo)
-        img = VideoContext::frameGrab(ref.path(), -1, true);
-      else
-        img = ref.loadImage(QSize(MB_THUMB_SIZE, 0));
-      m.setImage(img);
-      m.readMetadata();
-      return m;
-    }));
-  }
-  for (auto& w : work) {
-    w.waitForFinished();
-    index.append(w.result());
+  for (auto& key : qAsConst(folders).keys()) index.append(Media(key));
+
+  auto f = QtConcurrent::map(index, [&](Media& m) {
+    const Media& first = folders[m.path()][0][0];
+    QImage img;
+    if (first.type() == Media::TypeVideo)
+      img = VideoContext::frameGrab(first.path(), -1, true);
+    else
+      img = first.loadImage(QSize(0, options.iconSize));
+    m.setImage(img);
+    m.readMetadata();
+  });
+
+  while (f.isRunning()) {
+    qInfo("loading thumbnails... <PL>%d/%d", f.progressValue(), f.progressMaximum());
+    QThread::msleep(100);
   }
 
   qInfo() << "sorting...";
   Media::sortGroup(index, "path");
-  MediaBrowser browser(params, true);
-  browser.showIndex(index, prefix.mid(0, prefix.length() - 1));
+  auto opt = options;
+  opt.basePath = prefix.mid(0, prefix.length() - 1);
+  MediaBrowser browser(opt);
+  browser.showIndex(index, folders);
   return qApp->exec();
 }
 
-int MediaBrowser::showSets(const MediaGroupList& list,
-                           const SearchParams& params) {
+int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions& options) {
   if (list.count() <= 0) return 0;
 
   // try to form a list of MediaGroupList, where each member
-  // matches only between two directories, or an image "set".
+  // matches between two directories, or an image "set".
   // If there is no correlation, put match in "unpaired" set.
-
   MediaGroupList unpaired;
   const char* unpairedKey = "*unpaired*";
 
   MediaGroup index;                  // dummy group for top-level navigation
   index.append(Media(unpairedKey));  // entry for the "unpaired" list
 
+  QHash<QString, MediaGroupList> sets;
   for (MediaGroup g : list) {
-    // note: the groups from search results default sort by score, with
-    // the first image being the needle...probably don't want to sort
-    // Media::sortGroup(g, "path");
-
     QStringList dirPaths;
     for (const Media& m : g) {
       QString path = m.path().left(m.path().lastIndexOf("/"));
@@ -176,73 +164,71 @@ int MediaBrowser::showSets(const MediaGroupList& list,
       const QString& a = dirPaths[0];
       const QString& b = dirPaths[1];
       int i = 0;
-      while (i < a.length() &&     // longest prefix
-             i < b.length() &&
-             a[i] == b[i])
+      while (i < a.length() &&  // longest prefix
+             i < b.length() && a[i] == b[i])
         i++;
-      while (i-1 >= 0 && a[i-1] != '/') // parent dir
+      while (i - 1 >= 0 && a[i - 1] != '/')  // parent dir
         i--;
 
       QString key;
-      key += qElide(dirPaths[0].mid(i), MB_TEXT_MAXLEN) + "/";
+      key += qElide(dirPaths[0].mid(i), options.iconTextWidth) + "/";
       key += "\n";
-      key += qElide(dirPaths[1].mid(i), MB_TEXT_MAXLEN) + "/";
+      key += qElide(dirPaths[1].mid(i), options.iconTextWidth) + "/";
 
-      _matchSets[key].append(g);
+      sets[key].append(g);
     } else {
-      _matchSets[unpairedKey].append(g);
+      sets[unpairedKey].append(g);
     }
   }
 
   // any set with only one match, throw into the "other"
-  QMap<QString, MediaGroupList> filtered;
-  for (auto key : _matchSets.keys())
-    if (key != unpairedKey && _matchSets[key].count() == 1) {
-      _matchSets[unpairedKey].append(_matchSets[key][0]);
-      _matchSets.remove(key);
+  for (auto key : sets.keys())
+    if (key != unpairedKey && sets[key].count() == 1) {
+      sets[unpairedKey].append(sets[key][0]);
+      sets.remove(key);
     } else {
       // add the dummy item to index
       Media m(key);
       if (!index.contains(m)) {
-        m.setImage(_matchSets[key][0][0].loadImage(QSize(MB_THUMB_SIZE, 0)));
-        m.readMetadata();
         index.append(m);
       }
     }
 
-  if (_matchSets[unpairedKey].isEmpty())
+  if (sets[unpairedKey].isEmpty())
     index.removeFirst();
-  else {
-    Media& other = index.first();
-    other.setImage( _matchSets[unpairedKey][0][0].loadImage() );
+
+  auto f = QtConcurrent::map(index, [&](Media& m) {
+    m.setImage(sets[m.path()][0][0].loadImage(QSize{0, options.iconSize}));
+    m.readMetadata();
+  });
+  while (f.isRunning()) {
+    qInfo("loading thumbnails... <PL>%d/%d", f.progressValue(), f.progressMaximum());
+    QThread::msleep(100);
   }
+
   Media::sortGroup(index, "path");
-  MediaBrowser browser(params, true);
+  MediaBrowser browser(options);
 
   if (index.count() == 1)
     browser.show(list);
   else
-    browser.showIndex(index, "");
+    browser.showIndex(index, sets);
 
   return qApp->exec();
 }
 
-void MediaBrowser::showIndex(const MediaGroup& index, const QString& basePath) {
-  MediaFolderListWidget* w =
-      new MediaFolderListWidget(index, basePath, engine().db);
-  connect(w, &MediaFolderListWidget::mediaSelected, this,
-          &MediaBrowser::mediaSelected);
+void MediaBrowser::showIndex(const MediaGroup& index,
+                             const QHash<QString, MediaGroupList>& folders) {
+  _groups = &folders;
+  _options.selectionMode = MediaWidgetOptions::SelectOpen;
+  MediaFolderListWidget* w = new MediaFolderListWidget(index, _options);
+  connect(w, &MediaFolderListWidget::mediaSelected, this, &MediaBrowser::mediaSelected);
   w->show();
 }
 
 void MediaBrowser::show(const MediaGroupList& list) {
-  // todo: browser options
-  // fast seek is not great for many codecs
-  int options = 0;  // MediaGroupListWidget::FlagFastSeek;
-  MediaGroupListWidget* w =
-      new MediaGroupListWidget(list, nullptr, options, engine().db);
-  connect(w, &MediaGroupListWidget::mediaSelected, this,
-          &MediaBrowser::mediaSelected);
+  MediaGroupListWidget* w = new MediaGroupListWidget(list, _options);
+  connect(w, &MediaGroupListWidget::mediaSelected, this, &MediaBrowser::mediaSelected);
   w->show();
   w->activateWindow();
   w->setAttribute(Qt::WA_DeleteOnClose);
@@ -250,26 +236,25 @@ void MediaBrowser::show(const MediaGroupList& list) {
 
 void MediaBrowser::mediaSelected(const MediaGroup& group) {
   for (const Media& m : group) {
-    if (_selectionMode == SelectExitCode) {
+    if (_options.selectionMode == MediaWidgetOptions::SelectExitCode) {
       qApp->exit(m.position() + 1);  // subtract 1 where show() was called
       return;
     }
 
-    const MediaFolderListWidget* mw =
-        dynamic_cast<MediaFolderListWidget*>(sender());
-    if (mw && _sets && _matchSets.count() > 0)
-      show(_matchSets[m.path()]);
+    const MediaFolderListWidget* mw = dynamic_cast<MediaFolderListWidget*>(sender());
+    if (mw && _options.selectionMode == MediaWidgetOptions::SelectOpen && _groups &&
+        _groups->count() > 0)
+      show(_groups->value(m.path()));
     else {
       MediaSearch search;
       search.needle = m;
-      search.params = _params;
+      search.params = _options.params;
       search = engine().query(search);
 
       search.matches.prepend(search.needle);
       MediaGroupList list;
-      if (!engine().db->filterMatch(_params, search.matches))
-        list.append(search.matches);
-      engine().db->filterMatches(_params, list);
+      if (!engine().db->filterMatch(_options.params, search.matches)) list.append(search.matches);
+      engine().db->filterMatches(_options.params, list);
       show(list);
     }
   }

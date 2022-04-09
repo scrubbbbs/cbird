@@ -20,6 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #pragma once
 #include "../media.h"
+#include "mediawidget.h"
 
 class Database;
 class MediaItemDelegate;
@@ -40,14 +41,9 @@ class MediaGroupListWidget : public QListWidget {
   friend class MediaItemDelegate;
 
  public:
-  enum Flags {
-    FlagFastSeek = 1 << 1,       /// use fast but inaccurate seek for thumbnails
-    FlagSelectFirst = 1 << 2,    /// set initial selection to first item
-    FlagDisableDelete = 1 << 3,  /// do not allow deletion of files
-  };
-
-  MediaGroupListWidget(const MediaGroupList& list, QWidget* parent = nullptr,
-                       int flags = 0, Database* db = nullptr);
+  MediaGroupListWidget(const MediaGroupList& list,
+                       const MediaWidgetOptions& options = MediaWidgetOptions(),
+                       QWidget* parent = nullptr);
 
   virtual ~MediaGroupListWidget();
 
@@ -57,7 +53,7 @@ class MediaGroupListWidget : public QListWidget {
   void showNormal() = delete;
   void close();
 
-  bool fastSeek() const { return _flags & FlagFastSeek; }
+  bool fastSeek() const { return _options.flags & MediaWidgetOptions::FlagFastSeek; }
 
  Q_SIGNALS:
   /// Emitted by chooseAction()
@@ -266,8 +262,7 @@ private:
   QMenu* dirMenu(const char* slot);
 
   MediaGroupList _list;
-  int _flags;
-  Database* _db;
+  MediaWidgetOptions _options;
   MediaItemDelegate* _itemDelegate;
 
   QList<QFutureWatcher<void>*> _loaders; // loadMedia() threadpool tasks

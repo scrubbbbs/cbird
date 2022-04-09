@@ -20,6 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #pragma once
 #include "../media.h"
+#include "mediawidget.h"
 
 class Database;
 
@@ -28,8 +29,9 @@ class MediaFolderListWidget : public QListWidget {
   NO_COPY_NO_DEFAULT(MediaFolderListWidget, QListWidget)
 
  public:
-  MediaFolderListWidget(const MediaGroup& list, const QString& basePath,
-                        Database* db = nullptr, QWidget* parent = nullptr);
+  MediaFolderListWidget(const MediaGroup& list,
+                        const MediaWidgetOptions& options = MediaWidgetOptions(),
+                        QWidget* parent = nullptr);
   virtual ~MediaFolderListWidget();
 
  Q_SIGNALS:
@@ -37,16 +39,15 @@ class MediaFolderListWidget : public QListWidget {
 
  private Q_SLOTS:
   void chooseAction();
-  void moveFolderAction();
+  //void moveFolderAction(); //todo: refactor MGLW moveFolder to make this work
 
  private:
   void closeEvent(QCloseEvent* event);
   void close();
 
   MediaGroup selectedMedia() const;
+  float requiredMemory(int row) const;
 
   MediaGroup _list;
-  QString _basePath;
-  Database* _db = nullptr;
-  float requiredMemory(int row) const;
+  MediaWidgetOptions _options;
 };

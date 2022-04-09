@@ -41,9 +41,6 @@
 #define LW_ZOOM_IN_STEP (0.9)
 #define LW_ZOOM_OUT_STEP (1.1)
 
-#define FW_ICON_SIZE (200)    // folder list view icon size
-//#define LW_WM_ICON_SIZE (128) // size of window/application icon
-
 #define LW_ITEM_SPACING (8)
 #define LW_ITEM_MIN_IMAGE_HEIGHT (16)  // do not draw image below this
 #define LW_ITEM_HISTOGRAM_PADDING (16) // distance from item edge
@@ -65,38 +62,44 @@ static int countNonAnalysis(const MediaGroup& group) {
 }
 
 MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
-                                             const QString& basePath,
-                                             Database* db, QWidget* parent)
-    : super(parent), _list(list), _basePath(basePath), _db(db) {
+                                             const MediaWidgetOptions& options,
+                                             QWidget* parent)
+    : super(parent), _list(list), _options(options) {
   setWindowTitle(
-      QString("Group-List Set : %2 [x%1]").arg(_list.count()).arg(basePath));
+      QString("Group-List Set : %2 [x%1]").arg(_list.count()).arg(_options.basePath));
 
   setViewMode(QListView::IconMode);
-  setFlow(QListView::LeftToRight);
   setResizeMode(QListView::Adjust);
   setMovement(QListView::Static);
-  setSelectionRectVisible(false);
   setSelectionMode(QAbstractItemView::SingleSelection);
   setWrapping(true);
-  setUniformItemSizes(false);
-  setIconSize({FW_ICON_SIZE,FW_ICON_SIZE});
   setSpacing(LW_ITEM_SPACING);
+
+  int iconW = 0;
+  int iconH = 0;
+  for (auto&  m : list) {
+    iconW = std::max(iconW, m.image().width());
+    iconH = std::max(iconH, m.image().height());
+  }
+  setIconSize({iconW,iconH});
 
   // todo: external stylesheet
   setStyleSheet(
       "QListWidget::item { "
         "margin: 0px; "
-        "padding: 0px; "
+        "padding: 8px; "
       "}"
       "QListWidget::item:selected { "
+        "margin: 0px; "
+        "padding: 8px; "
         "background-color: #444; "
       "}"
       "QListWidget { "
         "background-color: black; "
-        "selection-color: white; "
-        "selection-background-color: #444; "
+        "selection-color: #FFF; " // text color
+        "selection-background-color: #FF0; " // text bg, overriden by item bg
         "font-size: 16px; "
-        "color: white; "
+        "color: white; " // font color
       "}"
       "QScrollBar {"
         "width: 32px; "
@@ -113,12 +116,12 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
     addItem(item);
   }
 
-  if (_db) {
-    QAction* a = new QAction("Move to...", this);
-    a->setMenu(MenuHelper::dirMenu(_db->path(),this,
-                                   SLOT(moveFolderAction())));
-    addAction(a);
-  }
+//  if (_options.db) {
+//    QAction* a = new QAction("Move to...", this);
+//    a->setMenu(MenuHelper::dirMenu(_options.db->path(),this,
+//                                   SLOT(moveFolderAction())));
+//    addAction(a);
+//  }
 
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(this->metaObject()->className() + QString(".shortcuts"));
@@ -164,41 +167,8 @@ MediaGroup MediaFolderListWidget::selectedMedia() const {
   return selected;
 }
 
-void MediaFolderListWidget::moveFolderAction() {
-  const QAction* action = dynamic_cast<QAction*>(sender());
-  if (!action) return;
-
-  QString dirPath = action->data().toString();
-
-  if (dirPath == ";newfolder;")
-    dirPath = QFileDialog::getExistingDirectory(this, "Choose Folder",
-                                                _db->path());
-
-  if (dirPath.isEmpty()) return;
-
-  const QDir baseDir(dirPath);
-  for (Media& m : selectedMedia()) {
-    const QString relPath = m.path();
-    const QFileInfo srcInfo(relPath);
-    const QString dirName = srcInfo.baseName();
-
-    const QString srcPath = _basePath + "/" + relPath;
-    const QString dstPath = dirPath + "/" + dirName;
-
-    qDebug() << "moveFolder" << srcPath << "to" << dstPath;
-
-    if (QFileInfo(dstPath).exists()) {
-      qWarning() << "destination folder exists, nothing moved:" << dirName;
-      continue;
-    }
-
-    if (!QDir(baseDir).rename(srcPath, dstPath)) {
-      qWarning() << "failed to make destination folder, nothing moved:"
-                 << dirName;
-      continue;
-    }
-  }
-}
+//void MediaFolderListWidget::moveFolderAction() {
+//}
 
 /// Passed in/out of background jobs
 struct ImageWork {
@@ -605,9 +575,9 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 };
 
 MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
-                                           QWidget* parent, int flags,
-                                           Database* db)
-    : QListWidget(parent), _list(list), _flags(flags), _db(db) {
+                                           const MediaWidgetOptions& options,
+                                           QWidget* parent)
+    : QListWidget(parent), _list(list), _options(options) {
 
   _itemDelegate = new MediaItemDelegate(this);
 
@@ -640,7 +610,8 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   if (list.count() > 0) {
     loadRow(0);
     int row = 0;
-    if (!(_flags & FlagSelectFirst)) row = model()->rowCount() - 1;
+    if (!(_options.flags & MediaWidgetOptions::FlagSelectFirst))
+      row = model()->rowCount() - 1;
     setCurrentIndex(model()->index(row, 0));
   }
 
@@ -708,10 +679,10 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addSeparatorAction(this);
 
   WidgetHelper::addAction(settings, "Delete", Qt::Key_D, this, SLOT(deleteAction()))
-      ->setEnabled(!(_flags & FlagDisableDelete));
+      ->setEnabled(!(_options.flags & MediaWidgetOptions::FlagDisableDelete));
 
   WidgetHelper::addAction(settings, "Replace", Qt::Key_G, this, SLOT(replaceAction()))
-      ->setEnabled(!(_flags & FlagDisableDelete));
+      ->setEnabled(!(_options.flags & MediaWidgetOptions::FlagDisableDelete));
 
   WidgetHelper::addSeparatorAction(this);
 
@@ -722,10 +693,10 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addSeparatorAction(this);
 
   WidgetHelper::addAction(settings, "Add to Negative Matches", Qt::Key_Minus, this, SLOT(negMatchAction()))
-      ->setEnabled(_db != nullptr);
+      ->setEnabled(_options.db != nullptr);
   WidgetHelper::addAction(settings, "Add All to Negative Matches", Qt::SHIFT | Qt::Key_Minus,
             this, SLOT(negMatchAllAction()))
-      ->setEnabled(_db != nullptr);
+      ->setEnabled(_options.db != nullptr);
 
   WidgetHelper::addSeparatorAction(this);
 
@@ -786,7 +757,7 @@ void MediaGroupListWidget::closeEvent(QCloseEvent* event) {
 }
 
 QMenu* MediaGroupListWidget::dirMenu(const char* slot) {
-  QMenu* dirs = MenuHelper::dirMenu(_db->path(), this, slot);
+  QMenu* dirs = MenuHelper::dirMenu(_options.db->path(), this, slot);
 
   QSet<QString> groupDirs;
   const auto& group = _list[_currentRow];
@@ -799,7 +770,7 @@ QMenu* MediaGroupListWidget::dirMenu(const char* slot) {
 
   for (int i = 0; i < group.count(); ++i)
     if (i != selectedIndex)
-      if (!isAnalysis(group[i])) groupDirs.insert(group[i].parentPath());
+      if (!isAnalysis(group[i])) groupDirs.insert(group[i].dirPath());
 
   const auto& keys = groupDirs.values();
   QList<QAction*> actions;
@@ -825,7 +796,7 @@ QMenu* MediaGroupListWidget::dirMenu(const char* slot) {
 void MediaGroupListWidget::execContextMenu(const QPoint& p) {
   // add the move-to folder action
   QMenu* menu = new QMenu;
-  if (_db) {
+  if (_options.db) {
     QMenu* dirs = dirMenu(SLOT(moveFileAction()));
     QAction* act = new QAction("Move File to ...", this);
     act->setMenu(dirs);
@@ -1600,7 +1571,7 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
         static bool skipDeleteConfirmation = false;
         int button = 0;
         if (m.isArchived()) {
-          QString zipPath = _db ? path.mid(_db->path().length()+1) : path;
+          QString zipPath = _options.db ? path.mid(_options.db->path().length()+1) : path;
           button = QMessageBox::warning(this, "Delete Zip Confirmation",
                               QString("The selected file is a member of \"%1\"\n\n"
                                       "Modification of zip archives is unsupported. Move the entire zip to the trash?"
@@ -1611,7 +1582,7 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
           button = 2;
         }
         else {
-          QString filePath = _db ? path.mid(_db->path().length()+1) : path;
+          QString filePath = _options.db ? path.mid(_options.db->path().length()+1) : path;
           button = QMessageBox::warning(this, "Delete File Confirmation",
                                QString("Move this file to the trash?\n\n%1").arg(filePath),
                                "&No", "&Yes", "Yes to &All (This Session)");
@@ -1623,15 +1594,15 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
 
       if (!DesktopHelper::moveToTrash(path)) return;
 
-      if (_db) {
+      if (_options.db) {
         if (m.isArchived()) {
             QString like = path;
             like.replace("%", "\\%").replace("_", "\\_");
             like += ":%";
-            MediaGroup zipGroup = _db->mediaWithPathLike(like);
-            _db->remove(zipGroup);
+            MediaGroup zipGroup = _options.db->mediaWithPathLike(like);
+            _options.db->remove(zipGroup);
         } else {
-          _db->remove(group[index].id());
+          _options.db->remove(group[index].id());
           if (replace && countNonAnalysis(group)==2) {
             int otherIndex = (index + 1) % 2;
             Media& other = group[otherIndex];
@@ -1645,8 +1616,8 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
 
             // rename (if needed) and then move
             if (otherInfo.fileName() == newName ||
-                _db->rename(other, newName))
-              _db->move(other, info.dir().absolutePath());
+                _options.db->rename(other, newName))
+              _options.db->move(other, info.dir().absolutePath());
           }
         }
       }
@@ -1739,8 +1710,8 @@ void MediaGroupListWidget::renameFileAction() {
 
     if (ok && newName != info.fileName()) {
       QString path = m.path();
-      if (_db) {
-        if (_db->rename(m, newName)) updateMedia(path, m);
+      if (_options.db) {
+        if (_options.db->rename(m, newName)) updateMedia(path, m);
         else qWarning() << "rename via database failed";
       }
       else {
@@ -1829,7 +1800,7 @@ bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
 }
 
 bool MediaGroupListWidget::renameWarning() {
-  if (!_db) {
+  if (!_options.db) {
     auto button = QMessageBox::warning(
         this, "Rename Without Database?",
         "Renaming without a database will invalidate the index.",
@@ -1862,8 +1833,8 @@ void MediaGroupListWidget::copyNameAction() {
   QString newName = QFileInfo(otherName).completeBaseName() +
                           "." + info.suffix();
   const QString oldPath = selected->path();
-  if (_db) {
-    if (_db->rename(*selected, newName))
+  if (_options.db) {
+    if (_options.db->rename(*selected, newName))
       updateMedia(oldPath, *selected);
     else
       qWarning() << "rename via database failed";
@@ -1880,7 +1851,7 @@ void MediaGroupListWidget::copyNameAction() {
 }
 
 void MediaGroupListWidget::moveFileAction() {
-  Q_ASSERT(_db); // w/o db we don't have dir menu actions
+  Q_ASSERT(_options.db); // w/o db we don't have dir menu actions
 
   QAction* action = dynamic_cast<QAction*>(sender());
   if (!action) return;
@@ -1889,13 +1860,13 @@ void MediaGroupListWidget::moveFileAction() {
 
   if (dirPath == ";newfolder;")
     dirPath =
-        QFileDialog::getExistingDirectory(this, "Choose Folder", _db->path());
+        QFileDialog::getExistingDirectory(this, "Choose Folder", _options.db->path());
 
   if (dirPath.isEmpty()) return;
 
   for (Media& m : selectedMedia()) {
     QString path = m.path();
-    if (_db->move(m, dirPath))
+    if (_options.db->move(m, dirPath))
       updateMedia(path, m);
   }
 }
@@ -1920,9 +1891,9 @@ void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& ne
 
   qDebug() << absSrcPath << "=>" << newPath;
   QString absDstPath;
-  if (_db) {
-    absDstPath = QDir(_db->path()).absoluteFilePath(newPath);
-    if (!_db->moveDir(absSrcPath, newPath)) {
+  if (_options.db) {
+    absDstPath = QDir(_options.db->path()).absoluteFilePath(newPath);
+    if (!_options.db->moveDir(absSrcPath, newPath)) {
       qWarning() << "rename folder via database failed";
       return;
     }
@@ -1951,7 +1922,7 @@ void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& ne
 }
 
 void MediaGroupListWidget::moveFolderAction() {
-  Q_ASSERT(_db); // w/o db we don't have dir menu actions
+  Q_ASSERT(_options.db); // w/o db we don't have dir menu actions
 
   QAction* action = dynamic_cast<QAction*>(sender());
   if (!action) return;
@@ -1960,7 +1931,7 @@ void MediaGroupListWidget::moveFolderAction() {
 
   if (dirPath == ";newfolder;")
     dirPath =
-        QFileDialog::getExistingDirectory(this, "Choose Folder", _db->path());
+        QFileDialog::getExistingDirectory(this, "Choose Folder", _options.db->path());
 
   if (dirPath.isEmpty()) return;
 
@@ -1973,7 +1944,7 @@ void MediaGroupListWidget::moveFolderAction() {
       m.archivePaths(srcPath, child);
     }
     else
-      srcPath = m.parentPath();
+      srcPath = m.dirPath();
 
     if (moved.contains(srcPath)) // already moved
       continue;
@@ -2118,13 +2089,13 @@ void MediaGroupListWidget::recordMatch(bool matched) {
 }
 
 bool MediaGroupListWidget::addNegMatch(bool all) {
-  if (!_db) return false;
+  if (!_options.db) return false;
 
   const MediaGroup& group = _list[_currentRow];
 
   if (all || group.count() == 2) {
     for (int i = 1; i < group.size(); i++)
-      _db->addNegativeMatch(group[0], group[i]);
+      _options.db->addNegativeMatch(group[0], group[i]);
 
     return true;
   } else {
@@ -2134,7 +2105,7 @@ bool MediaGroupListWidget::addNegMatch(bool all) {
       const Media& m1 = group[0];
       const Media& m2 = group[item->type()];
 
-      _db->addNegativeMatch(m1, m2);
+      _options.db->addNegativeMatch(m1, m2);
       return true;
     }
   }
