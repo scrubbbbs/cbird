@@ -125,6 +125,22 @@ class Database {
   MediaGroup filterNegativeMatches(const MediaGroup& in);
 
   /**
+   * @brief Add a weed (confirmed deletion), if it is seen again it can be removed automatically
+   * @param needle
+   * @param deleted
+   * @note This is for tracking user deletions / past user choices,
+   *       not automatic deletions (-dup-nuke etc)
+   */
+  bool addWeed(const Media& needle, const Media& deleted);
+  bool isWeed(const Media& needle, const Media& match);
+  /// remove deletion records for files(needles) which no longer exist
+  void updateWeeds();
+  void loadWeeds();
+  void unloadWeeds();
+
+  MediaGroupList weeds();
+
+  /**
    * Add content index methods
    * @param index interface for storage and search for a class of media
    * @note in theory, search methods can be plugins, and the plugin
@@ -216,6 +232,11 @@ private:
    */
   void saveIndices();
 
+  /// read/write a key-value map
+  void readMap(const QString& name, std::function<void(const QString&, const QString &)> insert) const;
+  bool appendMap(const QString& name, const QString& key, const QString& value) const;
+  bool writeMap(const QString &name, const QVector<std::pair<QString, QString> > &keyValues) const;
+
   /// @return atomic int for unique connection names in the pool
   static QAtomicInt& connectionCount();
 
@@ -252,8 +273,11 @@ private:
   } _mediaIndex;
 
   /// Negative matches list (md5 hash)
-  QMap<QString, QStringList> _negMatch;
+  QHash<QString, QSet<QString>> _negMatch;
 
   /// Negative matches list status
   bool _negMatchLoaded = false;
+
+  QHash<QString, QSet<QString>> _deletions;
+  bool _deletionsLoaded = false;
 };
