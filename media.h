@@ -252,7 +252,7 @@ class Media {
   void setPath(const QString& path) { _path = path; }
 
   /// fast path components
-  QString parentPath() const { return path().left(path().lastIndexOf("/")); }
+  QString dirPath() const { return path().left(path().lastIndexOf("/")); }
   QString name() const { return path().mid(path().lastIndexOf("/") + 1); }
   QString suffix() const { return path().mid(path().lastIndexOf(".") + 1); }
   QString completeBaseName() const { QString s=name(); return s.mid(0, s.lastIndexOf(".")); }; // w/o suffix
@@ -329,6 +329,7 @@ class Media {
    * @note some keys are used by gui/command line interface
    *       "filter" - the property key/value used for filtering
    *       "group"  - the property key/value used for group-by
+   *       "sort"   - the property key used for sorting
    */
   const QStringHash& attributes() const { return _attrs; }
   void setAttribute(const char* key, const QString& value) {

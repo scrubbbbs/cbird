@@ -439,7 +439,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       PAIR(md5),
       PAIR(type),
       PAIR(path),
-      PAIR(parentPath),
+      PAIR(dirPath),
       PAIR(name),
       PAIR(completeBaseName),
       PAIR(suffix),
@@ -461,6 +461,14 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
             return a;
           }
           return QString();
+      }},
+      { "parentPath", [](const Media& m) {
+          if (m.isArchived()) {
+            QString a, t;
+            m.archivePaths(a, t);
+            return a;
+          }
+          return m.dirPath();
       }},
 
       /// todo: attr(), VideoContext::metadata
