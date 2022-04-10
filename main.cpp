@@ -1585,9 +1585,11 @@ int main(int argc, char** argv) {
 
       if (queryResult.count() > 0) {
         auto future = QtConcurrent::map(queryResult, [&](MediaGroup& g) {
-          for (auto& m : g)
-            if (without ^ cmp.compareTo(getValue(m)))
-              m.setAttribute("filter", ":yes");
+          if (g.count() > 0)
+            g[0].setAttribute("filter", ":yes"); // never filter needle
+          for (int i = 1; i < g.count(); ++i)
+            if (without ^ cmp.compareTo(getValue(g[i])))
+              g[i].setAttribute("filter", ":yes");
         });
 
         while (future.isRunning()) {
@@ -1605,7 +1607,7 @@ int main(int argc, char** argv) {
               filtered.append(m);
             }
 
-          if (!filtered.empty()) tmp.append(filtered);
+          if (filtered.count() > 1) tmp.append(filtered);
         }
         queryResult = tmp;
       }
