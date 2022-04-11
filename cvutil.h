@@ -129,8 +129,10 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst);
 // QImage must not be destroyed before Mat
 void qImageToCvImgNoCopy(const QImage& src, cv::Mat& dst);
 
-void cvImgToQImage(const cv::Mat& src, QImage& dst);
-void cvImgToQImageNoCopy(const cv::Mat& src, QImage& dst);
+void cvImgToQImage(const cv::Mat& src, QImage& dst,
+                   QImage::Format forceFormat=QImage::Format_Invalid);
+void cvImgToQImageNoCopy(const cv::Mat& src, QImage& dst,
+                         QImage::Format forceFormat=QImage::Format_Invalid);
 
 QString cvMatTypeName(int type);
 

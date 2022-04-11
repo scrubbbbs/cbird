@@ -831,44 +831,61 @@ static QImage differenceImage(const QImage& inLeft, const QImage& inRight,
   if (inLeft.isNull() || inRight.isNull()) return nullImage;
 
   // normalize to reduce the effects of brightness/exposure
-  // todo: setting for % histogram clipping  
+  // todo: setting for % histogram clipping
+  Q_ASSERT(inLeft.format() == QImage::Format_RGB32);
+  Q_ASSERT(inRight.format() == QImage::Format_RGB32);
   cv::Mat norm1, norm2;
-  qImageToCvImgNoCopy(inLeft, norm1);
-  brightnessAndContrastAuto(norm1, norm2, 5);
   QImage left;
-  cvImgToQImageNoCopy(norm2, left);
+  QFuture<void> f1 = QtConcurrent::run([&]() {
+    qImageToCvImgNoCopy(inLeft, norm1);
+    brightnessAndContrastAuto(norm1, norm2, 5);
+    cvImgToQImageNoCopy(norm2, left, QImage::Format_RGB32);
+  });
+
+  cv::Mat norm3, norm4;
+  QImage right;
+  QFuture<void> f2 = QtConcurrent::run([&]() {
+    qImageToCvImgNoCopy(inRight, norm3);
+    brightnessAndContrastAuto(norm3, norm4, 5);
+    cvImgToQImageNoCopy(norm4, right, QImage::Format_RGB32);
+  });
+
+  f1.waitForFinished();
+  f2.waitForFinished();
 
   // cancellation points between slow steps
   if (future && future->isCanceled()) return nullImage;
 
-  cv::Mat norm3, norm4;
-  qImageToCvImgNoCopy(inRight, norm3);
-  brightnessAndContrastAuto(norm3, norm4, 5);
-  QImage right;
-  cvImgToQImageNoCopy(norm4, right);
-
-  if (future && future->isCanceled()) return nullImage;
-
   QSize rsize = right.size();
   QSize lsize = left.size();
-  int rightArea = rsize.width()*rsize.height();
-  int leftArea = lsize.width()*lsize.height();
+  int rightArea = rsize.width() * rsize.height();
+  int leftArea = lsize.width() * lsize.height();
   if (rightArea < leftArea)
     right = right.scaled(lsize);
   else
     left = left.scaled(rsize);
 
+  Q_ASSERT(left.format() == QImage::Format_RGB32);
+  Q_ASSERT(right.format() == QImage::Format_RGB32);
   Q_ASSERT(left.size() == right.size());
 
   QImage img(left.size(), left.format());
-  for (int y = 0; y < img.height(); y++)
-    for (int x = 0; x < img.width(); x++) {
-      QRgb lp = left.pixel(x, y);
-      QRgb rp = right.pixel(x, y);
 
-      int dr = qRed(lp) - qRed(rp);
-      int dg = qGreen(lp) - qGreen(rp);
-      int db = qBlue(lp) - qBlue(rp);
+  QVector<int> lines;
+  for (int y = 0; y < img.height(); ++y) lines.append(y);
+
+  QtConcurrent::blockingMap(lines, [&](const int& y) {
+    const QRgb* lp = (QRgb*)left.constScanLine(y);
+    const QRgb* rp = (QRgb*)right.constScanLine(y);
+    QRgb* dstP = (QRgb*)img.scanLine(y);
+    const QRgb* dstEnd = dstP + img.width();
+    while (dstP < dstEnd) {
+      int dr = qRed(*lp) - qRed(*rp);
+      int dg = qGreen(*lp) - qGreen(*rp);
+      int db = qBlue(*lp) - qBlue(*rp);
+
+      lp++;
+      rp++;
 
       // multiply to make > 0 and enhance differences
       dr = dr * dr;
@@ -887,10 +904,10 @@ static QImage differenceImage(const QImage& inLeft, const QImage& inRight,
       int g = ((sum >> 5) & 31) << 3;
       int b = (sum & 31) << 3;
 
-      QRgb diff = qRgb(r, g, b);
-      img.setPixel(x, y, diff);
+      *dstP = qRgb(r, g, b);
+      dstP++;
     }
-
+  });
   return img;
 }
 
@@ -975,6 +992,11 @@ static void loadImage(ImageWork* work, bool fastSeek) {
   }
 
   if (!img.isNull()) {
+    // rgb32 is best for painting
+    if (img.format() != QImage::Format_RGB32) {
+      qDebug() << "supplied image is not RGB32, converting";
+      img = img.convertToFormat(QImage::Format_RGB32);
+    }
     m.setImage(img);
     m.setWidth(img.width());
     m.setHeight(img.height());

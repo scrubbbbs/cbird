@@ -360,10 +360,11 @@ void qImageToCvImgNoCopy(const QImage& src, cv::Mat& dst) {
                 size_t(src.bytesPerLine()));
 }
 
-void cvImgToQImage(const cv::Mat& src, QImage& dst) {
+void cvImgToQImage(const cv::Mat& src, QImage& dst, QImage::Format forceFormat) {
+  bool force = forceFormat != QImage::Format_Invalid;
   switch (src.type()) {
     case CV_8UC(3):
-      dst = QImage(src.cols, src.rows, QImage::Format_RGB32);
+      dst = QImage(src.cols, src.rows, force ? forceFormat : QImage::Format_RGB32);
       for (int y = 0; y < src.rows; y++) {
         const uint8_t* sp = reinterpret_cast<const uint8_t*>(src.ptr(y));
         uint8_t* dp = reinterpret_cast<uint8_t*>(dst.scanLine(y));
@@ -379,7 +380,7 @@ void cvImgToQImage(const cv::Mat& src, QImage& dst) {
       break;
 
     case CV_8UC(4):
-      dst = QImage(src.cols, src.rows, QImage::Format_ARGB32);
+      dst = QImage(src.cols, src.rows, force ? forceFormat : QImage::Format_ARGB32);
       for (int y = 0; y < src.rows; y++) {
         const uint8_t* sp = reinterpret_cast<const uint8_t*>(src.ptr(y));
         uint8_t* dp = reinterpret_cast<uint8_t*>(dst.scanLine(y));
@@ -388,7 +389,7 @@ void cvImgToQImage(const cv::Mat& src, QImage& dst) {
       break;
 
     case CV_8UC(1):
-      dst = QImage(src.cols, src.rows, QImage::Format_Grayscale8);
+      dst = QImage(src.cols, src.rows, force ? forceFormat : QImage::Format_Grayscale8);
       for (int y = 0; y < src.rows; y++) {
         const uint8_t* sp = reinterpret_cast<const uint8_t*>(src.ptr(y));
         uint8_t* dp = reinterpret_cast<uint8_t*>(dst.scanLine(y));
@@ -397,7 +398,7 @@ void cvImgToQImage(const cv::Mat& src, QImage& dst) {
       break;
 
     case CV_16UC(3):
-      dst = QImage(src.cols, src.rows, QImage::Format_RGB32);
+      dst = QImage(src.cols, src.rows, force ? forceFormat : QImage::Format_RGB32);
       for (int y = 0; y < src.rows; y++) {
         const uint16_t* sp = reinterpret_cast<const uint16_t*>(src.ptr(y));
         uint8_t* dp = reinterpret_cast<uint8_t*>(dst.scanLine(y));
@@ -417,24 +418,25 @@ void cvImgToQImage(const cv::Mat& src, QImage& dst) {
   }
 }
 
-void cvImgToQImageNoCopy(const cv::Mat& src, QImage& dst) {
-  QImage::Format format;
-  switch (src.type()) {
-    case CV_8UC(3):
-      format = QImage::Format_RGB888;
-      break;
+void cvImgToQImageNoCopy(const cv::Mat& src, QImage& dst, QImage::Format forceFormat) {
+  QImage::Format format = forceFormat;
+  if (format == QImage::Format_Invalid)
+    switch (src.type()) {
+      case CV_8UC(3):
+        format = QImage::Format_RGB888;
+        break;
 
-    case CV_8UC(4):
-      format = QImage::Format_ARGB32;
-      break;
+      case CV_8UC(4):
+        format = QImage::Format_ARGB32;
+        break;
 
-    case CV_8UC(1):
-      format = QImage::Format_Grayscale8;
-      break;
+      case CV_8UC(1):
+        format = QImage::Format_Grayscale8;
+        break;
 
-    default:
-      qFatal("unsupported type: %s", qPrintable(cvMatTypeName(src.type())));
-  }
+      default:
+        qFatal("unsupported type: %s", qPrintable(cvMatTypeName(src.type())));
+    }
 
   dst = QImage(src.ptr(0), src.cols, src.rows, int(src.step[0]), format);
 }
