@@ -389,8 +389,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
                        "-sort-rev",  "-group-by",    "-max-per-page"};
   cmds += oneArg;
 
-  const QSet<QString> twoArg{"-with", "-without", "-merge", "-rename",
-                             "-compare-videos"};
+  const QSet<QString> twoArg{"-with", "-without", "-rename", "-compare-videos"};
   cmds += twoArg;
 
   const QSet<QString> fileArg{"-select-one",         "-jpeg-repair-script",
@@ -402,7 +401,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
                              "-move"};
   cmds += dirArg;
 
-  const QSet<QString> fileOrDirArg{"-similar-to", "-select-path", "-select-files"};
+  const QSet<QString> fileOrDirArg{"-similar-to", "-select-path", "-select-files", "-merge"};
   cmds += fileOrDirArg;
 
   const SearchParams searchParams;
