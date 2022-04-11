@@ -75,7 +75,7 @@ class Engine : public QObject {
    * @param search Query parameters and target/needle
    * @return Copy of query parameters with results added
    */
-  MediaSearch query(const MediaSearch& search);
+  MediaSearch query(const MediaSearch& search) const;
 
  public Q_SLOTS:
   /**

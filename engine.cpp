@@ -78,10 +78,6 @@ void Engine::add(const Media& m) {
 }
 
 void Engine::commit() {
-  // If there are multiple processes updating (user error as this is unsupported),
-  // they might cause database corruption, so lock them out.
-  // This will not prevent sql constraint violation if they attempt to
-  // add the same file. If processes work on different subtrees this won't happen.
   if (_batch.count() > 0) {
      db->add(_batch);
      //for (const auto& m : qAsConst(_batch))
@@ -168,7 +164,7 @@ Media Engine::mirrored(const Media& m, bool mirrorH, bool mirrorV) const {
   return result.media;
 }
 
-MediaSearch Engine::query(const MediaSearch& search_) {
+MediaSearch Engine::query(const MediaSearch& search_) const {
   MediaSearch search = search_;
   Media& needle = search.needle;
   MediaGroup& matches = search.matches;

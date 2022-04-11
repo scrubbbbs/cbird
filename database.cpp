@@ -343,8 +343,12 @@ void Database::add(MediaGroup& inMedia) {
   uint64_t then = nanoTime();
   uint64_t now;
 
-  // try to protect database from corruption
-  // it is still possible to corrupt if another thread crashes the app
+  // If there are multiple processes updating (user error as this is unsupported),
+  // they might cause database corruption, so lock them out.
+  // This will not prevent sql constraint violation if they attempt to
+  // add the same file. If processes work on different subtrees this won't happen.
+
+  // It is still possible to corrupt if another thread crashes the app
   // during a commit.
 
   QWriteLocker locker(&_rwLock);
