@@ -1441,16 +1441,16 @@ MediaGroup Database::similarTo(const Media& needle,
   // needle needs to be first for filter function,
   // but cannot include it in results
   result.prepend(needle);
-  int beforeCount = result.count();
+  int filtered = 0;
   if (filterMatch(params, result)) {
-    if (beforeCount > result.count()) qWarning() << "results filtered";
+    if (result.count() < 2) filtered++;
     result.clear();
   }
   if (result.count() > 0) result.removeFirst();
 
   if (params.verbose) {
     MessageContext mc(needle.path().mid(path().length()+1));
-    qInfo("%d results in %dms", result.count(),
+    qInfo("%d results (%d filtered out) in %dms", result.count(), filtered,
           int(QDateTime::currentMSecsSinceEpoch() - start));
   }
 
