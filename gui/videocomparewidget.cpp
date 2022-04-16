@@ -180,7 +180,7 @@ class FrameCache {
 
 VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
                                        const MatchRange& range, QWidget* parent)
-    : QWidget(parent) {
+    : super(parent) {
   float totalKb, cacheKb;
   Env::systemMemory(totalKb, cacheKb);
 
@@ -196,6 +196,8 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   _video[1].side = "B";
   _video[1].in = range.dstIn >= 0 ? range.dstIn : 0;
 
+  //qWarning() << "range in:" << range.srcIn << range.dstIn << range.len;
+
   const QString prefix =
       Media::greatestPathPrefix({_video[0].media.path(), _video[1].media.path()});
 
@@ -209,17 +211,32 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   }
 
   // sync different frame rates by scaling one of them
-  for (int i = 0; i < 2; ++i) _video[i].cache->setRateFactor(*_video[(i + 1) % 2].cache);
-
-  // no range given, end is the shortest
-  _endPos = range.srcIn + range.len;
-  if (_endPos <= 0) {
-    int shortest = 0;
-    if (_video[1].meta->duration < _video[0].meta->duration) shortest = 1;
-
-    _endPos = _video[shortest].meta->duration * _video[shortest].meta->frameRate /
-              _video[shortest].cache->rateFactor();
+  for (int i = 0; i < 2; ++i) {
+    _video[i].cache->setRateFactor(*_video[(i + 1) % 2].cache);
+    _video[i].in /= _video[i].cache->rateFactor();
   }
+
+  int matchLen = 0;
+  if (range.len > 0)
+    matchLen = range.len /  _video[0].cache->rateFactor(); // len is in dst units
+
+  Q_ASSERT(matchLen >= 0);
+
+  // get max legal out frame between the two videos (shortest video duration)
+  int maxOut = INT_MAX;
+  for (int i = 0; i < 2; ++i) {
+    _video[i].out = (_video[i].meta->duration * _video[i].meta->frameRate - 15) /
+                                       _video[i].cache->rateFactor();
+    maxOut = std::min(maxOut, _video[i].out);
+  }
+
+  // use the match len if we have it, otherwise shorted duration
+  for (int i = 0; i < 2; ++i)
+    _video[i].out = matchLen > 0 ? std::min(_video[i].in + matchLen, _video[i].out) : maxOut;
+
+  // endPos is limit of cursor, which is relative to video.in (negative cursor is before inpoint)
+  _endPos = std::min(_video[0].out - _video[0].in,
+                     _video[1].out - _video[1].in);
 
   // fps for positioning based on seconds, is the highest fps
   _fps = std::max(_video[0].cache->ctx().fps(), _video[1].cache->ctx().fps());
@@ -228,7 +245,7 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
 
   setStyleSheet(
       "VideoCompareWidget { "
-      "  background-color: #000; "
+      "  background-color: #111; " // non-black to help spot letterboxing
       "  font-size: 16px; "
       "  color: white; "
       "}");
@@ -359,6 +376,9 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   WidgetHelper::addAction(settings, "Play Side-by-Side", Qt::Key_P, this,
                           [&]() { playSideBySide(); });
 
+  WidgetHelper::addAction(settings, "Compare in Kdenlive", Qt::Key_K, this,
+                          [&]() { compareInKdenlive(); });
+
   WidgetHelper::addAction(settings, "Close", Qt::CTRL | Qt::Key_W, this, SLOT(close()));
   WidgetHelper::addAction(settings, "Close (Alt)", Qt::Key_Escape, this, SLOT(close()));
 
@@ -376,13 +396,13 @@ VideoCompareWidget::~VideoCompareWidget() {
 void VideoCompareWidget::drawFrame(QPainter& painter, const FrameCache& cache, const QImage& img,
                                    int iw,
                                    int ih,                     // frame image and scaled size
-                                   int matchIn, int matchLen,  // in+len of match range
+                                   int matchIn, int matchLen,  // in,len of match
                                    int currPos,  // current position, relative to matchIn
                                    const QString& text, int x, int y, int w,
                                    int h) const {  // x,y,w,h location
   (void)w; // w is == iw in this case, so unused
 
-  int infoMargin = 10;
+  int infoMargin = 16;
   int infoHeight = 130;
 
   // make space for info text
@@ -397,20 +417,35 @@ void VideoCompareWidget::drawFrame(QPainter& painter, const FrameCache& cache, c
   QPoint ip(x, y + ((h - ih - infoHeight) / 2));
   painter.drawImage(QRect(ip.x(), ip.y(), iw, ih), img);
 
-  // range indicator
+  // range
   float numFrames =
       cache.ctx().metadata().duration * cache.ctx().metadata().frameRate / cache.rateFactor();
 
-  painter.fillRect(QRect(ip.x() + (matchIn / numFrames * iw), ip.y() + ih,
-                         std::min((matchLen * iw) / numFrames, (float)iw), infoMargin),
+  const int cx = ip.x();
+  const int cy = ip.y()+ih;
+
+  painter.fillRect(QRect(cx + (matchIn / numFrames * iw), cy,
+                         matchLen / numFrames * iw, infoMargin),
                    Qt::darkGray);
 
-  float pos = (matchIn + currPos) * iw / numFrames;
+  // cursor
+  {
+    float pos = (matchIn + currPos) * iw / numFrames;
+    const int half = infoMargin / 2;
+    if (pos < 0) {
+      painter.drawLine(cx + half, cy, cx, cy + half);
+      painter.drawLine(cx, cy + half, cx + half, cy + infoMargin-1);
+    } else if (pos > iw) {
+      painter.drawLine(cx + iw - half, cy, cx + iw, cy + half);
+      painter.drawLine(cx + iw, cy + half, cx + iw - half, cy + infoMargin-1);
+    }
+    else
+      painter.drawLine(cx + pos, cy, cx + pos, cy + infoMargin - 1);
+  }
 
-  painter.drawLine(ip.x() + pos, ip.y() + ih, ip.x() + pos, ip.y() + ih + infoMargin);
-
-  WidgetHelper::drawRichText(&painter, QRect(ip.x(), ip.y() + ih + infoMargin, iw, infoHeight),
-                             text);
+  const int tx = cx;
+  const int ty = h - infoHeight;
+  WidgetHelper::drawRichText(&painter, QRect(tx+infoMargin, ty + infoMargin, iw, infoHeight), text);
 }
 
 void VideoCompareWidget::paintEvent(QPaintEvent* event) {
@@ -488,13 +523,13 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
 
     p.text = QString::asprintf(
         "<div class=\"default\">%s: %s<br/>%s<br/>%dx%d %s (sar=%.2f) "
-        "<br/>In:[%d+%d] {%d} "
+        "<br/>In:[%d+%d+%d]=%d src={%d} "
         "Out:[%d]<br/>",
         qPrintable(v.side), qPrintable(v.label), qPrintable(v.meta->toString(true)),
         p.frame->image.width(), p.frame->image.height(),
         qPrintable(p.img.text("format")), v.cache->ctx().aspect(),
-        int((v.in + _cursor) * v.cache->rateFactor()),
-        int(v.offset * v.cache->rateFactor()), p.img.text("frame").toInt(), _endPos);
+        v.in, _cursor, v.offset, v.in +_cursor+ v.offset,
+        p.img.text("frame").toInt(), v.out);
 
     if (p.frame->quality >= 0) p.text += "<br/>Q:" + QString::number(p.frame->quality);
 
@@ -527,8 +562,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
     const auto& s = !_swap ? setup[k] : setup[!k];
     const auto& v = _video[s.i];
     const auto& p = pane[s.i];
-
-    drawFrame(painter, *v.cache, p.img, s.w, s.h, v.in, _endPos, _cursor + v.offset, p.text,
+    drawFrame(painter, *v.cache, p.img, s.w, s.h, v.in, v.out-v.in, _cursor + v.offset, p.text,
               s.x + k * iw, s.y, iw, geom.height());
 
     if (_stacked) break;
@@ -676,4 +710,28 @@ void VideoCompareWidget::playSideBySide() {
   }
 
   Media::playSideBySide(_video[0].media, seek[0], _video[1].media, seek[1]);
+}
+
+#include "../nleutil.h"
+
+void VideoCompareWidget::compareInKdenlive() {
+
+  const float templateFps = 29.97; // todo: read from template
+  const QString templateFile=":/res/template.kdenlive";
+  KdenEdit edit(templateFile);
+
+  for (int i = 0; i < 2; ++i) {
+    const auto& v = _video[i];
+    int inFrame = (v.in + v.offset + _cursor) * v.cache->rateFactor(); // native frames
+    inFrame = inFrame * templateFps / v.cache->ctx().fps(); // template frames
+    int p = edit.addProducer(_video[i].media.path());
+    QString track = QString("Video ") + QString::number(i+1);
+    edit.addTrack(track);
+    edit.addBlank(track, 150);
+    edit.addClip(track, p, inFrame, inFrame+300);
+  }
+
+  QString outFile = DesktopHelper::tempName("cbird.XXXXXX.kdenlive", this);
+  edit.saveXml(outFile);
+  QDesktopServices::openUrl(QUrl::fromLocalFile(outFile));
 }

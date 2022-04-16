@@ -50,10 +50,10 @@ git.commands = ./tools/gitversion.sh "$$OBJECTS_DIR"
 git.depends = .git
 QMAKE_EXTRA_TARGETS += git
 
+RESOURCES += cbird.qrc
 
 # Input
-HEADERS += $$files(*.h) \
-    gui/mediawidget.h
+HEADERS += $$files(*.h)
 HEADERS += $$files(gui/*.h)
 HEADERS += $$files(lib/*.h)
 HEADERS += $$files(tree/*.h)

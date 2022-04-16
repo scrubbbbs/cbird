@@ -459,6 +459,40 @@ bool DesktopHelper::moveToTrash(const QString& path) {
   return ok;
 }
 
+QString DesktopHelper::tempName(const QString& nameTemplate, QObject *parent, int maxLifetime) {
+  QString fileName;
+  {
+    QTemporaryFile temp;
+    temp.setAutoRemove(false);
+    temp.setFileTemplate(QDir::tempPath() + "/" + nameTemplate);
+    if (!temp.open()) return "";
+    fileName = temp.fileName();
+  } // temp is now closed
+
+  if (parent)
+    QObject::connect(parent, &QObject::destroyed, [=]() {
+      QFile f(fileName);
+      if (f.exists() && !f.remove())
+        qWarning() << "failed to delete temporary (at exit)" << fileName;
+    });
+
+  if (maxLifetime > 0)
+    QTimer::singleShot(maxLifetime*1000, [=]() {
+      QFile f(fileName);
+      if (f.exists() && !f.remove())
+        qWarning() << "failed to delete temporary (on timer)" << fileName;
+    });
+
+  QObject* object = new QObject(qApp);
+  QObject::connect(object, &QObject::destroyed, [=]() {
+    QFile f(fileName);
+    if (f.exists() && !f.remove())
+      qWarning() << "failed to delete temporary (at exit)" << fileName;
+  });
+
+  return fileName;
+}
+
 QKeySequence WidgetHelper::getShortcut(QSettings& settings, const QString& label,
                                        const QKeySequence& defaultShortcut) {
   QString key = label.toLower();

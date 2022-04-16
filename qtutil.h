@@ -43,6 +43,18 @@ class DesktopHelper {
   /// move file to trash, do not overwrite existing files
   static bool moveToTrash(const QString& path);
 
+  /**
+   * @brief get temporary file path in /tmp that cleans itself up
+   * @param nameTemplate QTemporaryFile template
+   * @param parent       if non-null, delete temporary with parent
+   * @param maxLifetime  seconds, if > 0, delete temporary this
+   * @return path to temporary file
+   * @note this only exists because QTemporaryFile holds the file
+   *       open, which makes it impossible to pass the file name
+   *       to another process on win32 (due to exclusive open)
+   */
+  static QString tempName(const QString& templateName, QObject* parent=nullptr, int maxLifetime=60);
+
  private:
   static void runProgram(QStringList& args, bool wait,
                          const QString& inPath = "", double seek = 0.0,

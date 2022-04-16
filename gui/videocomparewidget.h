@@ -79,6 +79,7 @@ class VideoCompareWidget : public QWidget {
   void alignTemporally();
   void alignSpatially();
   void playSideBySide();
+  void compareInKdenlive();
 
   void drawFrame(QPainter& painter, const FrameCache& cache, const QImage& img,
                  int iw, int ih, int matchIn, int matchLen, int currPos,
@@ -96,7 +97,7 @@ class VideoCompareWidget : public QWidget {
     QVector<QImage> visual;  // analysis visual
     int visualFrame;  // frame number of corresponding to analysis visuals
     bool crop;        // if true enable de-letterbox cropping
-    int in, offset;   // match range and cursor offset (temporal align)
+    int in, out, offset;   // match range and cursor offset (temporal align)
     const VideoContext::Metadata* meta;  // video metadata (fps/codec etc)
     std::unique_ptr<FrameCache> cache;   // decoder/frame cache
   } _video[2];

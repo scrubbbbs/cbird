@@ -1,7 +1,7 @@
 
 # general configuration for cbird and unit tests
 
-QT *= core sql concurrent
+QT *= core sql concurrent xml
 CONFIG *= c++17 console
 mac {
     CONFIG -= app_bundle
@@ -21,10 +21,12 @@ DESTDIR=$$_PRO_FILE_PWD_
 unix {
     MOC_DIR=_build
     OBJECTS_DIR=_build
+    RCC_DIR=_build
 }
 win32 {
     MOC_DIR=_win32
     OBJECTS_DIR=_win32
+    RCC_DIR=_win32
 }
 
 #COMPILER = g++

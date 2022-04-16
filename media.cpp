@@ -906,51 +906,26 @@ void Media::openMedia(const Media& m, float seek) {
 
     QIODevice* io = m.ioDevice();
     if (io && io->open(QIODevice::ReadOnly)) {
+      child = child.split("/").last();
+      QFileInfo info(child);
+      QString temporaryName = DesktopHelper::tempName(info.completeBaseName() +
+                                                      ".unzipped.XXXXXX." + info.suffix());
 
-      QString temporaryName;
-
-      // temporary is not closeable (necessary on win32), so fart around
-      {
-        QTemporaryFile tm;
-        tm.setAutoRemove(false);
-
-        child = child.split("/").last();
-        QFileInfo info(child);
-        tm.setFileTemplate(QDir::tempPath() + "/" + info.completeBaseName() +
-                           ".unzipped.XXXXXX." + info.suffix());
-
-        if (!tm.open()) {
-          qWarning() << "open archived file: cannot open temporary"
-                     << tm.fileTemplate() << tm.fileName();
-          return;
-        }
-
-        // todo: support external tool for opening zip contents
-        qInfo() << "open archived file: from temporary" << tm.fileName()
-                << ", deleting after 60s";
-
-        tm.write(io->readAll());
-
-        temporaryName = tm.fileName();
-        // closed here
+      if (temporaryName.isEmpty()) {
+        qWarning() << "open archived file: cannot get temporary file";
+        return;
       }
 
+      QFile f(temporaryName);
+      if (!f.open(QFile::WriteOnly|QFile::Truncate)) {
+        qWarning() << "open archived file: cannot write temporary file";
+        return;
+      }
+
+      f.write(io->readAll());
+      f.close(); // necessary because file was opened excl mode (win32)
+
       QDesktopServices::openUrl(QUrl::fromLocalFile(temporaryName));
-
-      // attempt to delete the file after 60s
-      QTimer::singleShot(60000, [=]() {
-        QFile f(temporaryName);
-        if (f.exists() && !f.remove())
-          qWarning() << "failed to delete temporary (after 60s)" << temporaryName;
-      });
-
-      // attempt to remove on app shutdown
-      QObject* object = new QObject(qApp);
-      QObject::connect(object, &QObject::destroyed, [=]() {
-        QFile f(temporaryName);
-        if (f.exists() && !f.remove())
-          qWarning() << "failed to delete temporary (at exit)" << temporaryName;
-      });
     }
     delete io;
   } else {
@@ -1060,7 +1035,6 @@ QStringList Media::listArchive(const QString& path) {
 
 QIODevice* Media::ioDevice() const {
   QIODevice* io = nullptr;
-
   const QByteArray& data = this->data();
 
   if (data.size() > 0) {
@@ -1070,8 +1044,8 @@ QIODevice* Media::ioDevice() const {
   } else if (isArchived()) {
     QString zipPath, fileName;
     archivePaths(zipPath, fileName);
-
-    if (QFileInfo::exists(zipPath)) {
+    QFileInfo info(zipPath);
+    if (info.isFile()) {
       QuaZip zip(zipPath);
       zip.open(QuaZip::mdUnzip);
       zip.setCurrentFile(fileName);
@@ -1084,13 +1058,16 @@ QIODevice* Media::ioDevice() const {
       else {
         qWarning() << "failed to unzip" << zipPath << "for" << fileName;
       }
-    } else
+    } else {
       qWarning() << "zip file does not exist" << zipPath << "for" << fileName;
+      qWarning() << "maybe illegal path on this system" << zipPath;
+    }
   } else {
     QFile* file = new QFile(path());
-    if (!file->exists())
+    if (!file->exists()) {
       qWarning() << "file does not exist" << _path;
-
+      qWarning() << "maybe illegal path on this system" << _path;
+    }
     io = file;
   }
 
