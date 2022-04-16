@@ -2032,6 +2032,7 @@ int main(int argc, char** argv) {
         else if (arg == "-device") opt.deviceIndex = intArg(nextArg());
         else if (arg == "-fast") opt.fast = true;
         else if (arg == "-scale") scale = true;
+        else if (arg == "-no-scale") { opt.maxH = 0; opt.maxW = 0; }
         else if (arg == "-crop") { crop = true; scale = true; }
         else if (arg == "-zoom") { zoom = true; }
         else qFatal("unknown arg to -test-video-decoder");
@@ -2042,8 +2043,8 @@ int main(int argc, char** argv) {
 
       auto timing=[&]() {
         numFrames++;
-        if (numFrames > 1000) {
-          qint64 now = QDateTime::currentMSecsSinceEpoch();
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (now - then > 1000) {
           qInfo() << numFrames * 1000.0f / (now - then) << "frames/second";
           then = now;
           numFrames = 0;
@@ -2067,7 +2068,6 @@ int main(int argc, char** argv) {
 
       QLabel* label = nullptr;
       int zoomSize = opt.maxH * 10;
-      QRect screenRect;
       if (display) {
         if (qApp->testAttribute(Qt::AA_EnableHighDpiScaling))
           qApp->setAttribute(Qt::AA_DisableHighDpiScaling);
@@ -2083,14 +2083,26 @@ int main(int argc, char** argv) {
         label->setScaledContents(false);
         layout->addWidget(label);
         layout->addItem(new QSpacerItem(1,1,QSizePolicy::Expanding));
-
-        screenRect = QGuiApplication::primaryScreen()->availableGeometry();
+        layout->setSpacing(0);
+        layout->setMargin(0);
+        QRect screenRect = QGuiApplication::primaryScreen()->availableGeometry();
+        QRect windowRect;
         if (zoom) {
+          windowRect = screenRect;
           zoomSize = int(screenRect.height()*0.95 / opt.maxH) * opt.maxH;
           qInfo() << "zoom in (nearest neighbor) :" << zoomSize;
         }
-
-        window->setGeometry(screenRect);
+        else {
+          VideoContext video;
+          Q_ASSERT(0 == video.open(path, opt));
+          QImage img;
+          video.nextFrame(img);
+          windowRect.setWidth(img.width());
+          windowRect.setHeight(img.height());
+          windowRect.moveCenter(screenRect.center());
+        }
+        window->setGeometry(windowRect);
+        window->setContentsMargins(0,0,0,0);
         window->installEventFilter(new CloseFilter);
         window->show();
       }
