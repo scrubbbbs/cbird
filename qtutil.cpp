@@ -68,6 +68,47 @@ static QStringList listServiceObjects(QDBusConnection& connection,
   }
   return objectPaths;
 }
+
+static void callServiceMethod(const QStringList& args) {
+  auto service = args[0];
+  auto object = args[1];
+  auto interface = args[2];
+  auto method = args[3];
+  QVariantList methodArgs;
+  for (int i = 4; i < args.count(); ++i) methodArgs.append(args[i]);
+
+  auto bus = QDBusConnection::sessionBus();
+  auto paths = listServiceObjects(bus, service, QString());
+  qDebug() << "DBus services" << QStringList(bus.interface()->registeredServiceNames());
+  qDebug() << "Service objects" << paths;
+
+  // path may contain regular expression, the first matching path is taken
+  // useful for apps that have randomized path names (krusader)
+
+  bool validPath = false;
+  QRegularExpression pathMatch(object);
+  for (auto& path : paths)
+    if (pathMatch.match(path).hasMatch()) {
+      object = path;
+      validPath = true;
+      break;
+    }
+
+  if (!validPath) {
+    qWarning() << "DBus service missing" << object << "is" << service << "running?";
+    return;
+  }
+
+  QDBusInterface remoteApp(service, object, interface, QDBusConnection::sessionBus());
+  if (remoteApp.isValid()) {
+    QDBusReply<void> reply;
+    reply = remoteApp.callWithArgumentList(QDBus::Block, method, methodArgs);
+    if (!reply.isValid()) qWarning() << "DBus Error:" << reply.error();
+
+  } else
+    qWarning() << "DBus failed to connect:" << remoteApp.lastError();
+}
+
 #endif  // !Q_OS_WIN
 
 void DesktopHelper::runProgram(QStringList& args, bool wait,
@@ -108,42 +149,23 @@ void DesktopHelper::runProgram(QStringList& args, bool wait,
         return;
       }
 
-      auto bus = QDBusConnection::sessionBus();
-      auto paths = listServiceObjects(bus, args[1], QString());
-      qDebug() << "DBus services"
-               << QStringList(bus.interface()->registeredServiceNames());
-      qDebug() << "Service objects" << paths;
-
-      // path may contain regular expression, the first matching path is taken
-      // useful for apps that have randomized path names (krusader)
-      auto objectPath = args[2];
-      bool validPath = false;
-      QRegularExpression pathMatch(objectPath);
-      for (auto& path : paths)
-        if (pathMatch.match(path).hasMatch()) {
-          objectPath = path;
-          validPath = true;
-          break;
+      // multiple calls possible, separated by "&&"
+      qDebug() << "DBus args:" << args;
+      QVector<QStringList> calls;
+      QStringList dbusArgs;
+      for (int i = 1; i < args.count(); ++i) {
+        if (args[i] == "&&") {
+          calls.append(dbusArgs);
+          dbusArgs.clear();
         }
-
-      if (!validPath) {
-        qWarning() << "DBus service missing" << objectPath << "is" << args[1]
-                   << "running?";
-        return;
+        else
+          dbusArgs.append(args[i]);
       }
+      calls.append(dbusArgs);
 
-      QDBusInterface remoteApp(args[1], objectPath, args[3],
-                               QDBusConnection::sessionBus());
-      if (remoteApp.isValid()) {
-        QVariantList methodArgs;
-        for (int i = 5; i < args.count(); ++i) methodArgs.append(args[i]);
+      for (const QStringList& dbusCall : qAsConst(calls))
+        callServiceMethod(dbusCall);
 
-        QDBusReply<void> reply;
-        reply =
-            remoteApp.callWithArgumentList(QDBus::Block, args[4], methodArgs);
-        if (!reply.isValid()) qWarning() << "DBus Error:" << reply.error();
-      } else
-        qWarning() << "DBus failed to connect:" << remoteApp.lastError();
 #endif  // !Q_OS_WIN
     } else {
       QProcess p;
@@ -245,16 +267,14 @@ void DesktopHelper::revealPath(const QString& path) {
 #else
   const QStringList defaultArgs;
   fileManagers += QStringList{{"Default", "DesktopServices"}};
-  fileManagers +=
-      QStringList{{"Dolphin (KDE)", "/usr/bin/dolphin", "--select", "%1"}};
-  fileManagers += QStringList{{"Krusader (Right Panel)", "DBus", "org.krusader",
-                               "/Instances/krusader[0-9]*/right_manager", "",
-                               "newTab", "%dirname(1)"}};
-  fileManagers += QStringList{{"Krusader (Left Panel)", "DBus", "org.krusader",
-                               "/Instances/krusader[0-9]*/left_manager", "",
-                               "newTab", "%dirname(1)"}};
-  fileManagers +=
-      QStringList{{"Nautilus (GNOME)", "/usr/bin/nautilus", "-s", "%1"}};
+  fileManagers += QStringList{{"Dolphin (KDE)", "/usr/bin/dolphin", "--select", "%1"}};
+  fileManagers += QStringList{
+      {"Krusader (Right Panel)", "DBus", "org.krusader", "/Instances/krusader[0-9]*/right_manager",
+       "", "newTab", "%dirname(1)", "&&", "org.krusader", "/MainWindow_[0-9]*", "", "raise"}};
+  fileManagers += QStringList{
+      {"Krusader (Left Panel)", "DBus", "org.krusader", "/Instances/krusader[0-9]*/left_manager",
+       "", "newTab", "%dirname(1)", "&&", "org.krusader", "/MainWindow_[0-9]*", "", "raise"}};
+  fileManagers += QStringList{{"Nautilus (GNOME)", "/usr/bin/nautilus", "-s", "%1"}};
 #endif
   const char* settingsKey = "OpenFileLocation";
   QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
