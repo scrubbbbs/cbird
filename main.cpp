@@ -145,7 +145,6 @@ static int printUsage(int argc, char** argv) {
         HR
         H2 "-dups                            exact duplicates using md5 hash"
         H2 "-dups-in <selector>              exact duplicates in subset"
-        H2 "-dup-nuke <dir>                  delete (move to trash) dups under <dir> only"
         H2 "-similar                         similar items in entire index"
         H2 "-similar-in <selector>           similar items within a subset"
         H2 "-similar-to <file>|<selector>    similar items to a file, directory, or subset, within entire index"
@@ -166,6 +165,12 @@ static int printUsage(int argc, char** argv) {
         H2 "-select-sql <sql>                items with sql statement [select * from media where ...]"
         H2 "-select-files <file> [<file>]... ignore index, existing files of supported file types"
         H2 "-select-grid <file>              ignore index, detect a grid of thumbnails, break up into separate images"
+
+        H1 "Batch Deletion"
+        HR
+        H2 "-nuke-dups-in <dir>              delete (move to trash) dups under <dir> only"
+        H2 "-nuke-weeds                      delete (move to trash) all weeds"
+        H2 "-nuke                            delete selection (move to trash)"
 
         H1 "Filtering"
         HR
@@ -193,6 +198,7 @@ static int printUsage(int argc, char** argv) {
         H2 "    p                              * <find> matches the full path instead of the file name"
         H2 "-move <dir>                        move selection to another location in the index directory"
         H2 "-verify                            verify md5 sums"
+        H2 "-dump                              print selection information"
 
         H1 "Viewing"
         HR
@@ -200,7 +206,7 @@ static int printUsage(int argc, char** argv) {
         H2 "-sets                            enable group view, group results with the same pair of directories"
         H2 "-exit-on-select                  \"select\" action exits with selected index as exit code, < 0 if canceled"
         H2 "-max-per-page <int>              maximum items on one page [10]"
-        H2 "-track-weeds                     remember deleted files for future detection (-weeds)"
+        //H2 "-track-weeds                     remember deleted files for future detection (-weeds)"
         H2 "-show                            show results browser for the current selection/results"
 
         H1 "Miscellaneous"
@@ -295,6 +301,7 @@ static int printUsage(int argc, char** argv) {
         H2 "    resolution                  - width*height"
         H2 "    res                         - max of width, height"
         H2 "    compressionRatio            - resolution / file size"
+        H2 "    isWeed                      - 1 if tagged as weed (after query)"
         H2 "    score                       - match score"
         H2 "    matchFlags                  - match flags (Media::matchFlags)"
         H2 "    exif:<tag1[,tagN]>          - comma-separated exif tags, first available tag is used (\"Exif.\" prefix optional)"
@@ -381,7 +388,8 @@ int printCompletions(const char* argv0, const QStringList& args) {
       "-exit-on-select", "-show",          "-help",          "-version",
       "-about",          "-verify",        "-vacuum",        "-select-result",
       "-license",        "-cwd",           "-init",          "-list-search-params",
-      "-list-index-params", "-weeds",      "-track-weeds"
+      "-list-index-params", "-weeds",      /*"-track-weeds",*/   "-nuke-weeds",
+      "-dump"
       };
   cmds += noArgs;
 
@@ -397,7 +405,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
                               "-test-video-decoder", "-select-grid"};
   cmds += fileArg;
 
-  const QSet<QString> dirArg{"-use", "-dups-in", "-dup-nuke", "-similar-in",
+  const QSet<QString> dirArg{"-use", "-dups-in", "-nuke-dups-in", "-similar-in",
                              "-move"};
   cmds += dirArg;
 
@@ -530,7 +538,6 @@ int printCompletions(const char* argv0, const QStringList& args) {
 }
 
 static char inputChar(char defaultOption) {
-  qFlushOutput();
   char ch = 0, option = defaultOption;
 
   // non-newline, valid option
@@ -1035,11 +1042,11 @@ int main(int argc, char** argv) {
       selection.clear();
       queryResult = engine().db->dupsByMd5(params);
       qInfo("dups-in: %d groups found", queryResult.count());
-    } else if (arg == "-dup-nuke") {
+    } else if (arg == "-nuke-dups-in") {
       QString path = nextArg();
 
       QDir dir(path);
-      if (!dir.exists()) qFatal("dup-nuke: specified dir does not exist");
+      if (!dir.exists()) qFatal("nuke-dups-in: specified dir does not exist");
 
       path = dir.absolutePath();
 
@@ -1050,15 +1057,15 @@ int main(int argc, char** argv) {
           if (m.path().startsWith(path)) {
             filtered.append(g);
             if (params.verbose)
-              qInfo() << "dup-nuke:" << m.path().mid(engine().db->path().length()+1);
+              qInfo() << "nuke-dups-in:" << m.path();
             break;
           }
 
-      qInfo() << "dup-nuke:" << filtered.count() << "duplicates";
+      qInfo() << "nuke-dups-in:" << filtered.count() << "duplicates in" << path;
       if (filtered.count() <= 0) continue;
 
       qFlushOutput();
-      fprintf(stdout, "dup-nuke: %d items will be trashed, proceed [y/N]: ", filtered.count());
+      fprintf(stdout, "nuke-dups-in: %d items will be trashed, proceed [y/N]: ", filtered.count());
       fflush(stdout);
       fflush(stdin);
       char ch = inputChar('N');
@@ -1077,11 +1084,34 @@ int main(int argc, char** argv) {
         }
 
         nuke(toRemove);
-
-        qInfo("dup-nuke: %d nuked, updating db", nuked);
+        qInfo("nuke-dups-in: %d nuked, updating db", nuked);
         engine().db->remove(toRemove);
       }
+    } else if (arg == "-nuke-weeds") {
+      const auto weeds = engine().db->weeds();
+      if (weeds.count() <= 0) {
+        qInfo("nuke-weeds: no weeds found");
+        continue;
+      }
 
+      MediaGroup toRemove;
+      for (auto& g : weeds)  {
+        Q_ASSERT(g.count()==2);
+        auto& w = g[1];
+        Q_ASSERT(engine().db->isWeed(w));
+        if (params.verbose) qInfo() << "nuke-weeds:" << w.path();
+        toRemove.append(w);
+      }
+      qFlushOutput();
+      fprintf(stdout, "\nnuke-weeds: %d items will be trashed, proceed [y/N]: ", toRemove.count());
+      fflush(stdout);
+      fflush(stdin);
+      char ch = inputChar('N');
+      if (ch == 'Y' || ch == 'y') {
+        nuke(toRemove);
+        qInfo("nuke-weeds: %d nuked, updating db", weeds.count());
+        engine().db->remove(toRemove);
+      }
     } else if (arg == "-nuke") {
 
       if (selection.count() > 0) {
@@ -1099,7 +1129,8 @@ int main(int argc, char** argv) {
     } else if (arg == "-similar") {
       queryResult = engine().db->similar(params);
     } else if (arg == "-similar-in") {
-      params.set = selectPath(nextArg());
+      const auto group = selectPath(nextArg());
+      for (auto& m : group) if (m.type() & params.queryTypes) params.set.append(m);
       params.inSet = true;
       selection.clear();
       queryResult = engine().db->similar(params);
@@ -1281,6 +1312,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-weeds") {
       selection.clear();
       queryResult = engine().db->weeds();
+      qInfo() << "weeds:" << queryResult.count() << "result(s)";
     } else if (arg == "-select-none") {
       selection.clear();
     } else if (arg == "-select-all") {
@@ -1792,6 +1824,9 @@ int main(int argc, char** argv) {
       selection = setA;
       for (auto& m : selection) m.setAttribute("sort", "merged");
 
+    } else if (arg == "-dump") {
+      Media::printGroupList(queryResult);
+      Media::printGroup(selection);
     } else if (arg == "-sets") {
       showMode = MediaBrowser::ShowPairs;
     } else if (arg == "-folders") {
@@ -1800,8 +1835,8 @@ int main(int argc, char** argv) {
       widgetOptions.selectionMode = MediaWidgetOptions::SelectExitCode;
     } else if (arg == "-max-per-page") {
       widgetOptions.maxPerPage = intArg(nextArg());
-    } else if (arg == "-track-weeds") {
-      widgetOptions.trackWeeds = true;
+//    } else if (arg == "-track-weeds") {
+//      widgetOptions.trackWeeds = true;
     } else if (arg == "-show") {
       widgetOptions.params = params;
       widgetOptions.db = engine().db;
@@ -2080,6 +2115,7 @@ int main(int argc, char** argv) {
         layout->addItem(new QSpacerItem(1,1,QSizePolicy::Expanding));
         label = new QLabel(window);
         label->setAlignment(Qt::AlignHCenter|Qt::AlignVCenter);
+        label->setAttribute(Qt::WA_OpaquePaintEvent);
         label->setScaledContents(false);
         layout->addWidget(label);
         layout->addItem(new QSpacerItem(1,1,QSizePolicy::Expanding));

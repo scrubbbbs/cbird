@@ -42,7 +42,7 @@ class MediaWidgetOptions {
   Database* db = nullptr; /// database for SelectSearch or other things
 
   // todo: WidgetParams
-  bool trackWeeds = false;/// if true, remember user deletions
+  bool trackWeeds = true; /// if true, remember user deletions
   int maxPerPage = 12;    /// max images for paged views
   int iconSize = 256;     /// thumbnail size for icon views
   int iconTextWidth = 40; /// max icon text width (characters per line)

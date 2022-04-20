@@ -587,10 +587,11 @@ void WidgetHelper::drawRichText(QPainter *painter, const QRect &r, const QString
         ".time { color:#FF9; }"   // value is a timecode or duration
         ".video { color:#9FF; }"  // value describes video properties
         ".audio { color:#F9F; }"  // value describes audio properties
-        ".none { color:#000; }"   // "hide" value by matching background color
+        ".none { color:rgba(0,0,0,0); }" // "hide" value by matching background color
         ".archive { color:#FF9; }"// value is an archive/zip file
         ".file { color:#FFF; }"   // value is normal file
-        ".default { color:#FFF; }"   // normal text
+        ".default { color:#FFF; }"// normal text
+        ".weed { color:#0FF };"   // value is weed indicator
         );
 
   td.setHtml(text);
@@ -756,9 +757,10 @@ class MessageLog {
  private:
   QThread* thread;
   QMutex mutex;
-  QWaitCondition cond;
+  QWaitCondition logCond, syncCond;
   volatile bool stop = false;
-  QVector<QString> log;
+  volatile bool sync = false;
+  QList<QString> log;
   int termLines=-1;
   int termColumns=-1;
   QString homePath;
@@ -1001,11 +1003,14 @@ MessageLog::MessageLog() {
     QString lastInput, lastOutput;
     int repeats = 0;
     QMutexLocker locker(&mutex);
-    while (!stop && cond.wait(&mutex))
+    while (!stop && logCond.wait(&mutex)) {
+      if (sync && log.count() <= 0) {
+        sync = false;
+        syncCond.wakeAll();
+      }
       while (log.count() > 0) {
         const QString line = log.takeFirst();
-        // do not compress progress lines
-        int pl = line.indexOf("<PL>");
+        int pl = line.indexOf("<PL>");  // do not compress progress lines
         if (pl <= 0 && lastInput == line) {
           repeats++;
           continue;
@@ -1052,7 +1057,9 @@ MessageLog::MessageLog() {
 
         lastOutput = output;
 
+
         QByteArray utf8 = output.toUtf8();
+
         fwrite(utf8.data(), utf8.length(), 1, stdout);
         // we only need to flush if \r is present;
         // windows buffers forever until flushed
@@ -1062,18 +1069,17 @@ MessageLog::MessageLog() {
           fflush(stdout);
 
         locker.relock();
-      }
+      } // log.count() > 0
+    } // !stop
   });
   thread->start();
 }
 
 MessageLog::~MessageLog() {
   stop = true;
-  cond.wakeAll();
+  logCond.wakeAll();
   thread->wait();
   flush();
-  fprintf(stdout, "\n"); // last output might have no trailing "\n"
-  fflush(stdout);
 }
 
 void MessageLog::append(const QString &msg) {
@@ -1081,23 +1087,30 @@ void MessageLog::append(const QString &msg) {
     QMutexLocker locker(&mutex);
     log.append(msg);
   }
-  cond.wakeAll();
+  logCond.wakeAll();
 }
 
 void MessageLog::flush() {
   // prefer thread to write the logs since it handles things
-  QMutexLocker locker(&mutex);
-  while (log.count() > 0 && thread->isRunning()) {
-    locker.unlock();
-    cond.wakeAll();
-    qApp->processEvents();
-    locker.relock();
+  if (thread->isRunning()) {
+    QMutexLocker locker(&mutex);
+    sync = true;
+    while (sync) {
+      syncCond.wait(&mutex, 10);
+      logCond.wakeAll();
+    }
   }
-  // ensure all logs are written
-  QByteArray utf8;
-  while (log.count() > 0)
-    utf8 += (log.takeFirst() + "\n").toUtf8();
-  fwrite(utf8.data(), utf8.length(), 1, stdout);
+  else {
+    // no thread, ensure all logs are written
+    QByteArray utf8;
+    if (log.count() <= 0)
+      utf8 = "\n";
+    else
+      while (log.count() > 0)
+        utf8 += (log.takeFirst() + "\n").toUtf8();
 
+    fwrite(utf8.data(), utf8.length(), 1, stdout);
+  }
   fflush(stdout);
+  fflush(stderr);
 }

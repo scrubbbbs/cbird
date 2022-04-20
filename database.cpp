@@ -344,7 +344,8 @@ void Database::add(MediaGroup& inMedia) {
   uint64_t now;
 
   // If there are multiple processes updating (user error as this is unsupported),
-  // they might cause database corruption, so lock them out.
+  // they might cause database corruption, lock them out with QLockFile
+  //
   // This will not prevent sql constraint violation if they attempt to
   // add the same file. If processes work on different subtrees this won't happen.
 
@@ -1186,6 +1187,8 @@ MediaGroupList Database::dupsByMd5(const SearchParams& params) {
     while (query.next()) {
       const QString md5 = query.value(0).toString();
       MediaGroup g = mediaWithMd5(md5);
+      for (auto& m  : g)
+        if (isWeed(m)) m.setIsWeed();
       if (!g.isEmpty()) dups.append(g);
     }
   }
@@ -1198,6 +1201,10 @@ MediaGroupList Database::dupsByMd5(const SearchParams& params) {
 bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
   // remove matches in the "does not match" database
   if (params.negativeMatch) match = filterNegativeMatches(match);
+
+  // mark weeds
+  for (auto& m : match)
+    if (isWeed(m)) m.setIsWeed();
 
   // only results under path / not under path
   if (params.path != "" && match.count() > 1) {
@@ -1250,11 +1257,10 @@ void Database::filterMatches(const SearchParams& params,
   // e.g. a matches b, b matches a, only include first one
   if (params.filterGroups) {
     MediaGroupList filtered;
+    QSet<uint> groupHash;
 
     // prevent mixing a=>b with b=>a matches by sorting
     Media::sortGroupList(matches, "path");
-
-    QSet<uint> groupHash;
 
     for (const MediaGroup& group : matches) {
       QString str;
@@ -1324,17 +1330,16 @@ MediaGroupList Database::similar(const SearchParams& params) {
     QSet<uint32_t> ids;
     for (const auto& m : params.set) ids.insert(uint32_t(m.id()));
 
-    if (!ids.empty()) {
+    if (!ids.isEmpty()) {
+      QReadLocker lock(&_rwLock);
       slice = index->slice(ids);
-      if (slice)
+      if (slice) {
         index = slice;
+        qInfo() << "using haystack slice with" << slice->count() << "items";
+      }
       else
         qWarning() << "Index::slice unsupported for index" << index->id();
     }
-
-    if (!ids.isEmpty()) slice = index->slice(ids);
-    if (slice) index = slice;
-    if (slice) qInfo() << "searching slice of" << slice->count();
   }
 
   qInfo("index loaded in %dms",
@@ -1455,10 +1460,11 @@ MediaGroup Database::similarTo(const Media& needle,
   }
 
   // set match flags
+  // todo: seems like this should this be moved to filterMatch
   for (Media& m : result) {
     m.readMetadata();
 
-    int flags = 0;
+    int flags = m.matchFlags();
 
     if (m.md5() == needle.md5()) flags |= Media::MatchExact;
 
@@ -1507,18 +1513,16 @@ Index* Database::chooseIndex(const SearchParams& params) const {
 
 Index* Database::loadIndex(const SearchParams& params) {
   Index* i = chooseIndex(params);
+  if (i->isLoaded()) return i;
 
+  QWriteLocker locker(&_rwLock);
   if (!i->isLoaded()) {
-    QWriteLocker locker(&_rwLock);
-    if (!i->isLoaded()) {
-      QString dataPath = "";
-      if (i->id() == SearchParams::AlgoVideo) dataPath = videoPath();
+    QString dataPath = "";
+    if (i->id() == SearchParams::AlgoVideo) dataPath = videoPath();
 
-      QSqlDatabase db = connect(i->databaseId());
-      i->load(db, cachePath(), dataPath);
-    }
+    QSqlDatabase db = connect(i->databaseId());
+    i->load(db, cachePath(), dataPath);
   }
-
   return i;
 }
 
@@ -1662,97 +1666,118 @@ void Database::unloadNegativeMatches() {
 
 void Database::loadWeeds() {
   QWriteLocker lock(&_rwLock);
-  if (_deletionsLoaded) return;
-  Q_ASSERT(_deletions.isEmpty());
+  if (_weedsLoaded) return;
+  Q_ASSERT(_weeds.isEmpty());
 
   readMap("weed",[&](const QString& key, const QString& value) {
-    _deletions[key].insert(value);
+    _weeds.insert(key, value);
   });
 
-  qDebug() << "loaded" << _deletions.count() << "deletions";
-  _deletionsLoaded = true;
+  qDebug() << "loaded" << _weeds.count() << "weeds";
+  _weedsLoaded = true;
 }
 
 void Database::unloadWeeds() {
   QWriteLocker lock(&_rwLock);
-  _deletions.clear();
-  _deletionsLoaded = false;
+  _weeds.clear();
+  _weedsLoaded = false;
 }
 
-bool Database::addWeed(const Media& needle, const Media& deleted) {
-  if (needle.md5().isEmpty() || deleted.md5().isEmpty()) return false;
-  if (needle.md5() == deleted.md5()) return false;
-  if (needle.type() != deleted.type()) return false;
-  if (isWeed(needle, deleted)) {
-    qWarning() << "already confirmed deletion" << needle.md5() << deleted.md5();
+bool Database::addWeed(const Media& weed, const Media& original) {
+  if (weed.md5().isEmpty() || original.md5().isEmpty()) return false;
+  if (weed.md5() == original.md5()) return false;
+  if (weed.type() != original.type()) return false;
+  if (isWeed(weed)) {
+    QReadLocker locker(&_rwLock);
+    if (_weeds.value(weed.md5()) == original.md5()) // did not change the mapping
+      return true;
+    // fixme: this would be OK but we have to rewrite the weed.dat
+    qWarning() << "cannot replace existing weed with a different source" << weed.md5();
     return false;
   }
+  if (isWeed(original)) {
+    // don't allow weeds to refer to other weeds, it doesn't make sense
+    qWarning() << "cannot link new weed to existing weed" << original.md5();
+    return false;
+  }
+  qDebug() << weed.path() << "=>" << original.path();
   QWriteLocker lock(&_rwLock);
-  auto& key = needle.md5();
-  auto& value = deleted.md5();
-  _deletions[key].insert(value);
+  auto& key = weed.md5();
+  auto& value = original.md5();
+  _weeds.insert(key, value);
   return appendMap("weed", key, value);
 }
 
-bool Database::isWeed(const Media& needle, const Media& match) {
-  if (!_deletionsLoaded) loadWeeds();
+bool Database::isWeed(const Media& media) {
+  if (!_weedsLoaded) loadWeeds();
   QReadLocker lock(&_rwLock);
 
-  const auto& map = qAsConst(_deletions);
-  const auto it = map.find(needle.md5());
+  const auto& map = _weeds;
+  const auto it = map.find(media.md5());
   if (it != map.end())
-    return it.value().contains(match.md5());
+    return mediaWithMd5(it.value()).count() > 0;
+
   return false;
 }
 
-void Database::updateWeeds() {
-  if (!_deletionsLoaded) loadWeeds();
-
-  const MediaGroup all = mediaWithSql("select * from media");
-  QSet<QString> hashes;
-  for (const auto& m : all)
-    hashes.insert(m.md5());
-
-  QWriteLocker lock(&_rwLock);
-  bool rewrite = false;
-  for (const auto& key : qAsConst(_deletions).keys()) {
-    if (!hashes.contains(key)) {
-      qInfo() << "removing needle" << key;
-      _deletions.remove(key);
-      rewrite = true;
-    }
-  }
-  if (rewrite) {
+bool Database::removeWeed(const Media& media) {
+  if (isWeed(media)) {
+    QWriteLocker locker(&_rwLock);
+    _weeds.remove(media.md5());
+    qDebug() << media.md5();
     QVector<std::pair<QString,QString>> pairs;
-    const auto& map = _deletions;
+    const auto& map = _weeds;
     for (auto it = map.begin(); it != map.end(); ++it)
-      for (const auto& value : it.value())
-        pairs.append({it.key(), value});
-
-    (void)writeMap("weed", pairs);
+      pairs.append({it.key(),it.value()});
+    return writeMap("weed", pairs);
   }
+  return false;
 }
+//void Database::updateWeeds() {
+//  if (!_weedsLoaded) loadWeeds();
+
+//  const MediaGroup all = mediaWithSql("select * from media");
+//  QHash<QString, const Media*> existing;
+//  for (const auto& m : all)
+//    existing.insert(m.md5(), &m);
+
+//  QWriteLocker lock(&_rwLock);
+//  bool rewrite = false;
+//  const auto copy = qAsConst(_weeds); // copy needed for remove()
+//  for (auto it = copy.begin(); it != copy.end(); ++it)
+//    if (!existing.contains(it.value())) {
+//      auto& weedHash = it.key();
+//      qWarning() << "removing orphaned weed" << existing[weedHash]->path();
+//      _weeds.remove(weedHash);
+//      rewrite = true;
+//    }
+
+//  if (rewrite) {
+//    QVector<std::pair<QString,QString>> pairs;
+//    const auto& map = qAsConst(_weeds);
+//    for (auto it = map.begin(); it != map.end(); ++it)
+//      pairs.append({it.key(), it.value()});
+
+//    (void)writeMap("weed", pairs);
+//  }
+//}
 
 MediaGroupList Database::weeds() {
+  if (!_weedsLoaded) loadWeeds();
   QReadLocker lock(&_rwLock);
 
-  // reverse map so key is the weed's md5
-  QHash<QString, QSet<QString>> revMap;
-  const auto& map = _deletions;
-  for (auto it = map.begin(); it != map.end(); ++it)
-    for (auto& weed : it.value())
-      revMap[weed].insert(it.key());
-
   MediaGroupList list;
-  const MediaGroup g = mediaWithSql("select * from media");
-  for (auto& deleted : g) {
-    auto it = revMap.find(deleted.md5());
-    if (it == revMap.end()) continue;
-    // deleted file came back...
-    for (auto& md5 : it.value().values()) {
-      const MediaGroup& needle = mediaWithMd5(md5);
-      for (auto& n : needle)
-        list.append({n, deleted});
+
+  MediaGroup all = mediaWithSql("select * from media");
+  const auto& map = _weeds;
+  for (auto& m : all) {
+    const auto it = map.find(m.md5());
+    if (it != map.end()) {
+      const MediaGroup originals = mediaWithMd5(it.value());
+      if (originals.count() <= 0) continue;
+
+      m.setIsWeed();
+      list.append({originals[0], m});
     }
   }
   return list;
@@ -1760,12 +1785,12 @@ MediaGroupList Database::weeds() {
 
 void Database::readMap(const QString& name,
                        std::function<void(const QString& key, const QString& value)> insert) const {
-  QFile f(indexPath() + "/" + name + ".dat");
+  QFile f(indexPath() + "/" + name + ".csv");
   (void) f.open(QFile::ReadOnly);
 
   while (f.bytesAvailable()) {
     const QString line = f.readLine(256).trimmed();
-    const auto cols = line.split(",");
+    const auto cols = line.split(QChar(','));
     Q_ASSERT(cols.count() == 2);
     insert(cols[0], cols[1]);
   }
@@ -1773,13 +1798,13 @@ void Database::readMap(const QString& name,
 
 bool Database::appendMap(const QString& name, const QString& key,
                         const QString& value) const {
-  QFile f(indexPath() + "/" + name + ".dat");
+  QFile f(indexPath() + "/" + name + ".csv");
   if (!f.open(QFile::Append)) {
     qCritical() << "open failed:" << f.fileName() << f.error() << f.errorString();
     return false;
   }
 
-  auto buf = (key + "," + value + "\n").toLatin1();
+  auto buf = (key + "," + value + "\n").toUtf8();
   bool ok = buf.length() == f.write(buf);
   if (!ok) qCritical() << "write failed:" << f.fileName() << f.error() << f.errorString();
 
@@ -1787,7 +1812,7 @@ bool Database::appendMap(const QString& name, const QString& key,
 };
 
 bool Database::writeMap(const QString& name, const QVector<std::pair<QString,QString>>& keyValues) const {
-  QFile f(indexPath() + "/" + name + ".dat");
+  QFile f(indexPath() + "/" + name + ".csv");
   if (!f.open(QFile::ReadWrite|QFile::Truncate)) {
     qCritical() << "open failed:" << f.fileName() << f.error() << f.errorString();
     return false;

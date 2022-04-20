@@ -31,7 +31,7 @@ FILES_INDEX = index ioutil media videocontext cvutil qtutil database scanner tem
 # deps for using gui stuff
 LIBS_GUI = $$LIBS_CIMG
 FILES_GUI = gui/mediagrouplistwidget gui/mediafolderlistwidget env \
-    lib/jpegquality gui/videocomparewidget cimgops
+    lib/jpegquality gui/videocomparewidget cimgops nleutil
 
 #CONFIG += precompile_header
 #PRECOMPILED_HEADER = ../../prefix.h

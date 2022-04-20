@@ -125,6 +125,9 @@ class MediaGroupListWidget : public QListWidget {
   /// Record negative match to csv file
   void recordMatchFalseAction() { recordMatch(false); }
 
+  /// Forget selection is a weed
+  void forgetWeedsAction();
+
   /// Add first item and selected items to negative matches
   void negMatchAction() {
     addNegMatch(false);

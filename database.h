@@ -125,19 +125,19 @@ class Database {
   MediaGroup filterNegativeMatches(const MediaGroup& in);
 
   /**
-   * @brief Add a weed (confirmed deletion), if it is seen again it can be removed automatically
-   * @param needle
-   * @param deleted
-   * @note This is for tracking user deletions / past user choices,
-   *       not automatic deletions (-dup-nuke etc)
+   * @brief Track reappearing deleted files "weeds"
+   * @param weed deleted file
+   * @param original related non-weed
+   * @note A file is a weed when the associated non-weed still exists,
+   *       then it can be deleted automatically
    */
-  bool addWeed(const Media& needle, const Media& deleted);
-  bool isWeed(const Media& needle, const Media& match);
+  bool addWeed(const Media& weed, const Media& original);
+  bool isWeed(const Media& media);
   /// remove deletion records for files(needles) which no longer exist
-  void updateWeeds();
+  //void updateWeeds();
+  bool removeWeed(const Media& weed);
   void loadWeeds();
   void unloadWeeds();
-
   MediaGroupList weeds();
 
   /**
@@ -191,12 +191,14 @@ class Database {
 
 private:
   /**
-   * @return database connection for the current thread
+   * Thread-safe database connection
+   * @return per-thread instance
    * @param id which database to use
    * @note id corresponds to Index.id()
-   * @note sqlite is not thread-safe, each database/file/thread gets its own
+   * @note QSqlDatabase is not thread-safe, each database/file/thread gets its own
    * instance
    * @note the connections remain open as long as the thread is alive
+   * @note database writes also use lock file for extra safety
    */
   QSqlDatabase connect(int id = 0);
 
@@ -233,9 +235,9 @@ private:
   void saveIndices();
 
   /// read/write a key-value map
-  void readMap(const QString& name, std::function<void(const QString&, const QString &)> insert) const;
+  void readMap(const QString& name, std::function<void(const QString&, const QString&)> insert) const;
   bool appendMap(const QString& name, const QString& key, const QString& value) const;
-  bool writeMap(const QString &name, const QVector<std::pair<QString, QString> > &keyValues) const;
+  bool writeMap(const QString& name, const QVector<std::pair<QString, QString> >& keyValues) const;
 
   /// @return atomic int for unique connection names in the pool
   static QAtomicInt& connectionCount();
@@ -278,6 +280,6 @@ private:
   /// Negative matches list status
   bool _negMatchLoaded = false;
 
-  QHash<QString, QSet<QString>> _deletions;
-  bool _deletionsLoaded = false;
+  QHash<QString, QString> _weeds; /// deleted hash => retained hash
+  bool _weedsLoaded = false;
 };

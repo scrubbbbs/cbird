@@ -43,7 +43,8 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
   bool useCache = true;
 
   if (tmplMedia.md5().isEmpty()) {
-    qWarning() << "tmpl image has no md5 sum, won't cache:" << tmplMedia.path();
+    if (params.verbose)
+      qWarning() << "tmpl image has no md5 sum, won't cache:" << tmplMedia.path();
     useCache = false;
   }
 

@@ -28,7 +28,9 @@
 class Media;
 class VideoContext;
 
+/// List of media, typically needle followed by matches
 typedef QVector<Media> MediaGroup;
+/// List of groups, typically search results
 typedef QVector<MediaGroup> MediaGroupList;
 typedef std::vector<cv::KeyPoint> KeyPointList;
 typedef cv::Mat KeyPointDescriptors;
@@ -137,6 +139,7 @@ class Media {
     MatchBiggerDimensions = 1 << 1,  /// dimensionally bigger
     MatchBiggerFile = 1 << 2,        /// file size is bigger
     MatchLessCompressed = 1 << 3,    /// lower compression ratio
+    MatchIsWeed = 1 << 4,            /// checksum matches known weed
   };
 
   /// QImage::text() keys, added by image loader
@@ -321,12 +324,18 @@ class Media {
 
   int resolution() const { return _width * _height; }
 
+  bool isWeed() const { return _matchFlags & MatchIsWeed; }
+  void setIsWeed(bool set=true) {
+    if (set) _matchFlags |= MatchIsWeed;
+    else _matchFlags &= ~MatchIsWeed;
+  }
+
   /**
    * key/value store for clients
    * @note clients are free to set any values, untouched by
    * anything else
-   *
-   * @note some keys are used by gui/command line interface
+   * @note not to be used by database queries
+   * @note gui/command line uses these:
    *       "filter" - the property key/value used for filtering
    *       "group"  - the property key/value used for group-by
    *       "sort"   - the property key used for sorting
@@ -408,7 +417,7 @@ class Media {
 
   /**
    * approximation of current memory usage (self)
-   * @note memory usage can be lowered substatially with setImage()/setData()
+   * @note memory usage can be lowered substantially with setImage()/setData()
    */
   size_t memSize() const;
 
@@ -525,7 +534,6 @@ class Media {
    * @note doesn't touch any database, only the archive itself
    */
   int archiveCount() const;
-
 
   /// return virtualPath() list of contents
   static QStringList listArchive(const QString& path);

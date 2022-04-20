@@ -692,6 +692,8 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 
   WidgetHelper::addSeparatorAction(this);
 
+  WidgetHelper::addAction(settings, "Forget Weed", Qt::Key_W, this, SLOT(forgetWeedsAction()));
+
   WidgetHelper::addAction(settings, "Add to Negative Matches", Qt::Key_Minus, this, SLOT(negMatchAction()))
       ->setEnabled(_options.db != nullptr);
   WidgetHelper::addAction(settings, "Add All to Negative Matches", Qt::SHIFT | Qt::Key_Minus,
@@ -1299,21 +1301,21 @@ void MediaGroupListWidget::updateItems() {
 
       compare.compression = compare.pixels = compare.score = compare.size =
           compare.fileCount = "none";
-      compare.duration = compare.frameRate = "same";  // don't hide this one
-      compare.jpegQuality = compare.qualityScore = "same";
+      compare.duration = isVideo ? "same" : "none"; // do not hide
+      compare.frameRate = isVideo ? "same" : "none";
+      compare.jpegQuality = jpegQuality==0 ? "none" : "same"; // hide unless computed
+      compare.qualityScore = qualityScore==0 ? "none" : "same";
     } else {
       compare.compression = relativeLabel(first.compression, compression);
       compare.pixels = relativeLabel(pixels, first.pixels);
       compare.size = relativeLabel(size, first.size);
       compare.score = relativeLabel(score, first.score);
       compare.fileCount = relativeLabel(fileCount, first.fileCount);
-      compare.jpegQuality = relativeLabel(jpegQuality, first.jpegQuality);
-      compare.qualityScore = relativeLabel(qualityScore, first.qualityScore);
+      compare.jpegQuality = jpegQuality==0 ? "none" : relativeLabel(jpegQuality, first.jpegQuality);
+      compare.qualityScore = qualityScore==0 ? "none" : relativeLabel(qualityScore, first.qualityScore);
 
-      if (isVideo) {
-        compare.duration = relativeLabel(duration, first.duration);
-        compare.frameRate = relativeLabel(fps, first.fps);
-      }
+      compare.duration = isVideo ? relativeLabel(duration, first.duration) : "none";
+      compare.frameRate = isVideo ? relativeLabel(fps, first.fps) : "none";
     }
 
     const auto formatPercent = [](double a, double b) {
@@ -1326,6 +1328,8 @@ void MediaGroupListWidget::updateItems() {
     // pass via item->data() to the item paint()...then must assume
     // drawRichText() uses similar font metrics
     QString title = path + QString(" [x%1] ").arg(fileCount);
+
+    if (m.isWeed()) title += "WEED ";
 
     //
     // todo: convert this to some kind of loadable/configurable template with variable replacement
@@ -1391,7 +1395,7 @@ void MediaGroupListWidget::updateItems() {
             .arg(jpegQuality)
             .arg(compare.qualityScore)
             .arg(qualityScore)
-            .arg(m.isArchived() ? "archive" : "file");
+            .arg(m.isWeed() ? "weed" : m.isArchived() ? "archive" : "file");
 
     // note: the "type" attribute of QListWidgetItem will be used to refer
     // back to the associated Media object
@@ -1623,8 +1627,17 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
             like += ":%";
             MediaGroup zipGroup = _options.db->mediaWithPathLike(like);
             _options.db->remove(zipGroup);
+            if (_options.trackWeeds)
+              qWarning() << "Cannot track weeds when deleting zip files";
         } else {
           _options.db->remove(group[index].id());
+          if (_options.trackWeeds && countNonAnalysis(group)==2) {
+            int otherIndex = (index + 1) % 2;
+            Media& other = group[otherIndex];
+            Q_ASSERT(!isAnalysis(other));
+            if (!_options.db->addWeed(group[index], other))
+              qWarning() << "Failed to add weed" << group[index].md5() << other.md5();
+          }
           if (replace && countNonAnalysis(group)==2) {
             int otherIndex = (index + 1) % 2;
             Media& other = group[otherIndex];
@@ -2108,6 +2121,21 @@ void MediaGroupListWidget::recordMatch(bool matched) {
   f.write(line.toLatin1());
 
   loadNextRow(true);
+}
+
+void MediaGroupListWidget::forgetWeedsAction() {
+  if (!_options.db) return;
+
+  const auto group = selectedMedia();
+  QSet<QString> removed;
+  for (auto& m : group)
+    if (_options.db->removeWeed(m)) removed.insert(m.md5());
+
+  for (auto& g : _list)
+    for (auto& m : g)
+      if (removed.contains(m.md5())) m.setIsWeed(false);
+
+  updateItems();
 }
 
 bool MediaGroupListWidget::addNegMatch(bool all) {

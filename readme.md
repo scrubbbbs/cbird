@@ -109,6 +109,24 @@ This is lacking documentation at the moment. But for now...
 - The two deletion actions ("Delete" and "Replace") use the trash/recycler by default. There is
  no way to permanently delete files (not even with `-nuke` or `-dup-nuke` options)
 
+Using Weeds
+======================
+A "weed" is a deletion record of a near-duplicate, to allow fast deletion of files that reappear in the future. The record is a pair of file hashes, one is the weed/deleted file, the other is the original/retained file. When the weed shows up again, it can be deleted without inspection (`-nuke-weeds`)
+
+Weeds are tracked when:
+
+- exactly two files visible in inspector (matching pair)
+- neither file is a zip member
+- one of the files is deleted
+
+When a weed's filehash reappears, it is only considered valid if the original still exists - this prevents undesired deletions. A weed can be unset in the inspector with the "Forget Weed" command.
+
+```
+cbird -weeds -show # show all weeds
+cbird -nuke-weeds  # delete all weeds
+cbird -similar -with isWeed true # show weeds in search results
+```
+
 Environment Variables
 ======================
 There are a few for power users.
@@ -535,3 +553,11 @@ cd unit/
 qmake <test>.pro -o <test>.pro.make
 make -f <test>.pro.make -j
 ./runtest-<test>
+```
+
+Release Notes
+=============
+
+#### v0.6.0
+
+- Add weeds feature (recommended by r/user/traal)

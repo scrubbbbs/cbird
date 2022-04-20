@@ -200,6 +200,8 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
     return search;
   }
 
+  if (db->isWeed(needle)) needle.setIsWeed();
+
   matches = db->similarTo(needle, params);
 
   // some options require loading the image

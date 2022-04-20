@@ -112,20 +112,35 @@ Media::Media(const QString& path, int type, int width, int height,
 }
 
 void Media::print(const Media& media) {
+  qInfo("------------------------------------");
   qInfo() << "id    =" << media.id();
   qInfo() << "path  =" << media.path();
   qInfo() << "md5   =" << media.md5();
-  qInfo() << "dct   =" << media.dctHash();
+  qInfo() << "dct   =" << Qt::hex << media.dctHash();
   qInfo() << "size  =" << media.width() << "x" << media.height();
   qInfo() << "type  =" << media.type();
-
+  qInfo() << "isZip =" << media.isArchived();
   qInfo("score = %d rangeIn={%d, %d, %d}", media.score(),
         media.matchRange().srcIn, media.matchRange().dstIn,
         media.matchRange().len);
+
+  qInfo() << "image =" << media.image();
+  qInfo() << "dataSz=" << media.data().size();
+  qInfo() << "cmpSz =" << media.originalSize();
+  qInfo() << "memSz =" << media.memSize();
+  qInfo() << "cmpRto=" << media.compressionRatio();
+
+  qInfo() << "attr  =" << media.attributes();
+  qInfo() << "mime  =" << media.contentType();
+  qInfo() << "roi   =" << media.roi();
+  qInfo() << "xform =" << media.transform();
+  qInfo() << "pos   =" << media.position();
+  qInfo() << "color =" << media.matchColor();
+  qInfo() << "flags =" << Qt::hex << media.matchFlags();
 }
 
 void Media::printGroup(const MediaGroup& group) {
-  qInfo("------------------------------------");
+  qInfo("====================================");
   for (const Media& m : group) print(m);
 }
 
@@ -172,15 +187,11 @@ void Media::mergeGroupList(MediaGroupList& list) {
   // merge 1-connected matches
   // e.g. if a matches b and b matches c, then a matches c;
   // fixme: probably want to find something better than n*n
-  // todo: option to disable/enable merge
-
   for (int i = 0; i < list.count(); i++) {
     MediaGroup& a = list[i];
-
     for (int j = 0; j < list.count(); j++)
       if (i != j) {
         MediaGroup& b = list[j];
-
         if (b.count() > 0 && a.contains(b[0])) {
           // merge b into a, the match scores could be bogus now
           for (int k = 1; k < b.count(); k++)
@@ -452,6 +463,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       PAIR(matchFlags),
       PAIR(isArchived),
       PAIR(archiveCount),
+      PAIR(isWeed),
       { "res",     [](const Media& m) { return qMax(m.width(),m.height()); } },
       { "relPath", [](const Media& m) { return QDir().relativeFilePath(m.path()); }},
       { "archive", [](const Media& m) {
@@ -904,6 +916,12 @@ void Media::openMedia(const Media& m, float seek) {
     QString parent, child;
     m.archivePaths(parent, child);
 
+    // todo: open file within archive...have it be browseable
+    //       there are various ways this is done depending on
+    //       the viewer
+    // nomacs: zipfile.zipdIrChAr/child.jpg => opens but not browseable
+    // - use our own browser
+    // - move this to DesktopHelper::openImage
     QIODevice* io = m.ioDevice();
     if (io && io->open(QIODevice::ReadOnly)) {
       child = child.split("/").last();

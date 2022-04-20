@@ -360,9 +360,9 @@ void TestDatabase::testWeeds() {
 
   {
     // fail, no md5 sums
-    Media needle, weed;
-    QVERIFY(!_database->addWeed(needle, weed));
-    QVERIFY(!_database->isWeed(needle, weed));
+    Media weed, orig;
+    QVERIFY(!_database->addWeed(weed, orig));
+    QVERIFY(!_database->isWeed(weed));
   }
 
   MediaGroupList dups =_database->dupsByMd5(SearchParams());
@@ -372,35 +372,51 @@ void TestDatabase::testWeeds() {
 
   // fail, same md5 sums
   QVERIFY(!_database->addWeed(g[0], g[1]));
-  QVERIFY(!_database->isWeed(g[0], g[1]));
+  QVERIFY(!_database->isWeed(g[0]));
+  QVERIFY(!_database->isWeed(g[1]));
 
-  // success, different sets of dups
-  const Media& needle = dups[0][0];
-  const Media& dup = dups[1][0];
-  const Media& other = dups[2][0];
-  QVERIFY(!_database->isWeed(needle, dup));
-  QVERIFY(_database->addWeed(needle, dup));
-  QVERIFY(_database->addWeed(dup, other));
-  QVERIFY(_database->isWeed(needle, dup));
-  QVERIFY(_database->isWeed(dup, other));
+  const Media& orig = dups[0][0];
+  const Media& weed1 = dups[1][0];
+  const Media& weed2 = dups[2][0];
 
-  // converse should not be true (unlike negative match)
-  QVERIFY(!_database->isWeed(dup, needle));
+  QVERIFY(!_database->isWeed(weed1)); // not added yet
+  QVERIFY(_database->addWeed(weed1, orig));
+  QVERIFY(_database->isWeed(weed1));
+  QVERIFY(!_database->isWeed(orig)); // reverse is not true...
+
+  QVERIFY(_database->addWeed(weed1, orig)); // re-adding, ignore it
+  QVERIFY(!_database->addWeed(weed1, weed2)); // already added, different orig
+
+  // second weed
+  QVERIFY(!_database->isWeed(weed2));
+  QVERIFY(!_database->addWeed(weed2, weed1)); // illegal, orig is a weed
+  QVERIFY(_database->addWeed(weed2, orig)); // legal, multiple orig allowed
+  QVERIFY(_database->isWeed(weed2));
 
   // unload/re-load from file
   _database->unloadWeeds();
-  QVERIFY(_database->isWeed(needle, dup));
+  QVERIFY(_database->isWeed(weed1));
+  QVERIFY(_database->isWeed(weed2));
 
-  // remove the needle md5 from database and check that
-  // it was also removed from confirmed deletions
-  _database->remove(_database->mediaWithMd5(needle.md5()));
-  qDebug() << needle.id() << needle.md5();
-  QVERIFY(0 == _database->mediaWithMd5(needle.md5()).count());
+  // removal of original invalidates (orphans) the weed records
+  _database->remove(_database->mediaWithMd5(orig.md5()));
+  QVERIFY(0 == _database->mediaWithMd5(orig.md5()).count());
 
-  QVERIFY(_database->isWeed(needle, dup)); // not removed yet
-  _database->updateWeeds();
-  QVERIFY(!_database->isWeed(needle, dup)); // now removed
-  QVERIFY(_database->isWeed(dup, other)); // not removed
+  QVERIFY(!_database->isWeed(weed1)); // still present, but orphaned
+  QVERIFY(!_database->isWeed(weed2));
+
+  MediaGroup grp{orig};
+  _database->add(grp);
+  QVERIFY(_database->isWeed(weed1)); // add back, weed again
+  QVERIFY(_database->isWeed(weed2));
+
+  QVERIFY(_database->removeWeed(weed1));
+  QVERIFY(!_database->isWeed(weed1));
+  QVERIFY(_database->isWeed(weed2));
+
+  _database->unloadWeeds();
+  QVERIFY(!_database->isWeed(weed1));
+  QVERIFY(_database->isWeed(weed2));
 }
 
 QTEST_MAIN(TestDatabase)
