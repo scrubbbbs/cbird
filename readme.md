@@ -561,3 +561,8 @@ Release Notes
 #### v0.6.0
 
 - Add weeds feature (recommended by r/user/traal)
+- Add max-threshold search `-p.mt` which produces a result for every needle unless threshold is exceeded
+- Use skip-loop-filter for faster video indexing
+- Video compare view: fix issues with unequal frame rates
+- Video compare view: export to Kdenlive for more detailed comparison
+- Speedups: video compare view, differences image, `-group-by`
