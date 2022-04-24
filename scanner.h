@@ -23,6 +23,8 @@
 #include "media.h"
 #include "params.h"
 
+class FileId;
+
 /// settings to control scanning/indexing
 class IndexParams : public Params {
  public:
@@ -50,7 +52,8 @@ class IndexParams : public Params {
   bool showUnsupported = false;  // show unsupported filetype errors
   bool dryRun = false;           // scan for changes but do not process
   bool followSymlinks = false;   // follow symlinks to files/dirs
-
+  bool resolveLinks = false;     // index the resolved symlink instead of link
+  bool dupInodes = false;        // do not ignore duplicate inodes
   IndexParams();
 };
 
@@ -198,7 +201,7 @@ class Scanner : public QObject {
   void readArchive(const QString& path, QSet<QString>& expected);
   void scanProgress(const QString& path) const;
 
-  bool isQueued(const QString& path) const { return _queuedWork.contains(path); } //_imageQueue.contains(path) || _videoQueue.contains(path); }
+  bool isQueued(const QString& path) const { return _queuedWork.contains(path); }
 
   static void setError(const QString& path, const QString& error);
 
@@ -207,6 +210,8 @@ class Scanner : public QObject {
   QStringList _videoTypes;
   QStringList _jpegTypes;
   QStringList _archiveTypes;
+
+  QHash<FileId, QString> _inodes; // unique files (inodes) seen during scan (link tracking)
 
   QList<QFutureWatcher<IndexResult>*> _work; // qtconcurrent-issued jobs
 

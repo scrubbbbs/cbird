@@ -26,6 +26,7 @@
 #include "videocontext.h"
 #include "qtutil.h"
 #include "index.h"
+#include "fsutil.h"
 
 #include "quazip/quazip.h"
 #include "quazip/quazipfile.h"
@@ -70,6 +71,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   _modifiedFiles = 0;
   _processedFiles = 0;
   _modifiedSince = modifiedSince;
+  _inodes.clear();
   readDirectory(path, expected);
   scanProgress(path);
 
@@ -113,7 +115,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   }
 
   if (_imageQueue.count() > 0 || _videoQueue.count() > 0) {
-    qInfo() << "scan completed, indexing additions...";
+    qInfo() << "scan completed, indexing " << _queuedWork.count() << "additions...";
     QTimer::singleShot(1, this, &Scanner::processOne);
   }
   else {
@@ -203,10 +205,6 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
   }
 
   QStringList dirs;
-
-  QFileInfo entry;
-  entry.setCaching(false);
-
   scanProgress(dirPath);
 
   QDir::Filters filters = QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot;
@@ -214,8 +212,50 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
     filters |= QDir::NoSymLinks;
 
   for (const QString& name : QDir(dirPath).entryList(filters)) {
-    const QString& path = dirPath + "/" + name;
-    entry.setFile(path);
+    QString path = dirPath + "/" + name;
+    const QFileInfo entry(path);
+
+    // junctions are effectively symlinks
+    if (!_params.followSymlinks && entry.isJunction()) {
+      _ignoredFiles++;
+      continue;
+    }
+
+    if (!_params.dupInodes) {
+      // if we see the same inode twice, ignore it
+      // stops false duplicates and link recursion
+      FileId id(path);
+      if (id.isValid()) {
+        const auto& hash = _inodes;
+        auto it = hash.find(id);
+        if (it != hash.end()) {
+          qWarning() << "ignoring dup inode:" << path;
+          qWarning() << "    first instance:" << it.value();
+          _ignoredFiles++;
+          continue;
+        } else
+          _inodes.insert(id, path);
+      }
+    }
+
+    // prefer not to store symlinks in db
+    // - if the link is broken or renamed, forces reindex
+    // - allows links to be used for organizing, without re-indexing
+    if (_params.resolveLinks && (entry.isSymLink() || entry.isJunction())) {
+      QString canonical;
+#ifdef Q_OS_WIN32
+      if (entry.isJunction()) // qt will not resolve it ...
+        canonical = resolveJunction(path);
+      else
+#endif
+      canonical = entry.canonicalFilePath();
+      if (canonical.startsWith(_topDirPath)) {
+        path = canonical;
+        _imageQueue.removeOne(path);
+        _videoQueue.removeOne(path);
+        _queuedWork.remove(path);
+      }
+    }
 
     if (expected.contains(path)) {
       // fixme: database should store modification date?
@@ -226,10 +266,7 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         _existingFiles++;
         continue;
       }
-      else {
-        //qDebug() << "modified:" << path;
-        _modifiedFiles++;
-      }
+      _modifiedFiles++;
     }
 
     if (entry.isFile() && !_activeWork.contains(path)) {
@@ -256,13 +293,12 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         // 1. the zip modified date is before _modifiedSince
         // 2. the expected list contains the zip members
         // 3. remove all from expected list
-        //if (entry.metadataChangeTime() >= _modifiedSince)
+        // if (entry.metadataChangeTime() >= _modifiedSince)
         scanProgress(path);
         readArchive(path, expected);
       } else {
         _ignoredFiles++;
-        if (_params.showUnsupported)
-            setError(path, ErrorUnsupported);
+        if (_params.showUnsupported) setError(path, ErrorUnsupported);
       }
     } else if (entry.fileName() != INDEX_DIRNAME && entry.isDir()) {
       dirs.push_back(path);
@@ -297,7 +333,7 @@ void Scanner::flush(bool wait) {
 
   // in case this is called for no reason
   if (cancelled <= 0 && _activeWork.count() <= 0)
-    qDebug() << "nothing to flush, is there a scan running?";
+    qDebug() << "nothing to flush";
 
   if (wait) {
     // it isn't ideal to block, but the nature of flush() is that it must,
@@ -330,15 +366,12 @@ void Scanner::finish() {
       loop.exit(0);
       return;
     }
-    // <NC> == no context
-    //fprintf(stdout,
     QString status = QString::asprintf(
         "<NC>queued:<PL>image=%d,video=%d:batch=%d,threadpool:gpu=%d,video=%d,global=%"
         "d    ",
         _imageQueue.count(), _videoQueue.count(), _activeWork.count(),
         _gpuPool.activeThreadCount(), _videoPool.activeThreadCount(),
         QThreadPool::globalInstance()->activeThreadCount());
-    //fflush(stdout);
     qInfo().noquote() << status;
     timer.setInterval(100);
   });
@@ -836,6 +869,12 @@ IndexParams::IndexParams() {
 
   add({"links", "Follow symlinks to files and directories", Value::Bool, counter++,
        SET_BOOL(followSymlinks), GET(followSymlinks), NO_NAMES, NO_RANGE});
+
+  add({"resolve", "Resolve symlinks, store canonical path if possible", Value::Bool, counter++,
+       SET_BOOL(resolveLinks), GET(resolveLinks), NO_NAMES, NO_RANGE});
+
+  add({"dups", "Follow duplicate inodes (hard links, soft links etc)", Value::Bool, counter++,
+       SET_BOOL(dupInodes), GET(dupInodes), NO_NAMES, NO_RANGE});
 
   add({"ljf", "Estimate job cost and process longest jobs first", Value::Bool, counter++,
        SET_BOOL(estimateCost), GET(estimateCost), NO_NAMES, NO_RANGE});

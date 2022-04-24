@@ -89,17 +89,44 @@ void Engine::commit() {
 void Engine::update(bool wait) {
   QSet<QString> skip = db->indexedFiles();
 
-  // if the stored database paths are not canonical there
-  // is a bug somewhere, though not fatal it will prevent
-  // updating correctly
-  for (auto& path : qAsConst(skip)) {
-    QFileInfo info(path);
-    if ( (info.exists() && info.canonicalFilePath() != path) ||
-        path.contains("//") ) {
-      qCritical("invalid path in database:\n\tcanonical=%s\n\tdatabase =%s",
-             qUtf8Printable(QFileInfo(path).canonicalFilePath()), qUtf8Printable(path));
+  if (false) {
+    // if the stored database paths are not canonical there
+    // is a bug somewhere, though not fatal it will prevent
+    // updating correctly
+    // fixme: this can take a long time, figure out where
+    //        the invalid paths come from
+    QStringList paths = skip.values();  // sort to reduce random access
+    paths.sort();
+    QString child;
+    QSet<QString> checked;
+    int progress = 0;
+    for (int i = 0; i < paths.count(); ++i) {
+      auto& path = paths[i];
+      if (Media::isArchived(path)) Media::archivePaths(path, path, child);
+
+      if (checked.contains(path)) continue; // skip zip members
+      checked.insert(path);
+
+      // canonicalFilePath() hits the filesystem, if file does not
+      // exist it returns empty string
+      const QFileInfo info(path);
+      const int prefixLen = db->path().length() + 1;
+      const auto relPath = path.mid(prefixLen);
+      const auto canPath =  info.canonicalFilePath();
+      const auto canRelPath = canPath.mid(prefixLen);
+
+      // the relative paths should match; or the canonical path is outside of the index
+      if ( (canPath != "" && canPath.startsWith(db->path()) && relPath != canRelPath) ||
+           relPath.contains("//"))
+        qCritical("invalid path in database:\n\tcanonical=%s\n\tdatabase =%s",
+                  qUtf8Printable(canRelPath), qUtf8Printable(relPath));
+      if (progress++ == 10) {
+        progress = 0;
+        qInfo("<NC>%s: validating index <PL> %d/%d", qUtf8Printable(db->path()), i, paths.count());
+      }
     }
   }
+
   scanner->scanDirectory(db->path(), skip, db->lastAdded());
 
   QVector<int> toRemove;
@@ -115,7 +142,7 @@ void Engine::update(bool wait) {
         qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << path;
       const Media m = db->mediaWithPath(path);
       if (!m.isValid()) {
-        qWarning() << "attempting to remove non-indexed path:" << path;
+        qWarning() << "invalid removal, non-indexed path:" << path;
         continue;
       }
       //qDebug() << "removing id:" << m.id() << path;

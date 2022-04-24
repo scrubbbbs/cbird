@@ -270,7 +270,11 @@ Database::Database(const QString& path_) {
   if (!dir.exists())
     qFatal("directory does not exist: \"%s\"",
            qUtf8Printable(dir.absolutePath()));
-  _indexDir = dir.absolutePath();
+
+  // This is not redundant; absolutePath() does not
+  // resolve the path the same way as QFileInfo.
+  // On win32 the drive letter gets uppercased, for one...
+  _indexDir = QFileInfo(dir.absolutePath()).absoluteFilePath();
 
   qDebug() << "loading from" << _indexDir;
 
