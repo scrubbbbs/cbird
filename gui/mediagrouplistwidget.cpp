@@ -1910,7 +1910,7 @@ void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& ne
   QDir dir = QFileInfo(child.path()).dir();
 
   QString newPath = newName;
-  QString absSrcPath = dir.absolutePath();
+  QString absSrcPath = QFileInfo(dir.absolutePath()).absoluteFilePath();
   if (child.isArchived()) {
     QString childPath;
     child.archivePaths(absSrcPath, childPath);
@@ -1927,7 +1927,7 @@ void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& ne
   qDebug() << absSrcPath << "=>" << newPath;
   QString absDstPath;
   if (_options.db) {
-    absDstPath = QDir(_options.db->path()).absoluteFilePath(newPath);
+    absDstPath = QFileInfo(QDir(_options.db->path()).absoluteFilePath(newPath)).absoluteFilePath();
     if (!_options.db->moveDir(absSrcPath, newPath)) {
       qWarning() << "rename folder via database failed";
       return;

@@ -681,7 +681,7 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
   _width = video.width();
   _height = video.height();
 
-  const QString cwd = QDir::current().absolutePath();
+  const QString cwd = QFileInfo(QDir::current().absolutePath()).absoluteFilePath();
   QString path = video.path();
   if (path.startsWith(cwd)) path = path.mid(cwd.length() + 1);
 

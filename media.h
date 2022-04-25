@@ -522,7 +522,7 @@ class Media {
                            QString& child) {
     auto parts = path.split(".zip:");
     parent = parts[0] + ".zip";
-    child = parts[1];
+    child = parts.count() > 1 ? parts[1] : "";
   }
 
   void archivePaths(QString& parent, QString& child) const {

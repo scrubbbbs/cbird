@@ -538,6 +538,8 @@ int printCompletions(const char* argv0, const QStringList& args) {
 }
 
 static char inputChar(char defaultOption) {
+  fflush(stdout);
+  fflush(stdin);
   char ch = 0, option = defaultOption;
 
   // non-newline, valid option
@@ -768,10 +770,8 @@ static void nuke(const MediaGroup& group) {
 
       if (!yesAll) {
         qFlushOutput();
-        fprintf(stdout, "\nnuke: %s\nnuke: zips cannot be modified, trash entire zip? [y/N/a]: ",
+        printf("\nnuke: %s\nnuke: zips cannot be modified, trash entire zip? [y/N/a]: ",
                 qUtf8Printable(m.path()));
-        fflush(stdout);
-        fflush(stdin);
         char ch = inputChar('N');
         if (ch == 'a' || ch == 'A') yesAll = true;
         else if (ch != 'Y' && ch != 'y') continue;
@@ -1045,10 +1045,10 @@ int main(int argc, char** argv) {
     } else if (arg == "-nuke-dups-in") {
       QString path = nextArg();
 
-      QDir dir(path);
-      if (!dir.exists()) qFatal("nuke-dups-in: specified dir does not exist");
+      QFileInfo info(path);
+      if (!info.isDir() || !info.exists()) qFatal("nuke-dups-in: specified dir does not exist");
 
-      path = dir.absolutePath();
+      path = info.absoluteFilePath();
 
       MediaGroupList list = engine().db->dupsByMd5(params);
       MediaGroupList filtered;
@@ -1065,9 +1065,7 @@ int main(int argc, char** argv) {
       if (filtered.count() <= 0) continue;
 
       qFlushOutput();
-      fprintf(stdout, "nuke-dups-in: %d items will be trashed, proceed [y/N]: ", filtered.count());
-      fflush(stdout);
-      fflush(stdin);
+      printf("nuke-dups-in: %d items will be trashed, proceed [y/N]: ", filtered.count());
       char ch = inputChar('N');
       if (ch == 'Y' || ch == 'y') {
         int nuked = 0;
@@ -1103,9 +1101,7 @@ int main(int argc, char** argv) {
         toRemove.append(w);
       }
       qFlushOutput();
-      fprintf(stdout, "\nnuke-weeds: %d items will be trashed, proceed [y/N]: ", toRemove.count());
-      fflush(stdout);
-      fflush(stdin);
+      printf("\nnuke-weeds: %d items will be trashed, proceed [y/N]: ", toRemove.count());
       char ch = inputChar('N');
       if (ch == 'Y' || ch == 'y') {
         nuke(toRemove);
@@ -1116,9 +1112,7 @@ int main(int argc, char** argv) {
 
       if (selection.count() > 0) {
         qFlushOutput();
-        fprintf(stdout, "\nnuke: about to move %d items to trash, proceed? [y/N]: ", selection.count());
-        fflush(stdout);
-        fflush(stdin);
+        printf("\nnuke: about to move %d items to trash, proceed? [y/N]: ", selection.count());
         char ch = inputChar('N');
         if (ch == 'Y' || ch == 'y') {
           nuke(selection);
@@ -1542,7 +1536,8 @@ int main(int argc, char** argv) {
           qFatal("rename: new filename contains illegal characters %s -> <%s>",
                  qPrintable(m.path()), qPrintable(newName));
 
-        const QString newPath = info.dir().absolutePath() + "/" + newName;
+        const QString newPath = QFileInfo(info.dir().absolutePath()).absoluteFilePath()
+                                + "/" + newName;
 
         if (newNames.contains(newPath))
           qWarning("rename: collision: %s,%s => %s",
