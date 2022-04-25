@@ -688,6 +688,37 @@ double qRotationAngle(const QMatrix &mat) {
   return 180.0 / M_PI * atan((p1.y() - p0.y()) / (p1.x() - p0.x()));
 }
 
+// bad form, but only way to get to metacallevent
+// this header won't be found unless foo is added to qmake file
+#include "QtCore/private/qobject_p.h"
+
+DebugEventFilter::DebugEventFilter() : QObject() {}
+DebugEventFilter::~DebugEventFilter() {}
+
+bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
+  static int counter = 0;
+
+  qWarning() << counter++ << event << event->spontaneous();
+
+  // snoop signals/slot invocations
+  if (event->type() == QEvent::MetaCall) {
+    QMetaCallEvent* mc = (QMetaCallEvent*)event;
+    QMetaMethod slot = object->metaObject()->method(mc->id());
+    const char* senderClass = "unknown";
+    const char* recvClass = "unknown";
+
+    if (mc->sender() && mc->sender()->metaObject())
+      senderClass = mc->sender()->metaObject()->className();
+    if (object->metaObject())
+      recvClass = object->metaObject()->className();
+
+    qCritical("%d meta call event: sender=%s receiver=%s method=%s\n", counter++,
+              senderClass, recvClass, qPrintable(slot.methodSignature()));
+  }
+
+  return QObject::eventFilter(object, event);
+}
+
 //
 // Custom logger magic!
 //
@@ -707,14 +738,14 @@ double qRotationAngle(const QMatrix &mat) {
 //    * repeated log lines show # of repeats
 //
 // todo: drop logs if too much piles up
-// todo: avoid color resets? they might slow the terminal
 // todo: do bigger console writes, combine lines with timer
 // todo: use ::write() instead of fwrite
 //
 
 
-#include <unistd.h>  // isatty
-#include "exiv2/error.hpp" // capture exif library logs
+#if !defined(QT_MESSAGELOGCONTEXT) // disabled in release targets by default... but we need it
+#error qColorMessageOutput requires QT_MESSAGELOGCONTEXT
+#endif
 
 #define VT_RED "\x1B[31m"
 #define VT_GRN "\x1B[32m"
@@ -731,9 +762,7 @@ double qRotationAngle(const QMatrix &mat) {
 #define VT_REVERSE "\x1B[6m"
 #define VT_HIDDEN "\x1B[7m"
 
-#if !defined(QT_MESSAGELOGCONTEXT)
-#error qColorMessageOutput requires QT_MESSAGELOGCONTEXT
-#endif
+#include "exiv2/error.hpp" // capture exif library logs
 
 static void exifLogHandler(int level, const char* msg) {
   const int nLevels = 4;
@@ -745,28 +774,51 @@ static void exifLogHandler(int level, const char* msg) {
     qColorMessageOutput(levelToType[level], context, QString(msg).trimmed());
 }
 
+
+// headers for terminal detection
 #ifdef Q_OS_WIN
 #include <fcntl.h>
+#include <io.h>
+#include <winbase.h>
+#include <fileapi.h>
+#else
+#include <unistd.h>  // isatty
+extern "C" {
+#include <termcap.h>
+}
 #endif
 
-extern "C" {
-#include <termcap.h> // terminal width for eliding
-}
+/// Log record passed to logging thread
+struct LogMsg {
+  QString threadContext;
+  QtMsgType type;
+  QString msg;
+  int version;
+  int line;
+  const char *file;
+  const char *function;
+  const char *category;
+};
 
 class MessageLog {
  private:
-  QThread* thread;
-  QMutex mutex;
-  QWaitCondition logCond, syncCond;
-  volatile bool stop = false;
-  volatile bool sync = false;
-  QList<QString> log;
-  int termLines=-1;
-  int termColumns=-1;
-  QString homePath;
+  QList<LogMsg> _log;
+
+  QThread* _thread = nullptr;
+  QMutex _mutex;
+  QWaitCondition _logCond, _syncCond;
+  volatile bool _stop = false; // set to true to stop log thread
+  volatile bool _sync = false; // set to true to sync log thread
+
+  bool _isTerm = false;     // true if we think stdout is a tty
+  bool _termColors = false; // true if tty supports colors
+  int _termColumns = -1;    // number of columns in the tty
+  QString _homePath;
 
   MessageLog();
   ~MessageLog();
+
+  QString format(const LogMsg& msg) const;
 
  public:
   static MessageLog& instance() {
@@ -778,7 +830,7 @@ class MessageLog {
     static QThreadStorage<QString> context;
     return context;
   }
-  void append(const QString& msg);
+  void append(const LogMsg& msg);
   void flush();
 };
 
@@ -786,21 +838,217 @@ void qFlushOutput() { MessageLog::instance().flush(); }
 
 QThreadStorage<QString>& qMessageContext() { return MessageLog::context(); }
 
-void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
+void qColorMessageOutput(QtMsgType type, const QMessageLogContext& ctx,
                          const QString& msg) {
-  // const QByteArray localMsg = msg.toLocal8Bit();
-  const bool tty = isatty(fileno(stdout));
-
-  char typeCode = '\0';
-  const char* color = VT_WHT;
-  const char* reset = VT_RESET;
 
   const auto& perThreadContext = MessageLog::context();
   QString threadContext;
   if (perThreadContext.hasLocalData())
     threadContext = perThreadContext.localData();
 
-  switch (type) {
+  MessageLog::instance().append(LogMsg{threadContext, type, msg, ctx.version,
+                               ctx.line, ctx.file, ctx.function, ctx.category});
+
+  // we can crash the app to help locate a log message!
+  static const char* debugTrigger = nullptr;
+  static bool triggerCheck = false;
+  if (!triggerCheck) {
+    triggerCheck = true;
+    static QMutex mutex;
+    QMutexLocker locker(&mutex);
+
+    const char* env = getenv("DEBUG_TRIGGER");
+    if (env) {
+      debugTrigger = env;
+      qFlushOutput();
+      fprintf(stdout, "\n\n[X] debug trigger registered: \"%s\"\n\n", debugTrigger);
+      fflush(stdout);
+    }
+  }
+
+  if (debugTrigger) {
+    if (msg.contains(debugTrigger)) {
+      qFlushOutput();
+      fprintf(stdout, "\n\n[X][%s:%d] debug trigger matched: <<%s>>\n\n", ctx.file,
+              ctx.line, qPrintable(msg));
+      fflush(stdout);
+      char* ptr = nullptr;
+      *ptr = 0;
+    }
+  }
+}
+
+MessageContext::MessageContext(const QString& context) {
+  auto& threadContext = MessageLog::context();
+  if (threadContext.hasLocalData() && !threadContext.localData().isEmpty())
+    qWarning() << "overwriting message context"; // todo: save/restore message context
+  threadContext.setLocalData(context);
+}
+
+MessageContext::~MessageContext() { MessageLog::context().setLocalData(QString()); }
+
+MessageLog::MessageLog() {
+  std::set_terminate(qFlushOutput);
+  Exiv2::LogMsg::setHandler(exifLogHandler);
+
+#ifdef Q_OS_WIN32
+  auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
+  DWORD mode = 0;
+  if (GetConsoleMode(handle, &mode)) { // windows terminal, but not msys/mingw/cygwin
+    printf("win32 console detected mode=0x%x\n", (int)mode);
+    _isTerm = true;
+    _termColors = mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    if (getenv("CBIRD_COLOR_CONSOLE")) _termColors = true;
+
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    if (GetConsoleScreenBufferInfo(handle, &csbi))
+      _termColumns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    //int rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+  }
+  else if (getenv("TERM") && GetFileType(handle) == FILE_TYPE_PIPE) { // maybe msys/mingw...
+    struct {
+      DWORD len;
+      WCHAR name[MAX_PATH];
+    } info;
+    memset(&info, 0, sizeof(info));
+    if (GetFileInformationByHandleEx(handle, FileNameInfo, &info, sizeof(info))) {
+      // req windows > 7 it seems, though it will run on 7,  no result
+      QString name=QString::fromWCharArray((wchar_t*)info.name, info.len);
+      printf("stdio pipe=%d %s\n", (int)info.len, qUtf8Printable(name));
+      _isTerm = _termColors = (name.contains("msys-") && name.contains("-pty"));
+    }
+  }
+#else
+  _isTerm = isatty(fileno(stdout));
+  if (_isTerm) {
+    _termColors = true; // assume we have color on unix-like systems
+    // https://stackoverflow.com/questions/1022957/getting-terminal-width-in-c
+    const char* termEnv = getenv("TERM");
+    if (termEnv) {
+      char termBuf[2048];
+      int err = tgetent(termBuf, termEnv);
+      if (err <= 0)
+        printf("unknown terminal TERM=%s TERMCAP=%s err=%d, cannot guess config\n",
+               termEnv, getenv("TERMCAP"), err);
+      else {
+        int termLines = tgetnum("li");
+        _termColumns = tgetnum("co");
+        if (termLines < 0 || _termColumns < 0)
+          printf("unknown terminal TERM=%s %dx%d, cannot guess config\n",
+                 termEnv, _termColumns, termLines);
+      }
+    }
+  }
+#endif
+
+  // overrides
+  if (getenv("CBIRD_FORCE_COLORS")) _termColors = 1;
+
+  QString tc = getenv("CBIRD_CONSOLE_WIDTH");
+  if (!tc.isEmpty()) _termColumns = tc.toInt();
+
+  if (_isTerm)
+    printf("term width=%d colors=%d\n", _termColumns, _termColors);
+
+  _homePath = QDir::homePath();
+
+#ifdef Q_OS_WIN
+  // disable text mode to speed up console
+  _setmode( _fileno(stdout), _O_BINARY );
+#endif
+
+  _thread = QThread::create([this]() {
+    _sync = false;
+    QString lastInput, lastOutput;
+    int repeats = 0;
+    QMutexLocker locker(&_mutex);
+    while (!_stop && _logCond.wait(&_mutex)) {
+      if (_sync && _log.count() <= 0) {
+        _sync = false;
+        _syncCond.wakeAll();
+      }
+      while (_log.count() > 0) {
+        const LogMsg msg = _log.takeFirst();
+        int pl = msg.msg.indexOf("<PL>");  // do not compress progress lines
+        if (pl <= 0 && lastInput == msg.msg) {
+          repeats++;
+          continue;
+        }
+        locker.unlock();
+
+        const QString line = format(msg);
+
+        if (repeats > 0) {
+          QString output = lastInput + " [x" + QString::number(repeats) + "]\n";
+          QByteArray utf8 = output.toUtf8();
+          fwrite(utf8.data(), utf8.length(), 1, stdout);
+          repeats = 0;
+        }
+
+        lastInput = line;
+
+        QString output = line;
+        output.replace(_homePath, "~");
+
+        pl = output.indexOf("<PL>");  // must come after replacements!
+        output.replace("<PL>", "");
+
+        // elide and pad following text to terminal width
+        int elide = output.indexOf("<EL>");  // must come after <PL>!
+        if (elide > 0) {
+          if (_termColumns > 0) {
+            QString toElide = output.mid(elide + 4);
+            QString elided = qElide(toElide, _termColumns - elide);
+            output = output.midRef(0, elide) + elided;
+            output += QString().fill(' ', _termColumns - output.length());
+          } else
+            output.replace("<EL>", "");
+        }
+
+        if (pl > 0) {
+          if (lastInput.startsWith(line.midRef(0, pl))) output = "\r" + output;
+        } else {
+          if (!lastOutput.endsWith("\n")) output = "\n" + output;
+          output += "\n";
+        }
+
+        lastOutput = output;
+
+        QByteArray utf8 = output.toUtf8();
+
+        fwrite(utf8.data(), utf8.length(), 1, stdout);
+        // we only need to flush if \r is present;
+        // however, windows must always flush
+#ifndef Q_OS_WIN
+        if (pl > 0)
+#endif
+          fflush(stdout);
+
+        locker.relock();
+      }  // log.count() > 0
+    }    // !stop
+  });
+  // wait for thread to start or we have a race with destructor!
+  _sync = true;
+  _thread->start();
+  while (_sync) QThread::msleep(10);
+}
+
+MessageLog::~MessageLog() {
+  _stop = true;
+  _sync = false;
+  _logCond.wakeOne();
+  _thread->wait();
+  flush();
+}
+
+QString MessageLog::format(const LogMsg& msg) const {
+  static const char* lastColor = nullptr;
+  char typeCode = 'X';
+  const char* color = VT_WHT;
+  const char* reset = VT_RESET;
+
+  switch (msg.type) {
     case QtDebugMsg:
       typeCode = 'D';
       color = VT_WHT;
@@ -823,294 +1071,93 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
       break;
   }
 
-  if (msg.contains("<PL>")) // progress line
+  if (msg.msg.contains("<PL>"))  // progress line
     color = VT_CYN;
-
-  if (!tty) {
-    color = "";
-    reset = "";
-  }
 
   QStringList filteredClasses = {};
 
-  if (typeCode) {
-    QString shortFunction = context.function;
+  QString shortFunction = msg.function;
 
-    if (shortFunction.contains("::<lambda"))
-      shortFunction = shortFunction.split("::<lambda").front();
+  if (shortFunction.contains("::<lambda"))
+    shortFunction = shortFunction.split("::<lambda").front();
 
-    // int bar(...)
-    // int Foo::bar(...)
-    // int Foo::bar<float>(...)
-    shortFunction = shortFunction.split("(").first();
+  // int bar(...)
+  // int Foo::bar(...)
+  // int Foo::bar<float>(...)
+  shortFunction = shortFunction.split("(").first();
 
-    QStringList parts = shortFunction.split("::");
+  QStringList parts = shortFunction.split("::");
 
-    if (parts.length() > 1) {
-      // (1) cv::Mat foo
-      // (2) void class::foo
-      // (3) cv::Mat class::foo
-      // (4) cv::Mat class<bar>::foo
-      //fprintf(stdout, "%s\n", qPrintable(shortFunction));
-
-      shortFunction = parts.back().trimmed();
-      //fprintf(stdout, "%s\n", qPrintable(shortFunction));
-      parts.pop_back();
-      parts = parts.join("").split(" ");
-      if (parts.length() > 1) { // case (1) ignored
-        QString className = parts.back();
-        shortFunction = className + "::" + shortFunction;
-        if (filteredClasses.contains(className)) return;
-      }
-    } else {
-      shortFunction = shortFunction.split(" ").back();   // drop return type
+  if (parts.length() > 1) {
+    // (1) cv::Mat foo
+    // (2) void class::foo
+    // (3) cv::Mat class::foo
+    // (4) cv::Mat class<bar>::foo
+    shortFunction = parts.back().trimmed();
+    parts.pop_back();
+    parts = parts.join("").split(" ");
+    if (parts.length() > 1) {  // case (1) ignored
+      QString className = parts.back();
+      shortFunction = className + "::" + shortFunction;
+      if (filteredClasses.contains(className)) return "";
     }
-
-    // we can crash the app to help locate a log message
-    static QString debugTrigger;
-    static bool triggerCheck = false;
-    if (!debugTrigger.isNull()) {
-      if (msg.contains(debugTrigger)) {
-        const char* color = tty ? VT_RED : "";
-        qFlushOutput();
-        fprintf(stdout, "%s[X][%s:%d] debug message matched: %s\n%s", color,
-                QT_MESSAGELOG_FUNC, QT_MESSAGELOG_LINE, qPrintable(msg), reset);
-        fflush(stdout);
-        char* ptr = nullptr;
-        *ptr = 0;
-      }
-    } else if (!triggerCheck) {
-      // QProcessEnvironment::systemEnvironment() crashed once, maybe
-      // not reentrant
-      triggerCheck = true;
-      static QMutex mutex;
-      QMutexLocker locker(&mutex);
-
-      auto env = QProcessEnvironment::systemEnvironment();
-      if (env.contains("DEBUG_MSG")) {
-        debugTrigger = env.value("DEBUG_MSG");
-        const char* color = tty ? VT_RED : "";
-        qFlushOutput();
-        fprintf(stdout, "%s[X] debug message enabled: %s\n%s", color,
-                qPrintable(debugTrigger), reset);
-        fflush(stdout);
-      }
-    }
-
-    if (!threadContext.isNull()) shortFunction += "{" + threadContext + "}";
-
-    QString logLine;
-    if (msg.startsWith("<NC>")) // no context
-      logLine = QString("%1%2%3")
-                      .arg(color)
-                      .arg(msg.midRef(4))
-                      .arg(reset);
-    else
-      logLine = QString("%1[%2][%3] %4%5")
-                          .arg(color)
-                          .arg(typeCode)
-                          .arg(shortFunction)
-                          .arg(msg)
-                          .arg(reset);
-
-    // we are going to abort() next or debug break; we cannot
-    // rely on qFlushOutput to work after appending the line
-    if (type == QtFatalMsg) {
-      qFlushOutput();
-      fprintf(stdout, "\n%s\n\n", qUtf8Printable(logLine));
-    }
-    else {
-      MessageLog::instance().append(logLine);
-    }
-
-    // logLine += "\n";
-    //auto buf = logLine.toUtf8();
-    //fwrite(buf, buf.length(), 1, stdout);
-
-    // fprintf(stdout, "%s[%c][%s] %s%s\n", color, typeCode,
-    //        qPrintable(shortFunction), localMsg.constData(), reset);
-  }
-}
-
-MessageContext::MessageContext(const QString& context) {
-  auto& threadContext = MessageLog::context();
-  if (threadContext.hasLocalData() && !threadContext.localData().isEmpty())
-    qWarning() << "overwriting message context"; // todo: save/restore message context
-  threadContext.setLocalData(context);
-}
-
-MessageContext::~MessageContext() { MessageLog::context().setLocalData(QString()); }
-
-// bad form, but only way to get to metacallevent
-// this header won't be found unless foo is added to qmake file
-#include "QtCore/private/qobject_p.h"
-
-DebugEventFilter::DebugEventFilter() : QObject() {}
-DebugEventFilter::~DebugEventFilter() {}
-
-bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
-  static int counter = 0;
-
-  qWarning() << counter++ << event << event->spontaneous();
-
-  // hack to snoop events, signals/slot invocations
-  if (event->type() == QEvent::MetaCall) {
-    QMetaCallEvent* mc = (QMetaCallEvent*)event;
-    QMetaMethod slot = object->metaObject()->method(mc->id());
-    const char* senderClass = "unknown";
-    const char* recvClass = "unknown";
-
-    if (mc->sender() && mc->sender()->metaObject())
-      senderClass = mc->sender()->metaObject()->className();
-    if (object->metaObject())
-      recvClass = object->metaObject()->className();
-
-    qCritical("%d meta call event: sender=%s receiver=%s method=%s\n", counter++,
-             senderClass, recvClass, qPrintable(slot.methodSignature()));
+  } else {
+    shortFunction = shortFunction.split(" ").back();  // drop return type
   }
 
-  return QObject::eventFilter(object, event);
-}
+  if (!msg.threadContext.isNull()) shortFunction += "{" + msg.threadContext + "}";
 
-MessageLog::MessageLog() {
-  std::set_terminate(qFlushOutput);
-  Exiv2::LogMsg::setHandler(exifLogHandler);
-
-  // https://stackoverflow.com/questions/1022957/getting-terminal-width-in-c
-  const char* termType = getenv("TERM");
-
-  if (termType) {
-    char termBuf[2048];
-    int err = tgetent(termBuf, termType);
-    if (err <= 0)
-      printf("tgetent error TERM=%s TERMCAP=%s err=%d\n",
-             termType, getenv("TERMCAP"), err);
-    else {
-      termLines = tgetnum("li");
-      termColumns = tgetnum("co");
-      if (termLines < 0 || termColumns < 0)
-        printf("term: %s %dx%d\n", termType, termColumns, termLines);
-    }
+  if (_termColors && lastColor != color) {
+    fprintf(stdout, "%s%s", reset, color);
+    lastColor = color;
   }
 
-  homePath = QDir::homePath();
+  QString logLine;
+  if (msg.msg.startsWith("<NC>"))  // no context
+    logLine += msg.msg.mid(4);
+  else
+    logLine += QString("[%1][%2] %3").arg(typeCode).arg(shortFunction).arg(msg.msg);
 
-#ifdef Q_OS_WIN
-  // disable text mode to speed up console
-  _setmode( _fileno(stdout), _O_BINARY );
-#endif
-  thread = QThread::create([this]() {
-    QString lastInput, lastOutput;
-    int repeats = 0;
-    QMutexLocker locker(&mutex);
-    while (!stop && logCond.wait(&mutex)) {
-      if (sync && log.count() <= 0) {
-        sync = false;
-        syncCond.wakeAll();
-      }
-      while (log.count() > 0) {
-        const QString line = log.takeFirst();
-        int pl = line.indexOf("<PL>");  // do not compress progress lines
-        if (pl <= 0 && lastInput == line) {
-          repeats++;
-          continue;
-        }
-        locker.unlock();
-
-        if (repeats > 0) {
-          QString output = lastInput + " [x" + QString::number(repeats) + "]\n";
-          QByteArray utf8 = output.toUtf8();
-          fwrite(utf8.data(), utf8.length(), 1, stdout);
-          repeats = 0;
-        }
-
-        lastInput = line;
-
-        QString output = line;
-        output.replace(homePath, "~");
-
-        pl = output.indexOf("<PL>"); // must come after replacements!
-        output.replace("<PL>", "");
-
-        // elide and pad following text to terminal width
-        int elide = output.indexOf("<EL>"); // must come after <PL>!
-        if (elide > 0) {
-          if (termColumns > 0) {
-            QString toElide = output.mid(elide+4);
-            QString elided=qElide(toElide, termColumns-elide);
-            output = output.midRef(0, elide) + elided;
-            output += QString().fill(' ', termColumns-output.length());
-          }
-          else
-            output.replace("<EL>", "");
-        }
-
-        if (pl > 0) {
-          if (lastInput.startsWith(line.midRef(0, pl)))
-            output = "\r" + output;
-        }
-        else {
-          if (!lastOutput.endsWith("\n"))
-            output = "\n" + output;
-          output += "\n";
-        }
-
-        lastOutput = output;
-
-
-        QByteArray utf8 = output.toUtf8();
-
-        fwrite(utf8.data(), utf8.length(), 1, stdout);
-        // we only need to flush if \r is present;
-        // windows buffers forever until flushed
-#ifndef Q_OS_WIN
-        if (pl > 0)
-#endif
-          fflush(stdout);
-
-        locker.relock();
-      } // log.count() > 0
-    } // !stop
-  });
-  thread->start();
+  return logLine;
 }
 
-MessageLog::~MessageLog() {
-  stop = true;
-  logCond.wakeAll();
-  thread->wait();
-  flush();
-}
-
-void MessageLog::append(const QString &msg) {
-  {
-    QMutexLocker locker(&mutex);
-    log.append(msg);
+void MessageLog::append(const LogMsg& msg) {
+  // if fatal, output immediately. Since we are going to abort() next,
+  // we cannot rely on qFlushOutput to get called on exit
+  if (msg.type == QtFatalMsg) {
+    qFlushOutput();
+    fprintf(stdout, "\n%s\n\n", qUtf8Printable(format(msg)));
+    fflush(stdout);
+  } else {
+    QMutexLocker locker(&_mutex);
+    _log.append(msg);
   }
-  logCond.wakeAll();
+  _logCond.wakeAll();
 }
 
 void MessageLog::flush() {
   // prefer thread to write the logs since it handles things
-  if (thread->isRunning()) {
-    QMutexLocker locker(&mutex);
-    sync = true;
-    while (sync) {
-      syncCond.wait(&mutex, 10);
-      logCond.wakeAll();
+  if (_thread->isRunning()) {
+    QMutexLocker locker(&_mutex);
+    _sync = true;
+    while (_sync) {
+      _syncCond.wait(&_mutex, 10);
+      _logCond.wakeAll();
     }
   }
   else {
     // no thread, ensure all logs are written
+    QMutexLocker locker(&_mutex);
     QByteArray utf8;
-    if (log.count() <= 0)
+    if (_log.count() <= 0)
       utf8 = "\n";
     else
-      while (log.count() > 0)
-        utf8 += (log.takeFirst() + "\n").toUtf8();
+      while (_log.count() > 0)
+        utf8 += (format(_log.takeFirst()) + "\n").toUtf8();
 
     fwrite(utf8.data(), utf8.length(), 1, stdout);
   }
+  if (_termColors) fwrite(VT_RESET, strlen(VT_RESET), 1, stdout);
   fflush(stdout);
   fflush(stderr);
 }

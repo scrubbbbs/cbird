@@ -126,14 +126,23 @@ QString qElide(const QString& str, int maxLen = 80);
 /// get rotation angle represented by matrix
 double qRotationAngle(const QMatrix& mat);
 
-/// customized logger with compression, color, etc
+/// use with QObject::installEventFilter to log events
+/// and signal/slot invocations
+class DebugEventFilter : public QObject {
+ public:
+  DebugEventFilter();
+  virtual ~DebugEventFilter();
+  bool eventFilter(QObject* object, QEvent* event);
+};
+
+/// custom logger with compression, color, etc
 void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
                          const QString& msg);
 
-/// flush log messages before using printf/scanf etc
+/// flush log messages, required before using printf/scanf etc
 void qFlushOutput();
 
-/// log message extra context
+/// log message extra per-thread context
 QThreadStorage<QString>& qMessageContext();
 
 /// scoped log message extra context (preferred method)
@@ -142,11 +151,4 @@ class MessageContext {
  public:
   MessageContext(const QString& context);
   ~MessageContext();
-};
-
-class DebugEventFilter : public QObject {
- public:
-  DebugEventFilter();
-  virtual ~DebugEventFilter();
-  bool eventFilter(QObject* object, QEvent* event);
 };
