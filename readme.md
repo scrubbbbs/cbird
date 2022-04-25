@@ -106,8 +106,20 @@ This is lacking documentation at the moment. But for now...
 
 - The GUI is displayed with `-show` if there is a selection or results.
 - GUI windows have a context menu (right click) with all actions and shortcuts.
-- The two deletion actions ("Delete" and "Replace") use the trash/recycler by default. There is
- no way to permanently delete files (not even with `-nuke` or `-dup-nuke` options)
+- The two deletion actions ("Delete" and "Replace") use the trash/recycler by default. There is no way to permanently delete files (not even with batch deletion commands)
+
+Link Handling
+======================
+
+If the tree contains links, they are handled when scanning for changes (`-update`), otherwise there is no special treatment.
+
+Links are ignored by default. To follow links use `-i.links 1`
+
+Duplicate inodes (hard links, symbolic links, etc) are not followed by default. If there are duplicate inodes in the tree, the first inode in breadth-first traversal (closest to root) is indexed. To follow all inodes, for example to find hard links, use `-i.dups 1`.
+
+The index stores relative paths (to the indexed/root path), this makes the index stable if the parent directory or mount point changes. If a path contains links, or is a link, it is stored as-is; which may be less stable than the link target. To store the resolved links instead, use `i.resolve 1`. This is only possible if the link target is a child of the root.
+
+Note that cbird does not not prevent broken links from occurring, the link check is temporary during the index update.
 
 Using Weeds
 ======================
@@ -115,11 +127,11 @@ A "weed" is a deletion record of a near-duplicate, to allow fast deletion of fil
 
 Weeds are tracked when:
 
-- exactly two files visible in inspector (matching pair)
+- exactly two files visible in inspector (matching pair, use `-p.mm 1`to force pairs)
 - neither file is a zip member
 - one of the files is deleted
 
-When a weed's filehash reappears, it is only considered valid if the original still exists - this prevents undesired deletions. A weed can be unset in the inspector with the "Forget Weed" command.
+When a weed's file hash reappears, it is only considered valid if the original still exists; this prevents undesired deletions. A weed can be unset in the inspector with the "Forget Weed" command.
 
 ```
 cbird -weeds -show # show all weeds
@@ -133,6 +145,9 @@ There are a few for power users.
 
 - `CBIRD_SETTINGS_FILE` overrides the path to the global settings file
 - `CBIRD_TRASH_DIR` overrides the path to trash folder, do not use the system trash bin
+-  `CBIRD_CONSOLE_WIDTH` set character width of terminal console (default auto-detect)
+-  `CBIRD_COLOR_CONSOLE` use colored output even if console says no (default auto-detect)
+-  `CBIRD_FORCE_COLORS` use colored output even if console is not detected
 
 Search Algorithms
 ====================
@@ -236,6 +251,7 @@ Wish List
 - "-use" special notation to find root index in the parent (tree)
 - symbolic names for all enumerations (e.g. "v" == video)
 - disable/reduce logging (-verbose, -quiet etc)
+- typecheck param values
 - presets for multiple parameters
 - move/link files rather than delete/rename
 - prune groups, keeping/ignoring needle
