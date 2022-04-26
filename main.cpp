@@ -737,10 +737,11 @@ static QString& indexPath() {
   return *s;
 }
 
+static Engine* _engine = nullptr;
+
 Engine& engine() {
-  static Engine* instance = nullptr;
   QDir dir(indexPath());
-  if (!instance && checkIndexPathExists &&
+  if (!_engine && checkIndexPathExists &&
       !dir.exists(INDEX_DIRNAME)) {
     qFlushOutput();
     printf("cbird: No index found. Pass -use <dir> to a valid location,\n"
@@ -750,9 +751,9 @@ Engine& engine() {
     char choice = inputChar('Y');
     if (choice != 'Y' && choice != 'y') exit(0);
   }
-  if (!instance)
-    instance = new Engine(indexPath(), IndexParams());
-  return *instance;
+  if (!_engine)
+    _engine = new Engine(indexPath(), IndexParams());
+  return *_engine;
 }
 
 static void nuke(const MediaGroup& group) {
@@ -973,6 +974,9 @@ int main(int argc, char** argv) {
     // clang-format on
     else if (arg == "-use") {
       const QString path = nextArg();
+      if (_engine)
+        qFatal("-use: database already open on \"%s\", pass -use before other arguments",
+                  qUtf8Printable(_engine->db->path()));
       if (!QFileInfo(path).isDir())
         qFatal("-use: \"%s\" is not a directory", qPrintable(path));
       indexPath() = path;
