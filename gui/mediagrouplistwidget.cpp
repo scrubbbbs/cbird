@@ -1301,8 +1301,8 @@ void MediaGroupListWidget::updateItems() {
 
       compare.compression = compare.pixels = compare.score = compare.size =
           compare.fileCount = "none";
-      compare.duration = isVideo ? "same" : "none"; // do not hide
-      compare.frameRate = isVideo ? "same" : "none";
+      compare.duration = "same"; //isVideo ? "same" : "none"; // do not hide
+      compare.frameRate = "same"; //isVideo ? "same" : "none";
       compare.jpegQuality = jpegQuality==0 ? "none" : "same"; // hide unless computed
       compare.qualityScore = qualityScore==0 ? "none" : "same";
     } else {
@@ -1314,8 +1314,16 @@ void MediaGroupListWidget::updateItems() {
       compare.jpegQuality = jpegQuality==0 ? "none" : relativeLabel(jpegQuality, first.jpegQuality);
       compare.qualityScore = qualityScore==0 ? "none" : relativeLabel(qualityScore, first.qualityScore);
 
-      compare.duration = isVideo ? relativeLabel(duration, first.duration) : "none";
-      compare.frameRate = isVideo ? relativeLabel(fps, first.fps) : "none";
+      compare.duration = isVideo ? relativeLabel(duration, first.duration) : "same";
+      compare.frameRate = isVideo ? relativeLabel(fps, first.fps) : "same";
+    }
+
+    QString date, camera;
+    if (m.type() == Media::TypeImage) {
+      static auto dateFunc = Media::propertyFunc("exif:Photo.DateTimeOriginal,Photo.DateTimeDigitized");
+      static auto camFunc = Media::propertyFunc("exif:Image.UniqueCameraModel,Image.Model,Image.Make");
+      date = dateFunc(m).toString();
+      camera = camFunc(m).toString();
     }
 
     const auto formatPercent = [](double a, double b) {
@@ -1388,9 +1396,9 @@ void MediaGroupListWidget::updateItems() {
             .arg(compare.fileCount)
             .arg(fileCount - first.fileCount)
             .arg(compare.duration)
-            .arg(m.attributes().value("time"))
+            .arg(isVideo ? m.attributes().value("time") : date)
             .arg(compare.frameRate)
-            .arg(double(fps))
+            .arg(isVideo ? QString::number(fps) : camera)
             .arg(compare.jpegQuality)
             .arg(jpegQuality)
             .arg(compare.qualityScore)
