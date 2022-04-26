@@ -49,7 +49,7 @@ class IndexParams : public Params {
   // int resizeFilter;          // filter for resizing
   int writeBatchSize = 1024;     // size of item batch when writing to database
   bool estimateCost = true;      // estimate indexing cost to schedule jobs better
-  bool showUnsupported = false;  // show unsupported filetype errors
+  bool showIgnored = false;      // show all ignored files/dirs
   bool dryRun = false;           // scan for changes but do not process
   bool followSymlinks = false;   // follow symlinks to files/dirs
   bool resolveLinks = false;     // index the resolved symlink instead of link
@@ -80,6 +80,12 @@ class Scanner : public QObject {
   static constexpr const char* ErrorLoad = "format error";
   static constexpr const char* ErrorTooSmall = "skip small file";
   static constexpr const char* ErrorUnsupported = "unsupported file type";
+  static constexpr const char* ErrorNoType = "unknown file type";
+  static constexpr const char* ErrorDupInode = "duplicate inode";
+  static constexpr const char* ErrorNoLinks = "link following disabled";
+  static constexpr const char* ErrorZipFilter = "skipped by zip filter";
+  static constexpr const char* ErrorZipUnsupported = "unsupported in zip container";
+
 
   /**
    * error list writable by worker threads

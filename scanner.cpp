@@ -138,12 +138,15 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
   const auto list = zip.getFileInfoList();
   for (const auto& entry : list) {
     QString file = entry.name;
+    if (file.endsWith("/")) continue;
+
     // todo: setting for ignored folder names
+    const QString zipPath = Media::virtualPath(path, file);
     if (file.startsWith(".") || file.startsWith("__MACOSX")) {
       _ignoredFiles++;
+      if (_params.showIgnored) setError(zipPath, ErrorZipFilter);
       continue;
     }
-    const QString zipPath = Media::virtualPath(path, file);
     if (expected.contains(zipPath)) {
       if (entry.dateTime < _modifiedSince) {
         skipped.append(zipPath);
@@ -164,8 +167,10 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
         _queuedWork.insert(zipPath);
       }
     }
-    else
+    else {
       _ignoredFiles++;
+      if (_params.showIgnored) setError(zipPath, ErrorZipUnsupported);
+    }
   }
 
   for (const auto& zipPath : skipped) expected.remove(zipPath);
@@ -208,16 +213,15 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
   scanProgress(dirPath);
 
   QDir::Filters filters = QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot;
-  if (!_params.followSymlinks)
-    filters |= QDir::NoSymLinks;
 
   for (const QString& name : QDir(dirPath).entryList(filters)) {
     QString path = dirPath + "/" + name;
     const QFileInfo entry(path);
 
     // junctions are effectively symlinks
-    if (!_params.followSymlinks && entry.isJunction()) {
+    if (!_params.followSymlinks && (entry.isSymLink() || entry.isJunction())) {
       _ignoredFiles++;
+      if (_params.showIgnored) setError(path, ErrorNoLinks);
       continue;
     }
 
@@ -232,6 +236,7 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
           qWarning() << "ignoring dup inode:" << path;
           qWarning() << "    first instance:" << it.value();
           _ignoredFiles++;
+          if (_params.showIgnored) setError(path, ErrorDupInode);
           continue;
         } else
           _inodes.insert(id, path);
@@ -275,17 +280,26 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
       //                   qPrintable(path));
       //            fflush(stdout);
       const QString type = entry.suffix().toLower();
+      if (type.isEmpty()) {
+        _ignoredFiles++;
+        setError(path, ErrorNoType);
+        continue;
+      }
 
       if ((_params.types & IndexParams::TypeImage) && _imageTypes.contains(type)) {
-        if (entry.size() < _params.minFileSize)
-          setError(path, ErrorTooSmall);
+        if (entry.size() < _params.minFileSize) {
+          _ignoredFiles++;
+          setError(path, ErrorTooSmall); 
+        }
         else if (!isQueued(path)) {
           _imageQueue.append(path);
           _queuedWork.insert(path);
         }
       } else if ((_params.types & IndexParams::TypeVideo) && _videoTypes.contains(type)) {
-        if (entry.size() < _params.minFileSize)
+        if (entry.size() < _params.minFileSize) {
+          _ignoredFiles++;
           setError(path, ErrorTooSmall);
+        }
         else if (!isQueued(path))
           _videoQueue.append(path);
       } else if (_archiveTypes.contains(type)) {
@@ -298,7 +312,7 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         readArchive(path, expected);
       } else {
         _ignoredFiles++;
-        if (_params.showUnsupported) setError(path, ErrorUnsupported);
+        if (_params.showIgnored) setError(path, ErrorUnsupported);
       }
     } else if (entry.fileName() != INDEX_DIRNAME && entry.isDir()) {
       dirs.push_back(path);
@@ -866,6 +880,9 @@ IndexParams::IndexParams() {
 
   add({"dirs", "Enable indexing of subdirectories", Value::Bool, counter++,
        SET_BOOL(recursive),GET(recursive),NO_NAMES, NO_RANGE});
+
+  add({"ignored", "Log all ignored files", Value::Bool, counter++,
+       SET_INT(showIgnored), GET(showIgnored), NO_NAMES, NO_RANGE});
 
   add({"links", "Follow symlinks to files and directories", Value::Bool, counter++,
        SET_BOOL(followSymlinks), GET(followSymlinks), NO_NAMES, NO_RANGE});
