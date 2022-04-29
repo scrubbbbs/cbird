@@ -179,6 +179,8 @@ static int printUsage(int argc, char** argv) {
         H2 "-first                                keep the first item"
         H2 "-chop                                 remove the first item"
         H2 "-first-sibling                        keep one item from each directory"
+        H2 "-head <int>                           keep the first N items"
+        H2 "-tail <int>                           keep the last N items"
 
         H1 "Sorting/Grouping"
         HR
@@ -394,7 +396,8 @@ int printCompletions(const char* argv0, const QStringList& args) {
   cmds += noArgs;
 
   QSet<QString> oneArg{"-select-id", "-select-type", "-select-sql",  "-sort",
-                       "-sort-rev",  "-group-by",    "-max-per-page"};
+                       "-sort-rev",  "-group-by",    "-max-per-page", "-head",
+                       "-tail"};
   cmds += oneArg;
 
   const QSet<QString> twoArg{"-with", "-without", "-rename", "-compare-videos"};
@@ -1269,7 +1272,7 @@ int main(int argc, char** argv) {
         // index temporarily
         if (needles.count() <= 0)
           qWarning()
-              << "similar-to: invalid selection, is"
+              << "similar-to: empty selection, is"
               << to << "a valid file path or selector?";
 
         // this not the same as similar-in... which is a subset query
@@ -1649,6 +1652,22 @@ int main(int argc, char** argv) {
       for (auto& g : queryResult)
         if (g.count() > 0) g.removeFirst();
       if (selection.count() > 0) selection.removeFirst();
+    } else if (arg == "-head") {
+      int n = intArg(nextArg());
+      if (n <= 0) qFatal("count is not >= 0");
+      auto f = [n](MediaGroup& g) {
+        if (g.count() > n) g.resize(n);
+      };
+      for (auto& g : queryResult) f(g);
+      f(selection);
+    } else if (arg == "-tail") {
+      int n = intArg(nextArg());
+      if (n <= 0) qFatal("count is not >= 0");
+      auto f = [n](MediaGroup& g) {
+        if (g.count() > n) g = g.mid(g.count()-n);
+      };
+      for (auto& g : queryResult) f(g);
+      f(selection);
     } else if (arg == "-first-sibling") {
       auto fn = [=](MediaGroup& g) {
         QSet<QString> parents;
