@@ -261,7 +261,8 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     Q_ASSERT(item != nullptr);
 
     const QPalette& palette = parent->palette();
-    const Media& m = parent->_list[parent->_currentRow][index.row()];
+    const MediaGroup& group = parent->_list[parent->_currentRow];
+    const Media& m = group[index.row()];
 
     // offset rectangle for image
     QRect rect = option.rect.adjusted(0,0,0, -_textHeight);
@@ -290,7 +291,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       double rotation = 0.0;
 
       if (m.roi().count() > 0) {
-        if (index.model()->rowCount() != 2)
+        if (countNonAnalysis(group) != 2)//index.model()->rowCount() != 2)
           qWarning("item count must be 2 for transform display");
         else {
           isRoi = true;
@@ -821,16 +822,28 @@ void MediaGroupListWidget::execContextMenu(const QPoint& p) {
  * @details Black>Blue == small differences, probably unnoticable
  *          Cyan>Green == noticable upon close inspection
  *          Magenta>White = obvious without any differencing
- * @param left
- * @param right
  * @todo move to library function
- * @todo template match first, to align images
  * @return
  */
-static QImage differenceImage(const QImage& inLeft, const QImage& inRight,
+static QImage differenceImage(const Media& ml, const Media& mr,
                               const QFuture<void>* future=nullptr) {
   QImage nullImage;
+  QImage inLeft = ml.image();
+  QImage inRight = mr.image();
   if (inLeft.isNull() || inRight.isNull()) return nullImage;
+
+  // apply template matcher transform
+  if (!mr.transform().isIdentity()) {
+    QImage xFormed(inLeft.size(), QImage::Format_RGB32);
+    QPainter p(&xFormed);
+    const QTransform tx(mr.transform().inverted());
+    p.setTransform(tx, true);
+    p.drawImage(0, 0, inRight);
+    inRight = xFormed;
+  }
+
+  // cancellation points between slow steps
+  if (future && future->isCanceled()) return nullImage;
 
   // normalize to reduce the effects of brightness/exposure
   // todo: setting for % histogram clipping
@@ -855,7 +868,6 @@ static QImage differenceImage(const QImage& inLeft, const QImage& inRight,
   f1.waitForFinished();
   f2.waitForFinished();
 
-  // cancellation points between slow steps
   if (future && future->isCanceled()) return nullImage;
 
   QSize rsize = right.size();
@@ -978,8 +990,7 @@ static void loadImage(ImageWork* work, bool fastSeek) {
     QImage li = left.image();
     QImage ri = right.image();
 
-    if (!li.isNull() && !ri.isNull())
-      img = differenceImage(li, ri, &work->future);
+    img = differenceImage(left, right, &work->future);
   }
   else if (m.type() == Media::TypeImage) {
     img = m.loadImage(QSize(), &work->future);
@@ -1319,7 +1330,8 @@ void MediaGroupListWidget::updateItems() {
     }
 
     QString date, camera;
-    if (m.type() == Media::TypeImage) {
+    if (m.type() == Media::TypeImage &&
+        !isAnalysis(m)) {
       static auto dateFunc = Media::propertyFunc("exif:Photo.DateTimeOriginal,Photo.DateTimeDigitized");
       static auto camFunc = Media::propertyFunc("exif:Image.UniqueCameraModel,Image.Model,Image.Make");
       date = dateFunc(m).toString();
@@ -2151,9 +2163,10 @@ bool MediaGroupListWidget::addNegMatch(bool all) {
 
   const MediaGroup& group = _list[_currentRow];
 
-  if (all || group.count() == 2) {
+  if (all || countNonAnalysis(group) == 2) {
     for (int i = 1; i < group.size(); i++)
-      _options.db->addNegativeMatch(group[0], group[i]);
+      if (!isAnalysis(group[i]))
+        _options.db->addNegativeMatch(group[0], group[i]);
 
     return true;
   } else {
@@ -2216,14 +2229,21 @@ void MediaGroupListWidget::templateMatchAction() {
   if (haystack.count() > 0) group[targetIndex] = haystack[0];
 
   // reload since we may have deleted items
-  loadRow(_currentRow);
+  //loadRow(_currentRow);
+  updateCurrentRow(group);
 }
 
 void MediaGroupListWidget::reloadAction() {
   // reload current row and forget any uncommitted changes
-  for (Media& m : _list[_currentRow]) m.setRoi(QVector<QPoint>());
-
-  updateCurrentRow(_list[_currentRow]);
+  auto& g = _list[_currentRow];
+  for (int i = 0; i < g.count(); ++i) {
+    auto& m = g[i];
+    m.setRoi(QVector<QPoint>());
+    m.setTransform(QMatrix());
+    if (isAnalysis(m)) g.remove(i--); // recompute
+  }
+  resetZoom();
+  updateCurrentRow(g);
 }
 
 void MediaGroupListWidget::copyImageAction() {
@@ -2311,12 +2331,17 @@ void MediaGroupListWidget::panDownAction() {
   repaint();
 }
 
-void MediaGroupListWidget::resetZoomAction() {
+void MediaGroupListWidget::resetZoom()
+{
   _zoom = 1.0;
   _panX = 0.0;
   _panY = 0.0;
   _itemDelegate->setZoom(_zoom);
   _itemDelegate->setPan({_panX, _panY});
+}
+
+void MediaGroupListWidget::resetZoomAction() {
+  resetZoom();
   repaint();
 }
 

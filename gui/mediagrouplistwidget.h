@@ -264,6 +264,9 @@ private:
   /// Menu tree for moving stuff
   QMenu* dirMenu(const char* slot);
 
+  /// Reset zoom and pan
+  void resetZoom();
+
   MediaGroupList _list;
   MediaWidgetOptions _options;
   MediaItemDelegate* _itemDelegate;
