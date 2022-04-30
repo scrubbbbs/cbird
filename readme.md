@@ -268,36 +268,37 @@ Wish List
   - colordescriptor on grayscale image
 - console progress bar
 - error-log to file
-- removing items breaks symlinks to that item... ideally also track symlinks and update them
+- store symlinks to prevent broken links later on
 - use idct scaling to speed up jpeg decompress
 - file/directory name filters for inclusion/exclusion
-- hard links handling
-	- isJunction() exclusion from index
-	- exclusion from index (map inodes during scan)
-- see if `skip_loop_filter` for h264 decoding is a good idea: about 20% faster decoding, unknown affect on hash quality
-- same with `SWS_AREA` rescaler instead of `SWS_BICUBIC`
+- ~~hard links handling~~ added in v0.6
+	- ~~isJunction() exclusion from index~~
+	- ~~exclusion from index (map inodes during scan)~~
+- ~~see if `skip_loop_filter` for h264 decoding is a good idea: about 20% faster decoding, unknown affect on hash quality~~ enabled in v0.6
+- ~~same with `SWS_AREA` rescaler instead of `SWS_BICUBIC`~~ enabled in v0.6
 
 
 ### Search	
 - csv output for other tools, gui wrappers
 - sort groups with closest matches first
 - fast block-averaging template match with threshold
-- filter for hard/soft links
+- ~~filter for hard/soft links~~ added in v0.6
+- query, edit negative matches
 
 ### GUI
 - barebones index/search gui
-- open archive (shift+E ?)
+- reveal in archive (shift+E ?)
 - cv min/max filter 8-bit indexed
-- disable/enable relevant actions
+- disable/enable relevant actions per selection/other state
 - show results in batches as they are being computed, for slow queries
 - toggle histogram view
-- context menu: copy path
+- context menu: copy path to clipboard
 - when deleting zip, remove all zip contents from viewer
-- remember past deletions and optionally replay them in the future should they reappear (via traal)
-- detect breaking of symlinks on deletion
+- ~~remember past deletions and optionally replay them in the future should they reappear (via traal)~~ added "weeds" feature v0.6
+- detect breaking of symlinks on delete/rename
 
 ### Misc
-- method declartion sweep
+- method declaration sweep
 	- unecessary "virtual"
 	- "override"
 	- "const"
@@ -315,17 +316,17 @@ Minor Bugs
 - maybe scale up small svg prior to indexing
 - 64-bit image support
 - colordescriptor somewhat non-deterministic, could be a bug
-- vacuum database once in a while, maybe have a delete counter
+- auto-vacuum database once in a while, maybe have a delete counter
 - dctfeature hash logic seems flawed, needs analysis
 - ffmpeg deprecations, requires older branch to compile
 - replace qPrintable() used for file path with qUtf8Printable or QString
 - maybe problem with some chars in filenames, dirs ending in "!" are skipped by scanner
-- MGLW scale-to-fit does not work when diff image enabled
+- ~~MGLW scale-to-fit does not work when diff image enabled~~ fixed v0.6
 - MGLW up/down key selection swaps sides (scroll wheel does not)
 - MGLW: delete multi-select as one batch
 - MGLW: suppress QIR eof warnings from thread cancellation
 - MGLW: load next row loses focus item on some systems (gnome?)
-- MGLW: template match (T) hides diff image / doesn't restore after reset (F5)
+- ~~MGLW: template match (T) hides diff image / doesn't restore after reset (F5)~~ fixed v0.6
 - MGLW: rename folder doesn't update all affected viewer paths
 - Windows: titlebar/dialogs do not use native theme
 - Windows: white flash when MGLW is displayed
