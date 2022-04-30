@@ -366,7 +366,7 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
     const auto& v = _video[0].visual;
     if (v.count() > 0) {
       _visualIndex++;
-      _visualIndex %= v.count() + 1;
+      _visualIndex %= v.count() + 1; // index 0==no visual
       update();
     }
   });
@@ -458,7 +458,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
 
   const auto& v = _video;
   bool showVisual = false;
-  if (v[0].visualFrame == _cursor + v[0].offset && _visualIndex > 0 && v[0].visual.count() > 0 &&
+  if (v[0].visualFrame == _cursor + v[0].in + v[0].offset && _visualIndex > 0 && v[0].visual.count() > 0 &&
       (_visualIndex - 1) < v[0].visual.count())
     showVisual = true;
 
