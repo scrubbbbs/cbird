@@ -78,7 +78,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
       if (!key.isNull()) {
         int dist = _cache[key];
         m.setScore(dist);
-        if (dist < params.dctThresh) good.append(m);
+        if (dist < params.tmThresh) good.append(m);
       } else
         notCached.append(m);
     }

@@ -93,6 +93,9 @@ SearchParams::SearchParams() {
   add({"thf", "Template match number of haystack features", Value::Int, counter++,
        SET_INT(haystackFeatures), GET(haystackFeatures), NO_NAMES, GET_CONST(nonzero)});
 
+  add({"tdht", "Template matcher DCT hash threshold", Value::Int, counter++,
+       SET_INT(tmThresh), GET(tmThresh), NO_NAMES, GET_CONST(positive)});
+
   add({"diag", "Enable diagnostic/verbose output", Value::Bool, counter++,
        SET_BOOL(verbose), GET(verbose), NO_NAMES, NO_RANGE});
 

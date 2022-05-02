@@ -80,7 +80,8 @@ class SearchParams : public Params {
       needleFeatures = 100,    // template match: number of needle features
       haystackFeatures = 1000, // template match: number of haystack features
       mirrorMask = MirrorNone, // MirrorXXX flags for mirror search
-      maxThresh = 0;           // if > 0, increment dct/cv/Thresh < maxThresh until match is found
+      maxThresh = 0,           // if > 0, increment dct/cv/Thresh < maxThresh until match is found
+      tmThresh = 5;            // threshold for template match DCT hash
 
   bool templateMatch = false,  // remove results that don't pass the template matcher
       negativeMatch = false,   // remove results in the negative matches (blacklist)
