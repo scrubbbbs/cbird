@@ -19,6 +19,7 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "qtutil.h"
+#include "profile.h"
 
 // qttools/src/qdbus/qdbus/qdbus.cpp
 #ifndef Q_OS_WIN
@@ -617,8 +618,9 @@ QDateTime DBHelper::lastModified(const QSqlDatabase &db) {
 }
 
 
-QMenu *MenuHelper::dirMenu(const QString &root, QObject *target, const char *slot) {
-  QMenu* menu = makeDirMenu(root, target, slot);
+QMenu *MenuHelper::dirMenu(const QString &root, QObject *target, const char *slot, int maxDepth) {
+  QMenu* menu = makeDirMenu(root, target, slot, maxDepth, 0);
+  if (!menu) menu = new QMenu;
 
   QAction* action = new QAction("*new folder*", menu);
   action->connect(action, SIGNAL(triggered(bool)), target, slot);
@@ -628,26 +630,35 @@ QMenu *MenuHelper::dirMenu(const QString &root, QObject *target, const char *slo
   return menu;
 }
 
-QMenu *MenuHelper::makeDirMenu(const QString &root, QObject *target, const char *slot) {
+QMenu *MenuHelper::makeDirMenu(const QString &root, QObject *target, const char *slot,
+                               int maxDepth, int depth) {
+
+  if (depth >= maxDepth) return nullptr;
+
+  const auto& list =
+      QDir(root).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+  if (list.count() <= 0) return nullptr;
+
   QMenu* menu = new QMenu;
   QAction* action = menu->addAction(".");
   action->setData(root);
   action->connect(action, SIGNAL(triggered(bool)), target, slot);
 
-  const auto& list =
-      QDir(root).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
   int partition = 0;
   QMenu* partMenu = nullptr;
-  for (const QFileInfo& entry : list) {
+
+  for (const auto& fileName : list) {
+
     // todo: setting for index dir name
-    const QString& path = entry.absoluteFilePath();
-    if (path.endsWith(INDEX_DIRNAME)) continue;
+    //const QString& path = entry.absoluteFilePath();
+    const QString& path = root + "/" + fileName;
+    if (fileName == INDEX_DIRNAME) continue;
 
     // todo: setting or detect max popup size
-    const int maxFolders = 100;
+    const int maxFolders = 20;
     if (list.count() > maxFolders) {
       if (partition == 0) {
-        const QString name = entry.fileName();
+        const QString name = fileName;
         partMenu = new QMenu;
         partMenu->setTitle(name + "...");
         menu->addMenu(partMenu);
@@ -656,13 +667,12 @@ QMenu *MenuHelper::makeDirMenu(const QString &root, QObject *target, const char 
     } else
       partMenu = menu;
 
-    if (QDir(path).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot).count() >
-        0) {
-      QMenu* subMenu = makeDirMenu(path, target, slot);
-      subMenu->setTitle(entry.fileName());
+    QMenu* subMenu = makeDirMenu(path, target, slot, maxDepth, depth+1);
+    if (subMenu) {
+      subMenu->setTitle(fileName);
       partMenu->addMenu(subMenu);
     } else {
-      action = partMenu->addAction(entry.fileName());
+      action = partMenu->addAction(fileName);
       action->setData(path);
       action->connect(action, SIGNAL(triggered(bool)), target, slot);
     }
@@ -1044,6 +1054,9 @@ MessageLog::~MessageLog() {
 
 QString MessageLog::format(const LogMsg& msg) const {
   static const char* lastColor = nullptr;
+  static uint64_t lastTime = nanoTime();
+  static const bool showTimestamp = getenv("CBIRD_LOG_TIMESTAMP");
+
   char typeCode = 'X';
   const char* color = VT_WHT;
   const char* reset = VT_RESET;
@@ -1115,9 +1128,14 @@ QString MessageLog::format(const LogMsg& msg) const {
   QString logLine;
   if (msg.msg.startsWith("<NC>"))  // no context
     logLine += msg.msg.mid(4);
-  else
+  else {
+    if (showTimestamp) {
+      auto currTime = nanoTime();
+      logLine += QString::asprintf("%06d ", int( (currTime-lastTime)/1000 ));
+      lastTime = currTime;
+    }
     logLine += QString("[%1][%2] %3").arg(typeCode).arg(shortFunction).arg(msg.msg);
-
+  }
   return logLine;
 }
 

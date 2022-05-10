@@ -113,11 +113,11 @@ class MenuHelper {
  public:
   /// build menu for a directory tree
   static QMenu* dirMenu(const QString& root, QObject* target,
-                        const char* slot);
+                        const char* slot, int maxDepth=INT_MAX);
 
  private:
   static QMenu* makeDirMenu(const QString& root, QObject* target,
-                            const char* slot);
+                            const char* slot, int maxDepth, int depth);
 };
 
 /// elide string in the middle
