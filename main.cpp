@@ -380,9 +380,8 @@ int printCompletions(const char* argv0, const QStringList& args) {
     exit(0);
   }
 
-  QSet<QString> cmds; // everything starting with "-"
-
-  const QSet<QString> noArgs{
+  QSet<QString> cmds{
+      /* no arguments */
       "-update",         "-headless",      "-dups",          "-similar",
       "-select-none",    "-select-all",    "-select-errors", "-first",
       "-chop",           "-first-sibling", "-sort-similar",  "-remove",
@@ -391,21 +390,20 @@ int printCompletions(const char* argv0, const QStringList& args) {
       "-about",          "-verify",        "-vacuum",        "-select-result",
       "-license",        "-cwd",           "-init",          "-list-search-params",
       "-list-index-params", "-weeds",      /*"-track-weeds",*/   "-nuke-weeds",
-      "-dump"
+      "-dump",
+      /* one argument */
+      "-select-id", "-select-type", "-select-sql",  "-sort",
+      "-sort-rev",  "-group-by",    "-max-per-page", "-head",
+      "-tail"
       };
-  cmds += noArgs;
 
-  QSet<QString> oneArg{"-select-id", "-select-type", "-select-sql",  "-sort",
-                       "-sort-rev",  "-group-by",    "-max-per-page", "-head",
-                       "-tail"};
-  cmds += oneArg;
-
-  const QSet<QString> twoArg{"-with", "-without", "-rename", "-compare-videos"};
+  const QSet<QString> twoArg{"-with", "-without", "-rename", "-compare-videos", "-merge"};
   cmds += twoArg;
 
   const QSet<QString> fileArg{"-select-one",         "-jpeg-repair-script",
                               "-view-image",         "-test-csv",
-                              "-test-video-decoder", "-select-grid"};
+                              "-test-video-decoder", "-select-grid",
+                              "-compare-videos"};
   cmds += fileArg;
 
   const QSet<QString> dirArg{"-use", "-dups-in", "-nuke-dups-in", "-similar-in",
@@ -415,22 +413,18 @@ int printCompletions(const char* argv0, const QStringList& args) {
   const QSet<QString> fileOrDirArg{"-similar-to", "-select-path", "-select-files", "-merge"};
   cmds += fileOrDirArg;
 
+
   const SearchParams searchParams;
-  const auto sk = searchParams.keys();
-  const QSet<QString> paramKeys(sk.begin(),sk.end());
   QSet<QString> searchParamArg;
-  for (auto& k : paramKeys) searchParamArg << ("-p." + k);
+  const auto sk = searchParams.keys();
+  for (auto& k : sk) searchParamArg << ("-p." + k);
   cmds += searchParamArg;
 
   const IndexParams indexParams;
-  const auto ik = indexParams.keys();
-  const QSet<QString> indexKeys(ik.begin(),ik.end());
   QSet<QString> indexParamArg;
-  for (auto& k : indexKeys) indexParamArg << ("-i." + k);
+  const auto ik = indexParams.keys();
+  for (auto& k : ik) indexParamArg << ("-i." + k);
   cmds += indexParamArg;
-
-  const QSet<QString> argTypeFile{"-compare-videos"};
-  cmds += argTypeFile;
 
   // cword is the $CWORD variable in bash... index of the cursor (in words)
   int cword = args.at(2).toInt() + 3;
@@ -503,7 +497,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
     auto v = params.getValue(key);
     const auto& nv = v.namedValues();
     for (auto& n : nv) {
-      QString str(n.shortName);
+      const QLatin1String str(n.shortName);
       if (curr.isEmpty() || str.startsWith(curr))
         completions << n.shortName;
     }
@@ -515,23 +509,20 @@ int printCompletions(const char* argv0, const QStringList& args) {
     }
   };
 
-  if (fileOrDirArg.contains(prev)) {
-    completePath(QDir::Files | QDir::Dirs);
-  } else if (dirArg.contains(prev)) {
-    completePath(QDir::Dirs);
-  } else if (fileArg.contains(prev)) {
-    completePath(QDir::Files);
-  } else if (searchParamArg.contains(prev)) {
-    completeParam(searchParams);
-  } else if (indexParamArg.contains(prev)) {
-    completeParam(indexParams);
-  } else if (oneArg.contains(prev) || twoArg.contains(prev)) {
-    if (argTypeFile.contains(prev)) completePath(QDir::Files);
-  } else if (twoArg.contains(prev1)) {
-    if (argTypeFile.contains(prev1)) completePath(QDir::Files);
-  } else if (curr.startsWith("-") && !cmds.contains(curr)) {
+  if (curr.startsWith("-")) {
     for (auto& cmd : cmds)
       if (cmd.startsWith(curr)) completions << cmd;
+  }
+  else {
+    QString cmd = prev;
+    if (twoArg.contains(prev1))
+      cmd = prev1;
+
+    if      (fileOrDirArg.contains(cmd))   { completePath(QDir::Files | QDir::Dirs); }
+    else if (dirArg.contains(cmd))         { completePath(QDir::Dirs); }
+    else if (fileArg.contains(cmd))        { completePath(QDir::Files); }
+    else if (searchParamArg.contains(cmd)) { completeParam(searchParams); }
+    else if (indexParamArg.contains(cmd))  { completeParam(indexParams); }
   }
 
   for (auto& c : completions) debug << "output:" << c << "\n";
