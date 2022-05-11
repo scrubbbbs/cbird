@@ -955,7 +955,6 @@ int main(int argc, char** argv) {
       const QChar sep = arg[2];
       const QString key = arg.split(sep)[1];
       indexParams.setValue(key, val);
-      engine().scanner->setIndexParams(indexParams);
     }
     else if (arg == "-list-search-params") {
       MessageContext mc("SearchParams");
@@ -985,7 +984,9 @@ int main(int argc, char** argv) {
 
       QThreadPool::globalInstance()->setMaxThreadCount(threads);
 
-      engine().update(true);
+      auto &eng = engine();
+      eng.scanner->setIndexParams(indexParams);
+      eng.update(true);
 
       QThreadPool::globalInstance()->setMaxThreadCount(
           QThread::idealThreadCount());
@@ -2375,7 +2376,9 @@ int main(int argc, char** argv) {
 
       QObject::connect(b, &QPushButton::pressed, [=] {
         b->setText("Updating...");
-        engine().update();
+        auto &eng = engine();
+        eng.scanner->setIndexParams(indexParams);
+        eng.update();
       });
 
       QObject::connect(c, &QPushButton::pressed, [=] {
