@@ -205,7 +205,6 @@ void ColorDescIndex::remove(const QVector<int>& toRemove) {
   for (int i = 0; i < _count; i++)
     if (ids.contains(int(_mediaId[i]))) {
       _mediaId[i] = 0;
-      //memset(&_descriptors[i], 0, sizeof(ColorDescriptor));
       _descriptors[i].clear();
     }
 }

@@ -96,14 +96,10 @@ struct DescriptorColor {
  * @brief Storage unit of histogram-based color search
  */
 struct ColorDescriptor {
-  DescriptorColor colors[NUM_DESC_COLORS];
-  uint8_t numColors; // <= NUM_DESC_COLORS
+  DescriptorColor colors[NUM_DESC_COLORS] = {};
+  uint8_t numColors = 0; // <= NUM_DESC_COLORS
 
-  ColorDescriptor() {
-    clear();
-  }
-
-  void clear() {
+  void clear() noexcept {
     memset(&colors, 0, sizeof(colors));
     numColors = 0;
   }
