@@ -560,17 +560,17 @@ static void install(const QString& argv0, const QString& prefix) {
   }
 
   const char* bashCompletionScript =
-    "\n"
-    "##### <cbird-completions> #####\n"
-    "function _cbird {\n"
-    "  OIFS=$IFS\n"
-    "  IFS='|'\n"
-    "  COMPREPLY=($(cbird -complete $COMP_CWORD ${COMP_WORDS[*]}))\n"
-    "  IFS=$OIFS\n"
-    "}\n"
-    "complete -o filenames -F _cbird cbird\n"
-    "##### </cbird-completions> #####\n\n"
-    ;
+R"bash(
+##### <cbird-completions> #####
+function _cbird {
+  OIFS=$IFS
+  IFS='|'
+  COMPREPLY=($(cbird -complete $COMP_CWORD ${COMP_WORDS[*]}))
+  IFS=$OIFS
+}
+complete -o filenames -F _cbird cbird
+##### </cbird-completions> #####
+)bash";
 
   printf("install: Install cbird into %s ? [y/N]: ",
           qUtf8Printable(prefix));

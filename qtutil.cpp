@@ -578,22 +578,22 @@ void WidgetHelper::drawRichText(QPainter *painter, const QRect &r, const QString
   // todo: external stylesheet
   QTextDocument td;
 
-  td.setDefaultStyleSheet(
-        "table { color:rgba(255,255,255,192); font-size:16px; }"
-        "tr.even { background-color:rgba(96,96,96,128); }" // even rows of table
-        "tr.odd  { background-color:rgba(64,64,64,128); }" // odd rows of table
-        ".more { color:#9F9; }"   // value is >
-        ".less { color:#F99; }"   // value is <
-        ".same { color:#99F; }"   // value is ==
-        ".time { color:#FF9; }"   // value is a timecode or duration
-        ".video { color:#9FF; }"  // value describes video properties
-        ".audio { color:#F9F; }"  // value describes audio properties
-        ".none { color:rgba(0,0,0,0); }" // "hide" value by matching background color
-        ".archive { color:#FF9; }"// value is an archive/zip file
-        ".file { color:#FFF; }"   // value is normal file
-        ".default { color:#FFF; }"// normal text
-        ".weed { color:#0FF };"   // value is weed indicator
-        );
+  td.setDefaultStyleSheet(R"qss(
+        table { color:rgba(255,255,255,192); font-size:16px; }
+        tr.even { background-color:rgba(96,96,96,128); } /* even rows of table */
+        tr.odd  { background-color:rgba(64,64,64,128); } /* odd rows of table */
+        .more { color:#9F9; }   /* value is > */
+        .less { color:#F99; }   /* value is < */
+        .same { color:#99F; }   /* value is == */
+        .time { color:#FF9; }   /* value is a timecode or duration */
+        .video { color:#9FF; }  /* value describes video properties */
+        .audio { color:#F9F; }  /* value describes audio properties */
+        .none { color:rgba(0,0,0,0); } /* hide value by matching background color */
+        .archive { color:#FF9; } /* value is archive/zip file */
+        .file { color:#FFF; }    /* value is file */
+        .default { color:#FFF; } /* normal text */
+        .weed { color:#0FF };    /* value is weed */
+        )qss");
 
   td.setHtml(text);
   td.setDocumentMargin(0);

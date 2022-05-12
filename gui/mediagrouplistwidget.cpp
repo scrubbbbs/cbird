@@ -84,28 +84,28 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
   setIconSize({iconW,iconH});
 
   // todo: external stylesheet
-  setStyleSheet(
-      "QListWidget::item { "
-        "margin: 0px; "
-        "padding: 8px; "
-      "}"
-      "QListWidget::item:selected { "
-        "margin: 0px; "
-        "padding: 8px; "
-        "background-color: #444; "
-      "}"
-      "QListWidget { "
-        "background-color: black; "
-        "selection-color: #FFF; " // text color
-        "selection-background-color: #FF0; " // text bg, overriden by item bg
-        "font-size: 16px; "
-        "color: white; " // font color
-      "}"
-      "QScrollBar {"
-        "width: 32px; "
-        "background-color: black; "
-        "color: darkGray; "
-      "}");
+  setStyleSheet(R"qss(
+      QListWidget::item {
+        margin: 0px;
+        padding: 8px;
+      }
+      QListWidget::item:selected {
+        margin: 0px;
+        padding: 8px;
+        background-color: #444;
+      }
+      QListWidget {
+        background-color: black;
+        selection-color: #FFF;
+        selection-background-color: #FF0;
+        font-size: 16px;
+        color: white;
+      }
+      QScrollBar {
+        width: 32px;
+        background-color: black;
+        color: darkGray;
+      })qss");
 
   int index = 0;
   for (const Media& m : list) {
@@ -595,18 +595,19 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
   setStyleSheet(
-      "QListWidget { "
-        "background-color: black; "
-        "selection-color: rgba(255,255,255,255); "
-        "selection-background-color: #444; "
-        "font-size: 16px; "
-        "color: rgba(255,255,255,255); "
-      "}"
-      "QScrollBar {"
-        "width: 32px; "
-        "background-color: black; "
-        "color: darkGray; "
-      "}");
+      R"qss(
+      QListWidget {
+        background-color: black;
+        selection-color: rgba(255,255,255,255);
+        selection-background-color: #444;
+        font-size: 16px;
+        color: rgba(255,255,255,255);
+      }
+      QScrollBar {
+        width: 32px;
+        background-color: black;
+        color: darkGray;
+      })qss");
 
   if (list.count() > 0) {
     loadRow(0);
