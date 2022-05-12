@@ -168,13 +168,9 @@ QStringList VideoContext::ffVersions() {
 
 class VideoContextPrivate {
  public:
-  VideoContextPrivate() { init(); }
+  VideoContextPrivate() { reset(); }
 
-  ~VideoContextPrivate() {
-    // note: stuff gets free'd in VideoContext::close()
-  }
-
-  void init() {
+  void reset() {
     format = nullptr;
     context = nullptr;
     codec = nullptr;
@@ -568,7 +564,7 @@ void VideoContext::close() {
   if (_p->scaled.data[0]) av_freep( &(_p->scaled.data[0]) );
 
   // av_free_p->packet(&_p->packet);
-  _p->init();
+  _p->reset();
 }
 
 int VideoContext::ptsToFrame(int64_t pts) const {
