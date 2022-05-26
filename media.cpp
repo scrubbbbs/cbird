@@ -749,25 +749,26 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
     _videoIndex.frames.push_back((numFrames - 1) & 0xFFFF);
   }
 
-  qDebug("%s nframes=%d near=%d filt=%d corrupt=%d", qPrintable(video.path()),
+  qDebug("%s nframes=%d near=%d filt=%d corrupt=%d", qUtf8Printable(video.path()),
          numFrames, nearFrames, filteredFrames, corruptFrames);
 }
 
 void VideoIndex::save(const QString& file) const {
-  FILE* indexFile = fopen(qPrintable(file), "wb");
-  if (!indexFile) qFatal("failed to open: %s", qPrintable(file));
+  MessageContext ctx(file);
+  FILE* indexFile = fopen(qUtf8Printable(file), "wb");
+  if (!indexFile) qFatal("failed to open");
 
   uint16_t numFrames = frames.size() & 0xFFFF;
   if (1 != fwrite(&numFrames, sizeof(numFrames), 1, indexFile))
-    qFatal("write fail at start: %s", qPrintable(file));
+    qFatal("write fail at start");
 
   for (uint16_t frame : frames)
     if (1 != fwrite(&frame, sizeof(frame), 1, indexFile))
-      qFatal("write fail on frames: %s", qPrintable(file));
+      qFatal("write fail on frames");
 
   for (uint64_t hash : hashes)
     if (1 != fwrite(&hash, sizeof(hash), 1, indexFile))
-      qFatal("write fail on hashes: %s", qPrintable(file));
+      qFatal("write fail on hashes");
 
   fclose(indexFile);
 }

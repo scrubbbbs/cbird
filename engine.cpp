@@ -158,13 +158,13 @@ void Engine::update(bool wait) {
       QString vIndexPath =
           QString("%1/%2.vdx").arg(db->videoPath()).arg(m.id());
       if (!QFileInfo(vIndexPath).exists()) {
-        qWarning("video index missing: %s", qPrintable(m.path()));
+        qWarning() << "video index missing:" << m.path();
         toRemove.append(m.id());
       } else {
         VideoIndex idx;
         idx.load(vIndexPath);
         if (idx.isEmpty()) {
-          qWarning("video index is empty, forcing re-index: %s", qPrintable(m.path()));
+          qWarning() << "video index is empty, forcing re-index:" << m.path();
           toRemove.append(m.id());
         }
       }

@@ -66,7 +66,7 @@ template <typename A, typename B>
 static void saveMap(const std::map<A, B>& map, const QString& file) {
   QFile f(file);
   if (!f.open(QFile::WriteOnly | QFile::Truncate))
-    qFatal("failed to open for writing: %s", qPrintable(f.fileName()));
+    qFatal("failed to open for writing: %s", qUtf8Printable(f.fileName()));
 
   for (const auto& it : map) {
     const A& key = it.first;
@@ -81,7 +81,7 @@ template <typename A, typename B>
 static void loadMap(std::map<A, B>& map, const QString& file) {
   QFile f(file);
   if (!f.open(QFile::ReadOnly))
-    qFatal("failed to open for reading: %s", qPrintable(f.fileName()));
+    qFatal("failed to open for reading: %s", qUtf8Printable(f.fileName()));
 
   while (!f.atEnd()) {
     A key;

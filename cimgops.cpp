@@ -325,7 +325,7 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
   if (!m.image().isNull())
     qImageToCImg(m.image(), src);
   else
-    src.load(qPrintable(m.path()));
+    src.load(qUtf8Printable(m.path()));
 
   now = nanoTime();
   micros = (now - then) / 1000;

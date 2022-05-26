@@ -45,7 +45,7 @@ void DctVideoIndex::insertHashes(int mediaIndex, HammingTree* tree,
   QString indexPath =
       QString("%1/%2.vdx").arg(_dataPath).arg(_mediaId[uint32_t(mediaIndex)]);
   if (!QFileInfo(indexPath).exists()) {
-    qWarning("index file missing: %s", qPrintable(indexPath));
+    qWarning() << "index file missing:" << indexPath;
     return;
   }
 
@@ -228,7 +228,7 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle,
         "thresh=%d haystack=%dK match=%d time=%dus "
         "rate=%.2f Mhash/s [%s]",
         params.dctThresh, 0, int(matches.size()), int(end - start),
-        double(count()) / (end - start), qPrintable(needle.path()));
+        double(count()) / (end - start), qUtf8Printable(needle.path()));
 
   // get 1 nearest frame for each video matched
   QMap<int, HammingTree::Match> nearest;
@@ -294,7 +294,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
     srcIndex.load(QString("%1/%2.vdx").arg(_dataPath).arg(needle.id()));
 
   if (srcIndex.isEmpty()) {
-    qWarning("needle video index is empty: %s", qPrintable(needle.path()));
+    qWarning() << "needle video index is empty:" << needle.path();
     return results;
   }
 

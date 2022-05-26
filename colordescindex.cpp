@@ -244,7 +244,6 @@ QVector<Index::Match> ColorDescIndex::find(const Media& m,
 
   // todo: search tree for histograms
 
-  // printf("find: %s\n", qPrintable(m.path()));
   QVector<Index::Match> results;
 
   ColorDescriptor target = m.colorDescriptor();
@@ -253,7 +252,7 @@ QVector<Index::Match> ColorDescIndex::find(const Media& m,
     if (findIndexData(tmp))
       target = tmp.colorDescriptor();
     else
-      qWarning("needle has no color descriptor: %s", qPrintable(m.path()));
+      qWarning() << "needle has no color descriptor" << m.path();
   }
 
   for (int i = 0; i < _count; i++) {

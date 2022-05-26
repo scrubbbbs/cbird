@@ -527,7 +527,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
 
   for (auto& c : completions) debug << "output:" << c << "\n";
 
-  printf("%s\n", qPrintable(completions.join("|")));
+  printf("%s\n", qUtf8Printable(completions.join("|")));
   return 0;
 }
 
@@ -579,7 +579,7 @@ complete -o filenames -F _cbird cbird
     QString sudo;
     if (!dir.isWritable() || !dir.isExecutable()) {
       Q_ASSERT(0 == system("sudo -k")); // force re-entering password
-      fprintf(stdout, "install: Permission required for %s\n", qPrintable(prefix));
+      fprintf(stdout, "install: Permission required for %s\n", qUtf8Printable(prefix));
       if (0 != system("sudo echo 'install: Authenticated'"))
         return;
       sudo = "sudo ";
@@ -971,7 +971,7 @@ int main(int argc, char** argv) {
         qFatal("-use: database already open on \"%s\", pass -use before other arguments",
                   qUtf8Printable(_engine->db->path()));
       if (!QFileInfo(path).isDir())
-        qFatal("-use: \"%s\" is not a directory", qPrintable(path));
+        qFatal("-use: \"%s\" is not a directory", qUtf8Printable(path));
       indexPath() = path;
     } else if (arg == "-create") {
       checkIndexPathExists = false;
@@ -1228,7 +1228,7 @@ int main(int argc, char** argv) {
 
             if (list.count() <= 0)
               qInfo("similar-to[external video]: %s: No matches",
-                    qPrintable(to));
+                    qUtf8Printable(to));
 
             queryResult = list;
             continue;
@@ -1236,7 +1236,7 @@ int main(int argc, char** argv) {
         } else {
           qWarning(
               "similar-to: invalid query type (-p.qt) or not a known filetype: %s",
-              qPrintable(to));
+              qUtf8Printable(to));
           if (isVideo)
             qInfo("similar-to: for video search, use -p.qt 2[,1] -p.alg 4");
 
@@ -1420,7 +1420,7 @@ int main(int argc, char** argv) {
       const QRegularExpression re(srcPat);
       if (!re.isValid())
         qFatal("rename: <find> pattern <%s> is illegal regular expression: %s at offset %d",
-               qPrintable(srcPat), qPrintable(re.errorString()), re.patternErrorOffset());
+               qUtf8Printable(srcPat), qPrintable(re.errorString()), re.patternErrorOffset());
 
       int pad = int(log10(double(selection.count()))) + 1;
       int num = 1;
@@ -1470,7 +1470,7 @@ int main(int argc, char** argv) {
           else if (newName == oldName) {
             if (options.indexOf("v") >= 0)
               qWarning("rename: <find> text (%s) doesn't match: <%s>",
-                       qPrintable(srcPat), qPrintable(oldName));
+                       qUtf8Printable(srcPat), qUtf8Printable(oldName));
             continue;
           }
         } else {
@@ -1480,7 +1480,7 @@ int main(int argc, char** argv) {
           if (!match.hasMatch()) {
             if (options.indexOf("v") >= 0)
               qWarning("rename: <find> regexp <%s> does not match: <%s>",
-                       qPrintable(srcPat), qPrintable(oldName));
+                       qUtf8Printable(srcPat), qUtf8Printable(oldName));
             continue;
           }
           QStringList captured = match.capturedTexts();
@@ -1533,18 +1533,18 @@ int main(int argc, char** argv) {
         newName += "." + info.suffix();
         if (newName.contains("/")) // fixme: add proper set
           qFatal("rename: new filename contains illegal characters %s -> <%s>",
-                 qPrintable(m.path()), qPrintable(newName));
+                 qUtf8Printable(m.path()), qUtf8Printable(newName));
 
         const QString newPath = QFileInfo(info.dir().absolutePath()).absoluteFilePath()
                                 + "/" + newName;
 
         if (newNames.contains(newPath))
           qWarning("rename: collision: %s,%s => %s",
-                 qPrintable(toRename[newNames.indexOf(newPath)].path()),
-                 qPrintable(oldName), qPrintable(newName));
+                 qUtf8Printable(toRename[newNames.indexOf(newPath)].path()),
+                 qUtf8Printable(oldName), qUtf8Printable(newName));
         else if (info.dir().exists(newName))
           qWarning("rename: new name will overwrite: %s -> %s",
-                 qPrintable(m.path()), qPrintable(newName));
+                 qUtf8Printable(m.path()), qUtf8Printable(newName));
         else {
           newNames.append(newPath);
           toRename.append(m);
@@ -1921,7 +1921,7 @@ int main(int argc, char** argv) {
         {
           QFile f(m.path());
           if (!f.open(QFile::ReadOnly))
-            qFatal("failed to open: %s", qPrintable(m.path()));
+            qFatal("failed to open: %s", qUtf8Printable(m.path()));
           if (m.md5() != sparseMd5(f)) {
             qCritical()
                 << "updateMd5: no update since hash could be the new version"
@@ -1989,7 +1989,7 @@ int main(int argc, char** argv) {
             if (!Media(path).isArchived()) {
               path = path.replace("\"", "\\\"");
               QString cmd = QString("%1 \"%2\"").arg(jpegFixPath).arg(path);
-              if (0 != system(qPrintable(cmd)))
+              if (0 != system(qUtf8Printable(cmd)))
                 qWarning() << "jpeg repair script failed";
             }
           }
@@ -2400,7 +2400,7 @@ int main(int argc, char** argv) {
       d->exec();
       delete d;
     } else {
-      qCritical("unknown argument=%s", qPrintable(arg));
+      qCritical("unknown argument=%s", qUtf8Printable(arg));
 #ifdef Q_OS_WIN
       if (arg == "-p" || arg == "-i")
         qWarning() << "in PowerShell you must use -p: / -i: ";

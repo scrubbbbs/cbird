@@ -1024,7 +1024,7 @@ static void loadImage(ImageWork* work, bool fastSeek) {
     qWarning("%d %2d %dms[%d] %dk : %s", work->row, work->index,
            int(ts), int(t1),
            int(m.originalSize() / 1024),
-           qPrintable(m.path()));
+           qUtf8Printable(m.path()));
   }
 }
 

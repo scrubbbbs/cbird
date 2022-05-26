@@ -116,7 +116,7 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
 
     if (!stale) {
       qDebug("from cache");
-      _tree->read(qPrintable(cacheFile));
+      _tree->read(qUtf8Printable(cacheFile));
     } else {
       qDebug("from db");
 
@@ -156,7 +156,7 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
       }
       _tree->insert(values);
       values.clear();
-      _tree->write(qPrintable(cacheFile));
+      _tree->write(qUtf8Printable(cacheFile));
     }
 
     HammingTree::Stats stats = _tree->stats();

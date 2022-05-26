@@ -106,7 +106,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
 
     for (auto path : _videoQueue)
       qDebug("estimate cost=%.2f path=%s", double(cost[path]),
-             qPrintable(path));
+             qUtf8Printable(path));
   }
 
   if (_params.dryRun) {
@@ -820,7 +820,7 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
         (d.duration * d.frameRate * video->width() * video->height()) /
         (end - start);
 
-    qDebug("perf codec=%s bitrate=%d pixels/ms=%.1f", qPrintable(d.videoCodec),
+    qDebug("perf codec=%s bitrate=%d pixels/ms=%.1f", qUtf8Printable(d.videoCodec),
            d.videoBitrate, double(framePixelsPerMs));
   }
 

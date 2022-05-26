@@ -904,7 +904,7 @@ void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
             query.value(_mediaIndex.md5).toString(),
             uint64_t(query.value(_mediaIndex.phash_dct).toLongLong()));
 
-    // qDebug("%s %d %dx%d", qPrintable(mediaPath), (int)m.phashDct(),
+    // qDebug("%s %d %dx%d", qUtf8Printable(mediaPath), (int)m.phashDct(),
     // m.width(), m.height());
 
     if (m.width() <= 0 || m.height() <= 0)

@@ -380,10 +380,10 @@ bool DesktopHelper::moveFile(const QString& path, const QString& dir) {
   bool ok = QDir().rename(path, trashPath);
 
   if (ok)
-    qInfo("moved\n\t%s\nto\n\t%s\n", qPrintable(path), qPrintable(trashPath));
+    qInfo("moved\n\t%s\nto\n\t%s\n", qUtf8Printable(path), qUtf8Printable(trashPath));
   else
     qWarning("move\n\t%s\nto\n\t%s\nfailed due to filesystem error",
-             qPrintable(path), qPrintable(trashPath));
+             qUtf8Printable(path), qUtf8Printable(trashPath));
 
   return ok;
 }
@@ -723,7 +723,7 @@ bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
       recvClass = object->metaObject()->className();
 
     qCritical("%d meta call event: sender=%s receiver=%s method=%s\n", counter++,
-              senderClass, recvClass, qPrintable(slot.methodSignature()));
+              senderClass, recvClass, qUtf8Printable(slot.methodSignature()));
   }
 
   return QObject::eventFilter(object, event);

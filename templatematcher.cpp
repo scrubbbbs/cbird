@@ -99,7 +99,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
   // feature keypoints and descriptors
   QImage qImg = tmplMedia.loadImage();
   if (qImg.isNull()) {
-    qWarning("failure to load tmpl image %s", qPrintable(tmplMedia.path()));
+    qWarning() << "failure to load tmpl image:" << tmplMedia.path();
     return;
   }
 
@@ -114,7 +114,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
           int(tmplMedia.keyPointDescriptors().cols), params.needleFeatures);
 
   if (tmplMedia.keyPointDescriptors().cols <= 0) {
-    qWarning("no keypoints in template %s", qPrintable(tmplMedia.path()));
+    qWarning() << "no keypoints in template:" << tmplMedia.path();
     return;
   }
 
@@ -158,7 +158,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
     // decompress and build larger set of keypoints (params.haystackFeatures)
     qImg = m.loadImage();
     if (qImg.isNull()) {
-      qWarning("failure to load cand image %s", qPrintable(m.path()));
+      qWarning() << "failure to load cand image:" << m.path();
       continue;
     }
 
