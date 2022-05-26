@@ -1350,7 +1350,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
         int(QDateTime::currentMSecsSinceEpoch() - start));
   start = QDateTime::currentMSecsSinceEpoch();
 
-  int progressInterval = qBound(1, params.progressInterval, haystackSize / 10);
+  int progressInterval = qBound(1, params.progressInterval, haystackSize / 100);
 
   const int progressTotal = haystackSize;
 
