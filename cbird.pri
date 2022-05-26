@@ -7,7 +7,7 @@ mac {
     CONFIG -= app_bundle
 }
 
-VERSION=0.5.9
+VERSION=0.6.0
 
 QMAKE_CXXFLAGS += '-DCBIRD_VERSION=\\"$$VERSION\\"'
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
@@ -54,7 +54,7 @@ DEFINES += ENABLE_OPENCV
 QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
 !exists( $$QTCORE_PRIVATE_HEADERS ) {
     message("$${QTCORE_PRIVATE_HEADERS}/")
-    error("Can't find path to qtcore private headers")
+    error("Can't find qtcore private headers, maybe you need qtbase5-private-dev")
 }
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
@@ -62,11 +62,10 @@ win32 {
     INCLUDEPATH += windows/build-opencv/install/include
     LIBS *= -L windows/build-opencv/install/x64/mingw/lib
     OPENCV_VERSION = 2413
-    OPENCV_LIBS *= opencv_ml opencv_objdetect opencv_stitching opencv_superres opencv_videostab opencv_calib3d
-    OPENCV_LIBS *= opencv_features2d opencv_highgui opencv_video opencv_photo opencv_imgproc opencv_flann
-    OPENCV_LIBS *= opencv_core
+    OPENCV_LIBS *= ml objdetect stitching superres videostab calib3d
+    OPENCV_LIBS *= features2d highgui video photo imgproc flann core
     for (CVLIB, OPENCV_LIBS) {
-        LIBS *= -l$${CVLIB}$${OPENCV_VERSION}
+        LIBS *= -lopencv_$${CVLIB}$${OPENCV_VERSION}
     }
     LIBS *= -lquazip -lz
     LIBS *= -lpsapi
@@ -76,7 +75,7 @@ unix {
     QT += dbus xml
 
     INCLUDEPATH *= /usr/local/include
-    INCLUDEPATH *= /usr/local/include/QuaZip-Qt5-1.1
+    INCLUDEPATH *= $$system("pkg-config quazip1-qt5 --cflags-only-I | cut -d' ' -f1 | tail -c +3")
 
     LIBS *= -L/usr/local/lib
     LIBS *= $$system("pkg-config opencv --libs")
@@ -113,4 +112,3 @@ else {
 }
 
 #QMAKE_LFLAGS += -fuse-ld=gold -L/usr/local/lib
-
