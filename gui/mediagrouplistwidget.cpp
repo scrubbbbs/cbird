@@ -1335,7 +1335,7 @@ void MediaGroupListWidget::updateItems() {
         !isAnalysis(m)) {
       static auto dateFunc = Media::propertyFunc("exif:Photo.DateTimeOriginal,Photo.DateTimeDigitized");
       static auto camFunc = Media::propertyFunc("exif:Image.UniqueCameraModel,Image.Model,Image.Make");
-      date = dateFunc(m).toString();
+      date = dateFunc(m).toDateTime().toString("yyyy/MM/dd HH:mm:ss");
       camera = camFunc(m).toString();
     }
 

@@ -299,25 +299,26 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
         const QString k = v.toString();
         return QVariant(k.mid(start, len));
       };
-    } else if (fn == "trim") {
+    }
+    if (fn == "trim") {
       if (mod.count() != 1)
           qFatal("trim() has no arguments");
-      return [](const QVariant&v) {
-        return v.toString().trimmed();
-      };
-    } else if (fn == "upper") {
+      return [](const QVariant&v) { return v.toString().trimmed(); };
+    }
+    if (fn == "upper") {
       return [](const QVariant& v) { return v.toString().toUpper(); };
     }
-    else if (fn == "lower") {
+    if (fn == "lower") {
       return [](const QVariant& v) { return v.toString().toLower(); };
     }
-    else if (fn == "title") {
+    if (fn == "title") {
       return [](const QVariant& v) {
         auto s = v.toString().toLower();
         if (s.length() > 0) s[0] = s[0].toUpper();
         return s;
       };
-    } else if (fn == "pad") {
+    }
+    if (fn == "pad") {
       if (mod.count() != 2) qFatal("pad() has one argument (length <integer>)");
       bool ok;
       const int len = mod[1].toInt(&ok);
@@ -328,8 +329,9 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
         if (!ok) qFatal("pad() input is not integer: %s", qPrintable(v.toString()));
         return QString("%1").arg(num, len, 10, QLatin1Char('0'));
       };
+    }
     // list functions
-    } else if (fn == "split") {
+    if (fn == "split") {
       if (mod.count() != 2)
         qFatal("split() takes 1 regexp argument (separator)");
       QRegularExpression exp(mod[1]);
@@ -337,18 +339,19 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
         return [=](const QVariant& v) {
           return v.toString().split(exp);
         };
-      else {
-        return [=](const QVariant& v) {
-          return v.toString().split(mod[1]);
-        };
-      }
-    } else if (fn == "join") {
+
+      return [=](const QVariant& v) {
+        return v.toString().split(mod[1]);
+      };
+    }
+    if (fn == "join") {
       if (mod.count() != 2)
         qFatal("join() takes one string argument (glue)");
       return [=](const QVariant& v) {
         return v.toStringList().join(mod[1]);
       };
-    } else if (fn == "camelsplit") {
+    }
+    if (fn == "camelsplit") {
       if (mod.count() != 1)
         qFatal("camelsplit() takes no arguments");
 
@@ -367,7 +370,8 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
           parts.append(str);
         return parts;
       };
-    } else if (fn == "push") {
+    }
+    if (fn == "push") {
       if (mod.count() != 2)
         qFatal("push() takes one string argument (value)");
       return [=](const QVariant& v) {
@@ -375,7 +379,8 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
         r.append(mod[1]);
         return r;
       };
-    } else if (fn == "pop") {
+    }
+    if (fn == "pop") {
       if (mod.count() != 1)
         qFatal("pop() has no arguments");
       return [](const QVariant& v) {
@@ -383,7 +388,8 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
         r.removeLast();
         return r;
       };
-    } else if (fn == "foreach") {
+    }
+    if (fn == "foreach") {
       if (mod.count() < 2)
         qFatal("foreach() takes at least one argument (<func>[|<func>|<func>...]])");
       // recombine mod and split on |
@@ -400,8 +406,9 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
         return list;
       };
     }
+
     // math functions
-    else if (fn == "add") {
+    if (fn == "add") {
       if (mod.count() != 2)
         qFatal("add() takes one argument (integer)");
       bool ok;
@@ -424,11 +431,10 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
     }
 
     if (fn == "date") {
-      if (mod.count() != 2)
-        qFatal("date() takes 1 string argument (QDateTime format)");
+      if (mod.count() != 2) qFatal("date() takes 1 string argument (QDateTime format)");
       return [=](const QVariant& v) {
-        QDateTime d = QDateTime::fromString(v.toString(),
-                                            Qt::DateFormat::ISODate);
+        QDateTime d = v.toDateTime(); // should work for exif date tags
+        if (!d.isValid()) d = QDateTime::fromString(v.toString(), Qt::DateFormat::ISODate);
         return d.toString(mod[1]);
       };
     }
@@ -1275,10 +1281,8 @@ QVariantList Media::readExifKeys(const QStringList& keys) const {
   const MessageContext mc(QFileInfo(path()).fileName());
 
   QVariantList values;
-  for (auto& key : keys) {
-    (void)key;
+  for (int i = 0; i < keys.count(); ++i)
     values.append(QVariant());
-  }
 
   try {
     std::unique_ptr<Exiv2::Image> exif;
@@ -1293,24 +1297,32 @@ QVariantList Media::readExifKeys(const QStringList& keys) const {
       }
     }
 
-    if (!data.isEmpty()) {
+    if (!data.isEmpty())
       exif = Exiv2::ImageFactory::open(
           reinterpret_cast<const Exiv2::byte*>(data.constData()),
           data.size());
-    } else
+    else
       exif = Exiv2::ImageFactory::open(qUtf8Printable(path()));
 
-    if (exif.get()) {
-      exif->readMetadata();
-      auto& exifData = exif->exifData();
-      if (!exifData.empty())
-        for (int i = 0; i < keys.count(); ++i) {
-          QString key = keys[i];
-          if (!key.startsWith("Exif.")) key = "Exif." + key;
-          auto it = exifData.findKey(Exiv2::ExifKey(qPrintable(key)));
-          if (it != exifData.end()) values[i] = it->value().toString().c_str();
-        }
+    if (!exif.get()) return values;
+
+    exif->readMetadata();
+    const auto& exifData = exif->exifData();
+    if (exifData.empty()) return values;
+
+    for (int i = 0; i < keys.count(); ++i) {
+      QString key = keys[i];
+      if (!key.startsWith("Exif.")) key = "Exif." + key;
+      auto it = exifData.findKey(Exiv2::ExifKey(qPrintable(key)));
+      if (it != exifData.end()) {
+        QVariant v = it->value().toString().c_str();
+        if (key.contains("Date"))
+          v = QDateTime::fromString(v.toString(), "yyyy:MM:dd HH:mm:ss");
+
+        values[i] = v;
+      }
     }
+
   } catch (std::exception& e) {
     qWarning() << "exif exception:" << path() << e.what();
   }
