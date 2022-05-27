@@ -23,6 +23,16 @@ void Params::add(const Value &&v) {
   _params.insert(v.key, v);
 }
 
+void Params::link(const QString& keyA,
+                  const QVariant& valueA,
+                  const QString& keyB,
+                  const QVariant& valueB) {
+  auto a = _params.find(keyA);
+  auto b = _params.find(keyB);
+  Q_ASSERT(a!=_params.end() && b!=_params.end());
+  a.value().link.append({valueA, keyB, valueB});
+}
+
 QString Params::Value::toString() const {
   switch (type) {
     case Enum: {

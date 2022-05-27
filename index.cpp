@@ -31,7 +31,7 @@ SearchParams::SearchParams() {
   static const QVector<int> positive{0, INT_MAX};
   static const QVector<int> nonzero{1, INT_MAX};
 
-  int counter=0;
+  int counter = 0;
 
   {
     static const QVector<NamedValue> values{
@@ -128,5 +128,12 @@ SearchParams::SearchParams() {
 
   add({"eg", "Expand groups to make pairs {a,b,c}=>{a,b}+{a,c}", Value::Bool, counter++,
        SET_BOOL(expandGroups), GET(expandGroups), NO_NAMES, NO_RANGE});
-}
 
+  // link algo change to also set the query media type,
+  // "-p.alg video -p.types 3" == "-p.alg video"
+  for (int i = 0; i < NumAlgos; ++i) {
+    int types = FlagImage;
+    if (i == AlgoVideo) types |= FlagVideo;
+    link("alg", i, "types", types);
+  }
+}

@@ -30,6 +30,14 @@ class Params {
     const char* description;
   };
 
+  /// how one Value should change another one
+  class Link {
+   public:
+    QVariant value;
+    QString target; // other Value name
+    QVariant targetValue;
+  };
+
   /// parameter
   class Value {
    public:
@@ -48,6 +56,8 @@ class Params {
     std::function<const QVector<NamedValue>&()> namedValues;
     std::function<const QVector<int>&()> range;
 
+    QList<Link> link = {};
+
     QString toString() const;
     const char* typeName() const;
     bool operator<(const Value& other) const { return sort < other.sort; }
@@ -56,9 +66,10 @@ class Params {
                         const QVector<NamedValue>& namedValues,const char *arg,
                         int& member);
     static bool setFlags(const QVariant& v,
-                        const QVector<NamedValue>& namedValues, const char *arg,
-                        int& member);
+                         const QVector<NamedValue>& namedValues, const char *arg,
+                         int& member);
   };
+
 
   QHash<QString, Value> _params;
   Value _invalid;
@@ -75,10 +86,17 @@ class Params {
     auto it = _params.find(key);
     if (it == _params.end()) qWarning() << "invalid param:" << key;
     else if (!it->set(val)) qWarning() << "failed to set:" << key << "to:" << val;
+    else {
+      for (const auto& l : it->link)
+        if (l.value == it->get())
+          setValue(l.target, l.targetValue);
+    }
   }
 
   void print() const;
 
  protected:
   void add(const Value&& v);
+  void link(const QString& keyA, const QVariant& valueA,
+            const QString& keyB, const QVariant& valueB);
 };

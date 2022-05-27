@@ -24,7 +24,7 @@
 
 #define GET(member) [this]() { return this->member; }
 
-#define GET_CONST(member) []() -> const decltype(member)& { return member; }
+#define GET_CONST(global) []() -> const decltype(global)& { return global; }
 
 #define NO_NAMES GET_CONST(emptyValues)
 

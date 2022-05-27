@@ -48,7 +48,8 @@ class SearchParams : public Params {
     AlgoDCTFeatures = 1,  /// DCT hash around features (scale,big-crop)
     AlgoCVFeatures = 2,   /// OpenCV features (scale,big-crop,rotation)
     AlgoColor = 3,        /// Color Histogram match (any transform)
-    AlgoVideo = 4         /// DCT hashes of video frames (scale,small-crops)
+    AlgoVideo = 4,        /// DCT hashes of video frames (scale,small-crops)
+    NumAlgos = 5
   };
 
   /**
