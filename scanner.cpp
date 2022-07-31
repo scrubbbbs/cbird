@@ -61,6 +61,9 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   if (_params.decoderThreads <= 0)
     _params.decoderThreads = QThread::idealThreadCount();
 
+  // todo: subdirectory limiter for large indexes
+  // if (!_params.subdir.isEmpty())
+
   _gpuPool.setMaxThreadCount(_params.gpuThreads);
   _videoPool.setMaxThreadCount(_params.indexThreads);
   //_imagePool.setMaxThreadCount(_params.indexThreads);
@@ -79,7 +82,9 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   // - this is slow; so try to avoid it
   // - pointless if codecs are all multithreaded
   // - little difference if there are a lot of jobs
-  if (_params.estimateCost && _videoQueue.count() <= _params.indexThreads) {
+  if (_params.estimateCost &&
+      _params.algos & SearchParams::AlgoVideo &&
+      _videoQueue.count() <= _params.indexThreads) {
     QMap<QString, float> cost;
     for (auto& path : qAsConst(_videoQueue)) {
       cost[path] = -1.0f;
