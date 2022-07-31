@@ -174,8 +174,8 @@ static int printUsage(int argc, char** argv) {
 
         H1 "Filtering"
         HR
-        H2 "-with <prop>[:<func>] <comparator>    remove items if comparator is false"
-        H2 "-without <prop>[:<func>] <comparator> inversion of -with"
+        H2 "-with <prop>[#<func>] <comparator>    remove items if comparator is false"
+        H2 "-without <prop>[#<func>] <comparator> inversion of -with"
         H2 "-first                                keep the first item"
         H2 "-chop                                 remove the first item"
         H2 "-first-sibling                        keep one item from each directory"
@@ -184,9 +184,9 @@ static int printUsage(int argc, char** argv) {
 
         H1 "Sorting/Grouping"
         HR
-        H2 "-sort <prop>[:<func>]               sort ascending"
-        H2 "-sort-rev <prop>[:<func>]           sort descending"
-        H2 "-group-by <prop>[:<func>]           group selection by property, store in result (clears selection)"
+        H2 "-sort <prop>[#<func>]               sort ascending"
+        H2 "-sort-rev <prop>[#<func>]           sort descending"
+        H2 "-group-by <prop>[#<func>]           group selection by property, store in result (clears selection)"
         H2 "-sort-similar                       sort selection by similarity"
         H2 "-merge <selector> <selector>        merge two selections by similarity, into a new list, assuming first selection is sorted"
 
@@ -255,8 +255,8 @@ static int printUsage(int argc, char** argv) {
         H2 "<selection>                     current list of items for further operations"
         H2 "<selector>                      defines a set of (indexed) items by path, matching expression"
         H2 "    :<regular-expression>       - pcre, prefixed with colon"
-        H2 "    [<dir>]<sql-like>           - SQL LIKE expression (case-sensitive) optionally prefixed with dir"
-        H2 "    <dir>                       - everything under this path"
+        H2 "    <grok pattern>              - path in the index with grok-style [*|?] wildcards"
+        H2 "    <dir>|<file>                - existing file or directory"
         H2 "    @                           - use the current selection"
         H2 "<type>                          item media type (1=image,2=video,3=audio)"
         H2 "<find>                          source expression for string find/replace"
@@ -283,32 +283,8 @@ static int printUsage(int argc, char** argv) {
         H2 "    %empty                      - true if value is empty (after conversion to string)"
         H2 "    %!empty                     - true if value is not empty (after conversion to string)"
         H2 "<prop>                          item property for sorting, grouping, filtering"
-        H2 "    id                          - unique id"
-        H2 "    isValid                     - 1 if id != 0"
-        H2 "    md5                         - checksum"
-        H2 "    type                        - 1=image,2=video,3=audio"
-        H2 "    path                        - file path"
-        H2 "    parentPath                  - archivePath if archive, or dirPath"
-        H2 "    dirPath                     - parent directory path"
-        H2 "    relPath                     - relative file path to cwd"
-        H2 "    name                        - file name"
-        H2 "    completeBaseName            - file name w/o suffix"
-        H2 "    archivePath                 - archive/zip path, or empty if non-archive"
-        H2 "    suffix                      - file suffix"
-        H2 "    isArchived                  - 1 if archive member"
-        H2 "    archiveCount                - number of archive members"
-        H2 "    contentType                 - mime content type"
-        H2 "    width                       - pixel width"
-        H2 "    height                      - pixel height"
-        H2 "    resolution                  - width*height"
-        H2 "    res                         - max of width, height"
-        H2 "    compressionRatio            - resolution / file size"
-        H2 "    isWeed                      - 1 if tagged as weed (after query)"
-        H2 "    score                       - match score"
-        H2 "    matchFlags                  - match flags (Media::matchFlags)"
-        H2 "    exif:<tag1[,tagN]>          - comma-separated exif tags, first available tag is used (\"Exif.\" prefix optional)"
-        H2 "                                  see: https://www.exiv2.org/tags.html"
-        H2 "    ffmeta:<tag1[,tagN]         - comma-separated ffmpeg metadata tags, first available tag is used"
+        "%4"
+
         H2 "<func>                          transform a property value or string"
         H2 "    mid,from,len                - substring from index (from) with length (len) (see: QString::mid)"
         H2 "    trim                        - remove whitespace from beginning/end"
@@ -333,8 +309,8 @@ static int printUsage(int argc, char** argv) {
         H2 "create index in cwd             cbird -update"
         H2 "find exact duplicates           cbird -update -dups -show"
         H2 "find near duplicates            cbird -update -similar -show"
-        H2 "find near duplicates (video)    cbird -update -p.alg 4 -p.dht 7 -p.types 2 -p.vtrim 1000 -similar -show"
-        H2 "group photo sets by month       cbird -select-type 1 -group-by exif:Photo.DateTimeOriginal:month -folders -show"
+        H2 "find near duplicates (video)    cbird -update -p.alg video -p.dht 7 -p.vtrim 1000 -similar -show"
+        H2 "group photo sets by month       cbird -select-type 1 -group-by exif#Photo.DateTimeOriginal#month -folders -show"
         H2 "browse items, 16 per page       cbird -select-all -max-per-page 16 -show"
         BR;
   // clang-format on
@@ -360,10 +336,21 @@ static int printUsage(int argc, char** argv) {
     return lines;
   };
 
+  auto formatProps = []() {
+    QString lines;
+    for (const auto& p : Media::propertyList()) {
+      lines += QString(H2 "    %1 - %2")
+                   .arg(p.first, -27)
+                   .arg(p.second);
+    }
+    return lines;
+  };
+
   auto str = QString(usage)
                  .arg(argv[0])
                  .arg(formatParams(SearchParams()))
-                 .arg(formatParams(IndexParams()));
+                 .arg(formatParams(IndexParams()))
+                 .arg(formatProps());
   printf("%s\n", qUtf8Printable(str));
   return 0;
 }
@@ -392,13 +379,17 @@ int printCompletions(const char* argv0, const QStringList& args) {
       "-list-index-params", "-weeds",      /*"-track-weeds",*/   "-nuke-weeds",
       "-dump",
       /* one argument */
-      "-select-id", "-select-type", "-select-sql",  "-sort",
-      "-sort-rev",  "-group-by",    "-max-per-page", "-head",
-      "-tail"
+      "-select-id", "-select-sql", "-max-per-page", "-head", "-tail"
       };
 
-  const QSet<QString> twoArg{"-with", "-without", "-rename", "-compare-videos", "-merge"};
+  const QSet<QString> twoArg{"-rename", "-compare-videos", "-merge"};
   cmds += twoArg;
+
+  const QSet<QString> typeArg{"-select-type"};
+  cmds += typeArg;
+
+  const QSet<QString> propArg{"-sort", "-sort-rev",  "-group-by", "-with", "-without"};
+  cmds += propArg;
 
   const QSet<QString> fileArg{"-select-one",         "-jpeg-repair-script",
                               "-view-image",         "-test-csv",
@@ -509,6 +500,47 @@ int printCompletions(const char* argv0, const QStringList& args) {
     }
   };
 
+  auto completeType = [&]() {
+    const QStringList sym{"1","2","3","i","v","a"};
+    for (auto& s: sym)
+      if (curr.isEmpty() || s.startsWith(curr))
+        completions << s;
+  };
+
+  auto completeProp = [&]() {
+    struct {
+      const char* prop, *propHash, *tagFile;
+    } metaTags[3] = {
+      { "exif", "exif#", ":res/exif.txt" },
+      { "iptc", "iptc#", ":res/iptc.txt" },
+      { "ffmeta", "ffmeta#", ":res/ffmeta.txt" }
+    };
+
+    for (const auto& p : Media::propertyList()) {
+      QString sym(p.first);
+      for (const auto& m : metaTags)
+        if (sym.startsWith(m.prop)) {
+          sym = m.propHash;
+          break;
+        }
+      if (curr.isEmpty() || sym.startsWith(curr))
+        completions << sym;
+    }
+    if (curr.isEmpty()) return;
+    for (const auto& m : metaTags)
+      if (curr.startsWith(m.propHash)) {
+        QFile tagFile(m.tagFile);
+        Q_ASSERT(tagFile.open(QFile::ReadOnly));
+        const auto tags = tagFile.readAll().split('\n');
+        for (const auto& tag : tags) {
+          QString sym = m.propHash + tag;
+          if (sym.startsWith(curr))
+            completions << sym;
+        }
+        return;
+      }
+  };
+
   if (curr.startsWith("-")) {
     for (auto& cmd : cmds)
       if (cmd.startsWith(curr)) completions << cmd;
@@ -523,6 +555,8 @@ int printCompletions(const char* argv0, const QStringList& args) {
     else if (fileArg.contains(cmd))        { completePath(QDir::Files); }
     else if (searchParamArg.contains(cmd)) { completeParam(searchParams); }
     else if (indexParamArg.contains(cmd))  { completeParam(indexParams); }
+    else if (typeArg.contains(cmd))        { completeType(); }
+    else if (propArg.contains(cmd))        { completeProp(); }
   }
 
   for (auto& c : completions) debug << "output:" << c << "\n";
@@ -862,23 +896,20 @@ int main(int argc, char** argv) {
     } else {
       QFileInfo info(path);
       if (info.exists())
-        path = sqlEscapePath(info.absoluteFilePath()) + "%";
+        path = info.absoluteFilePath();
       else if (path.contains("/")) {
+        // try to form a valid path from the prefix
         QStringList parts = path.split("/");
 
-        // last component should be ignored since info.exists() failed
         QStringList tail;
         tail.append(parts.back());
         parts.pop_back();
 
         while (parts.count() > 0) {
-          // check if we can form a valid path, remove user-escapes
-          // (temporarily)
-          QString cand = sqlEscapePath(parts.join("/"));
-
-          QFileInfo info(cand);
+          const QString cand = parts.join("/");
+          const QFileInfo info(cand);
           if (info.exists()) {
-            path = sqlEscapePath(info.absoluteFilePath());
+            path = info.absoluteFilePath();
             path += "/" + tail.join("/");
             break;
           }
@@ -890,16 +921,21 @@ int main(int argc, char** argv) {
       }
 
       // make relative to index, required since database stores relative path
-      const QString cwd = sqlEscapePath(QDir::currentPath());
-      if (path.startsWith(cwd))
-        path = path.mid(engine().db->path().length() + 1);
+      const QString dbPath = engine().db->path();
+      if (path.startsWith(dbPath))
+        path = path.mid(dbPath.length() + 1);
 
-      if (!path.contains("%")) path.append("%");
+      // trailing wildcard is automatic
+      if (!path.endsWith("*")) path.append("*");
+
+      // escape the sql groks, replace sh-style ones
+      path = sqlEscapePath(path);
+      path = path.replace("?", "_");
+      path = path.replace("*", "%");
 
       auto selection = engine().db->mediaWithPathLike(path);
 
-      qInfo() << "select all with path like" << path << ":" << selection.count()
-              << "items";
+      qInfo() << "select all with path like" << path << ":" << selection.count() << "items";
 
       return selection;
     }
@@ -922,7 +958,12 @@ int main(int argc, char** argv) {
     return abs;
   };
 
-  auto parseType = [](const QString& value) { return value.toInt(); };
+  auto parseType = [](const QString& value) {
+    if (value == "i") return int(Media::TypeImage);
+    if (value == "v") return int(Media::TypeVideo);
+    if (value == "a") return int(Media::TypeAudio);
+    return value.toInt();
+  };
 
   // "arg" always refers to current comand line switch ("-foo")
   QString arg;

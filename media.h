@@ -476,11 +476,12 @@ class Media {
   void readMetadata();
 
   /**
-   * read EXIF data
-   * @param keys list of exiv2 tag names, "Exif" prefix is optional
+   * read metadata using exiv2
+   * @param keys list of exiv2 tag names (prefix is optional)
+   * @param type of metdata (exif, iptc, or xmp)
    * @return list of keys.length() with null or values found
    */
-  QVariantList readExifKeys(const QStringList& keys) const;
+  QVariantList readEmbeddedMetadata(const QStringList& keys, const QString& type) const;
 
 
   /// @section index processing
@@ -540,6 +541,9 @@ class Media {
 
   /// get the runtime/compiled version of exif library
   static QStringList exifVersion();
+
+  /// get list of property names and attributes
+  static QList<QPair<const char*, const char*> > propertyList();
 
  private:
   void setDefaults();

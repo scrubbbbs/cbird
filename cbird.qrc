@@ -1,5 +1,8 @@
 <RCC>
     <qresource prefix="/">
         <file>res/template.kdenlive</file>
+        <file>res/exif.txt</file>
+        <file>res/ffmeta.txt</file>
+        <file>res/iptc.txt</file>
     </qresource>
 </RCC>

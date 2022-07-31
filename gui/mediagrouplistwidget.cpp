@@ -1333,8 +1333,8 @@ void MediaGroupListWidget::updateItems() {
     QString date, camera;
     if (m.type() == Media::TypeImage &&
         !isAnalysis(m)) {
-      static auto dateFunc = Media::propertyFunc("exif:Photo.DateTimeOriginal,Photo.DateTimeDigitized");
-      static auto camFunc = Media::propertyFunc("exif:Image.UniqueCameraModel,Image.Model,Image.Make");
+      static auto dateFunc = Media::propertyFunc("exif#Photo.DateTimeOriginal,Photo.DateTimeDigitized");
+      static auto camFunc = Media::propertyFunc("exif#Image.UniqueCameraModel,Image.Model,Image.Make");
       date = dateFunc(m).toDateTime().toString("yyyy/MM/dd HH:mm:ss");
       camera = camFunc(m).toString();
     }
@@ -1656,7 +1656,8 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
             int otherIndex = (index + 1) % 2;
             Media& other = group[otherIndex];
             Q_ASSERT(!isAnalysis(other));
-            if (!_options.db->addWeed(group[index], other))
+            if (group[index].md5() != other.md5() &&
+                !_options.db->addWeed(group[index], other))
               qWarning() << "Failed to add weed" << group[index].md5() << other.md5();
           }
           if (replace && countNonAnalysis(group)==2) {

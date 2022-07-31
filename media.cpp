@@ -441,6 +441,41 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
     qFatal("invalid function: %s", qPrintable(fn));
 }
 
+QList<QPair<const char*, const char*>> Media::propertyList() {
+  return {
+      {"id", "unique id"},
+      {"isValid", "1 if id != 0"},
+      {"md5", "checksum"},
+      {"type", "1=image,2=video,3=audio"},
+      {"path", "file path"},
+      {"parentPath", "archivePath if archive, or dirPath"},
+      {"dirPath", "parent directory path"},
+      {"relPath", "relative file path to cwd"},
+      {"name", "file name"},
+      {"completeBaseName", "file name w/o suffix"},
+      {"archivePath", "archive/zip path, or empty if non-archive"},
+      {"suffix", "file suffix"},
+      {"isArchived", "1 if archive member"},
+      {"archiveCount", "number of archive members"},
+      {"contentType", "mime content type"},
+      {"width", "pixel width"},
+      {"height", "pixel height"},
+      {"resolution", "width*height"},
+      {"res", "max of width, height"},
+      {"compressionRatio", "resolution / file size"},
+      {"isWeed", "1 if tagged as weed (after query)"},
+      {"score", "match score"},
+      {"matchFlags", "match flags (Media::matchFlags)"},
+      {"exif#<tag1[,tagN]>",
+       "comma-separated EXIF tags, first available tag is used (\"Exif.\" prefix optional)"},
+      {"iptc#<tag1[,tagN]>",
+       "comma-separated IPTC tags, first available tag is used (\"Iptc.\" prefix optional)"},
+      {"xmp#<tag1[,tagN]>",
+       "comma-separated XMP tags, first available tag is used (\"Xmp.\" prefix optional)"},
+      {"ffmeta#<tag1[,tagN]", "comma-separated ffmpeg metadata tags, first available tag is used"},
+  };
+}
+
 std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
 
   static QHash<QString, QVariant> propCache;
@@ -492,9 +527,9 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       /// todo: attr(), VideoContext::metadata
   });
 
-  // field:args:modifier
-  // field:modifier
-  QStringList args = expr.split(":");
+  // prop#args#unaryFunc
+  // prop#unaryFunc
+  QStringList args = expr.split("#");
   const QString field = args.front();
   args.pop_front();
 
@@ -502,8 +537,8 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
   if (it != props.end()) {
     select = *it;
   }
-  else if (field == "exif") {
-    if (args.count() == 0) qFatal("exif requires exif tag name(s)");
+  else if (field == "exif" || field == "iptc" || field == "xmp") {
+    if (args.count() == 0) qFatal("exif/iptc/xmp require tag name(s)");
     QStringList exifKeys = args.front().split(",");
     args.pop_front();
 
@@ -516,7 +551,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       }
 
       QVariant result;
-      auto values = m.readExifKeys(exifKeys);
+      auto values = m.readEmbeddedMetadata(exifKeys, field);
       for (auto& v : values)
         if (!v.isNull()) {
           result = v;
@@ -1277,7 +1312,7 @@ QStringList Media::exifVersion() {
   return list;
 }
 
-QVariantList Media::readExifKeys(const QStringList& keys) const {
+QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString& type) const {
   const MessageContext mc(QFileInfo(path()).fileName());
 
   QVariantList values;
@@ -1285,7 +1320,7 @@ QVariantList Media::readExifKeys(const QStringList& keys) const {
     values.append(QVariant());
 
   try {
-    std::unique_ptr<Exiv2::Image> exif;
+    std::unique_ptr<Exiv2::Image> image;
     QByteArray data = _data;
 
     if (data.isEmpty() && isArchived()) {
@@ -1298,29 +1333,69 @@ QVariantList Media::readExifKeys(const QStringList& keys) const {
     }
 
     if (!data.isEmpty())
-      exif = Exiv2::ImageFactory::open(
+      image = Exiv2::ImageFactory::open(
           reinterpret_cast<const Exiv2::byte*>(data.constData()),
           data.size());
     else
-      exif = Exiv2::ImageFactory::open(qUtf8Printable(path()));
+      image = Exiv2::ImageFactory::open(qUtf8Printable(path()));
 
-    if (!exif.get()) return values;
+    if (!image.get()) return values;
 
-    exif->readMetadata();
-    const auto& exifData = exif->exifData();
-    if (exifData.empty()) return values;
+    image->readMetadata();
+    std::function<QVariant(const QString&)> findKey = [](const QString&) { return QVariant(); };
+
+    if (type == "exif") {
+      const auto& exifData = image->exifData();
+      if (exifData.empty()) return values;
+      findKey=[&exifData](const QString& key) {
+        QVariant v;
+        auto it = exifData.findKey(Exiv2::ExifKey(qPrintable(key)));
+        if (it == exifData.end()) return v;
+        v = it->value().toString().c_str();
+        if (key.contains("Date"))
+          v = QDateTime::fromString(v.toString(), "yyyy:MM:dd HH:mm:ss");
+        return v;
+      };
+    }
+    else if (type == "iptc") {
+      const auto& iptcData = image->iptcData();
+      if (iptcData.empty()) return values;
+      findKey=[&iptcData](const QString& key) {
+        QVariant v;
+        auto it = iptcData.findKey(Exiv2::IptcKey(qPrintable(key)));
+        if (it == iptcData.end()) return v;
+        v = it->value().toString().c_str();
+        switch (it->value().typeId()) {
+          case Exiv2::TypeId::date: v = QDate::fromString(v.toString(), Qt::ISODate); break;
+          case Exiv2::TypeId::time: v = QTime::fromString(v.toString(), Qt::ISODate); break;
+          default: ;
+        }
+        return v;
+      };
+    }
+    else if (type == "xmp") {
+      const auto& xmpData = image->xmpData();
+      if (xmpData.empty()) return values;
+      findKey=[&xmpData](const QString& key) {
+        QVariant v;
+        auto it = xmpData.findKey(Exiv2::XmpKey(qPrintable(key)));
+        if (it == xmpData.end()) return v;
+        v = it->value().toString().c_str();
+        if (key.contains("Date"))
+          v = QDateTime::fromString(v.toString(), Qt::ISODate);
+        return v;
+      };
+    }
+    else
+      qWarning("Invalid metadata prefix");
 
     for (int i = 0; i < keys.count(); ++i) {
       QString key = keys[i];
-      if (!key.startsWith("Exif.")) key = "Exif." + key;
-      auto it = exifData.findKey(Exiv2::ExifKey(qPrintable(key)));
-      if (it != exifData.end()) {
-        QVariant v = it->value().toString().c_str();
-        if (key.contains("Date"))
-          v = QDateTime::fromString(v.toString(), "yyyy:MM:dd HH:mm:ss");
-
-        values[i] = v;
-      }
+      QString prefix = type;
+      prefix[0] = prefix[0].toUpper();
+      if (!key.startsWith(prefix)) key = prefix + "." + key;
+      key[0] = key[0].toUpper(); // first part is caps (Exif.,Iptc.,Xmp. etc)
+      values[i] = findKey(key);
     }
 
   } catch (std::exception& e) {
