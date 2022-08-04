@@ -669,14 +669,15 @@ QString Database::moveFile(const QString& srcPath, const QString& dstDir) {
     return "";
   }
 
-  if (!dstDir.startsWith(path())) {
-    qWarning("move failed: destination is not subdir of index dir");
+  // construct path with QDir to resolve stuff (not symlinks)
+  const QString newPath = QDir(dstDir).absoluteFilePath(srcInfo.fileName());
+  if (QFileInfo(newPath).exists()) {
+    qWarning() << "move failed: destination file exists:" << newPath;
     return "";
   }
 
-  const QString newPath = dstInfo.absoluteFilePath() + "/" + srcInfo.fileName();
-  if (QFileInfo(newPath).exists()) {
-    qWarning() << "move failed: destination file exists:" << newPath;
+  if (!newPath.startsWith(path())) {
+    qWarning("move failed: destination is not subdir of index dir");
     return "";
   }
 
@@ -842,9 +843,9 @@ bool Database::moveDir(const QString& dirPath, const QString& newName) {
     return false;
   }
 
-  const QString absDst = QDir(path()).absoluteFilePath(newName);
+  QString absDst = QDir(path()).absoluteFilePath(newName);
   if (!absDst.startsWith(path())) {
-    qWarning() << "dst cannot be a subpath of index:" << absDst;
+    qWarning() << "dst is not a subdir of index:" << absDst;
     return false;
   }
 
