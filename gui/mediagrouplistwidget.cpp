@@ -2195,18 +2195,19 @@ void MediaGroupListWidget::templateMatchAction() {
 
   if (group.count() < 2) return;
 
-  // drop extra images and put selected image second
+  // we selected one, guess the other one in the pair
+  // probably the first image, unless selection is the first one
   QList<QListWidgetItem*> items = selectedItems();
   if (items.count() == 1) {
     MediaGroup filtered;
     int selectedIndex = items[0]->type();
-    int otherIndex = (selectedIndex + 1) % 2;
+    int otherIndex = selectedIndex==0 ? (selectedIndex + 1)%group.count() : 0;
     filtered.append(group[otherIndex]);
     filtered.append(group[selectedIndex]);
     group = filtered;
   }
 
-  // remove extra images
+  // no selection, the pair is {0,1}
   if (group.count() > 2) group.remove(2, group.count() - 2);
 
   // clear roi, template matcher sets it
@@ -2231,7 +2232,6 @@ void MediaGroupListWidget::templateMatchAction() {
   if (haystack.count() > 0) group[targetIndex] = haystack[0];
 
   // reload since we may have deleted items
-  //loadRow(_currentRow);
   updateCurrentRow(group);
 }
 
