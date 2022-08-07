@@ -65,18 +65,18 @@ chmod +x cbird-linux-0.5.0-x86_64.AppImage
 ```
 
 - Required packages: trash-cli
-- Optional packages: ocenaudio
+- Optional packages: ocenaudio, kdenlive
 
 #### Windows 7+ 64-bit
 - Unzip the distribution file and run the program
-- Install helpers (optional): vlc
+- Install helpers (optional): vlc, kdenlive
 
 Running
 ========================
 
 #### Get Help
 
- [CLI reference (v0.5.0)](https://gist.github.com/scrubbbbs/4c65058c054822d4f279c00f53ddd3aa)
+ [CLI reference (`cbird -help`) ](https://gist.github.com/scrubbbbs/4c65058c054822d4f279c00f53ddd3aa)
  
 `cbird -help | less`
 
@@ -99,6 +99,7 @@ Running
 #### Find near duplicates, lowest threshold
 
 `cbird -use <path> -p.dht 1 -similar -show`
+
 
 Using the GUI
 =====================
@@ -145,9 +146,11 @@ There are a few for power users.
 
 - `CBIRD_SETTINGS_FILE` overrides the path to the global settings file
 - `CBIRD_TRASH_DIR` overrides the path to trash folder, do not use the system trash bin
--  `CBIRD_CONSOLE_WIDTH` set character width of terminal console (default auto-detect)
--  `CBIRD_COLOR_CONSOLE` use colored output even if console says no (default auto-detect)
--  `CBIRD_FORCE_COLORS` use colored output even if console is not detected
+- `CBIRD_CONSOLE_WIDTH` set character width of terminal console (default auto-detect)
+- `CBIRD_COLOR_CONSOLE` use colored output even if console says no (default auto-detect)
+- `CBIRD_FORCE_COLORS` use colored output even if console is not detected
+- `CBIRD_LOG_TIMESTAMP` add time delta to log messages
+- `CBIRD_NO_APPIMAGE_PROGS` do not use bundled programs like ffmpeg in the appimage****
 
 Search Algorithms
 ====================
@@ -319,16 +322,17 @@ Minor Bugs
 - auto-vacuum database once in a while, maybe have a delete counter
 - dctfeature hash logic seems flawed, needs analysis
 - ffmpeg deprecations, requires older branch to compile
-- replace qPrintable() used for file path with qUtf8Printable or QString
+- ~~replace qPrintable() used for file path with qUtf8Printable or QString~~ v0.6
 - maybe problem with some chars in filenames, dirs ending in "!" are skipped by scanner
-- ~~MGLW scale-to-fit does not work when diff image enabled~~ fixed v0.6
+- ~~MGLW scale-to-fit does not work when diff image enabled~~ v0.6
 - MGLW up/down key selection swaps sides (scroll wheel does not)
 - MGLW: delete multi-select as one batch
 - MGLW: suppress QIR eof warnings from thread cancellation
 - MGLW: load next row loses focus item on some systems (gnome?)
 - ~~MGLW: template match (T) hides diff image / doesn't restore after reset (F5)~~ fixed v0.6
 - MGLW: rename folder doesn't update all affected viewer paths
-- Windows: titlebar/dialogs do not use native theme
+- ~~Windows: titlebar/dialogs do not use native theme~~ won't fix, req wm bypass
+- MGLW: difference image clips white/light shades of grayscale images
 - Windows: white flash when MGLW is displayed
 
 Compiling
@@ -350,7 +354,7 @@ This recipe is for Ubuntu 21.04/Debian 11 which includes required versions of co
 1.1 Packages
 
 ```
-apt-get install qtbase5-dev cmake g++ libpng-dev libjpeg-turbo8-dev libtiff5-dev libopenxr-dev libexiv2-dev git
+apt-get install git cmake g++ qtbase5-dev qtbase5-private-dev libpng-dev libjpeg-turbo8-dev libtiff5-dev libopenexr-dev libexiv2-dev libncurses-dev
 ```
 
 1.2 Compiling OpenCV 2.4
@@ -372,7 +376,7 @@ git clone https://github.com/stachenov/quazip
 cd quazip
 cmake .
 make
-make install
+sudo make install
 ```
 
 1.4a Using System FFmpeg
@@ -514,7 +518,7 @@ sudo apt-get update
 2.3 Install mxe toolchain and libraries into /usr/lib/mxe
 
 ```
-apt-get install mxe-x86-64-w64-mingw32.shared-cc mxe-x86-64-w64-mingw32.shared-qtbase mxe-x86-64-w64-mingw32.shared-quazip mxe-x86-64-w64-mingw32.shared-ffmpeg mxe-x86-64-w64-mingw32.shared-exiv2 mxe-x86-64-w64-mingw32.shared-termcap
+apt-get install mxe-x86-64-w64-mingw32.shared-cc mxe-x86-64-w64-mingw32.shared-qtbase mxe-x86-64-w64-mingw32.shared-quazip mxe-x86-64-w64-mingw32.shared-ffmpeg mxe-x86-64-w64-mingw32.shared-exiv2
 ```
 
 2.4 Compile OpenCV 2.4.x
@@ -525,7 +529,7 @@ Once mxe is installed this is like the Linux build. The mxe.env script sets the 
 cd cbird
 source windows/mxe.env
 cd windows
-unzip <2.4.13.6.zip>
+unzip <opencv-2.4.13.6.zip>
 mkdir build-opencv
 cd build-opencv
 cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_FAST_MATH=ON -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
@@ -578,8 +582,12 @@ Release Notes
 #### v0.6.0
 
 - Add weeds feature (recommended by r/user/traal)
-- Add max-threshold search `-p.mt` which produces a result for every needle unless threshold is exceeded
-- Use skip-loop-filter for faster video indexing
-- Video compare view: fix issues with unequal frame rates
-- Video compare view: export to Kdenlive for more detailed comparison
+- Search: Add max-threshold `-p.mt` which produces a result for every needle until threshold is exceeded
+- Indexer: Use skip-loop-filter to speedup video indexing ~20%
+- Indexer: Option to show all ignored files
+- Indexer: Handle links sanely by default, add options `i.links`, `-i.dups`, `-i.resolve`for other cases.
+- Filters: Add -head/-tail
+- Image view: difference image can align to template match 
+- Video view: fix issues with unequal frame rates
+- Video view: export the aligned pair to Kdenlive
 - Speedups: video compare view, differences image, `-group-by`
