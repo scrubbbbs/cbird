@@ -72,7 +72,7 @@ win32: {
     target.path = _win32/cbird
 
     warn.path = _win32/cbird
-    warn.extra = ./windows/mxe-pkg.sh
+    warn.extra = ./windows/mxe-pkg.sh $$VERSION x86_64
     INSTALLS += warn
 }
 

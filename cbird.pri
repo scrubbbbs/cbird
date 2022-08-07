@@ -7,7 +7,7 @@ mac {
     CONFIG -= app_bundle
 }
 
-VERSION=0.6.0
+VERSION=0.6.1
 
 QMAKE_CXXFLAGS += '-DCBIRD_VERSION=\\"$$VERSION\\"'
 QMAKE_CXXFLAGS += -fdiagnostics-color=always

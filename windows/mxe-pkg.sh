@@ -1,13 +1,17 @@
 #!/bin/bash
-PKG_DIR=_win32/cbird
+VERSION=$1
+ARCH=$2
+BUILD=_win32
+PKG_DIR=$BUILD/cbird
 MXE_DIR=/usr/lib/mxe
+ZIP=cbird-windows-$VERSION-$ARCH.zip
 
 MXE_BIN="$MXE_DIR/usr/$MXE_TARGET/bin"
 OPENCV_BIN=windows/build-opencv/install/x64/mingw/bin
 QT_DIR="$MXE_DIR/usr/$MXE_TARGET/qt5"
 QT_BIN="$QT_DIR/bin"
 
-echo building in $PKG_DIR
+echo building $VERSION $ARCH in $PKG_DIR
 
 # we need this for dll discovery
 mkdir -p _index
@@ -52,3 +56,7 @@ for exe in cbird.exe; do
         done
     done
 done
+
+rm -fv "$ZIP"
+(cd "$BUILD" && zip -r ../"$ZIP" cbird)
+
