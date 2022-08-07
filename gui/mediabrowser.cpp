@@ -30,6 +30,17 @@
 // todo: use widget options to decouple gui from engine()
 extern Engine& engine();
 
+static QImage loadThumb(const Media& m, const MediaWidgetOptions& options) {
+  QImage img;
+  if (m.type() == Media::TypeVideo) {
+    img = VideoContext::frameGrab(m.path(), -1, true);
+    img = Media(img).loadImage(QSize(0, options.iconSize));
+  }
+  else
+    img = m.loadImage(QSize(0, options.iconSize));
+  return img;
+}
+
 MediaBrowser::MediaBrowser(const MediaWidgetOptions& options) : _options(options) {}
 
 int MediaBrowser::showList(const MediaGroupList& list, const MediaWidgetOptions& options) {
@@ -114,11 +125,7 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
 
   auto f = QtConcurrent::map(index, [&](Media& m) {
     const Media& first = folders[m.path()][0][0];
-    QImage img;
-    if (first.type() == Media::TypeVideo)
-      img = VideoContext::frameGrab(first.path(), -1, true);
-    else
-      img = first.loadImage(QSize(0, options.iconSize));
+    QImage img = loadThumb(first, options);
     m.setImage(img);
     m.readMetadata();
   });
@@ -198,7 +205,7 @@ int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions&
     index.removeFirst();
 
   auto f = QtConcurrent::map(index, [&](Media& m) {
-    m.setImage(sets[m.path()][0][0].loadImage(QSize{0, options.iconSize}));
+    m.setImage(loadThumb(sets[m.path()][0][0], options));
     m.readMetadata();
   });
   while (f.isRunning()) {
