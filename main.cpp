@@ -222,6 +222,9 @@ static int printUsage(int argc, char** argv) {
         H2 "-test-video-decoder <file>       test video decoding"
         H2 "-test-video <file>               test video search"
         H2 "-vacuum                          compact/optimize database files"
+        H2 "-list-index-params               list current index parameters"
+        H2 "-list-search-params              list current search parameters"
+        H2 "-list-formats                    list available image and video formats"
 
         H1 "Search Parameters (for -similar*)"
         HR
@@ -377,7 +380,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
       "-about",          "-verify",        "-vacuum",        "-select-result",
       "-license",        "-cwd",           "-init",          "-list-search-params",
       "-list-index-params", "-weeds",      /*"-track-weeds",*/   "-nuke-weeds",
-      "-dump",
+      "-dump",           "-list-formats",
       /* one argument */
       "-select-id", "-select-sql", "-max-per-page", "-head", "-tail"
       };
@@ -1005,6 +1008,12 @@ int main(int argc, char** argv) {
       MessageContext mc("IndexParams");
       indexParams.print();
     }
+    else if (arg == "-list-formats") {
+      for (auto& mimeType : QImageReader::supportedMimeTypes())
+        qInfo().noquote() << mimeType << QImageReader::imageFormatsForMimeType(mimeType);
+
+      VideoContext::listFormats();
+    }
     // clang-format on
     else if (arg == "-use") {
       const QString path = nextArg();
@@ -1051,8 +1060,12 @@ int main(int argc, char** argv) {
       //            qInfo() << "Quazip" << qv[0] << "compiled:" << qv[1];
 
       qInfo() << "threads:" << QThread::idealThreadCount();
-      qInfo() << "image extensions:" << sc->imageTypes();
-      qInfo() << "video extensions:" << sc->videoTypes();
+      auto imageExt = sc->imageTypes().values();
+      imageExt.sort();
+      auto videoExt = sc->videoTypes().values();
+      videoExt.sort();
+      qInfo() << "image extensions:" << imageExt;
+      qInfo() << "video extensions:" << videoExt;
       qInfo() << db->count() << "indexed files";
       qInfo() << db->countType(Media::TypeImage) << "image files";
       qInfo() << db->countType(Media::TypeVideo) << "video files";

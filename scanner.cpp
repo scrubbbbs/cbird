@@ -33,11 +33,11 @@
 
 Scanner::Scanner() {
   // clang-format off
-    _imageTypes << "jpg" << "jpeg" << "jfif" << "png" << "bmp" << "gif";
-    _jpegTypes << "jpg" << "jpeg" << "jfif";
-    _videoTypes << "mp4" << "wmv" << "asf" << "flv" << "mpg" << "mpeg"  << "mov"
-                << "rm" << "ram" << "webm"<< "f4v" << "m4v" << "avi" << "qt" << "mkv";
-    _archiveTypes << "zip";
+  _imageTypes << "jpg" << "jpeg" << "jfif" << "png" << "bmp" << "gif";
+  _jpegTypes << "jpg" << "jpeg" << "jfif";
+  _videoTypes << "mp4" << "wmv" << "asf" << "flv" << "mpg" << "mpeg"  << "mov"
+              << "rm" << "ram" << "webm"<< "f4v" << "m4v" << "avi" << "qt" << "mkv";
+  _archiveTypes << "zip";
   // clang-format on
 
   for (auto& suffix : QImageReader::supportedImageFormats())

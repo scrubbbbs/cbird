@@ -166,6 +166,18 @@ QStringList VideoContext::ffVersions() {
   return list;
 }
 
+void VideoContext::listFormats() {
+  void* opaque = nullptr;
+  const AVInputFormat* fmt;
+  qWarning("showing all formats, not necessarily enabled for indexing");
+  qWarning("see enabled extensions with -about");
+  qInfo("-----------------------------");
+  qInfo("Format \"Description\" (Known Extensions)]");
+  qInfo("-----------------------------");
+  while (nullptr != (fmt = av_demuxer_iterate(&opaque)))
+    qInfo("%s \"%s\" (%s)", fmt->name, fmt->long_name, fmt->extensions);
+}
+
 class VideoContextPrivate {
  public:
   VideoContextPrivate() { reset(); }

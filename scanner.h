@@ -110,10 +110,10 @@ class Scanner : public QObject {
   const IndexParams& indexParams() const { return _params; }
 
   /// image file extensions we will try to process
-  const QStringList imageTypes() const { return _imageTypes.values(); }
+  const QSet<QString>& imageTypes() const { return _imageTypes; }
 
   /// video file extensions we will try to process
-  const QStringList& videoTypes() const { return _videoTypes; }
+  const QSet<QString>& videoTypes() const { return _videoTypes; }
 
   /// compressed archive extensions to search for images
   const QStringList& archiveTypes() const { return _archiveTypes; }
@@ -213,7 +213,7 @@ class Scanner : public QObject {
 
   IndexParams _params;
   QSet<QString> _imageTypes;
-  QStringList _videoTypes;
+  QSet<QString> _videoTypes;
   QStringList _jpegTypes;
   QStringList _archiveTypes;
 

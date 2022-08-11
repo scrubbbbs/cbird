@@ -104,6 +104,9 @@ class VideoContext {
   /// get the compiled/runtime ffmpeg versions
   static QStringList ffVersions();
 
+  /// list available formats/codecs
+  static void listFormats();
+
   VideoContext();
   ~VideoContext();
 
