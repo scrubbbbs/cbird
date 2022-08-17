@@ -170,6 +170,9 @@ class MediaGroupListWidget : public QListWidget {
   /// Toggle image-pair differences visualization
   void toggleAutoDifferenceAction();
 
+  void increasePageSize() { resizePage(true); }
+  void decreasePageSize() { resizePage(false); }
+
 private:
   void closeEvent(QCloseEvent* event);
   void keyPressEvent(QKeyEvent* event);
@@ -266,6 +269,9 @@ private:
 
   /// Reset zoom and pan
   void resetZoom();
+
+  /// Increase/decrease items per page
+  void resizePage(bool more);
 
   MediaGroupList _list;
   MediaWidgetOptions _options;

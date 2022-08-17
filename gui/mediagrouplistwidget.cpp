@@ -735,6 +735,9 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 
   WidgetHelper::addSeparatorAction(this);
 
+  WidgetHelper::addAction(settings, "More per Page", Qt::Key_BracketRight, this, SLOT(increasePageSize()));
+  WidgetHelper::addAction(settings, "Less per Page", Qt::Key_BracketLeft, this, SLOT(decreasePageSize()));
+
   WidgetHelper::addAction(settings, "Move to Next Screen", Qt::SHIFT | Qt::Key_F11,
             this, SLOT(moveToNextScreenAction()));
   WidgetHelper::addAction(settings, "Close Window", Qt::CTRL | Qt::Key_W, this, SLOT(close()));
@@ -2340,6 +2343,76 @@ void MediaGroupListWidget::resetZoom()
   _panY = 0.0;
   _itemDelegate->setZoom(_zoom);
   _itemDelegate->setPan({_panX, _panY});
+}
+
+void MediaGroupListWidget::resizePage(bool more) {
+  waitLoaders();
+  _lruRows.clear();
+  _autoDifference = false;
+
+  const auto& list = _list;
+  // const MediaGroup sel = selectedMedia(); // todo: restore selection
+  const Media first = list[_currentRow].first();
+  const int oldSize = list[_currentRow].count();
+
+  // preset of small sizes, multiples of largest size thereafter
+  const int numSizes = 5;
+  const int sizes[numSizes] = {1, 2, 4, 6, 12};
+  const int scale = sizes[numSizes - 1 ];
+
+  int newSize;
+
+  if (oldSize >= scale*2)
+    newSize = ((oldSize / scale) + (more ? 1 : -1) ) * scale;
+  else {
+    if (more) {
+      newSize = scale*2;
+      for (auto p : sizes)
+        if (oldSize < p) {
+          newSize = p;
+          break;
+        }
+    } else {
+      newSize = sizes[0];
+      for (auto p : sizes)
+        if (oldSize > p) newSize = p;
+    }
+  }
+
+  MediaGroupList newList;
+  MediaGroup page;
+  for (const auto& g : qAsConst(_list))
+    for (const auto& m : g)
+      if (!isAnalysis(m)) {
+        page += m;
+        if (page.count() == newSize) {
+          newList += page;
+          page.clear();
+        }
+      }
+  if (page.count() > 0) newList += page;
+
+  _list = newList;
+
+  int row = 0;
+  _currentRow = -1;
+  while (row < list.count()) {
+    if (list.at(row).contains(first)) break;
+    row++;
+  }
+  loadRow(row);
+
+  // drop cache for other rows
+  // preloader doesn't fire until after event loop;
+  // so only conflict is current row
+  for (int i = 0; i < _list.count(); ++i) {
+    if (i == row) continue;
+    for (auto& m : _list[i])
+      if (m.isReloadable()) {
+        m.setImage(QImage());
+        m.setData(QByteArray());
+      }
+  }
 }
 
 void MediaGroupListWidget::resetZoomAction() {
