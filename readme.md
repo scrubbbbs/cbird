@@ -38,7 +38,7 @@ Use Cases
 
 Format Support
 =========================
-Qt is used for images and FFmpeg is used for videos. The formats available will depend on the configuration of Qt and FFmpeg.
+Qt is used for images and FFmpeg is used for videos. The formats available will depend on the configuration of Qt and FFmpeg. Additional image formats are available with [kimageformats](https://invent.kde.org/frameworks/kimageformats).
 
 `cbird -about` lists the image and video extensions. Note that video extensions are not checked against FFmpeg at runtime, and codecs are not listed.
 
@@ -261,6 +261,7 @@ Wish List
 - rename folders based on filenames
 - copy or sync exif data with matching images
 - aspect ratio property
+- nuke-dups-in: show how many would not be deleted
 
 ### Indexing
 - store date-modified,size for better updating
