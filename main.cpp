@@ -2120,7 +2120,7 @@ int main(int argc, char** argv) {
       opt.maxH = 128; // 128 is used for video hashing
       opt.maxW = 128;
 
-      bool display = false, loop = false, scale = false, crop = false, zoom = false;
+      bool display = false, loop = false, scale = false, crop = false, zoom = false, noSws=false;
       while (args.count() > 0) {
         arg = nextArg();
         if (arg == "-show") { display = true; scale = true; }
@@ -2131,9 +2131,10 @@ int main(int argc, char** argv) {
         else if (arg == "-device") opt.deviceIndex = intArg(nextArg());
         else if (arg == "-fast") opt.fast = true;
         else if (arg == "-scale") scale = true;
-        else if (arg == "-no-scale") { opt.maxH = 0; opt.maxW = 0; }
+        else if (arg == "-unscaled") { opt.maxH = 0; opt.maxW = 0; }
         else if (arg == "-crop") { crop = true; scale = true; }
         else if (arg == "-zoom") { zoom = true; }
+        else if (arg == "-no-sws") { noSws = true; }
         else qFatal("unknown arg to -test-video-decoder");
       }
 
@@ -2215,7 +2216,7 @@ int main(int argc, char** argv) {
         if (scale) {
           QImage img;
           QImage out;
-          while (video.nextFrame(img)) {
+          while ( (noSws ? video.decodeFrame() : video.nextFrame(img)) ) {
             if (quit) return 0;
             if (crop) {
               cv::Mat m1;
