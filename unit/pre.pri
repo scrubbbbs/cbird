@@ -11,6 +11,7 @@ INCLUDEPATH += . .. ../..
 QTCORE_PRIVATE_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include/QtCore/$$QT_VERSION"
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
+
 MOC_DIR = _build 
 OBJECTS_DIR = _build
 
@@ -19,7 +20,7 @@ LIBS += -L/usr/local/lib
 LIBS_PHASH = -lpHash -lpng -ljpeg
 LIBS_OPENCV = $$system("pkg-config opencv --libs")
 LIBS_FFMPEG = -lavcodec -lavformat -lavutil -lswscale
-LIBS_QUAZIP = -lquazip -lz
+LIBS_QUAZIP = -lquazip1-qt6 -lz
 LIBS_EXIV2  = -lexiv2
 LIBS_CIMG   = -lpng
 LIBS_TERM   = -ltermcap
@@ -33,14 +34,13 @@ LIBS_GUI = $$LIBS_CIMG
 FILES_GUI = gui/mediagrouplistwidget gui/mediafolderlistwidget env \
     lib/jpegquality gui/videocomparewidget cimgops nleutil
 
-#CONFIG += precompile_header
-#PRECOMPILED_HEADER = ../../prefix.h
+# using this hack to share precomp header with all targets,
+# instead of PRECOMPILED_HEADER, so it is only compiled once
+QT_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include"
 
-QMAKE_CXXFLAGS += -fPIC -I/opt/qt/current/include -include ../prefix.h
+QMAKE_CXXFLAGS += -fPIC -I $$QT_HEADERS -include ../prefix.h
 
 QMAKE_CXXFLAGS += -fdiagnostics-color=always -Wno-deprecated-declarations
-
-#QMAKE_LFLAGS += -fuse-ld=gold
 
 # coverage
 !equals('',$$(COVERAGE)) {

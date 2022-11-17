@@ -243,7 +243,7 @@ private:
   static QAtomicInt& connectionCount();
 
   /// @return mutex for database connection pool (_dbConnections)
-  static QMutex& dbMutex();
+  static QRecursiveMutex& dbMutex();
 
   /// @return the database per-thread connection pool
   static QHash<int, QHash<QThread*, QString>>& dbConnections();

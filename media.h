@@ -380,8 +380,8 @@ class Media {
    * @note only set by template matcher, indicates the transform
    * (scale/rotate/translate) from the query image
    */
-  const QMatrix& transform() const { return _transform; }
-  void setTransform(const QMatrix& mat) { _transform = mat; }
+  const QTransform& transform() const { return _transform; }
+  void setTransform(const QTransform& mat) { _transform = mat; }
 
   /**
    * range that matched between query and this
@@ -583,7 +583,7 @@ class Media {
   QByteArray _data;
 
   QVector<QPoint> _roi;
-  QMatrix _transform;
+  QTransform _transform;
 
   QString _uid;
   QStringHash _attrs;

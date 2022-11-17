@@ -124,7 +124,7 @@ class MenuHelper {
 QString qElide(const QString& str, int maxLen = 80);
 
 /// get rotation angle represented by matrix
-double qRotationAngle(const QMatrix& mat);
+double qRotationAngle(const QTransform& mat);
 
 /// use with QObject::installEventFilter to log events
 /// and signal/slot invocations
@@ -152,3 +152,25 @@ class MessageContext {
   MessageContext(const QString& context);
   ~MessageContext();
 };
+
+#if QT_VERSION_MAJOR > 5
+QPartialOrdering qVariantCompare(const QVariant& a, const QVariant& b);
+
+Q_ALWAYS_INLINE bool operator<(const QVariant& a, const QVariant& b) {
+  return qVariantCompare(a,b) == QPartialOrdering::Less;
+}
+
+Q_ALWAYS_INLINE bool operator>(const QVariant& a, const QVariant& b) {
+  return qVariantCompare(a,b) == QPartialOrdering::Greater;
+}
+
+Q_ALWAYS_INLINE bool operator<=(const QVariant& a, const QVariant& b) {
+  auto ord = qVariantCompare(a,b);
+  return ord == QPartialOrdering::Less || ord == QPartialOrdering::Equivalent;
+}
+
+Q_ALWAYS_INLINE bool operator>=(const QVariant& a, const QVariant& b) {
+  auto ord = qVariantCompare(a,b);
+  return ord == QPartialOrdering::Greater || ord == QPartialOrdering::Equivalent;
+}
+#endif

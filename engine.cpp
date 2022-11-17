@@ -122,7 +122,7 @@ void Engine::update(bool wait) {
                   qUtf8Printable(canRelPath), qUtf8Printable(relPath));
       if (progress++ == 10) {
         progress = 0;
-        qInfo("<NC>%s: validating index <PL> %d/%d", qUtf8Printable(db->path()), i, paths.count());
+        qInfo("<NC>%s: validating index <PL> %d/%lld", qUtf8Printable(db->path()), i, paths.count());
       }
     }
   }
@@ -131,7 +131,7 @@ void Engine::update(bool wait) {
 
   QVector<int> toRemove;
   if (skip.count() > 0) {
-    qInfo("removing %d files from index", skip.count());
+    qInfo("removing %lld files from index", skip.count());
     QList<QString> sorted = skip.values();
     std::sort(sorted.begin(),sorted.end());
     int i = 0;

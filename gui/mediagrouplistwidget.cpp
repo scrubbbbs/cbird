@@ -325,7 +325,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
           totalScale = sqrt(p3.x() * p3.x() + p3.y() * p3.y());
 
           // rotation angle is nice to know
-          rotation = qRotationAngle(i2v.toAffine());
+          rotation = qRotationAngle(i2v);
         }
       }
 
@@ -1514,7 +1514,7 @@ void MediaGroupListWidget::loadRow(int row) {
   // todo: save the last row jump and offset that amount
   bool preloadNextRow = true;
   int nextRow = row + rowStride;
-  nextRow = std::min(_list.count(), std::max(nextRow, 0));
+  nextRow = std::min(int(_list.count()), std::max(nextRow, 0));
 
   // preload the next row we expect to see
   if (preloadNextRow) {
@@ -2244,7 +2244,7 @@ void MediaGroupListWidget::reloadAction() {
   for (int i = 0; i < g.count(); ++i) {
     auto& m = g[i];
     m.setRoi(QVector<QPoint>());
-    m.setTransform(QMatrix());
+    m.setTransform(QTransform());
     if (isAnalysis(m)) g.remove(i--); // recompute
   }
   resetZoom();
@@ -2259,43 +2259,46 @@ void MediaGroupListWidget::copyImageAction() {
 }
 
 void MediaGroupListWidget::moveToNextScreenAction() {
-  QDesktopWidget* desktop = QApplication::desktop();
-  int nextScreen = desktop->screenNumber(pos());
-  nextScreen = (nextScreen + 1) % desktop->numScreens();
+  auto screens = QGuiApplication::screens();
+  if (screens.count() <= 1) return;
 
-  QRect newGeom = desktop->availableGeometry(nextScreen);
+  // use this instead of pos() because it seems move() can
+  // put pos() out of bounds. ideally pick screen holding
+  // majority of window area like the WM maximize button
+  const QPoint contentsPos = geometry().topLeft();
+
+  QRect newGeom;
+  for (int i = 0; i < screens.count(); ++i) {
+    if (screens[i]->geometry().contains(contentsPos)) {
+      i = (i+1) % screens.count();
+      newGeom = screens[i]->availableGeometry();
+      break;
+    }
+  }
+
+  if (newGeom.isNull()) return;
 
   int newX = newGeom.topLeft().x();
   int newY = newGeom.topLeft().y();
 
   QRect geom = frameGeometry();
+  const QSize winOffset = frameGeometry().size() - geometry().size();
 
-  // move() seems to set the frame top-left, however
-  // if the window height doesn't fit the screen weird shit happens
-  // fixme: this might be wrong, appears to be window manager interaction...
-  //        the difference in width/height should include window border,
-  //        but window position won't work in that case
-  int offX = geom.x() - geometry().x();
-  int offY = geom.y() - geometry().y();
+  // don't care if maximized or not since isMaximized will not
+  // be preserved when moving anyways (X11)
+  if (newGeom.width() > geom.width())
+    newX = newX + (newGeom.width() - geom.width()) / 2;
+  else
+    geom.setWidth(newGeom.width() - winOffset.width());
 
-  // if the window is maximized we move it to top left
-  if (!isMaximized()) {
-    // center, or resize if we cannot
-    if (newGeom.width() > geom.width())
-      newX = newX + (newGeom.width() - geom.width()) / 2;
-    else
-      geom.setWidth(newGeom.width());
+  if (newGeom.height() > geom.height())
+    newY = newY + (newGeom.height() - geom.height()) / 2;
+  else
+    geom.setHeight(newGeom.height() - winOffset.height());
 
-    if (newGeom.height() > geom.height())
-      newY = newY + (newGeom.height() - geom.height()) / 2;
-    else
-      geom.setHeight(newGeom.height());
-
-    resize(geom.width() + offX, geom.height() + offY);
-  }
-
-  QPoint newPos(newX, newY);
-  move(newPos);
+  // resize regardless...otherwise seem to get artifacts on some WMs
+  resize(geom.width(),geom.height()); // does not include window frame
+  move(QPoint(newX, newY));           // position on screen, includes window frame
 }
 
 void MediaGroupListWidget::zoomInAction() {
@@ -2483,16 +2486,17 @@ void MediaGroupListWidget::keyPressEvent(QKeyEvent* event) {
 }
 
 void MediaGroupListWidget::wheelEvent(QWheelEvent* event) {
-  const int delta = event->delta();
-  const int orientation = event->orientation();
-  if (orientation == Qt::Vertical) {
-    if (delta > 0)
+  const int yDelta = event->angleDelta().y();
+  const int xDelta = event->angleDelta().x();
+
+  if (yDelta != 0) {
+    if (yDelta > 0)
       loadRow(_currentRow - 1);
     else
       loadRow(_currentRow + 1);
     event->accept();
-  } else if (orientation == Qt::Horizontal) {
-    if (delta > 0) {
+  } else if (xDelta != 0) {
+    if (xDelta > 0) {
       rotateAction();
       event->accept();
     }

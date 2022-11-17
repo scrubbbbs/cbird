@@ -517,7 +517,7 @@ QString DesktopHelper::tempName(const QString& nameTemplate, QObject *parent, in
 QKeySequence WidgetHelper::getShortcut(QSettings& settings, const QString& label,
                                        const QKeySequence& defaultShortcut) {
   QString key = label.toLower();
-  key = key.replace(QRegExp("[^a-z0-9-\\+\\%]+"), "_");
+  key = key.replace(QRegularExpression("[^a-z0-9-\\+\\%]+"), "_");
 
   if (!settings.contains(key)) settings.setValue(key, defaultShortcut);
   return settings.value(key, defaultShortcut).toString();
@@ -692,7 +692,7 @@ QString qElide(const QString &str, int maxLen) {
   return tmp;
 }
 
-double qRotationAngle(const QMatrix &mat) {
+double qRotationAngle(const QTransform& mat) {
   QPointF p0 = mat.map(QPointF(0, 0));
   QPointF p1 = mat.map(QPointF(1, 0));
   return 180.0 / M_PI * atan((p1.y() - p0.y()) / (p1.x() - p0.x()));
@@ -700,6 +700,7 @@ double qRotationAngle(const QMatrix &mat) {
 
 // bad form, but only way to get to metacallevent
 // this header won't be found unless foo is added to qmake file
+#if 0
 #include "QtCore/private/qobject_p.h"
 
 DebugEventFilter::DebugEventFilter() : QObject() {}
@@ -728,6 +729,7 @@ bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
 
   return QObject::eventFilter(object, event);
 }
+#endif
 
 //
 // Custom logger magic!
@@ -1009,14 +1011,14 @@ MessageLog::MessageLog() {
           if (_termColumns > 0) {
             QString toElide = output.mid(elide + 4);
             QString elided = qElide(toElide, _termColumns - elide);
-            output = output.midRef(0, elide) + elided;
+            output = output.mid(0, elide) + elided;
             output += QString().fill(' ', _termColumns - output.length());
           } else
             output.replace("<EL>", "");
         }
 
         if (pl > 0) {
-          if (lastInput.startsWith(line.midRef(0, pl))) output = "\r" + output;
+          if (lastInput.startsWith(line.mid(0, pl))) output = "\r" + output;
         } else {
           if (!lastOutput.endsWith("\n")) output = "\n" + output;
           output += "\n";
@@ -1179,3 +1181,12 @@ void MessageLog::flush() {
   fflush(stdout);
   fflush(stderr);
 }
+
+#if QT_VERSION_MAJOR > 5
+QPartialOrdering qVariantCompare(const QVariant& a, const QVariant& b) {
+  QPartialOrdering ord = QVariant::compare(a, b);
+  if (ord == QPartialOrdering::Unordered)
+    qWarning() << a << "and" << b << "are not comparable";
+  return ord;
+}
+#endif

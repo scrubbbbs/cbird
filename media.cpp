@@ -355,7 +355,7 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
       if (mod.count() != 1)
         qFatal("camelsplit() takes no arguments");
 
-      const QRegExp exp("[a-z][A-Z]");
+      const QRegularExpression exp("[a-z][A-Z]");
 
       return [=](const QVariant& v) {
         QStringList parts;

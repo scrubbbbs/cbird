@@ -121,7 +121,7 @@ QVariant MediaGroupTableModel::data(const QModelIndex& index, int role) const {
   } else if (role == Qt::DecorationRole) {
     if (index.column() == ColIcon)
       if (_icons.contains(m.path())) v = _icons[m.path()];
-  } else if (role == Qt::BackgroundColorRole) {
+  } else if (role == Qt::BackgroundRole) {
     const QString& path = m.path();
     if (_mark.contains(path) && _mark[path])
       v = QColor("purple");
@@ -244,7 +244,7 @@ void MediaGroupTableModel::applyFilter(int match, int size,
       };
     } else if (path != "") {
       _filterFunc = [path](const Media& a) {
-        return !a.path().contains(QRegExp(path));
+        return !a.path().contains(QRegularExpression(path));
       };
     } else {
       // filter none
@@ -259,7 +259,7 @@ void MediaGroupTableModel::applyFilter(int match, int size,
       if (size != 0 && std::max(a.width(), a.height()) < size) return true;
 
       // path
-      if (path != "" && !(a.path().contains(QRegExp(path)))) return true;
+      if (path != "" && !(a.path().contains(QRegularExpression(path)))) return true;
 
       if ((match & ShowNoMatch) && a.score() < 0) return false;
 
@@ -286,8 +286,7 @@ void MediaGroupTableModel::applyFilter(int match, int size,
 
   sort(_sortColumn, _sortOrder);
 
-  qDebug("_data.count=%d _filtered.count=%d", _data.count(),
-         _filtered.count());
+  qDebug("_data.count=%lld _filtered.count=%lld", _data.count(), _filtered.count());
 }
 
 void MediaGroupTableModel::sort(int column, Qt::SortOrder order) {
@@ -476,7 +475,7 @@ MediaGroupTableWidget::MediaGroupTableWidget(QWidget* parent)
   setSortingEnabled(true);
   sortByColumn(MediaGroupTableModel::ColOrderAdded, Qt::DescendingOrder);
   setTextElideMode(Qt::ElideLeft);
-
+/*
   QString sheet =
       "QTableView {"
       "   border: 1px solid rgb(255,255,255);"
@@ -505,7 +504,7 @@ MediaGroupTableWidget::MediaGroupTableWidget(QWidget* parent)
       "}";
 
   setStyleSheet(sheet);
-
+*/
   setSelectionBehavior(QAbstractItemView::SelectRows);
   setAlternatingRowColors(true);
 

@@ -142,7 +142,7 @@ class FrameCache {
         if (!_ctx.seek(pos, &frames, &interFrames)) return &_errorFrame;
 
         // cache the inter-frames and park the unused ones
-        int usedFrames = std::min(frames.count(), interFrames);
+        int usedFrames = std::min(int(frames.count()), interFrames);
         int i;
         for (i = 0; i < usedFrames; ++i) cacheFrame(pos - usedFrames + i, frames[i]);
         for (; i < frames.count(); ++i) cacheFrame(INT_MAX - i, frames[i]);
@@ -465,7 +465,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
   // decode frames
   QFuture<Frame*> work[2];
   for (int i = 0; i < 2; ++i)
-    work[i] = (QtConcurrent::run(v[i].cache.get(), &FrameCache::frame, v[i].in + _cursor + v[i].offset,
+    work[i] = (QtConcurrent::run(&FrameCache::frame, v[i].cache.get(), v[i].in + _cursor + v[i].offset,
                                  _scrub));
 
   // accurate seek is often slow due to interframe decoding,  show beach ball

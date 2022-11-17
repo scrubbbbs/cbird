@@ -33,13 +33,7 @@
 
 #include <QtCore/QtCore>
 
-#if QT_VERSION_MAJOR < 5
-#error Qt 5 is required
-#endif
-
-#if QT_VERSION_MINOR < 15
-#error Qt 5.15 is required
-#endif
+Q_STATIC_ASSERT_X(QT_VERSION_MAJOR==6, QT_VERSION_STR " is not a supported qt version");
 
 #include <QtConcurrent/QtConcurrent>
 #include <QtSql/QtSql>

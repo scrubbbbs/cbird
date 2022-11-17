@@ -202,7 +202,7 @@ void Scanner::scanProgress(const QString& path) const {
   const QString elided = qElide(path.mid(_topDirPath.length()+1), 80);
 
   QString status = QString::asprintf(
-          "<NC>%s<PL> i:%d v:%d ign:%d mod:%d ok:%d <EL>%s",
+          "<NC>%s<PL> i:%lld v:%lld ign:%d mod:%d ok:%d <EL>%s",
           qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(), _ignoredFiles,
          _modifiedFiles, _existingFiles, qUtf8Printable(elided));
   qInfo().noquote() << status;
@@ -386,7 +386,7 @@ void Scanner::finish() {
       return;
     }
     QString status = QString::asprintf(
-        "<NC>queued:<PL>image=%d,video=%d:batch=%d,threadpool:gpu=%d,video=%d,global=%"
+        "<NC>queued:<PL>image=%lld,video=%lld:batch=%lld,threadpool:gpu=%d,video=%d,global=%"
         "d    ",
         _imageQueue.count(), _videoQueue.count(), _activeWork.count(),
         _gpuPool.activeThreadCount(), _videoPool.activeThreadCount(),
@@ -466,7 +466,7 @@ void Scanner::processOne() {
           }
 
           if (pool) {
-            f = QtConcurrent::run(pool, this, &Scanner::processVideo, v);
+            f = QtConcurrent::run(pool, &Scanner::processVideo, this, v);
             _videoQueue.removeFirst();
           }
         }
@@ -478,7 +478,7 @@ void Scanner::processOne() {
     } else if (!_imageQueue.empty()) {
       path = _imageQueue.takeFirst();
       _queuedWork.remove(path);
-      f = QtConcurrent::run(this, &Scanner::processImageFile, path,
+      f = QtConcurrent::run(&Scanner::processImageFile, this, path,
                             QByteArray());
       queuedImage = true;
       //printf("i");

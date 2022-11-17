@@ -219,6 +219,7 @@ static int printUsage(int argc, char** argv) {
         H2 "-compare-videos <file> <file>    open a pair of videos in compare tool"
         H2 "-view-image <file>               open results browser with file"
         H2 "-test-csv <file>                 read csv of src/dst pairs for a similar-to test, store results in match.csv"
+        H2 "-test-image-loader <file>        test image decoding"
         H2 "-test-video-decoder <file>       test video decoding"
         H2 "-test-video <file>               test video search"
         H2 "-vacuum                          compact/optimize database files"
@@ -397,7 +398,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
   const QSet<QString> fileArg{"-select-one",         "-jpeg-repair-script",
                               "-view-image",         "-test-csv",
                               "-test-video-decoder", "-select-grid",
-                              "-compare-videos"};
+                              "-compare-videos",     "-test-image-loader"};
   cmds += fileArg;
 
   const QSet<QString> dirArg{"-use", "-dups-in", "-nuke-dups-in", "-similar-in",
@@ -746,7 +747,7 @@ class Comparator {
       _convert = [](const QString& str) { return QVariant(str); };
       _re.setPattern(valueExp.mid(1));
       if (!_re.isValid())
-        qFatal("invalid regular expression: %s at offset %d",
+        qFatal("invalid regular expression: %s at offset %lld",
                qPrintable(_re.errorString()), _re.patternErrorOffset());
       _operator = [&](const QVariant& v) {
         return _re.match(v.toString()).hasMatch();
@@ -861,6 +862,10 @@ int main(int argc, char** argv) {
   // fixme: could this be done lazily?
   VideoContext::loadLibrary();
 
+  // default of 128 sometimes not enough...
+  const QString allocLimit = qEnvironmentVariable("QT_IMAGE_ALLOC_LIMIT_MB", "256");
+  QImageReader::setAllocationLimit(allocLimit.toInt());
+
   SearchParams params;
   IndexParams indexParams;
   MediaGroup selection;        // selection of items by properties
@@ -888,7 +893,7 @@ int main(int argc, char** argv) {
 
       const QRegularExpression re(path);
       if (!re.isValid())
-        qFatal("invalid regular expression: %s at offset %d",
+        qFatal("invalid regular expression: %s at offset %lld",
                qPrintable(re.errorString()), re.patternErrorOffset());
 
       auto selection = engine().db->mediaWithPathRegexp(path);
@@ -1088,13 +1093,13 @@ int main(int argc, char** argv) {
       engine().db->remove(selection);
     } else if (arg == "-dups") {
       queryResult = engine().db->dupsByMd5(params);
-      qInfo("dups: %d groups found", queryResult.count());
+      qInfo("dups: %lld groups found", queryResult.count());
     } else if (arg == "-dups-in") {
       params.set = selectPath(nextArg());
       params.inSet = true;
       selection.clear();
       queryResult = engine().db->dupsByMd5(params);
-      qInfo("dups-in: %d groups found", queryResult.count());
+      qInfo("dups-in: %lld groups found", queryResult.count());
     } else if (arg == "-nuke-dups-in") {
       QString path = nextArg();
 
@@ -1118,7 +1123,7 @@ int main(int argc, char** argv) {
       if (filtered.count() <= 0) continue;
 
       qFlushOutput();
-      printf("nuke-dups-in: %d items will be trashed, proceed [y/N]: ", filtered.count());
+      printf("nuke-dups-in: %lld items will be trashed, proceed [y/N]: ", filtered.count());
       char ch = inputChar('N');
       if (ch == 'Y' || ch == 'y') {
         int nuked = 0;
@@ -1154,18 +1159,18 @@ int main(int argc, char** argv) {
         toRemove.append(w);
       }
       qFlushOutput();
-      printf("\nnuke-weeds: %d items will be trashed, proceed [y/N]: ", toRemove.count());
+      printf("\nnuke-weeds: %lld items will be trashed, proceed [y/N]: ", toRemove.count());
       char ch = inputChar('N');
       if (ch == 'Y' || ch == 'y') {
         nuke(toRemove);
-        qInfo("nuke-weeds: %d nuked, updating db", weeds.count());
+        qInfo("nuke-weeds: %lld nuked, updating db", weeds.count());
         engine().db->remove(toRemove);
       }
     } else if (arg == "-nuke") {
 
       if (selection.count() > 0) {
         qFlushOutput();
-        printf("\nnuke: about to move %d items to trash, proceed? [y/N]: ", selection.count());
+        printf("\nnuke: about to move %lld items to trash, proceed? [y/N]: ", selection.count());
         char ch = inputChar('N');
         if (ch == 'Y' || ch == 'y') {
           nuke(selection);
@@ -1306,7 +1311,7 @@ int main(int argc, char** argv) {
 
         float vm, ws;
         Env::memoryUsage(vm, ws);
-        qInfo("similar-to: %d items %d/%d MB", search.matches.count(),
+        qInfo("similar-to: %lld items %d/%d MB", search.matches.count(),
               int(ws / 1024), int(vm / 1024));
 
         search.matches.prepend(search.needle);
@@ -1325,7 +1330,7 @@ int main(int argc, char** argv) {
         QList<QFuture<MediaSearch>> work;
         for (const Media& m : needles) {
           search.needle = m;
-          work.append(QtConcurrent::run(&engine(), &Engine::query, search));
+          work.append(QtConcurrent::run(&Engine::query, &engine(), search));
         }
 
         int i = 1;
@@ -1347,7 +1352,7 @@ int main(int argc, char** argv) {
             list.append(search.matches);
           }
 
-          qInfo("similar-to:<PL> %d/%d", ++i, work.count());
+          qInfo("similar-to:<PL> %d/%lld", ++i, work.count());
         }
         engine().db->filterMatches(params, list);
 
@@ -1473,7 +1478,7 @@ int main(int argc, char** argv) {
 
       const QRegularExpression re(srcPat);
       if (!re.isValid())
-        qFatal("rename: <find> pattern <%s> is illegal regular expression: %s at offset %d",
+        qFatal("rename: <find> pattern <%s> is illegal regular expression: %s at offset %lld",
                qUtf8Printable(srcPat), qPrintable(re.errorString()), re.patternErrorOffset());
 
       int pad = int(log10(double(selection.count()))) + 1;
@@ -1750,7 +1755,7 @@ int main(int argc, char** argv) {
         m.setAttribute("group", attr);
       });
       while (f.isRunning()) {
-        qInfo("group-by:<PL> %d/%d", f.progressValue(), selection.count());
+        qInfo("group-by:<PL> %d/%lld", f.progressValue(), selection.count());
         QThread::msleep(10);
       }
 
@@ -1758,7 +1763,7 @@ int main(int argc, char** argv) {
       for (const auto& m : qAsConst(selection)) groups[m.attributes()["group"]].append(m);
 
       queryResult = groups.values().toVector();
-      qInfo("group-by: { %s } %d groups from %d items", qUtf8Printable(expr), queryResult.count(),
+      qInfo("group-by: { %s } %lld groups from %lld items", qUtf8Printable(expr), queryResult.count(),
             selection.count());
       selection.clear();
     } else if (arg == "-sort-similar") {
@@ -1806,7 +1811,7 @@ int main(int argc, char** argv) {
 
         // if we did not find anything, what now?
         if (i % 100 == 0)
-          qInfo("sort-similar:<PL> %d / %d", i, selection.count());
+          qInfo("sort-similar:<PL> %d / %lld", i, selection.count());
       }
 
       int missed = selection.count() - sorted.count();
@@ -1949,7 +1954,7 @@ int main(int argc, char** argv) {
           for (auto& m : g)
             m.setPosition(pos++);
 
-        qDebug("show browser: mode=%d groups=%d", showMode, list.count());
+        qDebug("show browser: mode=%d groups=%lld", showMode, list.count());
         int status = MediaBrowser::show(list, showMode, widgetOptions);
         if (widgetOptions.selectionMode == MediaWidgetOptions::SelectExitCode) return status - 1;
       }
@@ -2106,11 +2111,13 @@ int main(int argc, char** argv) {
       v.show();
       v.activateWindow();
       app->exec();
-    } else if (arg == "-view-image") {
+    } else if (arg == "-test-image-loader") {
       Media m(nextArg(), Media::TypeImage);
-      MediaGroupList l{{m}};
-      widgetOptions.params = params;
-      MediaBrowser::show(l, showMode, widgetOptions);
+      QImage img = m.loadImage();
+      QLabel label;
+      label.setPixmap(QPixmap::fromImage(img));
+      label.show();
+      while (1) qApp->processEvents();
     } else if (arg == "-test-video-decoder") {
       const QString path = nextArg();
 
@@ -2169,9 +2176,6 @@ int main(int argc, char** argv) {
       QLabel* label = nullptr;
       int zoomSize = opt.maxH * 10;
       if (display) {
-        if (qApp->testAttribute(Qt::AA_EnableHighDpiScaling))
-          qApp->setAttribute(Qt::AA_DisableHighDpiScaling);
-
         if (!qEnvironmentVariableIsEmpty("QT_SCALE_FACTOR"))
           qWarning() << "display scaling is enabled, may introduce artifacts";
 
@@ -2185,7 +2189,6 @@ int main(int argc, char** argv) {
         layout->addWidget(label);
         layout->addItem(new QSpacerItem(1,1,QSizePolicy::Expanding));
         layout->setSpacing(0);
-        layout->setMargin(0);
         QRect screenRect = QGuiApplication::primaryScreen()->availableGeometry();
         QRect windowRect;
         if (zoom) {

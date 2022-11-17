@@ -127,3 +127,4 @@ unix: {
 message("QT=" $$QT)
 message("CONFIG=" $$CONFIG)
 message("CXXFLAGS=" $$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE)
+message("LIBS=" $$LIBS)

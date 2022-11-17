@@ -817,7 +817,7 @@ QVariantList VideoContext::readMetaData(const QString& _path,
   for (int i = 0; i < keys.count(); ++i) {
     AVDictionaryEntry* entry =
         av_dict_get(format->metadata, qPrintable(keys[i]), nullptr, 0);
-    if (entry) values[i] = entry->value;
+    if (entry) values[i] = QString(entry->value);
   }
 
   avformat_close_input(&format);

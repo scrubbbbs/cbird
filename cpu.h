@@ -183,7 +183,7 @@ class CPU {
     numPrevCpuInfo = 0;
     _cpuUsage = 0;
 
-    QtConcurrent::run(this, &CPU::poll);
+    QtConcurrent::run(&CPU::poll, this);
   }
 
   float cpuUsage() const { return _cpuUsage; }

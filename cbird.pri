@@ -1,6 +1,11 @@
 
 # general configuration for cbird and unit tests
 
+# too many breaking changes
+equals(QT_MAJOR_VERSION, 5) {
+    error("QT 6 is required")
+}
+
 QT *= core sql concurrent xml
 CONFIG *= c++17 console
 mac {
@@ -44,7 +49,7 @@ DEFINES += ENABLE_CIMG   # still needed for qualityscore
 DEFINES += ENABLE_OPENCV
 
 # enable debugging here, not CONFIG += debug
-#DEFINES += DEBUG
+DEFINES += DEBUG
 
 #INCLUDEPATH += $$(QTDIR)/include
 #INCLUDEPATH += $$(HOME)/sw/include
@@ -54,7 +59,7 @@ DEFINES += ENABLE_OPENCV
 QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
 !exists( $$QTCORE_PRIVATE_HEADERS ) {
     message("$${QTCORE_PRIVATE_HEADERS}/")
-    error("Can't find qtcore private headers, maybe you need qtbase5-private-dev")
+    error("Can't find qtcore private headers, maybe you need qtbase6-private-dev")
 }
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
@@ -72,16 +77,20 @@ win32 {
 }
 
 unix {
-    QT += dbus xml
+    QT += dbus
+
+    equals(QT_MAJOR_VERSION, 6) {
+        QUAZIP=quazip1-qt6
+    }
 
     INCLUDEPATH *= /usr/local/include
-    INCLUDEPATH *= $$system("pkg-config quazip1-qt5 --cflags-only-I | cut -d' ' -f1 | tail -c +3")
+    INCLUDEPATH *= $$system("pkg-config $$QUAZIP --cflags-only-I | cut -d' ' -f1 | tail -c +3")
 
     LIBS *= -L/usr/local/lib
     LIBS *= $$system("pkg-config opencv --libs")
 
-    exists(/usr/local/lib/libquazip1-qt5.so) {
-        LIBS *= -lquazip1-qt5 -lz
+    exists("/usr/local/lib/lib$${QUAZIP}.so") {
+        LIBS *= -l$$QUAZIP -lz
     }
     else {
         LIBS *= -lquazip -lz

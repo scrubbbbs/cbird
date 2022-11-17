@@ -33,8 +33,8 @@ QHash<int, QHash<QThread*, QString>>& Database::dbConnections() {
   return *s;
 }
 
-QMutex& Database::dbMutex() {
-  static auto* s = new QMutex(QMutex::Recursive);
+QRecursiveMutex& Database::dbMutex() {
+  static auto* s = new QRecursiveMutex;
   return *s;
 }
 
@@ -489,7 +489,7 @@ void Database::add(MediaGroup& inMedia) {
   uint64_t w3 = now-then;
   then=now;
 
-  qDebug("count=%d write=%d+%d+%d+%d=%d ms",
+  qDebug("count=%lld write=%d+%d+%d+%d=%d ms",
          media.count(),
          (int)(w0/1000000),
               (int)(w1/1000000),
@@ -1175,8 +1175,8 @@ MediaGroupList Database::dupsByMd5(const SearchParams& params) {
   MediaGroupList dups;
 
   if (params.inSet) {
-    QHash<QString, Media> groups;
-    for (const Media& m : params.set) groups.insertMulti(m.md5(), m);
+    QMultiHash<QString, Media> groups;
+    for (const Media& m : params.set) groups.insert(m.md5(), m);
 
     for (auto& key : groups.uniqueKeys()) {
       auto values = groups.values(key);
@@ -1240,10 +1240,10 @@ bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
         }
     }
     else {
-      auto parent = match[0].path().splitRef("/");
+      auto parent = match[0].path().split("/");
       parent.pop_back();
       for (int i = 1; i < match.count(); ++i) {
-        auto tmp = match[i].path().splitRef("/");
+        auto tmp = match[i].path().split("/");
         tmp.pop_back();
         if (tmp == parent) { match.remove(i); --i; }
       }
@@ -1351,7 +1351,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
         int(QDateTime::currentMSecsSinceEpoch() - start));
   start = QDateTime::currentMSecsSinceEpoch();
 
-  int progressInterval = qBound(1, params.progressInterval, haystackSize / 100);
+  int progressInterval = haystackSize < 100 ? 1 : qBound(1, params.progressInterval, haystackSize / 100);
 
   const int progressTotal = haystackSize;
 
@@ -1400,8 +1400,8 @@ MediaGroupList Database::similar(const SearchParams& params) {
   f.waitForFinished();
   delete slice;
 
-  qInfo("searched %d items and found %d matches in %dms", haystackSize,
-         results.count(), int(QDateTime::currentMSecsSinceEpoch() - start));
+  qInfo("searched %d items and found %lld matches in %dms", haystackSize,
+        results.count(), int(QDateTime::currentMSecsSinceEpoch() - start));
 
   qDebug() << "filter matches";
   start = QDateTime::currentMSecsSinceEpoch();
@@ -1415,8 +1415,8 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   Media::sortGroupList(list, "path");
 
-  qInfo("filtered %d matches to %d in %dms", results.count(), list.count(),
-        int(QDateTime::currentMSecsSinceEpoch() - start));
+  qInfo("filtered %lld matches to %lld in %lldms", results.count(), list.count(),
+        QDateTime::currentMSecsSinceEpoch() - start);
   return list;
 }
 
@@ -1460,8 +1460,8 @@ MediaGroup Database::similarTo(const Media& needle,
 
   if (params.verbose) {
     MessageContext mc(needle.path().mid(path().length()+1));
-    qInfo("%d results (%d filtered out) in %dms", result.count(), filtered,
-          int(QDateTime::currentMSecsSinceEpoch() - start));
+    qInfo("%lld results (%d filtered out) in %lldms", result.count(), filtered,
+          QDateTime::currentMSecsSinceEpoch() - start);
   }
 
   // set match flags

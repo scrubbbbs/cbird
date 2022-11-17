@@ -151,6 +151,7 @@ There are a few for power users.
 - `CBIRD_FORCE_COLORS` use colored output even if console is not detected
 - `CBIRD_LOG_TIMESTAMP` add time delta to log messages
 - `CBIRD_NO_APPIMAGE_PROGS` do not use bundled programs like ffmpeg in the appimage****
+- `QT_IMAGE_ALLOC_LIMIT_MB` maximum memory allocation for image files (default 256)
 
 Search Algorithms
 ====================
@@ -262,6 +263,7 @@ Wish List
 - copy or sync exif data with matching images
 - aspect ratio property
 - nuke-dups-in: show how many would not be deleted
+- group-by breaks the sort/sort doesn't work on group-by?
 
 ### Indexing
 - store date-modified,size for better updating
@@ -300,6 +302,7 @@ Wish List
 - when deleting zip, remove all zip contents from viewer
 - ~~remember past deletions and optionally replay them in the future should they reappear (via traal)~~ added "weeds" feature v0.6
 - detect breaking of symlinks on delete/rename
+- visual indicator of the needle in group view
 
 ### Misc
 - method declaration sweep
@@ -335,6 +338,7 @@ Minor Bugs
 - ~~Windows: titlebar/dialogs do not use native theme~~ won't fix, req wm bypass
 - MGLW: difference image clips white/light shades of grayscale images
 - Windows: white flash when MGLW is displayed
+- replace getenv() calls with qt version
 
 Compiling
 =========================

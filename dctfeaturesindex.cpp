@@ -286,7 +286,7 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle,
 
   now = nanoTime();
   if (params.verbose)
-    qInfo("%d features, %d results, %.1f ms rate=%.1f Mhash/sec",
+    qInfo("%d features, %lld results, %.1f ms rate=%.1f Mhash/sec",
           numNeedleHashes, matches.count(), (now - then) / 1000000.0,
           (_tree->size() * numNeedleHashes) / ((now - then) / 1000.0));
 

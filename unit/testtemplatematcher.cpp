@@ -72,31 +72,31 @@ void TestTemplateMatcher::testMatch_data() {
 
     op = "cropcenter+rot10";
     tmp =
-        centerCrop.transformed(QMatrix().rotate(10), Qt::SmoothTransformation);
+        centerCrop.transformed(QTransform().rotate(10), Qt::SmoothTransformation);
     tmp = tmp.scaledToHeight(256, Qt::SmoothTransformation);
     QTest::newRow(qPrintable(file + "." + op)) << file << tmp;
 
     op = "cropcenter+rot30";
     tmp =
-        centerCrop.transformed(QMatrix().rotate(30), Qt::SmoothTransformation);
+        centerCrop.transformed(QTransform().rotate(30), Qt::SmoothTransformation);
     tmp = tmp.scaledToHeight(256, Qt::SmoothTransformation);
     QTest::newRow(qPrintable(file + "." + op)) << file << tmp;
 
     op = "cropcenter+rot60";
     tmp =
-        centerCrop.transformed(QMatrix().rotate(60), Qt::SmoothTransformation);
+        centerCrop.transformed(QTransform().rotate(60), Qt::SmoothTransformation);
     tmp = tmp.scaledToHeight(256, Qt::SmoothTransformation);
     QTest::newRow(qPrintable(file + "." + op)) << file << tmp;
 
     op = "cropcenter+rot90";
     tmp =
-        centerCrop.transformed(QMatrix().rotate(90), Qt::SmoothTransformation);
+        centerCrop.transformed(QTransform().rotate(90), Qt::SmoothTransformation);
     tmp = tmp.scaledToHeight(256, Qt::SmoothTransformation);
     QTest::newRow(qPrintable(file + "." + op)) << file << tmp;
 
     op = "cropcenter+rot135";
     tmp =
-        centerCrop.transformed(QMatrix().rotate(135), Qt::SmoothTransformation);
+        centerCrop.transformed(QTransform().rotate(135), Qt::SmoothTransformation);
     tmp = tmp.scaledToHeight(256, Qt::SmoothTransformation);
     QTest::newRow(qPrintable(file + "." + op)) << file << tmp;
   }

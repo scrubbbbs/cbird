@@ -558,7 +558,7 @@ QVector<Index::Match> CvFeaturesIndex::find(const Media& needle,
 
   now = nanoTime();
   if (params.verbose)
-    qInfo("found=%d load=%.1fms fwd=%.2fms rev=%.2fms total=%.1fms",
+    qInfo("found=%lld load=%.1fms fwd=%.2fms rev=%.2fms total=%.1fms",
           results.count(), nsLoad / 1000000.0, nsFwd / 1000000.0,
           nsRev / 1000000.0, (now - start) / 1000000.0);
 

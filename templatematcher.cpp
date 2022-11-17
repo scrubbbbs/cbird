@@ -307,16 +307,13 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
       const cv::Mat tx = cv::estimateRigidTransform(tmplPoints, matchPoints, false);
       if (tx.empty())
         qWarning("(%d): roi: empty transform", i);
-      else
-      if (tx.rows < 2 || tx.cols < 3)
+      else if (tx.rows < 2 || tx.cols < 3)
         qWarning("(%d): roi: transform rows/cols invalid", i);
       else {
-        QMatrix mat;
-        mat.setMatrix(tx.at<double>(0, 0), tx.at<double>(1, 0),
-                      tx.at<double>(0, 1), tx.at<double>(1, 1),
-                      tx.at<double>(0, 2), tx.at<double>(1, 2));
+        QTransform qtx(tx.at<double>(0, 0), tx.at<double>(1, 0), tx.at<double>(0, 1),
+                       tx.at<double>(1, 1), tx.at<double>(0, 2), tx.at<double>(1, 2));
 
-        m.setTransform(mat);
+        m.setTransform(qtx);
       }
     }
 
@@ -389,10 +386,10 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
 
   if (params.verbose)
     qInfo(
-      "%d/%d %dms:tot %dms:ea | tl=%.2f tr=%.2f tk=%.2f "
+      "%lld/%lld %dms:tot %lldms:ea | tl=%.2f tr=%.2f tk=%.2f "
       "tf=%.2f rm=%.2f ms=%.2f ert=%.2f mr=%.2f mp=%.2f ttl=%.2f",
       good.count(), notCached.count(), int(total) / 1000000,
-      int(total) / 1000000 / notCached.count(),
+      total / 1000000 / notCached.count(),
       timing.targetLoad * 100.0 / total, timing.targetResize * 100.0 / total,
       timing.targetKeyPoints * 100.0 / total,
       timing.targetFeatures * 100.0 / total, timing.radiusMatch * 100.0 / total,
