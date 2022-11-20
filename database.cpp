@@ -76,12 +76,15 @@ QSqlDatabase Database::connect(int id) {
   }
 
   // each db connection needs a unique identifier; use a counter
-  int connId = connectionCount()++;
+  const int connId = connectionCount()++;
 
-  QString name = QString("sqlite_%1_%2").arg(id).arg(connId);
+  const QString name = QString("sqlite_%1_%2").arg(id).arg(connId);
+  const QString path = dbPath(id);
+  qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread),
+         qPrintable(name), qPrintable(path));
 
   QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", name);
-  db.setDatabaseName(dbPath(id));
+  db.setDatabaseName(path);
   db.setConnectOptions("QSQLITE_ENABLE_REGEXP=1");
 
   Q_ASSERT(db.open());
@@ -275,8 +278,6 @@ Database::Database(const QString& path_) {
   // resolve the path the same way as QFileInfo.
   // On win32 the drive letter gets uppercased, for one...
   _indexDir = QFileInfo(dir.absolutePath()).absoluteFilePath();
-
-  qDebug() << "loading from" << _indexDir;
 
   // to verify database functionality, check that we have
   // an index for columns of the "media" table (in setup())
