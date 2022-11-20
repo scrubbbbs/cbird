@@ -1411,7 +1411,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-select-files") {
       if (args.count() < 1)
         qFatal("-select-files expects one or more arguments");
-
+      const Scanner sc;
       while (args.count() > 0) {
         QString arg = args.front();
         if (arg.startsWith("-"))  // next switch
@@ -1436,7 +1436,7 @@ int main(int argc, char** argv) {
 
         QString ext = info.suffix().toLower();
 
-        if (engine().scanner->archiveTypes().contains(ext)) {
+        if (sc.archiveTypes().contains(ext)) {
           const auto list = Media::listArchive(arg);
           QStringList zippedFiles;
           for (auto& path : list) zippedFiles.append(path);
@@ -1448,9 +1448,9 @@ int main(int argc, char** argv) {
         }
 
         int type = 0;
-        if (engine().scanner->imageTypes().contains(ext))
+        if (sc.imageTypes().contains(ext))
           type = Media::TypeImage;
-        else if (engine().scanner->videoTypes().contains(ext))
+        else if (sc.videoTypes().contains(ext))
           type = Media::TypeVideo;
         else
           qWarning() << "select-files: unknown file type:" << arg;
@@ -1916,7 +1916,7 @@ int main(int argc, char** argv) {
 //      widgetOptions.trackWeeds = true;
     } else if (arg == "-show") {
       widgetOptions.params = params;
-      widgetOptions.db = engine().db;
+      widgetOptions.db = _engine ? _engine->db : nullptr; // should not require db (-select-files)
       if (!queryResult.isEmpty())
         MediaBrowser::show(queryResult, showMode, widgetOptions);
       else {
