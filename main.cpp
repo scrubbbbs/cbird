@@ -1202,19 +1202,27 @@ int main(int argc, char** argv) {
 
       const QString ext = info.suffix();
       const bool isArchive = scanner->archiveTypes().contains(ext);
+      const bool isImage = scanner->imageTypes().contains(ext);
       const bool isVideo = scanner->videoTypes().contains(ext);
+      const bool isHash = to.startsWith("dct:");
 
-      if (info.isFile() && !isArchive) {
-        if (params.queryTypes & SearchParams::FlagImage &&
-            scanner->imageTypes().contains(ext)) {
-          IndexResult result = scanner->processImageFile(to);
+      if ((info.isFile()|isHash) && !isArchive) {
+        if (isHash) {
+          bool ok;
+          uint64_t hash = to.split(":").back().toULongLong(&ok, 16);
+          if (!ok) {
+            qWarning() << "similar-to: failed to parse hash spec";
+            continue;
+          }
+          search.needle = Media("@"+to, Media::TypeImage, -1, -1, "", hash);
+        } else if (params.queryTypes & SearchParams::FlagImage && isImage) {
+          const IndexResult result = scanner->processImageFile(to);
           if (!result.ok) {
             qCritical() << "similar-to: failed to process image file:" << to;
             continue;
           }
           search.needle = result.media;
-        } else if (params.queryTypes & SearchParams::FlagVideo &&
-                   isVideo) {
+        } else if (params.queryTypes & SearchParams::FlagVideo && isVideo) {
           search.needle = engine().db->mediaWithPath(to);
 
           // doesn't exist in the database, search by frame grabbing
