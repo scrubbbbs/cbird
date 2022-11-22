@@ -19,12 +19,14 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #pragma once
+#include "mediawidget.h"
 
 #include "../media.h"
 #include "../videocontext.h"
 
 class FrameCache;
 class Frame;
+class Database;
 
 /**
  * @brief Visual compare of two videos (side-by-side or interleaved)
@@ -44,6 +46,7 @@ class VideoCompareWidget : public QWidget {
    */
   VideoCompareWidget(const Media& left, const Media& right,
                      const MatchRange& range = MatchRange(),
+                     const MediaWidgetOptions& options=MediaWidgetOptions(),
                      QWidget* parent = nullptr);
 
   ~VideoCompareWidget();
@@ -80,6 +83,7 @@ class VideoCompareWidget : public QWidget {
   void alignSpatially();
   void playSideBySide();
   void compareInKdenlive();
+  void writeThumbnail(int index);
 
   void drawFrame(QPainter& painter, const FrameCache& cache, const QImage& img,
                  int iw, int ih, int matchIn, int matchLen, int currPos,
@@ -111,4 +115,5 @@ class VideoCompareWidget : public QWidget {
   int _scrub = 0;           // scrub forward or backward until a key is pressed
   bool _maximized = false;  // use to restore maximized window
   double _zoom = 0.0;       // zoom in
+  const MediaWidgetOptions& _options;      // for thumbnailer
 };

@@ -19,6 +19,7 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "videocomparewidget.h"
+#include "cropwidget.h"
 
 #include "../cimgops.h"
 #include "../env.h"
@@ -179,8 +180,10 @@ class FrameCache {
 };
 
 VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
-                                       const MatchRange& range, QWidget* parent)
-    : super(parent) {
+                                       const MatchRange& range,
+                                       const MediaWidgetOptions& options,
+                                       QWidget* parent)
+    : super(parent), _options(options) {
   float totalKb, cacheKb;
   Env::systemMemory(totalKb, cacheKb);
 
@@ -378,6 +381,11 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
 
   WidgetHelper::addAction(settings, "Compare in Kdenlive", Qt::Key_K, this,
                           [&]() { compareInKdenlive(); });
+
+  if (_options.db) {
+    WidgetHelper::addAction(settings, "Thumbnail A", Qt::Key_H, this,[&]() { writeThumbnail(0); });
+    WidgetHelper::addAction(settings, "Thumbnail B", Qt::Key_J, this,[&]() { writeThumbnail(1); });
+  }
 
   WidgetHelper::addAction(settings, "Close", Qt::CTRL | Qt::Key_W, this, SLOT(close()));
   WidgetHelper::addAction(settings, "Close (Alt)", Qt::Key_Escape, this, SLOT(close()));
@@ -734,4 +742,13 @@ void VideoCompareWidget::compareInKdenlive() {
   QString outFile = DesktopHelper::tempName("cbird.XXXXXX.kdenlive", this);
   edit.saveXml(outFile);
   QDesktopServices::openUrl(QUrl::fromLocalFile(outFile));
+}
+
+void VideoCompareWidget::writeThumbnail(int index)  {
+  Q_ASSERT(_options.db);
+  const auto& v = _video[index];
+  const Frame* frame = v.cache->frame(v.in + _cursor + v.offset);
+  Media m = v.media;
+  m.setImage(frame->image);
+  CropWidget::setIndexThumbnail(*_options.db, m, this);
 }

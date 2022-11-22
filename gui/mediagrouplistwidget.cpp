@@ -21,6 +21,7 @@
 #include "mediagrouplistwidget.h"
 #include "mediafolderlistwidget.h"
 #include "videocomparewidget.h"
+#include "cropwidget.h"
 
 #include "../lib/jpegquality.h"
 #include "../database.h"
@@ -677,6 +678,8 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addAction(settings, "Choose Selected", Qt::Key_Return, this, SLOT(chooseAction()));
   WidgetHelper::addAction(settings, "Reload", Qt::Key_F5, this, SLOT(reloadAction()));
   WidgetHelper::addAction(settings, "Copy Image", Qt::CTRL|Qt::Key_C, this, SLOT(copyImageAction()));
+  if (_options.db)
+    WidgetHelper::addAction(settings, "Set Index Thumbnail", Qt::Key_H, this, SLOT(thumbnailAction()));
 
   WidgetHelper::addSeparatorAction(this);
 
@@ -2032,10 +2035,10 @@ MediaGroup MediaGroupListWidget::selectedMedia() {
 
 void MediaGroupListWidget::compareVideosAction() {
   QList<QListWidgetItem*> items = selectedItems();
-  if (items.count() != 1) return;
+  if (items.count() < 1) return;
 
-  const MediaGroup& group = _list[_currentRow];
-  if (group.count() < 2) return;
+  MediaGroup group = _list[_currentRow];
+  if (group.count() < 2) group.append(group[0]);
 
   Media left = group[0];
   Media right = group[items[0]->type()];
@@ -2050,7 +2053,7 @@ void MediaGroupListWidget::compareVideosAction() {
     range = MatchRange(right.matchRange().srcIn, right.matchRange().dstIn,
                        right.matchRange().len);
 
-  VideoCompareWidget* comp = new VideoCompareWidget(left, right, range);
+  VideoCompareWidget* comp = new VideoCompareWidget(left, right, range, _options);
   comp->setAttribute(Qt::WA_DeleteOnClose);
   comp->show();
 }
@@ -2256,6 +2259,12 @@ void MediaGroupListWidget::copyImageAction() {
   if (sel.count() <= 0) return;
   const Media&m = sel[0];
   qApp->clipboard()->setImage(m.image());
+}
+
+void MediaGroupListWidget::thumbnailAction() {
+  auto sel = selectedMedia();
+  if (sel.count() != 1) return;
+  CropWidget::setIndexThumbnail(*_options.db, sel[0], this, true);
 }
 
 void MediaGroupListWidget::moveToNextScreenAction() {

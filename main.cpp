@@ -34,6 +34,7 @@
 #include "gui/mediagrouplistwidget.h"
 #include "gui/mediagrouptablewidget.h"
 #include "gui/videocomparewidget.h"
+#include "gui/cropwidget.h"
 
 #include <algorithm>  // std::max
 
@@ -226,6 +227,7 @@ static int printUsage(int argc, char** argv) {
         H2 "-list-index-params               list current index parameters"
         H2 "-list-search-params              list current search parameters"
         H2 "-list-formats                    list available image and video formats"
+        H2 "-video-thumbnail <file> <frame#> crop video thumbnail at frame"
 
         H1 "Search Parameters (for -similar*)"
         HR
@@ -386,7 +388,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
       "-select-id", "-select-sql", "-max-per-page", "-head", "-tail"
       };
 
-  const QSet<QString> twoArg{"-rename", "-compare-videos", "-merge"};
+  const QSet<QString> twoArg{"-rename", "-compare-videos", "-merge", "-video-thumbnail"};
   cmds += twoArg;
 
   const QSet<QString> typeArg{"-select-type"};
@@ -398,7 +400,8 @@ int printCompletions(const char* argv0, const QStringList& args) {
   const QSet<QString> fileArg{"-select-one",         "-jpeg-repair-script",
                               "-view-image",         "-test-csv",
                               "-test-video-decoder", "-select-grid",
-                              "-compare-videos",     "-test-image-loader"};
+                              "-compare-videos",     "-test-image-loader",
+                              "-video-thumbnail"};
   cmds += fileArg;
 
   const QSet<QString> dirArg{"-use", "-dups-in", "-nuke-dups-in", "-similar-in",
@@ -2119,6 +2122,16 @@ int main(int argc, char** argv) {
       v.show();
       v.activateWindow();
       app->exec();
+    } else if (arg == "-video-thumbnail") {
+      QString path = nextArg();
+      Media m = engine().db->mediaWithPath(path);
+      if (!m.isValid()) {
+        qWarning() << m.path() << "is not in the database, metadata will not be saved";
+        m = Media(path, Media::TypeVideo);
+      }
+      int  frame = nextArg().toInt();
+      m.setImage(VideoContext::frameGrab(m.path(), frame, false));
+      CropWidget::setIndexThumbnail(*engine().db, m);
     } else if (arg == "-test-image-loader") {
       Media m(nextArg(), Media::TypeImage);
       QImage img = m.loadImage();

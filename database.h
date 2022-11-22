@@ -50,6 +50,9 @@ class Database {
   /// @return directory for video index files
   QString videoPath() const { return indexPath() + "/video"; }
 
+  /// @return path to index icon/thumbnail
+  QString thumbPath() const { return path() + "/thumb.png"; };
+
   /// @return last time anything was added, files modified
   ///         after this date are re-indexed
   QDateTime lastAdded();
