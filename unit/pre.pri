@@ -25,14 +25,14 @@ LIBS_EXIV2  = -lexiv2
 LIBS_CIMG   = -lpng
 LIBS_TERM   = -ltermcap
 
-# deps for testing Index subclasses
+# deps for core 
 LIBS_INDEX = $$LIBS_OPENCV $$LIBS_FFMPEG $$LIBS_QUAZIP $$LIBS_EXIV2 $$LIBS_TERM
 FILES_INDEX = index ioutil media videocontext cvutil qtutil database scanner templatematcher params
 
-# deps for using gui stuff
+# deps for gui
 LIBS_GUI = $$LIBS_CIMG
 FILES_GUI = gui/mediagrouplistwidget gui/mediafolderlistwidget env \
-    lib/jpegquality gui/videocomparewidget cimgops nleutil
+    lib/jpegquality gui/videocomparewidget cimgops nleutil gui/cropwidget
 
 # using this hack to share precomp header with all targets,
 # instead of PRECOMPILED_HEADER, so it is only compiled once
