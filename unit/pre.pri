@@ -11,6 +11,7 @@ INCLUDEPATH += . .. ../..
 QTCORE_PRIVATE_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include/QtCore/$$QT_VERSION"
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
+INCLUDEPATH += /usr/local/include/QuaZip-Qt6-1.3
 
 MOC_DIR = _build 
 OBJECTS_DIR = _build

@@ -89,7 +89,7 @@ static void printLicense() {
   qFlushOutput();
   // clang-format off
   printf(
-      H2 "cbird, the Content Based Image Retrieval Database"
+      H2 "cbird, the Content-Based Image Retrieval Database"
       H2 "Copyright (C) 2021 scrubbbbs (esceruebbebbes@gemeaeiel.com =~ s/e//g)"
       H2 CBIRD_HOMEPAGE
       H2 "Licensed to you under the GNU GPL version 2 http://www.gnu.org/licenses"
@@ -99,7 +99,7 @@ static void printLicense() {
       H2
       HR
       H2
-      H2 "This software uses the Qt5 library under GPLv2 https://www.qt.io"
+      H2 "This software uses the Qt library under GPLv2 https://www.qt.io"
       H2 "This software uses the OpenCV library under Apache License v2 https://opencv.org"
       H2 "This software uses the FFmpeg library under GPLv2 https://ffmpeg.org"
       H2 "This software uses the quazip library under GPLv2 https://github.com/stachenov/quazip"
@@ -119,7 +119,7 @@ static int printUsage(int argc, char** argv) {
   const char* usage =
         BR
         H2 "    „__„                     CBIRD"
-        H2 "    {o,o}     Content Based Image Retrieval Database"
+        H2 "    {o,o}     Content-Based Image Retrieval Database"
         H2 "    |)__)       "       CBIRD_HOMEPAGE
         H2 "    -“–“-        license: GPLv2 (see: -license)"
         H2 ""

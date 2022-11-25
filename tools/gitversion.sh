@@ -1,18 +1,28 @@
 #!/bin/bash
 BUILD="$1"
+VERSION="$2"
 HEADER="$BUILD/git.h"
-CURRENT=$(echo "#define CBIRD_GITVERSION \"$(git branch --verbose | grep '^\*'  | sed -re 's/ +/ /g' | cut -d" " -f2,3)\"")
+GIT=$(git branch --verbose | grep '^\*'  | sed -re 's/ +/ /g' | cut -d" " -f2,3)
 
-echo "gitversion $HEADER"
+git status | grep staged >/dev/null
+if [ $? -eq 0 ]; then
+  GIT="$GIT *dirty*"
+fi
+
+ID="//<$0 $*> $VERSION $GIT"
+#echo "$ID"
+
 
 LAST=
 if [ -f "$HEADER" ]; then
-  LAST=$(cat "$HEADER")
+  LAST=$(cat "$HEADER" | head -n1)
 fi
 
-if [ "$LAST" != "$CURRENT" ]; then
-  echo $CURRENT
-  echo "$CURRENT" > "$HEADER"
+if [ "$LAST" != "$ID" ]; then
+  echo "writing $HEADER $VERSION $GIT"
+  echo "$ID" > "$HEADER"
+  echo "#define CBIRD_GITVERSION \"$GIT\""     >> "$HEADER"
+  echo "#define CBIRD_VERSION    \"$VERSION\"" >> "$HEADER"
 fi
 
 

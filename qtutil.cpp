@@ -172,24 +172,47 @@ void DesktopHelper::runProgram(QStringList& args, bool wait,
       QProcess p;
       p.setProgram(prog);
 
-      const QString disableAppProgs = getenv("CBIRD_NO_APPIMAGE_PROGS");
+      const QString disableAppProgs = getenv("CBIRD_NO_BUNDLED_PROGS");
+
       if (disableAppProgs.isEmpty()) {
-        const QString appDir = getenv("APPDIR");
-        const QString appProg = appDir + "/cbird/bin/" + prog;
-        if (!appDir.isEmpty() && QFileInfo(appProg).exists()) {
-          qInfo() << "using" << appProg << "for:" << prog;
-          qInfo() << "to disable this, set CBIRD_NO_APPIMAGE_PROGS";
+        bool portable = false; // portable binaries
+#ifdef CBIRD_PORTABLE_BINARY
+        portable=true;
+#endif
+        bool appImage = getenv("APPDIR") != nullptr;
+        bool setEnv = false;
+        QString binDir, libDir;
+        if (portable) {
+          setEnv = true;
+          QString appDir =qApp->applicationDirPath();
+          binDir = appDir + "/";
+          libDir = appDir + "/";
+          qDebug() << "portable path=" << appDir;
+        }
+        else if (appImage) {
+          setEnv = true;
+          QString appDir = getenv("APPDIR");
+          binDir = appDir + "/cbird/bin/";
+          libDir = appDir + "/cbird/lib/";
+        }
+
+        const QString appProg = binDir + prog;
+        qDebug() << appProg << QFileInfo(appProg).exists();
+        if (setEnv && QFileInfo(appProg).exists()) {
+          qInfo() << "using" << appProg << "for" << prog;
+          qInfo() << "to disable this, set CBIRD_NO_BUNDLED_PROGS";
 
           // put the bundled apps before everything else
           auto env = QProcessEnvironment::systemEnvironment();
           const QString binPath = env.value("PATH");
           const QString libPath = env.value("LD_LIBRARY_PATH"); // might be empty, should be fine
-          env.insert("PATH", appDir+"/cbird/bin:" + binPath);
-          env.insert("LD_LIBRARY_PATH", appDir+"/cbird/lib:" + libPath);
+          env.insert("PATH", binDir + ":" + binPath);
+          env.insert("LD_LIBRARY_PATH", libDir + ":" + libPath);
           p.setProcessEnvironment(env);
           p.setProgram(appProg);
         }
       }
+
 #ifdef Q_OS_WIN
       p.setNativeArguments(args.mid(1).join(" "));
 #else
@@ -268,14 +291,15 @@ void DesktopHelper::revealPath(const QString& path) {
 #else
   const QStringList defaultArgs;
   fileManagers += QStringList{{"Default", "DesktopServices"}};
-  fileManagers += QStringList{{"Dolphin (KDE)", "/usr/bin/dolphin", "--select", "%1"}};
+  fileManagers += QStringList{{"Dolphin (KDE)", "dolphin", "--select", "%1"}};
+  fileManagers += QStringList{{"Gwenview", "gwenview", "%dirname(1)"}};
   fileManagers += QStringList{
       {"Krusader (Right Panel)", "DBus", "org.krusader", "/Instances/krusader[0-9]*/right_manager",
        "", "newTab", "%dirname(1)", "&&", "org.krusader", "/MainWindow_[0-9]*", "", "raise"}};
   fileManagers += QStringList{
       {"Krusader (Left Panel)", "DBus", "org.krusader", "/Instances/krusader[0-9]*/left_manager",
        "", "newTab", "%dirname(1)", "&&", "org.krusader", "/MainWindow_[0-9]*", "", "raise"}};
-  fileManagers += QStringList{{"Nautilus (GNOME)", "/usr/bin/nautilus", "-s", "%1"}};
+  fileManagers += QStringList{{"Nautilus (GNOME)", "nautilus", "-s", "%1"}};
 #endif
   const char* settingsKey = "OpenFileLocation";
   QStringList args = getSetting(settingsKey, defaultArgs).toStringList();

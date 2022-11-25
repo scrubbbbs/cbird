@@ -14,7 +14,6 @@ mac {
 
 VERSION=0.6.2
 
-QMAKE_CXXFLAGS += '-DCBIRD_VERSION=\\"$$VERSION\\"'
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
 QMAKE_CXXFLAGS += -Werror -Wno-deprecated-declarations
 
@@ -22,44 +21,38 @@ QMAKE_CXXFLAGS += -Werror -Wno-deprecated-declarations
 #QMAKE_CXXFLAGS += -fopenmp
 #QMAKE_LFLAGS   += -fopenmp
 
+# autotools-style compiler override, also needed for appimage
+CXX=$$(CXX)
+!isEmpty(CXX) {
+    QMAKE_CXX=$$CXX
+    QMAKE_LINK=$$CXX
+}
+CC=$$(CC)
+!isEmpty(CC) {
+    QMAKE_CC=$$CC
+}
+
 DESTDIR=$$_PRO_FILE_PWD_
-unix {
-    MOC_DIR=_build
-    OBJECTS_DIR=_build
-    RCC_DIR=_build
-}
-win32 {
-    MOC_DIR=_win32
-    OBJECTS_DIR=_win32
-    RCC_DIR=_win32
-}
+BUILDDIR=_build
 
-#COMPILER = g++
-#COMPILER = colorgcc
-#COMPILER = clang++
-#COMPILER = g++-mp-4.7
+win32: BUILDDIR=_win32
 
-#QMAKE_LINK = $$COMPILER
-#QMAKE_CXX = $$COMPILER
+MOC_DIR=$$BUILDDIR
+OBJECTS_DIR=$$BUILDDIR
+RCC_DIR=$$BUILDDIR
 
-DEFINES += QT_FORCE_ASSERTS
-DEFINES += QT_MESSAGELOGCONTEXT
+DEFINES += QT_FORCE_ASSERTS     # Q_ASSERT(0) crashes the app
+DEFINES += QT_MESSAGELOGCONTEXT # nice for custom logger
+DEFINES += ENABLE_CIMG          # still needed for qualityscore
 
-DEFINES += ENABLE_CIMG   # still needed for qualityscore
-DEFINES += ENABLE_OPENCV
-
-# enable debugging here, not CONFIG += debug
-DEFINES += DEBUG
-
-#INCLUDEPATH += $$(QTDIR)/include
-#INCLUDEPATH += $$(HOME)/sw/include
-#INCLUDEPATH += /usr/local/include
+# enable debug build/features, NOT CONFIG += debug
+#DEFINES += DEBUG
 
 # private headers for DebugEventFilter
 QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
 !exists( $$QTCORE_PRIVATE_HEADERS ) {
     message("$${QTCORE_PRIVATE_HEADERS}/")
-    error("Can't find qtcore private headers, maybe you need qtbase6-private-dev")
+    error("Can't find qtcore private headers, maybe you need qt6-base-private-dev")
 }
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
@@ -79,45 +72,60 @@ win32 {
 unix {
     QT += dbus
 
-    equals(QT_MAJOR_VERSION, 6) {
-        QUAZIP=quazip1-qt6
-    }
-
     INCLUDEPATH *= /usr/local/include
-    INCLUDEPATH *= $$system("pkg-config $$QUAZIP --cflags-only-I | cut -d' ' -f1 | tail -c +3")
 
     LIBS *= -L/usr/local/lib
+    LIBS *= -ltermcap
+
+    CV_REQUIRED=2.4.13.6
+    CV_VERSION=$$system("pkg-config opencv --modversion")
+    !equals(CV_VERSION,$$CV_REQUIRED)  {
+        error("OpenCV $$CV_REQUIRED is required, found version <$$CV_VERSION>")
+    }
     LIBS *= $$system("pkg-config opencv --libs")
 
-    exists("/usr/local/lib/lib$${QUAZIP}.so") {
-        LIBS *= -l$$QUAZIP -lz
+    # quazip uses a funky versioned include directory...and now qt6 doesn't seem
+    # to distribute pkg-config files at all (Ubuntu 22.04) but they're still in the source build
+    # .. so we need to find quazip ourself
+    # fixme: qt6 seems to have moved to cmake so throw all of this out..
+    QUAZIP_MODULE=quazip1-qt6
+    QUAZIP_VERSION=$$system("pkg-config $$QUAZIP_MODULE --modversion")
+    QUAZIP_HEADERS="/usr/local/include/QuaZip-Qt6-$$QUAZIP_VERSION"
+    QUAZIP_LIB = "/usr/local/lib/lib$${QUAZIP_MODULE}.so"
+
+    !exists($$QUAZIP_HEADERS) {
+        message(expected QuaZip headers in $$QUAZIP_HEADERS)
+        error(quazip headers elude me)
     }
-    else {
-        LIBS *= -lquazip -lz
+    INCLUDEPATH *= $$QUAZIP_HEADERS
+
+    !exists($$QUAZIP_LIB) {
+        message(expected QuaZip lib at $$QUAZIP_LIB)
+        error(quazip lib eludes me)
     }
-    LIBS *= -ltermcap
+
+    LIBS *= -l$${QUAZIP_MODULE} -lz
 }
 
-LIBS *= -lpng # for cimg
-LIBS *= -ljpeg # for cimg
+# cross-platform common libs
+contains(DEFINES, ENABLE_CIMG) LIBS *= -lpng -ljpeg
 LIBS *= -lavcodec -lavformat -lavutil -lswscale
 LIBS *= -lexiv2
 
+# testing other search tree implementations
 # LIBS *= lib/vptree/lib/libvptree.a
 
 contains(DEFINES, DEBUG) {
-    warning("debug build")
+    warning("******************************")
+    warning("DEBUG BUILD")
+    warning("******************************")
     QMAKE_CXXFLAGS_RELEASE = -g -O0
 }
 else {
-    win32 {
-        # westmere is latest that I can run in qemu, and
-        # it has popcnt (population count) which is nice for hamm64()
-        QMAKE_CXXFLAGS_RELEASE = -Ofast -march=westmere
-    }
-    unix {
-        QMAKE_CXXFLAGS_RELEASE = -Ofast -march=native
-    }
+    # westmere is latest that I can run in qemu, and
+    # it has popcnt (population count) which is nice for hamm64()
+    win32: QMAKE_CXXFLAGS_RELEASE = -Ofast -march=westmere
+
+    unix: QMAKE_CXXFLAGS_RELEASE = -Ofast -march=native
 }
 
-#QMAKE_LFLAGS += -fuse-ld=gold -L/usr/local/lib

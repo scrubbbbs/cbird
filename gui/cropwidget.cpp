@@ -108,7 +108,8 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
             .toHex();
     QString cacheDir = qEnvironmentVariable("XDG_CACHE_HOME", "$HOME/.cache/thumbnails");
     QString flushCacheCmd = QString("rm -v \"%1/\"*/%2.png").arg(cacheDir).arg(hash);
-    system(qPrintable(flushCacheCmd));
+    if (0 == system(qPrintable(flushCacheCmd)))
+      qInfo() << "thumbnail cache flushed";
 
     if (async) after(ok);
 #endif

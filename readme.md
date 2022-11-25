@@ -1,4 +1,4 @@
-![](screenshot.png)
+            ![](screenshot.png)
 
 About cbird
 =========================
@@ -44,7 +44,7 @@ Qt is used for images and FFmpeg is used for videos. The formats available will 
 
 Additionally, zip files are supported for images.
 
-To get the most formats you will need to compile FFmpeg and Qt5 with the necessary options.
+To get the most formats you will need to compile FFmpeg and Qt 6 with the necessary options.
 
 License
 =========================
@@ -64,6 +64,10 @@ chmod +x cbird-linux-0.5.0-x86_64.AppImage
 ./cbird-linux-0.5.0-AppImage -install # install to /usr/local
 ```
 
+- missing libOpenGL.so.0:
+	+ debian: apt install libopengl0
+	+ redhat: yum install libglvnd-opengl
+	+ arch: ?
 - Required packages: trash-cli
 - Optional packages: ocenaudio, kdenlive
 
@@ -303,6 +307,7 @@ Wish List
 - ~~remember past deletions and optionally replay them in the future should they reappear (via traal)~~ added "weeds" feature v0.6
 - detect breaking of symlinks on delete/rename
 - visual indicator of the needle in group view
+- open zip'd files/dirs directly where supported (dolphin/gwenview/nomacs?)
 
 ### Misc
 - method declaration sweep
@@ -345,24 +350,24 @@ Compiling
 
 ## Compiling: Dependencies
 
-- qt5, 5.15
+- qt6
 - opencv2, 2.4.13+
 - FFmpeg
 - quazip
 
-## Compiling: Linux (Ubuntu 21.04/Debian 11)
+## Compiling: Linux (Ubuntu 22.04)
 
-The easiest way is to use a distro that has Qt 5.15. However, the qt.io distribution or building from source can have additional image formats like tiff, tga, and webp.
+The easiest way is to use a distro that has Qt 6. However, the qt.io distribution or building from source can have additional image formats like tiff, tga, and webp.
 
-This recipe is for Ubuntu 21.04/Debian 11 which includes required versions of core dependencies already.
+This recipe is for Ubuntu 22.04 which includes a working FFmpeg and Qt6 version.
 
-1.1 Packages
+#### 1.1 Packages
 
 ```
-apt-get install git cmake g++ qtbase5-dev qtbase5-private-dev libpng-dev libjpeg-turbo8-dev libtiff5-dev libopenexr-dev libexiv2-dev libncurses-dev
+sudo apt-get install git cmake  g++ qt6-base-dev qt6-base-private-dev libqt6core5compat6-dev libgl-dev libpng-dev libjpeg-turbo8-dev libtiff5-dev libopenexr-dev libexiv2-dev libncurses-dev
 ```
 
-1.2 Compiling OpenCV 2.4
+#### 1.2 Compiling OpenCV 2.4
 
 ```
 wget https://github.com/opencv/opencv/archive/2.4.13.6.zip
@@ -374,87 +379,27 @@ make -j8
 sudo make install
 ```
 
-1.3 Compiling quazip
+#### 1.3 Compiling quazip
 
 ```
 git clone https://github.com/stachenov/quazip
 cd quazip
-cmake .
-make
+cmake -DQUAZIP_QT_MAJOR_VERSION=6 .
+make -j8
 sudo make install
 ```
 
-1.4a Using System FFmpeg
+#### 1.4a Using System FFmpeg
 
 ```
 apt-get install libavformat-dev libswscale-dev
 ```
 
-1.4b Compiling FFmpeg
-
-Compiling FFmpeg from source can provide additional format support.
-See: doc/ffmpeg-compile.txt
-
-1.5 Compiling cbird
-
-```
-cd cbird
-qmake
-make -j8
-sudo make install
-```
-
-1.6 Install Supporting Files (Optional)
-
-```
-cbird -install
-```
-
-## Compiling: AppImage
-
-The AppImage is built using linuxdeployqt on ubuntu 18.04 LTS. Core dependencies are all compiled (maybe PPA can be used for some...)
-
-Use a virtual machine (I use qemu) with xubuntu 18.04 lts, target CPU "Westmere". The CPU target helps ensure compatibility with older systems.
-
-#### apt packages
-
-```
-sudo apt-get install bison build-essential gperf flex ruby python git mercurial cmake nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev libncurses5-dev libfribidi-dev
-
-sudo apt-get install libxcb*-dev libx11*-dev libxext-dev libxfixes-dev libxi-dev libxcd*-dev libxkb*-dev libxrender-dev libfontconfig1-dev libfreetype6-dev libdrm-dev libegl1-mesa-dev libxcursor-dev libxcomposite-dev libxdamage-dev libxrandr-dev libfontconfig1-dev libxss-dev libevent-dev 
-```
-
-#### qt base
-
-```
-for x in qtbase qtimageformats qtwayland; do
-  wget "https://download.qt.io/official_releases/qt/5.15/5.15.2/submodules/$x-everywhere-src-5.15.2.tar.xz"
-done
-
-for x in qtbase qtimageformats qtwayland; do
-  tar -Jxvf "$x-everywhere-src-5.15.2.tar.xz"
-done
-```
-
-```
-cd qtbase-everywhere-src-5.15.2
- ./configure  -opensource -confirm-license -nomake examples -nomake tests -no-avx -xcb -silent
-make -j8
-sudo make install
-```
-
-#### qt submodules
-
-```
-alias qmake=/usr/local/Qt-5.15.2/bin/qmake
-for x in qtimageformats qtwayland; do
-  (cd "$x-everywhere-src-5.15.2" && qmake && make -j8 && sudo make install)
-done
-```
-
-#### ffmpeg
+#### 1.4b Compiling FFmpeg
 
 The latest ffmpeg will not work due to deprecations, so checkout a working version. For GPU video decoding (Nvidia) we also need nv-codecs-headers and --enable-cuvid.
+
+With some additional flags (not shown here) you can get more codec support.
 
 ```
 git clone https://github.com/FFmpeg/nv-codec-headers.git
@@ -469,7 +414,96 @@ make -j8
 sudo make install
 ```
 
+#### 1.5 Compiling cbird
+
+```
+cd cbird
+qmake6
+make -j8
+sudo make install
+```
+
+#### 1.6 Install Supporting Files (Optional)
+
+```
+cbird -install
+```
+
+## Compiling: AppImage
+
+The AppImage is built using linuxdeployqt on ubuntu 18.04 LTS.
+
+Using QEMU with cpu target "Westmere" to ensure binary compatibility with older systems.
+
+#### apt packages
+
+```
+sudo apt-get install bison build-essential gperf flex ruby python git mercurial nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev libncurses5-dev libfribidi-dev g++-8
+
+sudo apt-get install libxcb*-dev libx11*-dev libxext-dev libxfixes-dev libxi-dev libxcd*-dev libxkb*-dev libxrender-dev libfontconfig1-dev libfreetype6-dev libdrm-dev libegl1-mesa-dev libxcursor-dev libxcomposite-dev libxdamage-dev libxrandr-dev libfontconfig1-dev libxss-dev libevent-dev 
+```
+
+#### environment
+
+```
+# make sure we can't use g++7...incompatible with qt6
+apt-get autoremove g++-7
+
+# force build tools to use gcc v8
+export CXX=g++-8
+export CC=gcc-8
+
+# (after qt-base compilation)
+export Qt6_DIR=/usr/local/Qt-6.4.
+```
+
+#### cmake 3.24+
+
+```
+wget https://github.com/Kitware/CMake/archive/refs/tags/v3.25.0.tar.gz
+tar -xvf v3.25.0.tar.gz
+cd CMake-3.25.0
+./bootstrap
+make -j8
+sudo make install
+cmake --version
+```
+
+#### qt base
+
+```
+for x in qtbase qtimageformats qtwayland qt5compat; do
+  wget "https://download.qt.io/official_releases/qt/6.4/6.4.0/submodules/$x-everywhere-src-6.4.0.tar.xz"
+done
+
+for x in *.xz; do tar -xvf "$x"; done
+```
+ 
+```
+cd qtbase-everywhere-src-6.4.0
+./configure -qt-libjpeg -no-avx -nomake tests -nomake examples -silent
+cmake --build . --parallel
+sudo cmake --install .
+```
+
+#### qt submodules
+
+```
+for x in qtimageformats qtwayland qt5compat; do
+  (cd "$x-everywhere-src-6.4.0" && \
+   cmake . && \
+   cmake --build . --parallel && \
+   sudo cmake --install .)
+done
+```
+
+#### ffmpeg
+
+See [Compiling FFmpeg](#1.4b-compiling-ffmpeg)
+
 #### opencv
+
+See [Compiling opencv](#1.2-compiling-opencv), except for cpu flags for compatibility.
 
 ```
 cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_FAST_MATH=ON -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
@@ -477,15 +511,7 @@ cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D CMAKE_CXX_FLAGS_RELEASE=
 
 #### quazip
 
-```
-git clone https://github.com/stachenov/quazip
-git checkout v0.8.1
-alias qmake=/usr/local/Qt-5.15.2/bin/qmake
-cd quazip
-qmake PREFIX=/usr/local
-make -j8
-sudo make install
-```
+See [Compiling quazip](#1.3-compiling-quazip)
 
 #### cbird
 
@@ -493,8 +519,7 @@ sudo make install
 
 ```
 cd cbird
-alias qmake=/usr/local/Qt-5.15.2/bin/qmake
-qmake
+$Qt6_DIR/bin/qmake -r
 make -j8
 make appimage
 ```
@@ -583,6 +608,14 @@ make -f <test>.pro.make -j
 
 Release Notes
 =============
+
+#### v0.6.2
+
+- Qt 6 port
+- Thumbnail cropping tools
+- Search: Query external hash code
+- Results view: Resize page option
+- Folder view: Fix video thumbnail size
 
 #### v0.6.0
 
