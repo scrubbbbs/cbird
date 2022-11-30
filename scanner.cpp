@@ -120,7 +120,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   }
 
   if (_imageQueue.count() > 0 || _videoQueue.count() > 0) {
-    qInfo() << "scan completed, indexing " << _queuedWork.count() << "additions...";
+    qInfo() << "scan completed, indexing" << remainingWork() << "additions...";
     QTimer::singleShot(1, this, &Scanner::processOne);
   }
   else {
@@ -773,6 +773,7 @@ VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu,
   opt.maxH = 128;                 // need just enough to detect/crop borders
   opt.maxW = 128;
   opt.fast = true;                // enable speeds ok for indexing
+  opt.gray = true;                // only look at the "Y" channel, dct algo is grayscale
   if (video->open(path, opt) < 0) {
     setError(path, ErrorLoad);
     delete video;

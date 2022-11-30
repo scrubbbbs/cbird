@@ -209,6 +209,8 @@ class Scanner : public QObject {
 
   bool isQueued(const QString& path) const { return _queuedWork.contains(path); }
 
+  int remainingWork() const { return _activeWork.count()+_videoQueue.count()+_imageQueue.count(); }
+
   static void setError(const QString& path, const QString& error);
 
   IndexParams _params;

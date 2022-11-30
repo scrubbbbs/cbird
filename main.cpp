@@ -1242,8 +1242,7 @@ int main(int argc, char** argv) {
             int numFrames;
             {
               VideoContext v;
-              VideoContext::DecodeOptions opt;
-              if (0 != v.open(to, opt)) {
+              if (0 != v.open(to)) {
                 qCritical()
                     << "similar-to: frame grabbing failed to open video:"
                     << arg;
@@ -1308,7 +1307,7 @@ int main(int argc, char** argv) {
               "similar-to: invalid query type (-p.qt) or not a known filetype: %s",
               qUtf8Printable(to));
           if (isVideo)
-            qInfo("similar-to: for video search, use -p.qt 2[,1] -p.alg 4");
+            qInfo("similar-to: for video search, use -p.alg video");
 
           continue;
         }
@@ -2129,7 +2128,7 @@ int main(int argc, char** argv) {
         qWarning() << m.path() << "is not in the database, metadata will not be saved";
         m = Media(path, Media::TypeVideo);
       }
-      int  frame = nextArg().toInt();
+      int frame = nextArg().toInt();
       m.setImage(VideoContext::frameGrab(m.path(), frame, false));
       CropWidget::setIndexThumbnail(*engine().db, m);
     } else if (arg == "-test-image-loader") {
@@ -2153,7 +2152,7 @@ int main(int argc, char** argv) {
         arg = nextArg();
         if (arg == "-show") { display = true; scale = true; }
         else if (arg == "-loop") loop = true;
-        else if (arg == "-rgb") opt.rgb = 1;
+        else if (arg == "-gray") opt.gray = 1;
         else if (arg == "-maxw") opt.maxW = intArg(nextArg());
         else if (arg == "-maxh") opt.maxH = intArg(nextArg());
         else if (arg == "-device") opt.deviceIndex = intArg(nextArg());
@@ -2270,12 +2269,9 @@ int main(int argc, char** argv) {
       // settings used by indexer, maybe higher hit rate
       opt.maxW = 128;
       opt.maxH = 128;
-      opt.rgb = 0;
+      opt.gray = true;
       opt.gpu = indexParams.useHardwareDec;
       opt.threads = indexParams.decoderThreads;
-
-      // settings used in practical use
-      // opt.rgb = 1;
 
       // arg must be file we know to be in the db already
       const QString path = nextArg();

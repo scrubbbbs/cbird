@@ -61,34 +61,30 @@ class VideoContext {
   };
 
   struct DecodeOptions {
-    int maxW;  // maximum frame w/h (forces rescale)
-    int maxH;
-    bool rgb;   // color or yuv/grayscale output
-    bool fast;  // faster but lower quality, maybe suitable for indexing
+    int maxW = 0;       // maximum frame w/h (downscale, both must be given)
+    int maxH = 0;
+    bool gray = false;  // color or yuv/grayscale output
+    bool fast = false;  // faster but lower quality, maybe suitable for indexing
 
-    int threads;      // max # of threads
-    bool gpu;         // try gpu decoding
-    int deviceIndex;  // gpu device index
+    int threads = 1;      // max # of threads
+    bool gpu = false;     // try gpu decoding
+    int deviceIndex = 0;  // gpu device index
 
-    DecodeOptions()
-        : maxW(0),
-          maxH(0),
-          rgb(false),
-          fast(false),
-          threads(1),
-          gpu(false),
-          deviceIndex(0) {}
+    DecodeOptions();
   };
 
   /**
    * get a single frame
    * @param path file location
    * @param frame frame number (-1 means automatic)
-   * @param fast less accurate but faster seeking
+   * @param fastSeek less accurate but faster seeking
+   * @param decoder options
+   * @param future if non-null use for cancellation
    * @return
    */
-  static QImage frameGrab(const QString& path, int frame = -1,
-                          bool fast = false);
+  static QImage frameGrab(const QString& path, int frame = -1, bool fastSeek=false,
+                          const DecodeOptions& options = DecodeOptions(),
+                          QFuture<void>* future = nullptr);
 
   /**
    * read file metadata
@@ -114,7 +110,7 @@ class VideoContext {
    * open video for decoding
    * @return 0 if no error, <0 if error
    */
-  int open(const QString& path, const DecodeOptions& opt);
+  int open(const QString& path, const DecodeOptions& opt=DecodeOptions());
   void close();
 
   /// seek by decoding every frame; painfully slow but reliable

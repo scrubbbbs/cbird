@@ -255,7 +255,6 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
   void paint(QPainter* painter, const QStyleOptionViewItem& option,
              const QModelIndex& index) const {
-
     auto* parent = dynamic_cast<const MediaGroupListWidget*>(option.widget);
     Q_ASSERT(parent);
     const auto* item = parent->item(index.row());
@@ -344,6 +343,8 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       //if (isRoi) painter->fillRect(dstRect, Qt::gray);
 
       if (full.isNull()) {
+        // draw outline of image to show it is loading
+        // we may not know what the dimensions are so we can't always do it
         if (fullRect.height() > 0) {
           QRectF r = i2v.mapRect(fullRect);
           r = r.intersected(QRect{0,0,rect.width(),rect.height()});
@@ -936,8 +937,7 @@ static float videoFps(const QString& path) {
   float fps = 29.97f;
 
   VideoContext video;
-  VideoContext::DecodeOptions opt;
-  if (0 == video.open(path, opt)) {
+  if (0 == video.open(path)) {
     QImage frame;
     video.nextFrame(frame);
     fps = video.fps();
@@ -954,8 +954,7 @@ static float videoFps(const QString& path) {
  */
 static VideoContext::Metadata loadVideo(const Media& m) {
   VideoContext video;
-  VideoContext::DecodeOptions opt;
-  video.open(m.path(), opt);
+  video.open(m.path());
   video.close();
   return video.metadata();
 }
@@ -969,6 +968,8 @@ static VideoContext::Metadata loadVideo(const Media& m) {
 static void loadImage(ImageWork* work, bool fastSeek) {
   Media& m = work->media;
   Q_ASSERT(m.image().isNull());
+
+  const MessageContext ctx(m.path().split("/").last());
 
   uint64_t ts = nanoTime();
   uint64_t then = ts;
@@ -1002,7 +1003,9 @@ static void loadImage(ImageWork* work, bool fastSeek) {
   else if (m.type() == Media::TypeImage) {
     img = m.loadImage(QSize(), &work->future);
   } else if (m.type() == Media::TypeVideo) {
-    img = VideoContext::frameGrab(m.path(), m.matchRange().dstIn, fastSeek);
+    VideoContext::DecodeOptions opt;
+    opt.fast = true; // faster scaler
+    img = VideoContext::frameGrab(m.path(), m.matchRange().dstIn, fastSeek, opt, &work->future);
     if (work->future.isCanceled()) return;
     auto meta = loadVideo(m);
     m.setAttribute("duration", QString::number(meta.duration));
@@ -1013,10 +1016,9 @@ static void loadImage(ImageWork* work, bool fastSeek) {
 
   if (!img.isNull()) {
     // rgb32 is best for painting
-    if (img.format() != QImage::Format_RGB32) {
-      qDebug() << "supplied image is not RGB32, converting";
+    if (img.format() != QImage::Format_RGB32)
       img = img.convertToFormat(QImage::Format_RGB32);
-    }
+
     m.setImage(img);
     m.setWidth(img.width());
     m.setHeight(img.height());
@@ -1242,6 +1244,8 @@ void MediaGroupListWidget::updateItems() {
   QString prefix = Media::greatestPathPrefix(group);
   prefix = prefix.mid(0, prefix.lastIndexOf('/') + 1);
 
+  QHash<QString, int> fsFileCount; // cache file count for large folders
+
   // store the attributes of the first item and compare to the others
   struct {
     int64_t size;        // byte size
@@ -1295,9 +1299,16 @@ void MediaGroupListWidget::updateItems() {
         fileCount = m.archiveCount();
         _archiveFileCount.insert(archivePath, fileCount);
       }
-    } else if (fileInfo.isFile())
-      fileCount = fileInfo.dir().entryList(QDir::Files).count();
-
+    } else if (fileInfo.isFile()) {
+      const auto key = fileInfo.absolutePath();
+      const auto it = fsFileCount.find(key);
+      if (it != fsFileCount.end())
+        fileCount = it.value();
+      else {
+        fileCount = fileInfo.dir().entryList(QDir::Files).count();
+        fsFileCount.insert(key, fileCount);
+      }
+    }
     // store if current value is less than/greater than the first item in the
     // group the labels assigned are referenced in the stylesheet to change the
     // color of the value

@@ -208,38 +208,40 @@ class VideoContextPrivate {
   } scaled;
 };
 
-QImage VideoContext::frameGrab(const QString& path, int frame, bool fast) {
-  VideoContext::DecodeOptions options;
-  options.rgb = true;
-  options.threads = QThread::idealThreadCount();
-  options.fast = true;
+QImage VideoContext::frameGrab(const QString& path, int frame, bool fastSeek,
+                               const VideoContext::DecodeOptions& options,
+                               QFuture<void>* future) {
   QImage img;
 
   // note: hardware decoder is much slower to open, not worthwhile
   // todo: system configuration for grab location
   VideoContext video;
-  if (0 == video.open(path, options)) {
-    const auto md = video.metadata();
-    const int maxFrame = int(md.frameRate * float(md.duration));
-    if (frame >= maxFrame) {
-      qWarning() << path << ": seek frame out of range :" << frame << ", using auto";
-      frame = -1;
-    }
-    if (frame < 0) {
-      if (md.duration > 60)
-        frame = int(60 * md.frameRate);
-      else
-        frame = int(float(md.duration) * md.frameRate * 0.10f);
-    }
+  if (0 != video.open(path, options)) return img;
+  if (future && future->isCanceled()) return img;
 
-    bool ok = false;
-    if (fast)
-      ok = video.seekFast(frame);
-    else
-      ok = video.seek(frame);
-
-    if (ok) video.nextFrame(img);
+  const auto md = video.metadata();
+  const int maxFrame = int(md.frameRate * float(md.duration));
+  if (frame >= maxFrame) {
+    qWarning() << path << ": seek frame out of range :" << frame << ", using auto";
+    frame = -1;
   }
+  if (frame < 0) {
+    if (md.duration > 60)
+      frame = int(60 * md.frameRate);
+    else
+      frame = int(float(md.duration) * md.frameRate * 0.10f);
+  }
+
+  bool ok = false;
+  if (fastSeek)
+    ok = video.seekFast(frame);
+  else
+    ok = video.seek(frame);
+
+  if (future && future->isCanceled()) return img;
+
+  if (ok) video.nextFrame(img);
+
   return img;
 }
 
@@ -418,7 +420,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       if (*fmt++ == _p->context->pix_fmt) supported = true;
 
     if (!supported) {
-      qDebug() << "unsupported pixel format for hw codec :"
+      qWarning() << "pixel format unsupported, falling back to sw :"
                << av_pix_fmt_desc_get(_p->context->pix_fmt)->name;
       tryHardware = false;
     }
@@ -525,10 +527,10 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     }
   }
 
-  qDebug("%s using %d threads (requested %d) threads=%s",
-         _p->codec->name,
-         _p->context->thread_count, _numThreads,
-         _p->context->active_thread_type == FF_THREAD_FRAME ? "frame" : "slice");
+//  qDebug("%s using %d threads (requested %d) threads=%s",
+//         _p->codec->name,
+//         _p->context->thread_count, _numThreads,
+//         _p->context->active_thread_type == FF_THREAD_FRAME ? "frame" : "slice");
 
   _p->frame = av_frame_alloc();
   if (!_p->frame) {
@@ -604,7 +606,7 @@ bool VideoContext::seekFast(int frame) {
 
   const int64_t target = frameToPts(frame);
 
-  qDebug("frame=%d pts=(%" PRIi64 ")", frame, target);
+  //qDebug("frame=%d pts=(%" PRIi64 ")", frame, target);
 
   int err = av_seek_frame(_p->format, _p->videoStream->index, target,
                           AVSEEK_FLAG_BACKWARD);
@@ -625,7 +627,7 @@ bool VideoContext::seek(int frame, QVector<QImage>* decoded, int* maxDecoded) {
   const double frameDuration = 1.0 / av_q2d(_p->videoStream->time_base);
   const int64_t target = frameToPts(frame);
 
-  qDebug("frame=%d pts=(%" PRIi64 ") pts=(%" PRIi64 ")", frame, target, target-_firstPts);
+  //qDebug("frame=%d pts=(%" PRIi64 ") pts=(%" PRIi64 ")", frame, target, target-_firstPts);
 
   int seekedFrame = 0; // frame number we actually seeked to
 
@@ -827,7 +829,7 @@ QVariantList VideoContext::readMetaData(const QString& _path,
 }
 
 bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
-  if (_opt.rgb ||
+  if ( (!_opt.gray) ||
       (_opt.maxW && _opt.maxH &&
        (_p->frame->width > _opt.maxW || _p->frame->height > _opt.maxH))) {
     w = _opt.maxW;
@@ -838,8 +840,8 @@ bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
       h = _p->frame->height;
     }
 
-    fmt = AV_PIX_FMT_YUV420P;
-    if (_opt.rgb) fmt = AV_PIX_FMT_BGR24;
+    fmt = AV_PIX_FMT_BGR24;
+    if (_opt.gray) fmt = AV_PIX_FMT_YUV420P;
 
     if (_p->scaler == nullptr) {
       if (!av_pix_fmt_desc_get(AVPixelFormat(_p->frame->format))) {
@@ -848,28 +850,38 @@ bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
         return false;
       }
 
-      // area filter seems the best for downscaling
+      // area filter seems the best for downscaling (indexing)
       // - faster than bicubic with fewer artifacts
       // - less artifacts than bilinear
+      // fast-bilinear produces artifacts if heights differ
       int fastFilter = SWS_AREA;
       int fw = _p->frame->width;
       int fh = _p->frame->height;
-      if (w > fw || h > fh) {
-        if (fh == h) fastFilter = SWS_FAST_BILINEAR;  // bilinear in one direction
+      if (w >= fw || h > fh) {
+        if (fh == h) fastFilter = SWS_FAST_BILINEAR;
         else fastFilter = SWS_BILINEAR;
       }
+      int filter = _opt.fast ? fastFilter : SWS_BICUBIC;
 
-      qDebug() << "scaling from:"
-              << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
+      const char* filterName="other";
+      switch (filter) {
+        case SWS_AREA:          filterName="area"; break;
+        case SWS_BILINEAR:      filterName="bilinear"; break;
+        case SWS_FAST_BILINEAR: filterName="fast-bilinear"; break;
+        case SWS_BICUBIC:       filterName="bicubic"; break;
+      }
+
+      qDebug() << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
               << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height)
-              << "to:" << av_get_pix_fmt_name(AVPixelFormat(fmt))
+              << "=>" << av_get_pix_fmt_name(AVPixelFormat(fmt))
               << QString("@%1x%2").arg(w).arg(h)
-               << "fast=" << _opt.fast << "fast-filter" << fastFilter;
+              << filterName
+              << (_opt.fast ? "fast" : "");
 
 
       _p->scaler = sws_getContext(
           _p->frame->width, _p->frame->height, AVPixelFormat(_p->frame->format),
-          w, h, AVPixelFormat(fmt), _opt.fast ? fastFilter : SWS_BICUBIC,
+          w, h, AVPixelFormat(fmt), filter,
           nullptr, nullptr, nullptr);
 
       avLoggerSetFileName(_p->scaler, QFileInfo(_path).fileName());
@@ -1033,3 +1045,5 @@ QString VideoContext::Metadata::toString(bool styled) const {
       .arg(audioCodec)
       .arg(audioBitrate / 1000);
 }
+
+VideoContext::DecodeOptions::DecodeOptions() {}
