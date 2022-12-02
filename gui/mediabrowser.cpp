@@ -31,13 +31,16 @@
 extern Engine& engine();
 
 static QImage loadThumb(const Media& m, const MediaWidgetOptions& options) {
+  qreal dpr = qApp->devicePixelRatio();
+  QSize size(0, options.iconSize * dpr);
   QImage img;
   if (m.type() == Media::TypeVideo) {
     img = VideoContext::frameGrab(m.path(), -1, true);
-    img = Media(img).loadImage(QSize(0, options.iconSize));
-  }
-  else
-    img = m.loadImage(QSize(0, options.iconSize));
+    img = Media(img).loadImage(size);
+  } else
+    img = m.loadImage(size);
+
+  img.setDevicePixelRatio(dpr);
   return img;
 }
 

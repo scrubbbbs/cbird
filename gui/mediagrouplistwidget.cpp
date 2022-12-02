@@ -79,8 +79,10 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
   int iconW = 0;
   int iconH = 0;
   for (auto&  m : list) {
-    iconW = std::max(iconW, m.image().width());
-    iconH = std::max(iconH, m.image().height());
+    qreal dpr = m.image().devicePixelRatioF();
+    QSize size = m.image().size();
+    iconW = std::max(iconW, int(size.width()/dpr));
+    iconH = std::max(iconH, int(size.height()/dpr));
   }
   setIconSize({iconW,iconH});
 
@@ -192,11 +194,11 @@ class MediaItemDelegate : public QAbstractItemDelegate {
   MediaItemDelegate(MediaGroupListWidget* parent)
       : QAbstractItemDelegate(parent) {
     _filters.push_back({-1, "Qt"});
-    _filters.push_back({cv::INTER_NEAREST, "Nearest"});
     _filters.push_back({cv::INTER_LINEAR, "Linear"});
     _filters.push_back({cv::INTER_AREA, "Area"});
     _filters.push_back({cv::INTER_CUBIC, "Cubic"});
     _filters.push_back({cv::INTER_LANCZOS4, "Lanczos"});
+    _filters.push_back({cv::INTER_NEAREST, "Nearest"});
 
     _debug = QProcessEnvironment::systemEnvironment().contains("DEBUG_LAYOUT");
   }
@@ -204,7 +206,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
   virtual ~MediaItemDelegate() {}
 
   void setAverageItemRatio(double ratio) { _avgItemRatio = ratio; }
-  void setZoom(double zoom) { _zoom = zoom; }
+  void setZoom(double zoom) { _zoom = zoom; } // 0.0-1.0; 1.0==no zoom
   void setPan(const QPointF& pan) { _pan = pan; }
   void setTextHeight(int height) { _textHeight = height; }
 
@@ -222,35 +224,50 @@ class MediaItemDelegate : public QAbstractItemDelegate {
    *
    * @param imgRect   Full size (unscaled) image
    * @param itemRect  List item paint (sub) rectangle
+   * @param dpr       Device Pixel Ratio
    * @param scale     Scale-to-fit factor from image->viewport (ignoring zoom)
-   * @param dstRect   Destination rectangle in item coordinates
-   * @param i2v       Image-to-viewport transformation
+   * @param dstRect   Destination rectangle in view coordinates
+   * @param i2v       Image-to-viewport item transformation (0,0)==dstRect.topLeft()
    */
-  void calculate(const QRect& imgRect, const QRect& itemRect, double& scale,
-                 QRectF& dstRect, QTransform& i2v) const {
+  void calculate(const QRect& imgRect, const QRect& itemRect_, const double dpr, double& scale,
+                 QRect& dstRect, QTransform& i2v) const {
+    // hidpi: scale viewport rect by dpr, scale painter by 1/dpr
+    // makes 100% scale == true pixels
+    const QRect itemRect = QRect(itemRect_.topLeft() * dpr, itemRect_.size() * dpr);
 
     double sw = double(itemRect.width()) / imgRect.width();
     double sh = double(itemRect.height()) / imgRect.height();
+
+    // if we want actual pixels fix the scale factor,
+    // zoom still works but starts from here
     scale = _actualSize ? 1.0 : qMin(sw, sh);
 
-    // scale-to-fit mode disabled and magnification needed, limit to 100% scale
+    // usually we want to see the relative sizes, the
+    // largest image fills the viewport
+    // do not scale > 100% unless _scaleToFit
     if (!_scaleToFit && scale > 1.0) scale = 1.0;
 
-    double x = (itemRect.width() - scale * imgRect.width()) / 2;
-    double y = (itemRect.height() - scale * imgRect.height()) / 2;
+    scale /= _zoom;
 
-    double px = _pan.x()/scale * _zoom;
-    double py = _pan.y()/scale * _zoom;
+    double hw = imgRect.width() / 2.0;
+    double hh = imgRect.height() / 2.0;
 
-    dstRect = QRectF(x, y,
-                     imgRect.width() * scale, imgRect.height() * scale);
+    // dst rect is centered and doesn't go outside the box
+    double dx = itemRect.x() + itemRect.width() / 2.0 - (scale * hw);
+    double dy = itemRect.y() + itemRect.height() / 2.0 - (scale * hh);
+    double dw = imgRect.width() * scale;
+    double dh = imgRect.height() * scale;
+    dstRect = QRect(dx, dy, dw, dh);
+    dstRect = dstRect.intersected(itemRect);
 
-    i2v.translate(itemRect.width()/2,itemRect.height()/2);
+    // pan gets less sensitive at higher scales
+    // fixme: doesn't stay on center
+    double px = _pan.x() / scale;
+    double py = _pan.y() / scale;
+
+    i2v.translate(dstRect.width() / 2.0, dstRect.height() / 2.0);
     i2v.scale(scale, scale);
-
-    i2v.scale(1.0 / _zoom, 1.0 / _zoom);
-    i2v.translate(-imgRect.width() / 2 + px,
-                  -imgRect.height() / 2 + py);
+    i2v.translate(-hw + px, -hh + py);
   }
 
   void paint(QPainter* painter, const QStyleOptionViewItem& option,
@@ -272,17 +289,29 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       const QImage& full = m.image();
 
       QTransform i2v;  // image-to-viewport transform
-      QRectF dstRect;  // destination paint rectangle (viewport coordinates)
+      QRect dstRect;  // destination paint rectangle (viewport coordinates)
       double scale;    // scale factor for scale-to-fit
+      const qreal dpr = parent->devicePixelRatioF();
 
       const QRect fullRect = !full.isNull() ? full.rect() : QRect(0,0,m.width(),m.height());
-      calculate(fullRect, rect, scale, dstRect, i2v);
+      calculate(fullRect, rect, dpr, scale, dstRect, i2v);
 
       if (_debug) {
+        painter->setPen(Qt::green);
+        painter->drawRect(option.rect);
         painter->setPen(Qt::cyan);
         painter->drawRect(rect);
+        painter->save();
+
+        painter->scale(1.0/dpr, 1.0/dpr);
         painter->setPen(Qt::red);
-        painter->drawRect(dstRect.translated(rect.topLeft()));
+        painter->drawRect(dstRect);
+
+        painter->translate(dstRect.topLeft());
+        painter->setTransform(i2v, true);
+        painter->setPen(Qt::yellow);
+        painter->drawRect(full.rect());
+        painter->restore();
       }
 
       // total scale from source image to viewport, to select filter
@@ -306,7 +335,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
               parent->_list[parent->_currentRow][tmplIndex].image().rect();
 
           QTransform tx;
-          calculate(tmplRect, rect, scale, dstRect, tx);
+          calculate(tmplRect, rect, dpr, scale, dstRect, tx);
 
           // m.transform() is from template to m.image(),
           // tx is from template to viewport so with the inversion we get
@@ -316,7 +345,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
           // to confirm the mapping is right, draw the outline
           if (_debug) {
             painter->setPen(Qt::yellow);
-            painter->drawRect(dstRect.translated(rect.topLeft()));
+            painter->drawRect(dstRect);
           }
           // get accurate scale for the filters
           QPointF p1 = i2v.map(QPointF(0, 0));
@@ -353,25 +382,22 @@ class MediaItemDelegate : public QAbstractItemDelegate {
         }
       }
       else if (filterId == -1) {
-        // Qt5 scaling (bicubic?)
         painter->setRenderHint(QPainter::SmoothPixmapTransform);
+        painter->save();
+        painter->scale(1.0/dpr, 1.0/dpr); // disables transparent dpi scaling
 
         // this is slower, only use if there is a rotation
         if (i2v.isRotating()) {
-          // bug: at some scale factors qt seems to only
-          // draw the top half of the image
-          painter->save();
-          painter->setClipRect(rect);
-          painter->translate(rect.x(),rect.y());
+          painter->setClipRect(dstRect);
+          painter->translate(dstRect.topLeft());
           painter->setTransform(i2v, true);
-          painter->drawImage(0,0,full);
-          painter->restore();
+          painter->drawImage(full.rect(), full);
         } else {
           QRectF srcRect = i2v.inverted().mapRect(
-              QRectF(0,0,rect.width(),rect.height()));
-          painter->drawImage(rect, full, srcRect);
+              QRectF(0,0,dstRect.width(),dstRect.height()));
+          painter->drawImage(dstRect, full, srcRect);
         }
-        //if (isRoi) painter->drawRect(dstRect);
+        painter->restore();
 
       } else {
         Q_ASSERT(!full.isNull()); // opencv exception/segfault
@@ -387,12 +413,15 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
         cv::Mat subImg;
         cv::warpAffine(cvImg, subImg, xForm,
-                       cv::Size(rect.width(), rect.height()),
+                       cv::Size(dstRect.width(), dstRect.height()),
                        filterId, cv::BORDER_CONSTANT);
 
         QImage qImg;
         cvImgToQImageNoCopy(subImg, qImg);
-        painter->drawImage(rect.topLeft(), qImg);
+        painter->save();
+        painter->scale(1.0/dpr,1.0/dpr);
+        painter->drawImage(dstRect.topLeft(), qImg);
+        painter->restore();
       }
 
       // draw info about the image display (scale factor, mode, filter etc)
@@ -435,8 +464,8 @@ class MediaItemDelegate : public QAbstractItemDelegate {
           y += h;
         }
         painter->restore();
-      }
-    }
+      } // histogram
+    } // image
 
     rect = option.rect;
     rect = rect.adjusted(0,std::max(0, rect.height()-_textHeight),0,0);
@@ -458,8 +487,6 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     if (_debug) {
       painter->setPen(Qt::magenta);
       painter->drawRect(rect);
-      painter->setPen(Qt::green);
-      painter->drawRect(option.rect);
     }
   }
 
