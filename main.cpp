@@ -1039,12 +1039,15 @@ int main(int argc, char** argv) {
       checkIndexPathExists = false;
       int threads = indexParams.indexThreads;
       if (threads <= 0) threads = QThread::idealThreadCount();
-
       QThreadPool::globalInstance()->setMaxThreadCount(threads);
 
-      auto &eng = engine();
-      eng.scanner->setIndexParams(indexParams);
-      eng.update(true);
+      {
+        LowPriority friendly;
+
+        auto &eng = engine();
+        eng.scanner->setIndexParams(indexParams);
+        eng.update(true);
+      }
 
       QThreadPool::globalInstance()->setMaxThreadCount(
           QThread::idealThreadCount());

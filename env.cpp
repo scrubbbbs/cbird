@@ -103,4 +103,19 @@ void Env::memoryUsage(float& virtualKb, float& workingSetKb) {
   virtualKb = vsize / 1024.0f;
   workingSetKb = rss * page_size_kb;
 }
+
+#include <sys/resource.h>
+static void setProcessPriority(int priority) {
+  if (setpriority(PRIO_PROCESS, getpid(), priority) != 0)
+    qWarning() << "setpriority() failed:" << errno << strerror(errno);
+}
+
+LowPriority::LowPriority() {
+  setProcessPriority(19);
+}
+
+LowPriority::~LowPriority() {
+  setProcessPriority(0);
+}
+
 #endif

@@ -30,3 +30,11 @@ class Env {
   Env();
   virtual ~Env();
 };
+
+/// Nice the process while instance is alive
+class LowPriority {
+  Q_DISABLE_COPY_MOVE(LowPriority);
+ public:
+  LowPriority();
+  ~LowPriority();
+};
