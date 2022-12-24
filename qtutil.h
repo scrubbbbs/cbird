@@ -78,6 +78,13 @@ class WidgetHelper {
   /// @return true if widget was maximized
   static bool restoreGeometry(QWidget* w, const char* id = nullptr);
 
+  /// save table column widths, sort column etc
+  static void saveTableState(const QTableView* w, const char* id = nullptr);
+
+  /// restore table properties
+  /// @return true if properties were set
+  static bool restoreTableState(QTableView* w, const char* id = nullptr);
+
   /// one-liner for adding actions
   static QAction* addAction(QSettings& settings, const QString& label,
                             const QKeySequence& shortcut, QWidget* target,

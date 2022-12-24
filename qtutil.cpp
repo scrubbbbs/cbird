@@ -566,6 +566,38 @@ bool WidgetHelper::restoreGeometry(QWidget *w, const char *id) {
   return settings.value("maximized").toBool();
 }
 
+void WidgetHelper::saveTableState(const QTableView* w, const char* id) {
+  auto* model = w->model();
+  Q_ASSERT(model);
+
+  if (!id) id = w->metaObject()->className();
+  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+  settings.beginGroup(id);
+
+  QStringList colWidths;
+  for (int i = 0; i < model->columnCount(); ++i)
+    colWidths.append(QString::number(w->columnWidth(i)));
+  settings.setValue("columnWidths", colWidths);
+}
+
+bool WidgetHelper::restoreTableState(QTableView* w, const char* id) {
+  Q_ASSERT(w->model());
+  if (!id) id = w->metaObject()->className();
+  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+  settings.beginGroup(id);
+
+  const QStringList colWidths = settings.value("columnWidths").toStringList();
+  settings.endGroup();
+
+  if (colWidths.count() <= 0)
+    return false;
+
+  for (int i = 0; i < colWidths.count(); i++)
+    w->setColumnWidth(i, colWidths[i].toInt());
+
+  return true;
+}
+
 QAction* WidgetHelper::addAction(QSettings& settings,
                                  const QString& label,
                                  const QKeySequence& shortcut,
