@@ -51,6 +51,8 @@ void Env::memoryUsage(float& virtualKb, float& workingSetKb) {
 }
 #else
 
+#include <sys/resource.h>
+
 void Env::systemMemory(float& totalKb, float& freeKb) {
   QFile f("/proc/meminfo");
   totalKb = freeKb = 0;
@@ -104,18 +106,9 @@ void Env::memoryUsage(float& virtualKb, float& workingSetKb) {
   workingSetKb = rss * page_size_kb;
 }
 
-#include <sys/resource.h>
-static void setProcessPriority(int priority) {
-  if (setpriority(PRIO_PROCESS, getpid(), priority) != 0)
+void Env::setIdleProcessPriority() {
+  if (setpriority(PRIO_PROCESS, getpid(), 19) != 0)
     qWarning() << "setpriority() failed:" << errno << strerror(errno);
 }
 
-LowPriority::LowPriority() {
-  setProcessPriority(19);
-}
-
-LowPriority::~LowPriority() {
-  setProcessPriority(0);
-}
-
-#endif
+#endif // !Q_OS_WIN

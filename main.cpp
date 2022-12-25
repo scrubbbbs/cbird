@@ -1042,9 +1042,8 @@ int main(int argc, char** argv) {
       QThreadPool::globalInstance()->setMaxThreadCount(threads);
 
       {
-        LowPriority friendly;
-
-        auto &eng = engine();
+        Env::setIdleProcessPriority(); // we cannot get normal priority back after this
+        auto& eng = engine();
         eng.scanner->setIndexParams(indexParams);
         eng.update(true);
       }

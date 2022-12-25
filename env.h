@@ -26,15 +26,13 @@ class Env {
   static void systemMemory(float& totalKb, float& freeKb);
   static void memoryUsage(float& vmKb, float& workingSetKb);
 
+  /**
+   * @brief set calling process to lowest/idle priority
+   */
+  static void setIdleProcessPriority();
+
  private:
   Env();
   virtual ~Env();
 };
 
-/// Nice the process while instance is alive
-class LowPriority {
-  Q_DISABLE_COPY_MOVE(LowPriority);
- public:
-  LowPriority();
-  ~LowPriority();
-};
