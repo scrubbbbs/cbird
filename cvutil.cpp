@@ -242,19 +242,23 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
   //       src.width(), src.height(),
   //       src.hasAlphaChannel());
 
+
   // you could do this with less code, however since these
   // get used a lot, we want optimized versions of each
   // note: this implementation is possibly wrong on older
   // versions of Qt or big-endian architectures
+  const int srcW = src.width();
+  const int srcH = src.height();
+
   switch (src.depth()) {
     case 32:
       if (!src.hasAlphaChannel()) {
-        dst = cv::Mat(src.height(), src.width(), CV_8UC(3));
-        for (int y = 0; y < src.height(); y++) {
+        dst = cv::Mat(srcH, srcW, CV_8UC(3));
+        for (int y = 0; y < srcH; ++y) {
           const uint8_t* sp =
               reinterpret_cast<const uint8_t*>(src.constScanLine(y));
           uint8_t* dp = reinterpret_cast<uint8_t*>(dst.ptr(y));
-          for (int x = 0; x < src.width(); x++) {
+          for (int x = 0; x < srcW; ++x) {
             dp[0] = sp[0];
             dp[1] = sp[1];
             dp[2] = sp[2];
@@ -263,23 +267,23 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
           }
         }
       } else {
-        dst = cv::Mat(src.height(), src.width(), CV_8UC(4));
-        for (int y = 0; y < src.height(); y++) {
+        dst = cv::Mat(srcH, srcW, CV_8UC(4));
+        for (int y = 0; y < srcH; ++y) {
           const uint32_t* sp =
               reinterpret_cast<const uint32_t*>(src.constScanLine(y));
           uint32_t* dp = reinterpret_cast<uint32_t*>(dst.ptr(y));
-          memcpy(dp, sp, size_t(src.width() * 4));
+          memcpy(dp, sp, size_t(srcW * 4));
         }
       }
       break;
 
     case 24:
-      dst = cv::Mat(src.height(), src.width(), CV_8UC(3));
-      for (int y = 0; y < src.height(); y++) {
+      dst = cv::Mat(srcH, srcW, CV_8UC(3));
+      for (int y = 0; y < srcH; ++y) {
         const uint8_t* sp =
             reinterpret_cast<const uint8_t*>(src.constScanLine(y));
         uint8_t* dp = reinterpret_cast<uint8_t*>(dst.ptr(y));
-        for (int x = 0; x < src.width(); x++) {
+        for (int x = 0; x < srcW; ++x) {
           dp[0] = sp[2];
           dp[1] = sp[1];
           dp[2] = sp[0];
@@ -292,25 +296,25 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
     case 8:
       switch (src.format()) {
         case QImage::Format_Grayscale8:
-          dst = cv::Mat(src.height(), src.width(), CV_8UC(1));
-          for (int y = 0; y < src.height(); y++) {
+          dst = cv::Mat(srcH, srcW, CV_8UC(1));
+          for (int y = 0; y < srcH; ++y) {
             const uint8_t* sp =
                 reinterpret_cast<const uint8_t*>(src.constScanLine(y));
             uint8_t* dp = reinterpret_cast<uint8_t*>(dst.ptr(y));
-            memcpy(dp, sp, size_t(src.width()));
+            memcpy(dp, sp, size_t(srcW));
           }
           break;
 
         case QImage::Format_Indexed8:
           // opencv doesn't have index color, convert to 24-bit rgb
-          dst = cv::Mat(src.height(), src.width(), CV_8UC(3));
-          for (int y = 0; y < src.height(); y++) {
+          dst = cv::Mat(srcH, srcW, CV_8UC(3));
+          for (int y = 0; y < srcH; ++y) {
             uint8_t* dp = reinterpret_cast<uint8_t*>(dst.ptr(y));
-            for (int x = 0; x < src.width(); x++) {
-              QColor pixel = src.pixel(x, y);
-              dp[0] = pixel.blue() & 0xFF;
-              dp[1] = pixel.green() & 0xFF;
-              dp[2] = pixel.red() & 0xFF;
+            for (int x = 0; x < srcW; ++x) {
+              QRgb pixel = src.pixel(x, y);
+              dp[0] = qBlue(pixel) & 0xFF;
+              dp[1] = qGreen(pixel) & 0xFF;
+              dp[2] = qRed(pixel) & 0xFF;
               dp += 3;
             }
           }
@@ -322,12 +326,12 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
       break;
 
     case 1:
-      dst = cv::Mat(src.height(), src.width(), CV_8UC(1));
-      for (int y = 0; y < src.height(); y++) {
+      dst = cv::Mat(srcH, srcW, CV_8UC(1));
+      for (int y = 0; y < srcH; ++y) {
         uint8_t* dp = reinterpret_cast<uint8_t*>(dst.ptr(y));
-        for (int x = 0; x < src.width(); x++) {
-          QColor pixel = src.pixel(x, y);
-          dp[x] = pixel.red() & 0xFF;
+        for (int x = 0; x < srcW; ++x) {
+          QRgb pixel = src.pixel(x, y);
+          dp[x] = qRed(pixel) & 0xFF;
         }
       }
       break;
