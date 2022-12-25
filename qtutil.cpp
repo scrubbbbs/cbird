@@ -553,7 +553,6 @@ void WidgetHelper::saveGeometry(const QWidget *w, const char *id) {
   settings.beginGroup(id);
   settings.setValue("geometry", w->saveGeometry());
   settings.setValue("maximized", w->isMaximized());
-  settings.endGroup();
 }
 
 bool WidgetHelper::restoreGeometry(QWidget *w, const char *id) {
@@ -801,7 +800,7 @@ bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
 //          may not come before <PL>
 // - threaded output
 //    * logs choke main thread, really badly on windows
-//    * qFlushOutput() to sync up when needed
+//    * qFlushMessageLog() to sync up when needed
 // - compression
 //    * repeated log lines show # of repeats
 //
@@ -814,21 +813,6 @@ bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
 #if !defined(QT_MESSAGELOGCONTEXT) // disabled in release targets by default... but we need it
 #error qColorMessageOutput requires QT_MESSAGELOGCONTEXT
 #endif
-
-#define VT_RED "\x1B[31m"
-#define VT_GRN "\x1B[32m"
-#define VT_YEL "\x1B[33m"
-#define VT_BLU "\x1B[34m"
-#define VT_MAG "\x1B[35m"
-#define VT_CYN "\x1B[36m"
-#define VT_WHT "\x1B[37m"
-#define VT_RESET "\x1B[0m"
-#define VT_BRIGHT "\x1B[1m"
-#define VT_DIM "\x1B[2m"
-#define VT_UNDERL "\x1B[4m"
-#define VT_BLINK "\x1B[5m"
-#define VT_REVERSE "\x1B[6m"
-#define VT_HIDDEN "\x1B[7m"
 
 #include "exiv2/error.hpp" // capture exif library logs
 
@@ -856,6 +840,22 @@ extern "C" {
 }
 #endif
 
+/// terminal color/format codes
+#define VT_RED "\x1B[31m"
+#define VT_GRN "\x1B[32m"
+#define VT_YEL "\x1B[33m"
+#define VT_BLU "\x1B[34m"
+#define VT_MAG "\x1B[35m"
+#define VT_CYN "\x1B[36m"
+#define VT_WHT "\x1B[37m"
+#define VT_RESET "\x1B[0m"
+#define VT_BRIGHT "\x1B[1m"
+#define VT_DIM "\x1B[2m"
+#define VT_UNDERL "\x1B[4m"
+#define VT_BLINK "\x1B[5m"
+#define VT_REVERSE "\x1B[6m"
+#define VT_HIDDEN "\x1B[7m"
+
 /// Log record passed to logging thread
 struct LogMsg {
   QString threadContext;
@@ -868,6 +868,7 @@ struct LogMsg {
   const char *category;
 };
 
+/// Private logging class/singleton
 class MessageLog {
  private:
   QList<LogMsg> _log;
@@ -881,11 +882,17 @@ class MessageLog {
   bool _isTerm = false;     // true if we think stdout is a tty
   bool _termColors = false; // true if tty supports colors
   int _termColumns = -1;    // number of columns in the tty
+
   QString _homePath;
+  const bool   _showTimestamp = getenv("CBIRD_LOG_TIMESTAMP");
+  mutable const char* _lastColor = nullptr; // format()
+  mutable int64_t _lastTime = nanoTime();   // format()
+  mutable QString _formatStr;               // format()
 
   MessageLog();
   ~MessageLog();
 
+  void outputThread();
   QString format(const LogMsg& msg) const;
 
  public:
@@ -898,11 +905,12 @@ class MessageLog {
     static QThreadStorage<QString> context;
     return context;
   }
+
   void append(const LogMsg& msg);
   void flush();
 };
 
-void qFlushOutput() { MessageLog::instance().flush(); }
+void qFlushMessageLog() { MessageLog::instance().flush(); }
 
 QThreadStorage<QString>& qMessageContext() { return MessageLog::context(); }
 
@@ -915,11 +923,13 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& ctx,
     threadContext = perThreadContext.localData();
 
   MessageLog::instance().append(LogMsg{threadContext, type, msg, ctx.version,
-                               ctx.line, ctx.file, ctx.function, ctx.category});
+                                       ctx.line, ctx.file, ctx.function, ctx.category});
 
+#ifdef DEBUG
   // we can crash the app to help locate a log message!
   static const char* debugTrigger = nullptr;
   static bool triggerCheck = false;
+
   if (!triggerCheck) {
     triggerCheck = true;
     static QMutex mutex;
@@ -928,7 +938,7 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& ctx,
     const char* env = getenv("DEBUG_TRIGGER");
     if (env) {
       debugTrigger = env;
-      qFlushOutput();
+      qFlushMessageLog();
       fprintf(stdout, "\n\n[X] debug trigger registered: \"%s\"\n\n", debugTrigger);
       fflush(stdout);
     }
@@ -936,7 +946,7 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& ctx,
 
   if (debugTrigger) {
     if (msg.contains(debugTrigger)) {
-      qFlushOutput();
+      qFlushMessageLog();
       fprintf(stdout, "\n\n[X][%s:%d] debug trigger matched: <<%s>>\n\n", ctx.file,
               ctx.line, qPrintable(msg));
       fflush(stdout);
@@ -944,6 +954,7 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& ctx,
       *ptr = 0;
     }
   }
+#endif
 }
 
 MessageContext::MessageContext(const QString& context) {
@@ -956,7 +967,7 @@ MessageContext::MessageContext(const QString& context) {
 MessageContext::~MessageContext() { MessageLog::context().setLocalData(QString()); }
 
 MessageLog::MessageLog() {
-  std::set_terminate(qFlushOutput);
+  std::set_terminate(qFlushMessageLog);
   Exiv2::LogMsg::setHandler(exifLogHandler);
 
 #ifdef Q_OS_WIN32
@@ -1009,14 +1020,16 @@ MessageLog::MessageLog() {
   }
 #endif
 
-  // overrides
+  // detection is buggy, provide overrides
   if (getenv("CBIRD_FORCE_COLORS")) _termColors = 1;
 
   QString tc = getenv("CBIRD_CONSOLE_WIDTH");
   if (!tc.isEmpty()) _termColumns = tc.toInt();
 
+#ifdef DEBUG
   if (_isTerm)
     printf("term width=%d colors=%d\n", _termColumns, _termColors);
+#endif
 
   _homePath = QDir::homePath();
 
@@ -1024,78 +1037,8 @@ MessageLog::MessageLog() {
   // disable text mode to speed up console
   _setmode( _fileno(stdout), _O_BINARY );
 #endif
+  _thread = QThread::create(&MessageLog::outputThread, this);
 
-  _thread = QThread::create([this]() {
-    _sync = false;
-    QString lastInput, lastOutput;
-    int repeats = 0;
-    QMutexLocker locker(&_mutex);
-    while (!_stop && _logCond.wait(&_mutex)) {
-      if (_sync && _log.count() <= 0) {
-        _sync = false;
-        _syncCond.wakeAll();
-      }
-      while (_log.count() > 0) {
-        const LogMsg msg = _log.takeFirst();
-        int pl = msg.msg.indexOf("<PL>");  // do not compress progress lines
-        if (pl <= 0 && lastInput == msg.msg) {
-          repeats++;
-          continue;
-        }
-        locker.unlock();
-
-        const QString line = format(msg);
-
-        if (repeats > 0) {
-          QString output = lastInput + " [x" + QString::number(repeats) + "]\n";
-          QByteArray utf8 = output.toUtf8();
-          fwrite(utf8.data(), utf8.length(), 1, stdout);
-          repeats = 0;
-        }
-
-        lastInput = line;
-
-        QString output = line;
-        output.replace(_homePath, "~");
-
-        pl = output.indexOf("<PL>");  // must come after replacements!
-        output.replace("<PL>", "");
-
-        // elide and pad following text to terminal width
-        int elide = output.indexOf("<EL>");  // must come after <PL>!
-        if (elide > 0) {
-          if (_termColumns > 0) {
-            QString toElide = output.mid(elide + 4);
-            QString elided = qElide(toElide, _termColumns - elide);
-            output = output.mid(0, elide) + elided;
-            output += QString().fill(' ', _termColumns - output.length());
-          } else
-            output.replace("<EL>", "");
-        }
-
-        if (pl > 0) {
-          if (lastInput.startsWith(line.mid(0, pl))) output = "\r" + output;
-        } else {
-          if (!lastOutput.endsWith("\n")) output = "\n" + output;
-          output += "\n";
-        }
-
-        lastOutput = output;
-
-        QByteArray utf8 = output.toUtf8();
-
-        fwrite(utf8.data(), utf8.length(), 1, stdout);
-        // we only need to flush if \r is present;
-        // however, windows must always flush
-#ifndef Q_OS_WIN
-        if (pl > 0)
-#endif
-          fflush(stdout);
-
-        locker.relock();
-      }  // log.count() > 0
-    }    // !stop
-  });
   // wait for thread to start or we have a race with destructor!
   _sync = true;
   _thread->start();
@@ -1110,111 +1053,229 @@ MessageLog::~MessageLog() {
   flush();
 }
 
+void MessageLog::outputThread() {
+  _sync = false;
+
+  constexpr QChar charCR('\r'), charLF('\n'), charSpace(' ');
+  constexpr QLatin1String tokenProgress("<PL>"), tokenElide("<EL>");
+
+  QString lastInput, lastOutput, lastProgressLine;
+  int numRepeats = 0;
+  QMutexLocker locker(&_mutex);
+  while (!_stop && _logCond.wait(&_mutex)) {
+    if (_sync && _log.count() <= 0) {
+      _sync = false;
+      _syncCond.wakeAll();
+    }
+    while (_log.count() > 0) {
+      const LogMsg msg = _log.takeFirst();
+
+      // compress repeats while we hold the lock
+      int pl = msg.msg.indexOf(tokenProgress);    // do not compress progress lines
+      if (pl <= 0 && lastInput == msg.msg) {
+        numRepeats++;
+        continue;
+      }
+      locker.unlock();
+
+      // repeats end, print one more with the total count
+      if (numRepeats > 0) {
+        QString output = lastInput;
+        output += QLatin1String(" [x");
+        output += QString::number(numRepeats);
+        output += QLatin1String("]\n");
+
+        const QByteArray utf8 = output.toUtf8();
+        fwrite(utf8.data(), utf8.length(), 1, stdout);
+        numRepeats = 0;
+      }
+
+      const QString formatted = format(msg);
+      if (formatted.isEmpty()) { // possible with filters
+        locker.relock();
+        continue;
+      }
+      lastInput.resize(0);
+      lastInput += formatted;
+      QString output = lastInput;
+
+      // special progress line, everything before the <PL> must be static
+      pl = output.indexOf(tokenProgress);
+      if (pl > 0)
+        output.remove(pl, tokenProgress.length());
+
+      // special elide indicator, everything after is elided to terminal width
+      // note: must come after <PL> since prefix of <PL> must be static
+      int elide = output.indexOf(tokenElide);
+      if (elide > 0 && elide > pl) {
+        if (_termColumns > 0) {
+          auto toElide = output.mid(elide + tokenElide.length());
+          auto elided = qElide(toElide, _termColumns - elide);
+          output = output.mid(0, elide) + elided;
+          output += QString().fill(charSpace, _termColumns - output.length());
+        } else
+          output.remove(elide, tokenElide.length());
+      }
+
+      // find chars to append/prepend
+      const QChar* prepend = nullptr, *append = nullptr;
+
+      if (pl > 0 && _isTerm) {
+        auto prefix = QStringView(output).mid(0, pl);
+        if (lastProgressLine.startsWith(prefix)) prepend = &charCR;
+        else if (!lastOutput.endsWith(charLF))   prepend = &charLF;
+
+        lastProgressLine = output;
+
+      } else {
+        if (!lastOutput.endsWith(charLF)) prepend = &charLF;
+        append = &charLF;
+        lastProgressLine.clear();
+      }
+
+      lastOutput.resize(0); // next appends are allocation free
+      if (lastOutput.capacity() > 1024) lastOutput.squeeze(); // don't take too much
+
+      if (prepend) lastOutput += *prepend;
+      lastOutput += output;
+      if (append) lastOutput += *append;
+
+      const QByteArray utf8 = lastOutput.toUtf8();
+      fwrite(utf8.data(), utf8.length(), 1, stdout);
+
+      // we only need to flush if CR is present;
+      // however, windows must always flush
+#ifndef Q_OS_WIN
+      if (!append)
+#endif
+        fflush(stdout);
+
+      locker.relock();
+    } // _log.count() > 0
+  } // !_stop
+}
+
 QString MessageLog::format(const LogMsg& msg) const {
-  static const char* lastColor = nullptr;
-  static uint64_t lastTime = nanoTime();
-  static const bool showTimestamp = getenv("CBIRD_LOG_TIMESTAMP");
 
-  char typeCode = 'X';
-  const char* color = VT_WHT;
-  const char* reset = VT_RESET;
+  struct MessageFormat {
+    QLatin1String label;
+    const char* color;
+  };
 
-  switch (msg.type) {
-    case QtDebugMsg:
-      typeCode = 'D';
-      color = VT_WHT;
-      break;
-    case QtInfoMsg:
-      typeCode = 'I';
-      color = VT_GRN;
-      break;
-    case QtWarningMsg:
-      typeCode = 'W';
-      color = VT_YEL;
-      break;
-    case QtCriticalMsg:
-      typeCode = 'C';
-      color = (VT_BRIGHT VT_RED);
-      break;
-    case QtFatalMsg:
-      typeCode = 'F';
-      color = (VT_UNDERL VT_BRIGHT VT_RED);
-      break;
+  // table index is QtDebugMsg ... QtInfoMsg
+  static constexpr MessageFormat formats[QtInfoMsg + 1] = {
+      {QLatin1String("D"), VT_WHT},
+      {QLatin1String("W"), VT_YEL},
+      {QLatin1String("C"), (VT_BRIGHT VT_RED)},
+      {QLatin1String("F"), (VT_UNDERL VT_BRIGHT VT_RED)},
+      {QLatin1String("I"), VT_GRN}};
+
+  // table could become invalid, enum is unnumbered in qlogging.h
+  static_assert(QtDebugMsg == 0 && QtInfoMsg == 4);
+  if (msg.type < 0 || msg.type > 4) {
+    fprintf(stderr, "unexpected qt logging type\n");
+    return msg.msg;
   }
 
-  if (msg.msg.contains("<PL>"))  // progress line
-    color = VT_CYN;
+  const auto& fmt = formats[msg.type];
 
-  QStringList filteredClasses = {};
+  // don't change colors unless we have to (maybe faster)
+  if (_termColors && _lastColor != fmt.color) {
+    fprintf(stdout, "%s%s", VT_RESET, fmt.color);
+    _lastColor = fmt.color;
+  }
 
-  QString shortFunction = msg.function;
+  // shortened function name provides sufficient context
+  QString shortFunction = QString::fromLatin1(msg.function);
 
-  if (shortFunction.contains("::<lambda"))
-    shortFunction = shortFunction.split("::<lambda").front();
+  // drop lambda, we want the scope where it was defined
+  {
+    int i = shortFunction.indexOf(QLatin1String("::<lambda"));
+    if (i >= 0) shortFunction.resize(i);
+  }
 
+  // drop arguments
   // int bar(...)
   // int Foo::bar(...)
   // int Foo::bar<float>(...)
-  shortFunction = shortFunction.split("(").first();
-
-  QStringList parts = shortFunction.split("::");
-
-  if (parts.length() > 1) {
-    // (1) cv::Mat foo
-    // (2) void class::foo
-    // (3) cv::Mat class::foo
-    // (4) cv::Mat class<bar>::foo
-    shortFunction = parts.back().trimmed();
-    parts.pop_back();
-    parts = parts.join("").split(" ");
-    if (parts.length() > 1) {  // case (1) ignored
-      QString className = parts.back();
-      shortFunction = className + "::" + shortFunction;
-      if (filteredClasses.contains(className)) return "";
-    }
-  } else {
-    shortFunction = shortFunction.split(" ").back();  // drop return type
+  // std::function<void foo(int)>  Foo::bar(...) fixme...
+  {
+    int i = shortFunction.indexOf(QLatin1Char('('));
+    if (i >= 0) shortFunction.resize(i);
   }
 
-  if (!msg.threadContext.isNull()) shortFunction += "{" + msg.threadContext + "}";
+  // drop return type
+  // (1) cv::Mat foo
+  // (2) void class::foo
+  // (3) cv::Mat class::foo
+  // (4) cv::Mat class<bar>::foo
+  // (5) void foo
+  {
+    int i = shortFunction.lastIndexOf(QLatin1Char(' '));
+    if (i >= 0) shortFunction.remove(0, i + 1);
 
-  if (_termColors && lastColor != color) {
-    fprintf(stdout, "%s%s", reset, color);
-    lastColor = color;
+    //    static const QSet<QString> filteredClasses{"MediaGroupListWidget"};
+    //    i = shortFunction.indexOf("::");
+    //    if (i >= 0) {
+    //      auto className = shortFunction.mid(0, i);
+    //      //fprintf(stderr, "\n%s\n", qPrintable(className));
+    //      if (filteredClasses.contains(className)) return QString();
+    //    }
   }
 
-  QString logLine;
-  if (msg.msg.startsWith("<NC>"))  // no context
-    logLine += msg.msg.mid(4);
+  _formatStr.resize(0); // no more allocs after a few calls
+
+  if (_formatStr.capacity() > 1024) // don't take too much
+    _formatStr.squeeze();
+
+  if (_showTimestamp) {
+    auto currTime = nanoTime();
+    int micros = (currTime - _lastTime) / 1000;
+    _formatStr += QString::asprintf("%06d ", micros);
+    _lastTime = currTime;
+  }
+
+  if (msg.msg.startsWith(QLatin1String("<NC>")))  // no context
+    _formatStr += QStringView(msg.msg).mid(4);
   else {
-    if (showTimestamp) {
-      auto currTime = nanoTime();
-      logLine += QString::asprintf("%06d ", int( (currTime-lastTime)/1000 ));
-      lastTime = currTime;
+    _formatStr += QLatin1Char('[');
+    _formatStr += fmt.label;
+    _formatStr += QLatin1String("][");
+
+    _formatStr += shortFunction;
+    if (!msg.threadContext.isNull()) {
+      _formatStr += QLatin1Char('{');
+      _formatStr += msg.threadContext;
+      _formatStr += QLatin1Char('}');
     }
-    logLine += QString("[%1][%2] %3").arg(typeCode).arg(shortFunction).arg(msg.msg);
+    _formatStr += QLatin1String("] ");
+    _formatStr += msg.msg;
   }
-  return logLine;
+
+  _formatStr.replace(_homePath, QLatin1String("~"));
+
+  return _formatStr;
 }
 
 void MessageLog::append(const LogMsg& msg) {
-  // if fatal, output immediately. Since we are going to abort() next,
-  // we cannot rely on qFlushOutput to get called on exit
-  if (msg.type == QtFatalMsg) {
-    qFlushOutput();
-    fprintf(stdout, "\n%s\n\n", qUtf8Printable(format(msg)));
-    fflush(stdout);
-  } else {
+  if (msg.type != QtFatalMsg) {
     QMutexLocker locker(&_mutex);
     _log.append(msg);
+    _logCond.wakeAll();
   }
-  _logCond.wakeAll();
+  else {
+    // if fatal, flush logger, since abort() comes next
+    qFlushMessageLog();
+    fprintf(stdout, "\n%s\n\n", qUtf8Printable(format(msg)));
+    fflush(stdout);
+  }
 }
 
 void MessageLog::flush() {
+  QMutexLocker locker(&_mutex);
+
   // prefer thread to write the logs since it handles things
-  if (_thread->isRunning()) {
-    QMutexLocker locker(&_mutex);
+  if (_thread && _thread->isRunning()) {
     _sync = true;
     while (_sync) {
       _syncCond.wait(&_mutex, 10);
@@ -1223,15 +1284,13 @@ void MessageLog::flush() {
   }
   else {
     // no thread, ensure all logs are written
-    QMutexLocker locker(&_mutex);
-    QByteArray utf8;
-    if (_log.count() <= 0)
-      utf8 = "\n";
-    else
-      while (_log.count() > 0)
-        utf8 += (format(_log.takeFirst()) + "\n").toUtf8();
+    QByteArray utf8("\n");
 
-    fwrite(utf8.data(), utf8.length(), 1, stdout);
+    while (_log.count() > 0) {
+      utf8 += format(_log.takeFirst()).toUtf8();
+      utf8 += "\n";
+    }
+    fwrite(utf8.constData(), utf8.length(), 1, stdout);
   }
   if (_termColors) fwrite(VT_RESET, strlen(VT_RESET), 1, stdout);
   fflush(stdout);

@@ -142,17 +142,18 @@ class DebugEventFilter : public QObject {
   bool eventFilter(QObject* object, QEvent* event);
 };
 
-/// custom logger with compression, color, etc
+/// custom log handler with compression, color, etc,
+/// enable with qInstallMessageHandler(qColorMessageOutput)
 void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
                          const QString& msg);
 
-/// flush log messages, required before using printf/scanf etc
-void qFlushOutput();
+/// flush logger, required before using printf/scanf etc
+void qFlushMessageLog();
 
-/// log message extra per-thread context
+/// log message extra per-thread context, e.g. the currently active file
 QThreadStorage<QString>& qMessageContext();
 
-/// scoped log message extra context (preferred method)
+/// scoped log message extra context (preferred over qMessageContext())
 class MessageContext {
   NO_COPY_NO_DEFAULT(MessageContext, QObject);
  public:

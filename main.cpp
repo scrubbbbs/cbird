@@ -86,7 +86,7 @@ static QStringList buildFlags() {
 #define H3 "\n  "
 
 static void printLicense() {
-  qFlushOutput();
+  qFlushMessageLog();
   // clang-format off
   printf(
       H2 "cbird, the Content-Based Image Retrieval Database"
@@ -640,7 +640,7 @@ complete -o filenames -F _cbird cbird
                         .arg(sudo).arg(binary[1])
                         .arg(prefix).arg(binary[0]);
       qDebug() << cmd;
-      qFlushOutput();
+      qFlushMessageLog();
       if (0 != system(qUtf8Printable(cmd)))
         printf("install: installation of %s failed\n", qPrintable(binary[0]));
     }
@@ -778,7 +778,7 @@ Engine& engine() {
   QDir dir(indexPath());
   if (!_engine && checkIndexPathExists &&
       !dir.exists(INDEX_DIRNAME)) {
-    qFlushOutput();
+    qFlushMessageLog();
     printf("cbird: No index found. Pass -use <dir> to a valid location,\n"
            "       or pass -create/-update to skip this prompt.\n\n");
     printf("cbird: Create index in {%s} ? [Y/n] : ",
@@ -805,7 +805,7 @@ static void nuke(const MediaGroup& group) {
       zips.insert(path);
 
       if (!yesAll) {
-        qFlushOutput();
+        qFlushMessageLog();
         printf("\nnuke: %s\nnuke: zips cannot be modified, trash entire zip? [y/N/a]: ",
                 qUtf8Printable(m.path()));
         char ch = inputChar('N');
@@ -1128,7 +1128,7 @@ int main(int argc, char** argv) {
       qInfo() << "nuke-dups-in:" << filtered.count() << "duplicates in" << path;
       if (filtered.count() <= 0) continue;
 
-      qFlushOutput();
+      qFlushMessageLog();
       printf("nuke-dups-in: %lld items will be trashed, proceed [y/N]: ", filtered.count());
       char ch = inputChar('N');
       if (ch == 'Y' || ch == 'y') {
@@ -1164,7 +1164,7 @@ int main(int argc, char** argv) {
         if (params.verbose) qInfo() << "nuke-weeds:" << w.path();
         toRemove.append(w);
       }
-      qFlushOutput();
+      qFlushMessageLog();
       printf("\nnuke-weeds: %lld items will be trashed, proceed [y/N]: ", toRemove.count());
       char ch = inputChar('N');
       if (ch == 'Y' || ch == 'y') {
@@ -1175,7 +1175,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-nuke") {
 
       if (selection.count() > 0) {
-        qFlushOutput();
+        qFlushMessageLog();
         printf("\nnuke: about to move %lld items to trash, proceed? [y/N]: ", selection.count());
         char ch = inputChar('N');
         if (ch == 'Y' || ch == 'y') {
@@ -2391,7 +2391,7 @@ int main(int argc, char** argv) {
             // printf("%d %d\n", range.srcIn, range.dstIn);
           }
 
-          qFlushOutput();
+          qFlushMessageLog();
           printf("%c", status);
           //fflush(stdout);
 #if USE_THREADS
@@ -2427,7 +2427,7 @@ int main(int argc, char** argv) {
 
       std::sort(rangeError.begin(), rangeError.end());
 
-      qFlushOutput();
+      qFlushMessageLog();
 
       printf("\nframes=%d found=%.3f%% poor=%.3f%% bad=%.3f%% none=%.3f%%\n",
              frames, found * 100.0 / frames, poor * 100.0 / frames,
