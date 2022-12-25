@@ -1285,9 +1285,8 @@ int main(int argc, char** argv) {
 
               MediaSearch result = w.result();
 
+              result.needle.setImage(QImage()); // force reading video metatdata
               result.needle.setType(Media::TypeVideo);
-              result.needle.setMatchRange(
-                  MatchRange());  // technically has no range, messes up viewer
 
               result.matches.prepend(result.needle);
               if (!engine().db->filterMatch(params, result.matches))
@@ -1306,7 +1305,7 @@ int main(int argc, char** argv) {
           }
         } else {
           qWarning(
-              "similar-to: invalid query type (-p.qt) or not a known filetype: %s",
+              "similar-to: invalid query type for algo (-p.types/-p.alg) or not a known filetype: %s",
               qUtf8Printable(to));
           if (isVideo)
             qInfo("similar-to: for video search, use -p.alg video");
