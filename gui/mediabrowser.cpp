@@ -69,33 +69,27 @@ int MediaBrowser::show(const MediaGroupList& list, int mode, const MediaWidgetOp
 int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptions& options) {
   if (list.count() <= 0) return 0;
 
-  QString prefix = Media::greatestPathPrefix(list);
+  qInfo() << "collecting info...";
 
-  class GroupStats {
-   public:
+  const QString prefix = Media::greatestPathPrefix(list);
+
+  struct GroupStats {
     int itemCount = 0;
-    // int byteCount = 0;
   };
-
   QHash<QString, GroupStats> stats;
 
-  qInfo() << "collecting info...";
   QStringList keys;
   for (const MediaGroup& g : list) {
     Q_ASSERT(g.count() > 0);
     const Media& first = g.at(0);
-    QString key, tmp;
-
-    key = first.attributes().value("group"); // from -group-by
+    QString key = first.attributes().value("group"); // use -group-by before path
     if (key.isEmpty()) {
-      // path-based grouping
       if (first.isArchived())
-        first.archivePaths(key, tmp);
-      else if (first.type() == Media::TypeVideo)
+        first.archivePaths(&key);
+      else if (first.type() == Media::TypeVideo) // don't group videos todo: option
         key = first.path();
       else
-        key = first.dirPath();  // todo: media::parent, media::relativeParent,
-                                   // media::relativePath
+        key = first.dirPath();
       key = key.mid(prefix.length());
     }
     key = qElide(key, options.iconTextWidth);
@@ -103,28 +97,26 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
 
     GroupStats& s = stats[key];
     s.itemCount += g.count();
-    //    for (const Media& m : g) {
-    //      Media tmp(m);
-    //      tmp.readMetadata();
-    //      s.byteCount += tmp.originalSize();
-    //    }
   }
 
   QHash<QString, MediaGroupList> folders;
 
   qInfo() << "building folders...";
-  for (int i = 0; i < list.count(); i++) {
-    QString key = keys[i];
-    GroupStats& s = stats[key];
+  for (int i = 0; i < list.count(); ++i) {
+    const QString& key = keys.at(i);
+    const GroupStats& s = stats.value(key);
     QString newKey = key + QString(" [x%1]").arg(s.itemCount);
     auto& set = folders[newKey];
-    const auto& group = list[i];
-    const auto split = Media::splitGroup(group, options.maxPerPage);
-    set.append(split);
+    const auto& group = list.at(i);
+    if (group.count() > options.maxPerPage)
+      set.append(Media::splitGroup(group, options.maxPerPage));
+    else
+      set.append(group);
   }
 
   MediaGroup index;
-  for (auto& key : qAsConst(folders).keys()) index.append(Media(key));
+  for (auto it = folders.constKeyValueBegin(); it != folders.constKeyValueEnd(); ++it)
+    index.append(Media(it->first));
 
   auto f = QtConcurrent::map(index, [&](Media& m) {
     const Media& first = folders[m.path()][0][0];
@@ -140,6 +132,7 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
 
   qInfo() << "sorting...";
   Media::sortGroup(index, "path");
+
   auto opt = options;
   opt.basePath = prefix.mid(0, prefix.length() - 1);
   MediaBrowser browser(opt);
@@ -153,18 +146,22 @@ int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions&
   // try to form a list of MediaGroupList, where each member
   // matches between two directories, or an image "set".
   // If there is no correlation, put match in "unpaired" set.
-  MediaGroupList unpaired;
   const char* unpairedKey = "*unpaired*";
 
   MediaGroup index;                  // dummy group for top-level navigation
   index.append(Media(unpairedKey));  // entry for the "unpaired" list
 
   QHash<QString, MediaGroupList> sets;
-  for (MediaGroup g : list) {
+  for (const MediaGroup& g : list) {
     QStringList dirPaths;
     for (const Media& m : g) {
-      QString path = m.path().left(m.path().lastIndexOf("/"));
-      if (!dirPaths.contains(path)) dirPaths.append(path);
+      QString path;
+      if (m.isArchived())
+        m.archivePaths(&path);
+      else
+        path = m.dirPath();
+      if (!dirPaths.contains(path))
+        dirPaths.append(path);
     }
 
     // we have a pair, add it
