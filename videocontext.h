@@ -140,7 +140,7 @@ class VideoContext {
 
   /// display aspect ratio
   /// @note only valid after nextFrame()
-  float aspect() const;
+  float pixelAspectRatio() const;
 
   /// @note only valid after open()
   const Metadata& metadata() const { return _metadata; }

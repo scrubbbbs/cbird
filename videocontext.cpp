@@ -148,7 +148,6 @@ static void avFrameToCvImg(const AVFrame& frame, cv::Mat& dst) {
 }
 
 void VideoContext::loadLibrary() {
-  av_register_all();
   av_log_set_callback(&avLogger);
 }
 
@@ -195,7 +194,7 @@ class VideoContextPrivate {
 
   AVFormatContext* format;
   AVCodecContext* context;
-  AVCodec* codec;
+  const AVCodec* codec;
   AVFrame* frame;
   AVStream* videoStream;
   AVPacket packet;
@@ -242,6 +241,11 @@ QImage VideoContext::frameGrab(const QString& path, int frame, bool fastSeek,
 
   if (ok) video.nextFrame(img);
 
+  float par = video.pixelAspectRatio();
+  if (par > 0.0  && par != 1.0) {
+    int w = par * img.width();
+    img = img.scaled(w, img.height(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+  }
   return img;
 }
 
@@ -268,7 +272,8 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   _deviceIndex = -1;
   _isHardware = false;
   _eof = false;
-  av_init_packet(&_p->packet);
+  _p->packet.size = 0;
+  _p->packet.data = nullptr;
 
   QMutexLocker locker(&_mutex);
 
@@ -289,12 +294,15 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   }
 
   // firstPts is needed for seeking
-  // read a few packets to find it
+  // read a few packets to find it, then close/reopen the file
   _p->format->flags |= AVFMT_FLAG_GENPTS;
   for (int i = 0; i < 5;) {
     if (0 > av_read_frame(_p->format, &_p->packet)) break;
 
     const auto* stream = _p->format->streams[_p->packet.stream_index];
+    int64_t pts = _p->packet.pts;
+    av_packet_unref(&_p->packet); // free memory
+
     if (stream->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) continue;
     if (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) continue;
 
@@ -306,12 +314,10 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 //    }
 
     if (_firstPts == AV_NOPTS_VALUE)
-      _firstPts = _p->packet.pts;
+      _firstPts = pts;
     else
-      _firstPts = std::min(_firstPts, _p->packet.pts);
+      _firstPts = std::min(_firstPts, pts);
     i++;
-
-    av_packet_unref(&_p->packet);
   }
 
   avformat_close_input(&_p->format);
@@ -327,8 +333,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   Q_ASSERT(_p->format);
   avLoggerSetFileName(_p->format, fileName);
 
-  if ((err=avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, nullptr)) <
-      0) {
+  if ((err=avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, nullptr)) < 0) {
     AV_CRITICAL("cannot reopen input");
     avLoggerUnsetFileName(_p->format);
     return -1;
@@ -342,14 +347,16 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     return -2;
   }
 
-  // av_dump_p->format(fmt, 0, NULL, 0);
+  //av_dump_format(_p->format, 0, NULL, 0);
+
+  // determine stream we are opening and get some metadata
   int videoStreamIndex = -1;
   int audioStreamIndex = -1;
   for (unsigned int i = 0; i < _p->format->nb_streams; i++) {
     AVStream* stream = _p->format->streams[i];
-    const AVCodecParameters* codec = stream->codecpar;
+    const AVCodecParameters* codecParams = stream->codecpar;
 
-    if (codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+    if (codecParams->codec_type == AVMEDIA_TYPE_VIDEO) {
       if (stream->disposition &  AV_DISPOSITION_ATTACHED_PIC) continue;
       if (videoStreamIndex >= 0) continue;
 
@@ -358,21 +365,22 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
       AVRational fps = stream->r_frame_rate;
       _metadata.frameRate = float(av_q2d(fps));
-      _metadata.frameSize = QSize(codec->width, codec->height);
-      _metadata.videoBitrate = int(codec->bit_rate);
+      _metadata.frameSize = QSize(codecParams->width, codecParams->height);
+      _metadata.videoBitrate = int(codecParams->bit_rate);
 
-      AVCodec* vCodec = avcodec_find_decoder(codec->codec_id);
+      const AVCodec* vCodec = avcodec_find_decoder(codecParams->codec_id);
       if (vCodec) _metadata.videoCodec = vCodec->name;
 
-    } else if (codec->codec_type == AVMEDIA_TYPE_AUDIO) {
+    } else if (codecParams->codec_type == AVMEDIA_TYPE_AUDIO) {
       if (audioStreamIndex >= 0) continue;
+
       audioStreamIndex = int(i);
       _metadata.isEmpty = false;
-      _metadata.audioBitrate = int(codec->bit_rate);
-      _metadata.sampleRate = codec->sample_rate;
-      _metadata.channels = codec->channels;
+      _metadata.audioBitrate = int(codecParams->bit_rate);
+      _metadata.sampleRate = codecParams->sample_rate;
+      _metadata.channels = codecParams->ch_layout.nb_channels;
 
-      AVCodec* aCodec = avcodec_find_decoder(codec->codec_id);
+      const AVCodec* aCodec = avcodec_find_decoder(codecParams->codec_id);
       if (aCodec) _metadata.audioCodec = aCodec->name;
     }
   }
@@ -401,15 +409,33 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
   _p->videoStream = _p->format->streams[videoStreamIndex];
   _p->format->flags |= AVFMT_FLAG_GENPTS;
-  _p->context = _p->videoStream->codec;
+
+  const AVCodec* codec = avcodec_find_decoder(_p->videoStream->codecpar->codec_id);
+  if (!codec) {
+    AV_CRITICAL("could not find video codec");
+    return -3;
+  }
+
+  _p->context = avcodec_alloc_context3(codec);
+  if (!_p->context) {
+    AV_CRITICAL("could not allocate video codec context");
+    return -3;
+  }
+
+  if (avcodec_parameters_to_context(_p->context, _p->videoStream->codecpar) < 0) {
+    AV_CRITICAL("failed to copy codec params to codec context");
+    return -3;
+  }
 
   avLoggerSetFileName(_p->context, fileName);
 
-  // the actual format support doesn't seem to be published by ffmpeg
-  // the codec says only nv12, p010le, p016le, but yuv420 works fine
-  // todo: system configuration
+
+  // fixme: hwdec is probably broken since using current FFmpeg (git ~2022/12)
   bool tryHardware = opt.gpu;
   if (tryHardware) {
+    // the actual format support doesn't seem to be published by ffmpeg
+    // the codec says only nv12, p010le, p016le, but yuv420 works fine
+    // todo: system configuration
     constexpr AVPixelFormat hwFormats[] = {AV_PIX_FMT_YUV420P,
                                            AV_PIX_FMT_YUV440P,
                                            AV_PIX_FMT_NV12,
@@ -548,10 +574,6 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
         long(_p->videoStream->duration * av_q2d(_p->videoStream->time_base) /
              av_q2d(_p->videoStream->r_frame_rate));
 
-  av_init_packet(&_p->packet);
-  _p->packet.size = 0;
-  _p->packet.data = nullptr;
-
   return 0;
 }
 
@@ -563,21 +585,22 @@ void VideoContext::close() {
 
   QMutexLocker locker(&_mutex);
 
-  avformat_close_input(&_p->format);
-
-  avLoggerUnsetFileName(_p->format);
-  avLoggerUnsetFileName(_p->context);
-
-  // avcodec_close(_p->context);
-  // av_free(_p->context);
-  av_frame_free(&_p->frame);
+  av_packet_unref(&_p->packet);
 
   avLoggerUnsetFileName(_p->scaler);
   if (_p->scaler) sws_freeContext(_p->scaler);
 
   if (_p->scaled.data[0]) av_freep( &(_p->scaled.data[0]) );
 
-  // av_free_p->packet(&_p->packet);
+  avcodec_close(_p->context);
+  avLoggerUnsetFileName(_p->context);
+
+  avformat_close_input(&_p->format);
+  avLoggerUnsetFileName(_p->format);
+
+  // av_free(_p->context);
+  av_frame_free(&_p->frame);
+
   _p->reset();
 }
 
@@ -615,7 +638,7 @@ bool VideoContext::seekFast(int frame) {
     return false;
   }
 
-  avcodec_flush_buffers(_p->videoStream->codec);
+  avcodec_flush_buffers(_p->context);
 
   _eof = false;
 
@@ -646,7 +669,7 @@ bool VideoContext::seek(int frame, QVector<QImage>* decoded, int* maxDecoded) {
         qCritical("av_seek_frame error %d", err);
         return false;
       }
-      Q_ASSERT(_p->videoStream->codec == _p->context);
+      //Q_ASSERT(_p->videoStream->codec == _p->context);
       avcodec_flush_buffers(_p->context);
       _eof = false;
 
@@ -1013,7 +1036,7 @@ bool VideoContext::nextFrame(cv::Mat& outImg) {
   return gotFrame;
 }
 
-float VideoContext::aspect() const {
+float VideoContext::pixelAspectRatio() const {
   if (_p->sar > 0.0) return _p->sar;
 
   _p->sar = float(av_q2d(

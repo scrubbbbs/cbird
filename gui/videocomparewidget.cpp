@@ -187,8 +187,9 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   Env::systemMemory(totalKb, cacheKb);
 
   // use almost all available memory, helpful for 4k video
-  cacheKb = (cacheKb - 2 * 1024 * 1024) / 2;   // 1GB for other things
-  cacheKb = std::max(cacheKb, 512 * 1024.0f);  // 21 4k frames
+  //cacheKb = (cacheKb - 2 * 1024 * 1024) / 2;   // 1GB for other things
+  //cacheKb = std::max(cacheKb, 512 * 1024.0f);  // 21 4k frames
+  cacheKb = 1024*1024;
 
   _video[0].media = left;
   _video[0].side = "A";
@@ -210,6 +211,7 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
     v.crop = false;
     v.meta = &v.cache->ctx().metadata();
     v.offset = 0;
+    v.visualFrame = -1;
   }
 
   // sync different frame rates by scaling one of them
@@ -255,11 +257,12 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   _maximized = WidgetHelper::restoreGeometry(this);
 
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
-  settings.beginGroup(this->metaObject()->className());
+  const char* className = self::staticMetaObject.className();
+  settings.beginGroup(className);
   _stacked = settings.value("stacked", false).toBool();
   settings.endGroup();
 
-  settings.beginGroup(this->metaObject()->className() + QString(".shortcuts"));
+  settings.beginGroup(className + QString(".shortcuts"));
 
   WidgetHelper::addAction(settings, "Play/Pause", Qt::Key_Space, this, [&]() {
     _scrub = _scrub ? 0 : 1;
@@ -465,14 +468,16 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
 
   const auto& v = _video;
   bool showVisual = false;
-  if (v[0].visualFrame == _cursor + v[0].in + v[0].offset && _visualIndex > 0 && v[0].visual.count() > 0 &&
+  if (v[0].visualFrame == _cursor + v[0].in + v[0].offset &&
+      _visualIndex > 0 && v[0].visual.count() > 0 &&
       (_visualIndex - 1) < v[0].visual.count())
     showVisual = true;
 
   // decode frames
   QFuture<Frame*> work[2];
   for (int i = 0; i < 2; ++i)
-    work[i] = (QtConcurrent::run(&FrameCache::frame, v[i].cache.get(), v[i].in + _cursor + v[i].offset,
+    work[i] = (QtConcurrent::run(&FrameCache::frame, v[i].cache.get(),
+                                 v[i].in + _cursor + v[i].offset,
                                  _scrub));
 
   // accurate seek is often slow due to interframe decoding,  show beach ball
@@ -534,7 +539,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
         "Out:[%d]<br/>",
         qPrintable(v.side), qPrintable(v.label), qPrintable(v.meta->toString(true)),
         p.frame->image.width(), p.frame->image.height(),
-        qPrintable(p.img.text("format")), v.cache->ctx().aspect(),
+        qPrintable(p.img.text("format")), v.cache->ctx().pixelAspectRatio(),
         v.in, _cursor, v.offset, v.in +_cursor+ v.offset,
         p.img.text("frame").toInt(), v.out);
 

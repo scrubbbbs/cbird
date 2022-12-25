@@ -99,9 +99,9 @@ class VideoCompareWidget : public QWidget {
     Media media;             // source media
     QString label, side;     // file name and A/B side label
     QVector<QImage> visual;  // analysis visual
-    int visualFrame;  // frame number of corresponding to analysis visuals
-    bool crop;        // if true enable de-letterbox cropping
-    int in, out, offset;   // match range and cursor offset (temporal align)
+    int visualFrame;         // frame number of corresponding to analysis visuals
+    bool crop;               // if true enable de-letterbox cropping
+    int in, out, offset;     // match range and cursor offset (temporal align)
     const VideoContext::Metadata* meta;  // video metadata (fps/codec etc)
     std::unique_ptr<FrameCache> cache;   // decoder/frame cache
   } _video[2];
