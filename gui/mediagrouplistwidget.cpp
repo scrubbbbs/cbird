@@ -371,20 +371,17 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       // fill with grey to show what parts are missing
       //if (isRoi) painter->fillRect(dstRect, Qt::gray);
 
+      painter->save();
+      painter->scale(1.0/dpr,1.0/dpr);
+
       if (full.isNull()) {
         // draw outline of image to show it is loading
         // we may not know what the dimensions are so we can't always do it
-        if (fullRect.height() > 0) {
-          QRectF r = i2v.mapRect(fullRect);
-          r = r.intersected(QRect{0,0,rect.width(),rect.height()});
-          painter->fillRect(r.translated(rect.topLeft()),
-                            QBrush(Qt::darkGray,Qt::FDiagPattern));
-        }
+        if (fullRect.height() > 0)
+          painter->fillRect(dstRect, QBrush(Qt::darkGray,Qt::FDiagPattern));
       }
       else if (filterId == -1) {
         painter->setRenderHint(QPainter::SmoothPixmapTransform);
-        painter->save();
-        painter->scale(1.0/dpr, 1.0/dpr); // disables transparent dpi scaling
 
         // this is slower, only use if there is a rotation
         if (i2v.isRotating()) {
@@ -397,7 +394,6 @@ class MediaItemDelegate : public QAbstractItemDelegate {
               QRectF(0,0,dstRect.width(),dstRect.height()));
           painter->drawImage(dstRect, full, srcRect);
         }
-        painter->restore();
 
       } else {
         Q_ASSERT(!full.isNull()); // opencv exception/segfault
@@ -418,11 +414,9 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
         QImage qImg;
         cvImgToQImageNoCopy(subImg, qImg);
-        painter->save();
-        painter->scale(1.0/dpr,1.0/dpr);
         painter->drawImage(dstRect.topLeft(), qImg);
-        painter->restore();
       }
+      painter->restore();
 
       // draw info about the image display (scale factor, mode, filter etc)
       painter->setPen(palette.text().color());
