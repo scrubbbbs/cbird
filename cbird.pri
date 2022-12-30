@@ -15,7 +15,7 @@ mac {
 VERSION=0.6.2
 
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
-QMAKE_CXXFLAGS += -Werror -Wno-deprecated-declarations
+#QMAKE_CXXFLAGS += -Werror -Wno-deprecated-declarations
 
 # cimg has openmp support, doesn't do much (qualityscore())
 #QMAKE_CXXFLAGS += -fopenmp
@@ -44,9 +44,11 @@ RCC_DIR=$$BUILDDIR
 DEFINES += QT_FORCE_ASSERTS     # Q_ASSERT(0) crashes the app
 DEFINES += QT_MESSAGELOGCONTEXT # nice for custom logger
 DEFINES += ENABLE_CIMG          # still needed for qualityscore
+DEFINES += QT_STRICT_ITERATORS  # find inefficient iterators
 
 # enable debug build/features, NOT CONFIG += debug
-#DEFINES += DEBUG
+# DEFINES += DEBUG
+# DEFINES += DEBUG_OPTIMIZED
 
 # private headers for DebugEventFilter
 QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
@@ -119,7 +121,12 @@ contains(DEFINES, DEBUG) {
     warning("******************************")
     warning("DEBUG BUILD")
     warning("******************************")
-    QMAKE_CXXFLAGS_RELEASE = -g -O0
+    contains(DEFINES, DEBUG_OPTIMIZED) {
+      QMAKE_CXXFLAGS_RELEASE = -g -Ofast -march=native
+    }
+    else {
+      QMAKE_CXXFLAGS_RELEASE = -g -O0
+    }
 }
 else {
     # westmere is latest that I can run in qemu, and
