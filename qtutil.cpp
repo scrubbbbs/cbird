@@ -739,7 +739,7 @@ QMenu *MenuHelper::makeDirMenu(const QString &root, QObject *target, const char 
 QString qElide(const QString &str, int maxLen) {
   QString tmp;
   if (str.length() > maxLen) {
-    int half = maxLen / 2 - 3;
+    int half = (maxLen-3) / 2;
     tmp = str.mid(0, half) + "..." + str.mid(str.length() - half);
   } else
     tmp = str;
