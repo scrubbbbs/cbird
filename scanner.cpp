@@ -570,8 +570,22 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
     const MessageContext mc(shortPath);
     const CVErrorLogger cvLogger(shortPath);
 
+    int width = qImg.width();
+    int height = qImg.height();
+
+    // qImg could be rescaled, store the original w/h
+    QString imgText = qImg.text(Media::ImgKey_FileWidth);
+    if (!imgText.isEmpty()) {
+      bool ok;
+      width = imgText.toInt(&ok);
+      Q_ASSERT(ok);
+      imgText = qImg.text(Media::ImgKey_FileHeight);
+      height = imgText.toInt(&ok);
+      Q_ASSERT(ok);
+    }
+
     cv::Mat cvImg;
-    qImageToCvImg(qImg, cvImg);
+    qImageToCvImg(qImg, cvImg); // can this use nocopy?
 
     // note: this should probably only be used
     // for algos without features
@@ -723,7 +737,12 @@ IndexResult Scanner::processImageFile(const QString& path,
   QImage qImg;
   QSize size(-1,-1);
   if (_params.algos) {
-    qImg = Media::loadImage(bytes, QSize(), path);
+    ImageLoadOptions opt;
+    opt.fastJpegIdct = true;
+    opt.readScaled = true;
+    opt.minSize = _params.resizeLongestSide;
+    opt.maxSize = opt.minSize * 1.5;
+    qImg = Media::loadImage(bytes, QSize(), path, nullptr, opt);
     if (qImg.isNull()) {
       setError(path, ErrorLoad);
       return result;

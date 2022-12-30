@@ -2133,12 +2133,130 @@ int main(int argc, char** argv) {
       m.setImage(VideoContext::frameGrab(m.path(), frame, false));
       CropWidget::setIndexThumbnail(*engine().db, m);
     } else if (arg == "-test-image-loader") {
-      Media m(nextArg(), Media::TypeImage);
-      QImage img = m.loadImage();
-      QLabel label;
-      label.setPixmap(QPixmap::fromImage(img));
-      label.show();
-      while (1) qApp->processEvents();
+
+      ImageLoadOptions options;
+      options.fastJpegIdct = true;
+      options.readScaled = true;
+      options.minSize = indexParams.resizeLongestSide;
+      options.maxSize = indexParams.resizeLongestSide * 1.5;
+      selection.front().loadImage();
+      selection.pop_front();
+
+      qint64 then = QDateTime::currentMSecsSinceEpoch();
+      for (auto& m : selection) {
+        auto io = m.ioDevice();
+        Q_ASSERT(io->open(QIODevice::ReadOnly));
+        QImage img = m.loadImage(io->readAll(), QSize(), "", nullptr, options);
+        delete io;
+        qDebug() << img.text(Media::ImgKey_FileWidth) << "=>" << img.width() << img.format();
+      }
+      qint64 now = QDateTime::currentMSecsSinceEpoch();
+      qInfo() << (now-then)/selection.count() << "ms/image";
+    } else if (arg == "-test-image-search") {
+
+      const int sizeHt=128;
+      struct {
+        QString id;
+        SearchParams params;
+        QSize size;
+        ImageLoadOptions loadOptions;
+      } test[4];
+
+      //params.inSet = true;
+      //params.set = selection;
+
+      test[0].id = "islow";  // standard image reader + qt scaler
+      test[1].id = "ifast";  // ifast jpeg decode + qt scaler
+      test[2].id = "iscale"; // idct scaler + qt scaler
+      test[3].id = "i150";   // idct scaler only
+
+      for (int i : {0, 1, 2, 3}) test[i].params = params;
+      for (int i : {0, 1, 2})    test[i].size = QSize(0, sizeHt);
+      for (int i : {1, 2, 3})    test[i].loadOptions.fastJpegIdct = true;
+
+      test[2].loadOptions.readScaled = true;
+      test[2].loadOptions.minSize = sizeHt;
+      test[2].loadOptions.maxSize = sizeHt * 1.5;
+      test[3].loadOptions = test[2].loadOptions;
+
+      for (int algo : { 0,1,2 })
+      for (auto t : qAsConst(test)) {
+        t.params.algo = algo;
+        const int startMs = QDateTime::currentMSecsSinceEpoch();
+        engine().scanner->setIndexParams(indexParams);
+        QList<QFuture<MediaSearch>> jobs;
+        for (auto& m : selection) {
+          Q_ASSERT(m.isValid());
+
+          jobs += QtConcurrent::run([m,&t]() {
+            QString path = "@" + m.name() + ":" + QString(t.id);
+
+            auto  io = m.ioDevice();
+            Q_ASSERT(io->open(QIODevice::ReadOnly));
+            QImage img = m.loadImage(io->readAll(), t.size, m.name(), nullptr, t.loadOptions);
+            delete io;
+
+            Q_ASSERT(!img.isNull());
+            if (t.size != QSize())
+              Q_ASSERT(img.height() == t.size.height());
+            else if (t.loadOptions.readScaled)
+              Q_ASSERT(qMax(img.width(),img.height()) >= t.loadOptions.minSize);
+
+            IndexResult r = engine().scanner->processImage(path,m.name(), img);
+            Q_ASSERT(r.ok);
+
+            MediaSearch s;
+            s.params = t.params;
+            s.needle = r.media;
+            s = engine().query(s);
+            s.needle.setId(m.id()); // to identify the correct match
+            return s;
+          });
+        }
+
+        int hit=0, miss=0;
+        int totScore=0, minScore=INT_MAX, maxScore=INT_MIN;
+        int totDist=0,  minDist=INT_MAX, maxDist=INT_MIN;
+        while (jobs.count())  {
+          auto job  = jobs.front(); jobs.pop_front();
+          job.waitForFinished();
+          MediaSearch s = job.result();
+          int distance = -1, score = -1;
+          for (int i = 0; i < s.matches.count(); ++i)
+            if (s.matches[i].id() == s.needle.id()) {
+              distance = i;
+              score = s.matches[i].score();
+            }
+          //qDebug() << m.path() << sz << distance << score;
+
+          if (distance < 0) {
+            miss++;
+            //s.needle.setImage(img);
+            //s.matches.prepend(s.needle);
+            //MediaBrowser::show({s.matches}, MediaBrowser::ShowNormal, widgetOptions);
+          }
+          else {
+            hit++;
+            totScore += score;
+            minScore = qMin(minScore, score);
+            maxScore = qMax(maxScore, score);
+            totDist  += distance;
+            minDist = qMin(minDist, distance);
+            maxDist = qMax(maxDist, distance);
+          }
+          const int endMs = QDateTime::currentMSecsSinceEpoch();
+          int elapsed = (endMs-startMs) / 1000.0 + 1;
+          qWarning("<NC>| %s/%d/%d<PL> | %6d | %6d | %6d (%.4f%%) | %.4f/%d/%d | %.4f/%d/%d       ",
+                 qPrintable(t.id), t.size.height(), t.params.algo,
+                 elapsed,
+                 hit, miss, miss * 100.0 / (hit+miss),
+                 totScore * 1.0 / hit, minScore, maxScore,
+                 totDist * 1.0  / hit, minDist, maxDist);
+        }
+
+      } // for each test
+
+
     } else if (arg == "-test-video-decoder") {
       const QString path = nextArg();
 

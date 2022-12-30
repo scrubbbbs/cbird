@@ -1135,9 +1135,11 @@ QIODevice* Media::ioDevice() const {
 }
 
 QImage Media::loadImage(const QByteArray& data, const QSize& size,
-                        const QString& name, QFuture<void>* future) {
+                        const QString& name, QFuture<void>* future,
+                        const ImageLoadOptions& options) {
 
-  qMessageContext().setLocalData("QImageReader: " + QFileInfo(name).fileName());
+  const QString fileName = QFileInfo(name).fileName();
+  qMessageContext().setLocalData(QLatin1String("QImageReader: ") + fileName);
 
   // safe to cast away const since we do not write the buffer
   QBuffer* buffer = new QBuffer(const_cast<QByteArray*>(&data));
@@ -1146,7 +1148,8 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   // svg loader does not like having io terminated early, deadlocks
   if (future) {
     const auto lcName = name.toLower();
-    if (name.endsWith(".svg") || name.endsWith(".svgz") )
+    if (lcName.endsWith(QLatin1String(".svg")) ||
+        lcName.endsWith(QLatin1String(".svgz")))
       future = nullptr;
   }
 
@@ -1156,35 +1159,84 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
     io.reset(buffer);
 
   QImageReader reader;
-  // we don't use this due to bug in qt
-  // reader.setAutoTransform(true);
-
-  // todo: setScaledSize would improve indexing speed, jpeg load times
-  // up to 2x for large images. indexer could skip additional scaling steps
-  //
-  // need to know the orientation to set this to right thing
-  // if (size != QSize())
-  //    reader.setScaledSize(size);
   reader.setDevice(io.get());
 
   auto format = reader.format();
 
+  if (options.fastJpegIdct && format == "jpeg")
+    reader.setQuality(0); // use libjpeg JDCT_IFAST
+
+  QSize origSize = reader.size();
+  const int maxDim = qMax(origSize.width(), origSize.height());
+  if (options.readScaled && origSize.isValid() &&
+      maxDim > options.maxSize &&
+      reader.supportsOption(QImageIOHandler::ScaledSize)) {
+
+      // jpeg idct scaling supports n/8 for n=[16-1]
+      // for downscaling we get 1/8, 2/8, ... 7/8
+      int numerator;
+      for (numerator = 7; numerator > 1; --numerator) {
+        int scaled = maxDim * numerator / 8;
+        if (scaled >= options.minSize && scaled <= options.maxSize) break;
+      }
+
+      // could get something < min if range is too narrow
+      if (maxDim * numerator / 8 < options.minSize) {
+        ;//qWarning() << "ignoring readScaled, no suitable scale factor. maybe increase range?";
+      }
+      else {
+
+        //
+        // qjpeg shenanigans...
+        // see: qtbase/src/plugins/imageformats/jpeg/qjpeghandler.cpp
+        //
+        // qjpeghandler will use (n+1) idct and scale down if
+        // we don't set the size just right. This is bad since
+        // qt scaler seems to add noise/aliasing that affects
+        // search algorithms
+        //
+        // qt will *always* invoke the scaler, however if we are
+        // already really close the noise/aliasing seems to be reduced
+        // or insignificant
+        //
+        // note: can verify the correct scale was selected from
+        // profiler, e.g.  jpeg_idct7 for the 7/8 downscale
+        //
+        int rw = origSize.width() & ~0x7;
+        int rh = origSize.height() & ~0x7;
+
+        QSize ssize(int(rw / 8 * numerator), int(rh / 8 * numerator));
+        reader.setScaledSize(ssize);
+
+        //qDebug() << "downscale " << rw << rh << ssize << numerator;
+      }
+  }
   QImage img = reader.read();
 
-  // assume future canceled the reader
-  if (future && future->isCanceled())
+  if (future && future->isCanceled()) // io could have been canceled, assume incomplete image
     img = QImage();
 
   img.setText(ImgKey_FileSize, QString::number(data.length()));
   img.setText(ImgKey_FileName, name);
   img.setText(ImgKey_FileFormat, reader.format());
 
-  // qt will pull orientation from thumbnail IFD if
-  // it is not present in the image IFD, resulting
-  // in incorrect rotation
+  if (!origSize.isValid()) {
+    if (reader.scaledSize().isEmpty())
+        origSize = img.size();
+    else
+        qWarning("%s: unknown original dimensions", format.data());
+  }
+
+  img.setText(ImgKey_FileWidth,  QString::number(origSize.width()));
+  img.setText(ImgKey_FileHeight, QString::number(origSize.height()));
+
+  qMessageContext().setLocalData(fileName);
+
+  // setAutoTransform() will pull orientation from thumbnail IFD if it is not present in the image
+  // IFD, resulting in incorrect rotation
   long exifOrientation = 0;
-  if (format == "jpeg" && reader.transformation() != 0) {
-    qMessageContext().setLocalData(QFileInfo(name).fileName());
+  if (format == "jpeg" &&
+      reader.transformation() != 0) {
 
     auto exif = Exiv2::ImageFactory::open(
         reinterpret_cast<const Exiv2::byte*>(data.constData()), data.size());
@@ -1195,8 +1247,6 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
       if (it != exifData.end()) exifOrientation = it->value().toLong();
     }
   }
-
-  qMessageContext().setLocalData(QString());
 
   // fixme: skipping exif mirror orientations (2,4,5,7)
   qreal rotate = 0;
@@ -1221,10 +1271,12 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   if (size != QSize()) img = constrainedResize(img, size);
 
   if (reader.error())
-    qWarning("%s: %s: xform=0x%x orient=%d size=%dx%d error=%s",
-             qPrintable(name), format.data(), int(reader.transformation()),
+    qWarning("%s: xform=0x%x orient=%d size=%dx%d error=%s",
+             format.data(), int(reader.transformation()),
              int(exifOrientation), img.width(), img.height(),
              qPrintable(reader.errorString()));
+
+  qMessageContext().setLocalData(QString());
 
   return img;
 }

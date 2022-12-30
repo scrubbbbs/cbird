@@ -90,6 +90,16 @@ class MatchRange {
 };
 
 /**
+ * Pass advanced options to loadImage()
+ */
+class ImageLoadOptions {
+ public:
+  bool fastJpegIdct = false;    // use JDCT_FAST in libjpeg, unused if scaling
+  bool readScaled = false;      // scale image down in the decompress phase
+  int minSize = 0, maxSize = 0; // acceptable size range (best-effort, could be bigger)
+};
+
+/**
  * A single unit of indexable content such as image, video or audio
  *
  * @details
@@ -146,6 +156,8 @@ class Media {
   static constexpr const char* ImgKey_FileSize = "fileSize";  // uncompressed size
   static constexpr const char* ImgKey_FileName = "name";      // original file name
   static constexpr const char* ImgKey_FileFormat = "format";  // jpg, gif etc
+  static constexpr const char* ImgKey_FileWidth = "width";    // original/pre-scaled width
+  static constexpr const char* ImgKey_FileHeight = "height";  // original/pre-scaled height
 
   // hooks to external things
   // fixme: gui functions don't belong here
@@ -453,17 +465,18 @@ class Media {
   /**
    * decompress image and optionally rescale
    * @param data Compressed image data
-   * @param see: loadIcon()
+   * @param size Rescale to the non-zero dimension
    * @param name label for debug messages, e.g. the file name or url
    * @note  all image loaders eventually call this
    * @note  EXIF orientation flag will be used to transform the image
    */
   static QImage loadImage(const QByteArray& data, const QSize& size = QSize(),
-                          const QString& name = QString(), QFuture<void> *future=nullptr);
+                          const QString& name = QString(), QFuture<void> *future=nullptr,
+                          const ImageLoadOptions& options = ImageLoadOptions());
 
   /**
    * scale image using Qt's "smooth" filter
-   * @param size see: loadImage()
+   * @param size Use the dimension > 0, keeping the aspect ratio
    */
   static QImage constrainedResize(const QImage& img, const QSize& size);
 
