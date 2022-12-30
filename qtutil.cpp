@@ -818,10 +818,10 @@ bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
 
 static void exifLogHandler(int level, const char* msg) {
   const int nLevels = 4;
-  constexpr QtMsgType levelToType[nLevels] = {
+  static constexpr QtMsgType levelToType[nLevels] = {
     QtDebugMsg, QtInfoMsg, QtWarningMsg, QtCriticalMsg
   };
-  constexpr QMessageLogContext context("", 0, "exif()", "");
+  static constexpr QMessageLogContext context("", 0, "exif()", "");
   if (level < nLevels && level > 0)
     qColorMessageOutput(levelToType[level], context, QString(msg).trimmed());
 }
@@ -1056,8 +1056,8 @@ MessageLog::~MessageLog() {
 void MessageLog::outputThread() {
   _sync = false;
 
-  constexpr QChar charCR('\r'), charLF('\n'), charSpace(' ');
-  constexpr QLatin1String tokenProgress("<PL>"), tokenElide("<EL>");
+  static constexpr QChar charCR('\r'), charLF('\n'), charSpace(' ');
+  static constexpr QLatin1String tokenProgress("<PL>"), tokenElide("<EL>");
 
   QString lastInput, lastOutput, lastProgressLine;
   int numRepeats = 0;
