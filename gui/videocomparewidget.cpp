@@ -42,24 +42,36 @@ class FrameCache {
     VideoContext::DecodeOptions opt;
     opt.threads = QThread::idealThreadCount();
 
-    Q_ASSERT(0 == _ctx.open(m.path(), opt));
     _curPos = 0;
-    _end = _ctx.metadata().duration * _ctx.metadata().frameRate;
     _rateFactor = 1.0f;
     _keyInterval = 0;
     _lastKey = 0;
     _maxCacheSizeKb = cacheSizeKb;
 
     // read first frame to get real format for dummy frames
+    // if we can't for some reason use dummy frame
     QImage firstFrame;
-    Q_ASSERT(_ctx.nextFrame(firstFrame));
+    if (_ctx.open(m.path(), opt) < 0) {
+      _end = 1;
+    }
+    else {
+      _end = _ctx.metadata().duration * _ctx.metadata().frameRate;
+      if (!_ctx.nextFrame(firstFrame))
+        _end = 1;
+    }
+
+    if (firstFrame.isNull()) {
+      firstFrame = QImage(16,16,QImage::Format_RGB888);
+      firstFrame.fill(_ERROR_COLOR);
+    }
+
     _curPos++;
     cacheFrame(0, firstFrame);
 
     _errorFrame.image = firstFrame;
-    _errorFrame.image.fill(0xFF5050);
+    _errorFrame.image.fill(_ERROR_COLOR);
     _oobFrame = _errorFrame;
-    _oobFrame.image.fill(0x5050FF);
+    _oobFrame.image.fill(_OOB_COLOR);
   }
 
   int availableCache() const {
@@ -176,6 +188,9 @@ class FrameCache {
   float _rateFactor;             // multiply requested frame by this
   int _keyInterval, _lastKey;    // key interval detection
   float _maxCacheSizeKb;         // memory management
+
+  const int _OOB_COLOR = 0x5050FF;
+  const int _ERROR_COLOR = 0xFF5050;
 };
 
 VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
