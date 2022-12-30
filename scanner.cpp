@@ -593,9 +593,6 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
     // todo: setting for indexer autocrop threshold
     if (_params.algos && _params.autocrop) autocrop(cvImg, 20);
 
-    int width = cvImg.cols;
-    int height = cvImg.rows;
-
     uint64_t dctHash = 0;
     if (_params.algos & (1 << SearchParams::AlgoDCT)) dctHash = dctHash64(cvImg);
 
