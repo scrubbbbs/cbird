@@ -1674,7 +1674,9 @@ int main(int argc, char** argv) {
           }
         }
         qInfo().noquote() << "filter:{" << arg << key << value << "} removed"
-                          << selection.count()- tmp.count() << "of" << selection.count() << "items";
+                          << selection.count()- tmp.count() << "from"
+                          << selection.count() << "items,"
+                          << tmp.count() << "remaining";
         selection = tmp;
       }
 
