@@ -35,7 +35,7 @@ Scanner::Scanner() {
   // clang-format off
   _imageTypes << "jpg" << "jpeg" << "jfif" << "png" << "bmp" << "gif";
   _jpegTypes << "jpg" << "jpeg" << "jfif";
-  _videoTypes << "mp4" << "wmv" << "asf" << "flv" << "mpg" << "mpeg"  << "mov"
+  _videoTypes << "mp4" << "wmv" << "asf" << "flv" << "mpg" << "mpeg"  << "mov" << "vob" << "ogv"
               << "rm" << "ram" << "webm"<< "f4v" << "m4v" << "avi" << "qt" << "mkv";
   _archiveTypes << "zip";
   // clang-format on
@@ -96,7 +96,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
       VideoContext v;
       VideoContext::DecodeOptions opt;
       opt.threads = _params.decoderThreads;
-      if (v.open(path, opt) < 0) continue;
+      if (v.open(path) < 0) continue;
 
       VideoContext::Metadata d = v.metadata();
       cost[path] = (d.frameRate * d.duration * d.frameSize.width() *
