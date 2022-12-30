@@ -1305,3 +1305,14 @@ QPartialOrdering qVariantCompare(const QVariant& a, const QVariant& b) {
   return ord;
 }
 #endif
+
+ShadeWidget::ShadeWidget(QWidget *parent) : QLabel(parent) {
+  setGeometry({0,0,parent->width(),parent->height()});
+  setMargin(0);
+  setFrameShape(QFrame::NoFrame);
+  setStyleSheet(R"qss(
+        QLabel {
+          background-color:rgba(0,0,0,128);
+        })qss");
+  show();
+}

@@ -127,6 +127,12 @@ class MenuHelper {
                             const char* slot, int maxDepth, int depth);
 };
 
+/// cover up parent to emphasize foreground
+class ShadeWidget : public QLabel {
+ public:
+  ShadeWidget(QWidget* parent);
+};
+
 /// elide string in the middle
 QString qElide(const QString& str, int maxLen = 80);
 
