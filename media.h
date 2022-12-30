@@ -532,14 +532,26 @@ class Media {
   bool isArchived() const { return isArchived(_path); }
 
   /// decompose a virtual path, assuming it was for a zip file
-  static void archivePaths(const QString& path, QString& parent,
+  QT_DEPRECATED static void archivePaths(const QString& path, QString& parent,
                            QString& child) {
     auto parts = path.split(".zip:");
     parent = parts[0] + ".zip";
     child = parts.count() > 1 ? parts[1] : "";
   }
 
-  void archivePaths(QString& parent, QString& child) const {
+  QT_DEPRECATED void archivePaths(QString& parent, QString& child) const {
+    archivePaths(_path, parent, child);
+  }
+
+  static void archivePaths(const QString& path, QString* parent,
+                           QString* child=nullptr) {
+    auto parts = path.split(".zip:");
+    *parent = parts.at(0) + ".zip";
+    if (child)
+      *child = parts.count() > 1 ? parts.at(1) : "";
+  }
+
+  void archivePaths(QString* parent, QString* child=nullptr) const {
     archivePaths(_path, parent, child);
   }
 
