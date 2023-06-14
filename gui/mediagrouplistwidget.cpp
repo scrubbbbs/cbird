@@ -118,6 +118,7 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
     item->setIcon(QIcon(QPixmap::fromImage(m.image())));
     addItem(item);
   }
+  setCurrentIndex( model()->index(0,0) );
 
 //  if (_options.db) {
 //    QAction* a = new QAction("Move to...", this);
