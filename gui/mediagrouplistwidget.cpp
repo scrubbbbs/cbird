@@ -1155,6 +1155,16 @@ void MediaGroupListWidget::loadMedia(int row) {
         iw->input = {left, right};
       }
 
+      // match needle video range to result if it is missing
+      if (group.count() == 2 && groupIndex == 0 &&
+          group[0].type() == Media::TypeVideo &&
+          group[1].type() == Media::TypeVideo &&
+          group[0].matchRange().dstIn < 0 &&
+          group[1].matchRange().srcIn >= 0) {
+
+        iw->media.setMatchRange({-1, group[1].matchRange().srcIn, 0});
+      }
+
       QFutureWatcher<void>* w = new QFutureWatcher<void>(this);
       _loaders.append(w);
 
