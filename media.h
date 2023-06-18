@@ -471,7 +471,7 @@ class Media {
    * @note  EXIF orientation flag will be used to transform the image
    */
   static QImage loadImage(const QByteArray& data, const QSize& size = QSize(),
-                          const QString& name = QString(), QFuture<void> *future=nullptr,
+                          const QString& name = QString(), const QFuture<void> *future=nullptr,
                           const ImageLoadOptions& options = ImageLoadOptions());
 
   /**

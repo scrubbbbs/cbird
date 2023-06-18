@@ -24,7 +24,7 @@
 class QCancelableIODevice : public QIODevice {
   NO_COPY_NO_DEFAULT(QCancelableIODevice, QIODevice)
  public:
-  QCancelableIODevice(QIODevice* io, QFuture<void>* future);
+  QCancelableIODevice(QIODevice* io, const QFuture<void>* future);
   ~QCancelableIODevice();
 
   bool open(QIODevice::OpenMode flags) override;
@@ -43,7 +43,7 @@ class QCancelableIODevice : public QIODevice {
 
  private:
     QIODevice* _io;
-    QFuture<void>* _future;
+    const QFuture<void>* _future;
 };
 
 /// md5 the entire file/buffer

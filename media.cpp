@@ -1135,7 +1135,7 @@ QIODevice* Media::ioDevice() const {
 }
 
 QImage Media::loadImage(const QByteArray& data, const QSize& size,
-                        const QString& name, QFuture<void>* future,
+                        const QString& name, const QFuture<void>* future,
                         const ImageLoadOptions& options) {
 
   const QString fileName = QFileInfo(name).fileName();

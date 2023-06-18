@@ -20,7 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #include "ioutil.h"
 
-QCancelableIODevice::QCancelableIODevice(QIODevice *io, QFuture<void>* future)
+QCancelableIODevice::QCancelableIODevice(QIODevice *io, const QFuture<void>* future)
     : _io(io), _future(future) {
   setOpenMode(_io->openMode());
 }
