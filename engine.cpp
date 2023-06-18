@@ -250,7 +250,9 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
   if (params.mirrorMask & SearchParams::MirrorBoth)
     matches.append(db->similarTo(mirrored(needle, true, true), params));
 
-  if (params.templateMatch) matcher->match(needle, matches, params);
+  if (params.templateMatch &&
+      params.algo != SearchParams::AlgoVideo)
+    matcher->match(needle, matches, params);
 
   std::sort(matches.begin(), matches.end());
 
