@@ -90,6 +90,9 @@ class Database {
   /// Fast test if index contains file
   bool mediaExists(const QString& path);
 
+  /// Fast test if index contains path (sql like)
+  bool mediaExistsLike(const QString& pathLike);
+
   // Basic database lookups
   Media mediaWithId(int id);
   Media mediaWithPath(const QString& path);

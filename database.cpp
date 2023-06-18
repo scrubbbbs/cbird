@@ -1030,6 +1030,23 @@ bool Database::mediaExists(const QString& path) {
   return query.next();
 }
 
+bool Database::mediaExistsLike(const QString& pathLike) {
+  QString relPath = pathLike;
+  if (relPath.startsWith(path()))
+    relPath = relPath.mid(path().length() + 1);
+
+  QSqlQuery query(connect());
+
+  if (!query.prepare("select id from media where path like :path escape '\\'"))
+    SQL_FATAL(prepare);
+
+  query.bindValue(":path", relPath);
+
+  if (!query.exec()) SQL_FATAL(exec);
+
+  return query.next();
+}
+
 MediaGroup Database::mediaWithSql(const QString& sql,
                                   const QString& placeholder,
                                   const QVariant& value) {
