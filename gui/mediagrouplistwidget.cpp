@@ -1280,18 +1280,18 @@ void MediaGroupListWidget::updateItems() {
 
   // store the attributes of the first item and compare to the others
   struct {
-    int64_t size;        // byte size
-    double compression;  // compressed size / uncompressed sized
-    int pixels;          // number of pixels / pixels per frame
-    int quality;         // no-reference quality score
-    int score;           // match score
-    int fileCount;       // number of files in the same dir as this one
-    int jpegQuality;     // jpeg quality factor used when saving
-    int qualityScore;    // no-reference quality score
-    int duration;        // video: duration in seconds
-    float fps;           // video: frames-per-second
+    int64_t size = 0;        // byte size
+    double compression = 0;  // compressed size / uncompressed sized
+    int pixels = 0;          // number of pixels / pixels per frame
+    int quality = 0;         // no-reference quality score
+    int score = 0;           // match score
+    int fileCount = 0;       // number of files in the same dir as this one
+    QDateTime date;          // media creation date (best guess)
+    int jpegQuality = 0;     // jpeg quality factor used when saving
+    int qualityScore = 0;    // no-reference quality score
+    int duration = 0;        // video: duration in seconds
+    float fps = 0;           // video: frames-per-second
   } first;
-  memset(&first, 0, sizeof(first));
 
   for (int i = 0; i < group.count(); i++) {
     const Media& m = group[i];
@@ -1304,7 +1304,6 @@ void MediaGroupListWidget::updateItems() {
     int pixels = m.resolution();
     double compression = double(m.compressionRatio());
     int score = m.score();
-    int fileCount = 0;
     int jpegQuality = m.attributes().value("jpeg-quality").toInt();
     int qualityScore = m.attributes().value("quality-score").toInt();
     int duration = m.attributes().value("duration").toInt();
@@ -1319,6 +1318,7 @@ void MediaGroupListWidget::updateItems() {
       if (size == 0) size = fileInfo.size();
     }
 
+    int fileCount = 0;
     if (m.isArchived()) {
       // can be slow for large archives, we can cache since
       // archives are immutable here
@@ -1341,11 +1341,25 @@ void MediaGroupListWidget::updateItems() {
         fsFileCount.insert(key, fileCount);
       }
     }
+
+    QDateTime date;
+    QString camera;
+    if (m.type() == Media::TypeImage && !isAnalysis(m)) {
+      static auto dateFunc = Media::propertyFunc("exif#Photo.DateTimeOriginal,Photo.DateTimeDigitized");
+      static auto camFunc = Media::propertyFunc("exif#Image.UniqueCameraModel,Image.Model,Image.Make");
+      date = dateFunc(m).toDateTime();
+      camera = camFunc(m).toString();
+    }
+    else if (m.type() == Media::TypeVideo) {
+      static auto dateFunc = Media::propertyFunc("ffmeta#creation_time");
+      date = dateFunc(m).toDateTime();
+    }
+
     // store if current value is less than/greater than the first item in the
     // group the labels assigned are referenced in the stylesheet to change the
     // color of the value
     struct {
-      QString compression, pixels, size, score, fileCount, duration, frameRate,
+      QString compression, pixels, size, score, fileCount, date, duration, frameRate,
           jpegQuality, qualityScore;
     } compare;
 
@@ -1355,6 +1369,7 @@ void MediaGroupListWidget::updateItems() {
       first.size = size;
       first.score = score;
       first.fileCount = fileCount;
+      first.date = date;
       first.jpegQuality = jpegQuality;
       first.qualityScore = qualityScore;
       first.duration = duration;
@@ -1362,6 +1377,7 @@ void MediaGroupListWidget::updateItems() {
 
       compare.compression = compare.pixels = compare.score = compare.size =
           compare.fileCount = "none";
+      compare.date = "same";
       compare.duration = "same"; //isVideo ? "same" : "none"; // do not hide
       compare.frameRate = "same"; //isVideo ? "same" : "none";
       compare.jpegQuality = jpegQuality==0 ? "none" : "same"; // hide unless computed
@@ -1377,15 +1393,11 @@ void MediaGroupListWidget::updateItems() {
 
       compare.duration = isVideo ? relativeLabel(duration, first.duration) : "same";
       compare.frameRate = isVideo ? relativeLabel(fps, first.fps) : "same";
-    }
 
-    QString date, camera;
-    if (m.type() == Media::TypeImage &&
-        !isAnalysis(m)) {
-      static auto dateFunc = Media::propertyFunc("exif#Photo.DateTimeOriginal,Photo.DateTimeDigitized");
-      static auto camFunc = Media::propertyFunc("exif#Image.UniqueCameraModel,Image.Model,Image.Make");
-      date = dateFunc(m).toDateTime().toString("yyyy/MM/dd HH:mm:ss");
-      camera = camFunc(m).toString();
+      if (first.date.isValid() && date.isValid())
+        compare.date = relativeLabel(first.date, date);
+      else
+        compare.date = "same";
     }
 
     const auto formatPercent = [](double a, double b) {
@@ -1457,12 +1469,12 @@ void MediaGroupListWidget::updateItems() {
             .arg(fileCount)
             .arg(compare.fileCount)
             .arg(fileCount - first.fileCount)
-            .arg(compare.duration)
-            .arg(isVideo ? m.attributes().value("time") : date)
-            .arg(compare.frameRate)
-            .arg(isVideo ? QString::number(fps) : camera)
-            .arg(compare.jpegQuality)
-            .arg(jpegQuality)
+            .arg(compare.date)
+            .arg(date.toString("yyyy/MM/dd HH:mm:ss"))
+            .arg(isVideo ? compare.duration : "same")
+            .arg(isVideo ? m.attributes().value("time") : camera)
+            .arg(isVideo ? compare.frameRate : compare.jpegQuality)
+            .arg(isVideo ? QString::number(fps) : QString::number(jpegQuality))
             .arg(compare.qualityScore)
             .arg(qualityScore)
             .arg(m.isWeed() ? "weed" : m.isArchived() ? "archive" : "file");
