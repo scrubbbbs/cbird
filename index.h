@@ -95,6 +95,7 @@ class SearchParams : public Params {
   MediaGroup set;     // subset to search within (using Index::slice())
   bool inSet = false; // true==use subset
 
+  // fixme: target overlaps with inSet, has limited use, should be removed
   uint32_t target = 0; // specify a media id to search in/for (Media::id())
 
   //QVector<int> resultTypes{Media::TypeImage,Media::TypeVideo};  // list of Media::Type to include in result set

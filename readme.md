@@ -1,4 +1,4 @@
-            ![](screenshot.png)
+![](screenshot.png)
 
 About cbird
 =========================
@@ -12,7 +12,7 @@ The main features are:
 - MD5 hashing for duplicates, bitrot detection
 - Perceptual search for images and video
 - Renaming and sorting tools
-- Clean GUI for viewing results
+- Efficient GUI for duplicate evaluation & removal
 - Comparative analysis tools
 - Zip file support
 
@@ -31,20 +31,20 @@ Use Cases
 	- False-color visualization of differences
 	- No-reference quality metric
 	- Jpeg quality setting estimate
-	- View videos side-by-side
+	- Align and compare videos side-by-side or stacked
 - General management
 	- Sort/rename based on similarity
 	- Rename using regular expressions
 
 Format Support
 =========================
-Qt is used for images and FFmpeg is used for videos. The formats available will depend on the configuration of Qt and FFmpeg. Additional image formats are available with [kimageformats](https://invent.kde.org/frameworks/kimageformats).
+Available formats will vary based on the configuration of Qt and FFmpeg.
 
-`cbird -about` lists the image and video extensions. Note that video extensions are not checked against FFmpeg at runtime, and codecs are not listed.
+`cbird -about` lists the image and video extensions. Note that video extensions are not checked against FFmpeg at runtime, so they could be unavailable.
 
 Additionally, zip files are supported for images.
 
-To get the most formats you will need to compile FFmpeg and Qt 6 with the necessary options.
+To get the most formats you will need to compile FFmpeg and Qt with the necessary options. Additional image formats are available with [kimageformats](https://invent.kde.org/frameworks/kimageformats).
 
 License
 =========================
@@ -64,7 +64,7 @@ chmod +x cbird-linux-0.5.0-x86_64.AppImage
 ./cbird-linux-0.5.0-AppImage -install # install to /usr/local
 ```
 
-- missing libOpenGL.so.0:
+- If missing libOpenGL.so.0:
 	+ debian: apt install libopengl0
 	+ redhat: yum install libglvnd-opengl
 	+ arch: ?
@@ -81,8 +81,6 @@ Running
 #### Get Help
 
  [CLI reference (`cbird -help`) ](https://gist.github.com/scrubbbbs/4c65058c054822d4f279c00f53ddd3aa)
- 
-`cbird -help | less`
 
 #### Index the files in `<path>`
 
@@ -92,7 +90,7 @@ Running
 
 `cbird -update`
 
-#### Find exact duplicates
+#### Exact duplicates
 
 `cbird -use <path> -dups -show`
 
@@ -120,9 +118,9 @@ If the tree contains links, they are handled when scanning for changes (`-update
 
 Links are ignored by default. To follow links use `-i.links 1`
 
-Duplicate inodes (hard links, symbolic links, etc) are not followed by default. If there are duplicate inodes in the tree, the first inode in breadth-first traversal (closest to root) is indexed. To follow all inodes, for example to find hard links, use `-i.dups 1`.
+Duplicate inodes (hard links, symbolic links, etc) are not followed by default. If there are duplicate inodes in the tree, the first inode in breadth-first traversal is indexed. To follow all inodes, for example to find hard links, use `-i.dups 1`.
 
-The index stores relative paths (to the indexed/root path), this makes the index stable if the parent directory or mount point changes. If a path contains links, or is a link, it is stored as-is; which may be less stable than the link target. To store the resolved links instead, use `i.resolve 1`. This is only possible if the link target is a child of the root.
+The index stores relative paths (to the indexed/root path), this makes the index stable if the parent directory or mount point changes. If a path contains links, or is a link, it is stored as-is; which may be less stable than the link target. To store the resolved links instead, use `i.resolve 1`. This is only possible if the link target is a child of the index root.
 
 Note that cbird does not not prevent broken links from occurring, the link check is temporary during the index update.
 
@@ -132,11 +130,11 @@ A "weed" is a deletion record of a near-duplicate, to allow fast deletion of fil
 
 Weeds are tracked when:
 
-- exactly two files visible in inspector (matching pair, use `-p.mm 1`to force pairs)
+- two files visible in results view (matching pair, use `-p.mm 1` or `-p.eg 1` to force pairs)
 - neither file is a zip member
 - one of the files is deleted
 
-When a weed's file hash reappears, it is only considered valid if the original still exists; this prevents undesired deletions. A weed can be unset in the inspector with the "Forget Weed" command.
+When a weed's file hash reappears, it is only considered valid if the original still exists; this prevents undesired deletions. These "broken weeds" can be unset with the "Forget Weed" command.
 
 ```
 cbird -weeds -show # show all weeds
@@ -154,29 +152,30 @@ There are a few for power users.
 - `CBIRD_COLOR_CONSOLE` use colored output even if console says no (default auto-detect)
 - `CBIRD_FORCE_COLORS` use colored output even if console is not detected
 - `CBIRD_LOG_TIMESTAMP` add time delta to log messages
-- `CBIRD_NO_APPIMAGE_PROGS` do not use bundled programs like ffmpeg in the appimage****
+- `CBIRD_NO_BUNDLED_PROGS` do not use bundled programs like ffmpeg in the appimage****
 - `QT_IMAGE_ALLOC_LIMIT_MB` maximum memory allocation for image files (default 256)
+- `QT_SCALE_FACTOR` global scale factor for UI
 
 Search Algorithms
 ====================
 
 #### Discrete Cosine Transform (DCT) Hash (`-p.alg dct`)
-Uses one 64-bit hash per image, similar to pHash. Very fast and good for rescaled images and lightly cropped images.
+Uses one 64-bit hash per image, similar to pHash. Very fast, good for rescaled images and lightly cropped images.
 
 #### DCT Features `-p.alg fdct`
 Uses DCT hashes around features, up to 400 per image. Good for heavily cropped images, much faster than ORB.
 
 #### Oriented Rotated Brief (ORB) Features `-p.alg orb`
-Uses up to 400 256-bit feature descriptors per image and searches using FLANN-based matcher. Good for rotated and cropped images, but slow.
+Uses 256-bit scale/rotation invariant feature descriptors, up to 400 per image, and searches using FLANN-based matcher. Good for rotated and cropped images, but slow.
 
 #### Color Histogram `-p.alg color`
-Uses histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` which is too slow except with `-similar-to`
+Uses histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` and must rehash the reflected image (very slow)
 
 #### DCT Video Index `-p.alg video`
-Uses DCT hashes of video frames, with some compression of nearby similar hashes. Frames are pre-processed to remove letterboxing.
+Uses DCT hashes of video frames, with compression of nearby similar hashes. Frames are pre-processed to remove letterboxing. Compatible with image hashes (fdct) for finding video thumbnails.
 
 #### Template Matcher `-p.tm 1`
-Not a technically a search algorithm, but helps to refine results. Uses up to 1000 features to find an affine transform between two images, then uses DCT hash of the mapped region to validate. Since it requires decompressing the source/destination image it is extremely slow. It can help to reduce the maximum number of matches per image with `-p.mm #`
+Technically a results filter and not search algorithm. Helps  discard poor results. Uses up to 1000 features to find an affine transform between two images, then uses DCT hash of the mapped region to validate. Since it requires decompressing the source/destination image it is extremely slow. It can help to reduce the maximum number of matches per image with `-p.mm #`
 
 How it Performs
 ====================
@@ -268,6 +267,8 @@ Wish List
 - aspect ratio property
 - nuke-dups-in: show how many would not be deleted
 - group-by breaks the sort/sort doesn't work on group-by?
+- replace pattern can take properties
+- sort strings using locale/numeric rules (QCollator)
 
 ### Indexing
 - store date-modified,size for better updating
@@ -279,13 +280,14 @@ Wish List
 - console progress bar
 - error-log to file
 - store symlinks to prevent broken links later on
-- use idct scaling to speed up jpeg decompress
+- use idct scaling to speed up jpeg decompress (wip)
 - file/directory name filters for inclusion/exclusion
 - ~~hard links handling~~ added in v0.6
 	- ~~isJunction() exclusion from index~~
 	- ~~exclusion from index (map inodes during scan)~~
 - ~~see if `skip_loop_filter` for h264 decoding is a good idea: about 20% faster decoding, unknown affect on hash quality~~ enabled in v0.6
 - ~~same with `SWS_AREA` rescaler instead of `SWS_BICUBIC`~~ enabled in v0.6
+- index videos with partition and merge approach to overcome ffmpeg limitations
 
 
 ### Search	
@@ -308,6 +310,8 @@ Wish List
 - detect breaking of symlinks on delete/rename
 - visual indicator of the needle in group view
 - open zip'd files/dirs directly where supported (dolphin/gwenview/nomacs?)
+- side-by-side playback: fix narrow videos
+- video compare: use the same zoom/pan controls as image view
 
 ### Misc
 - method declaration sweep
@@ -374,7 +378,7 @@ wget https://github.com/opencv/opencv/archive/2.4.13.6.zip
 unzip 2.4.13.6.zip
 mkdir build
 cd build
-cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 CMAKE_INSTALL_PREFIX=/usr/local ../opencv-2.4.13.6/
+cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 CMAKE_INSTALL_PREFIX=/usr/local ../opencv-2.4.13.6/
 make -j8
 sudo make install
 ```
@@ -382,6 +386,9 @@ sudo make install
 #### 1.3 Compiling quazip
 
 ```
+# if you compiled qt6 then
+export Qt6_DIR=<path-to-qt6>
+
 git clone https://github.com/stachenov/quazip
 cd quazip
 cmake -DQUAZIP_QT_MAJOR_VERSION=6 .
