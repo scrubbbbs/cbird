@@ -133,6 +133,14 @@ class ShadeWidget : public QLabel {
   ShadeWidget(QWidget* parent);
 };
 
+/**
+ * @brief compare strings by segmenting into numeric and non-numeric parts
+ * @param cmp locale-aware compare function for all parts
+ * @note cmp should probably enable numeric sorting and maybe case insensitivity
+ * @return -1, 0, or 1
+ */
+int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const QStringView& b);
+
 /// elide string in the middle
 QString qElide(const QString& str, int maxLen = 80);
 

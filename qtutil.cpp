@@ -1316,3 +1316,69 @@ ShadeWidget::ShadeWidget(QWidget *parent) : QLabel(parent) {
         })qss");
   show();
 }
+
+int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const QStringView& b) {
+  static const QRegularExpression numberStartExp(qq("[0-9]"));
+
+  // non-digit not preceded by digit or .
+  static const QRegularExpression numberEndExp(qq("(?![0-9\\.])[^0-9]"));
+
+  // current index into string
+  int ia = a.isEmpty() ? -1 : 0;
+  int ib = b.isEmpty() ? -1 : 0;
+
+  auto compareNumbers = [&a, &b, &ia, &ib, &cmp](const int na, const int nb) {
+    ia = a.indexOf(numberEndExp, ia);
+    ib = b.indexOf(numberEndExp, ib);
+    auto pa = a.mid(na, ia > 0 ? (ia - na) : -1);
+    auto pb = b.mid(nb, ib > 0 ? (ib - nb) : -1);
+    return cmp.compare(pa, pb);
+  };
+
+  while (true) {
+    if (ia < 0 && ib >= 0) return -1;  // empty < something
+    if (ia >= 0 && ib < 0) return 1;   // something > empty
+    if (ia < 0 && ib < 0) return 0;    // empty == empty
+    // both >= 0; keep looping
+
+    const int na = a.indexOf(numberStartExp, ia);
+    if (na == ia) {
+      const int nb = b.indexOf(numberStartExp, ib);
+      if (nb == ib) {  // numeric in both
+        int r = compareNumbers(na, nb);
+        if (r != 0) return r;
+        continue;
+      } else {
+        // a is numeric, b is not, a < b
+        return -1;
+      }
+    }
+    const int nb = b.indexOf(numberStartExp, ib);
+    if (nb == ib) {
+      const int na = a.indexOf(numberStartExp, ia);
+      if (na == ia) {  // same block as above
+        int r = compareNumbers(na, nb);
+        if (r != 0) return r;
+        continue;
+      } else
+        return 1;  // b is num, a is not, a > b
+    }
+
+    // if there is a number somewhere,
+    // and prefixes have the same length, compare prefixes
+    if (na > 0 && nb > 0 && na == nb) {
+      auto pa = a.mid(ia, na - ia);
+      auto pb = b.mid(ib, nb - ib);
+      int r = cmp.compare(pa, pb);
+      if (r != 0) return r;
+      ia = na;
+      ib = nb;
+      continue;
+    } else {
+      // no number or unequal prefixes
+      return cmp.compare(a.mid(ia), b.mid(ib));
+    }
+
+    Q_UNREACHABLE();  // every case either continues or returns
+  }
+}

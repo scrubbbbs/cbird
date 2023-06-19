@@ -148,17 +148,6 @@ void Media::printGroupList(const MediaGroupList& list) {
   for (const MediaGroup& group : list) printGroup(group);
 }
 
-bool Media::groupCompareByPath(const MediaGroup& s1, const MediaGroup& s2) {
-  bool result = true;
-  if (s1.count() != 0) {
-    if (s2.count() != 0)
-      result = s1.first().path() < s2.first().path();
-    else
-      result = false;
-  }
-  return result;
-}
-
 bool Media::groupCompareByContents(const MediaGroup& s1, const MediaGroup& s2) {
   if (s1.count() == s2.count()) {
     QSet<QString> paths;
@@ -217,22 +206,31 @@ void Media::expandGroupList(MediaGroupList& list) {
 }
 
 void Media::sortGroupList(MediaGroupList& list, const QString& key) {
-  // todo: use propertyFunc
+  QCollator collator;
+  auto f = propertyFunc(key);
+  auto numericStringCmp = [&](const MediaGroup& a, const MediaGroup& b) {
+    if (a.count() <= 0) return true;
+    if (b.count() <= 0) return false;
+    const QString sa = f(a.first()).toString();
+    const QString sb = f(b.first()).toString();
+    return 0 > qNumericSubstringCompare(collator, sa, sb);
+  };
   if (key == "path")
-    std::stable_sort(list.begin(), list.end(), groupCompareByPath);
+    std::stable_sort(list.begin(), list.end(), numericStringCmp);
   else
-    qFatal("unknown sort key \"%s\"", qPrintable(key));
+    qFatal("unsupported sort key \"%s\"", qPrintable(key));
 }
 
 void Media::sortGroup(MediaGroup& group, const QString& key, bool reverse) {
   auto f = propertyFunc(key);
+  QCollator collator;
+  collator.setNumericMode(true);
 
-  std::function<bool(const Media&, const Media&)> cmp;
-
-  if (!reverse)
-    cmp = [&](const Media& a, const Media& b) { return f(a) < f(b); };
-  else
-    cmp = [&](const Media& a, const Media& b) { return f(b) < f(a); };
+  auto cmp = [&](const Media& a, const Media& b) {
+      const QString sa = f(a).toString();
+      const QString sb = f(b).toString();
+      return reverse ^ (0 > qNumericSubstringCompare(collator, sa, sb));
+    };
 
   std::stable_sort(group.begin(), group.end(), cmp);
 }

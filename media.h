@@ -169,7 +169,6 @@ class Media {
   static void print(const Media& media);
   static void printGroup(const MediaGroup& group);
   static void printGroupList(const MediaGroupList& list);
-  static bool groupCompareByPath(const MediaGroup& s1, const MediaGroup& s2);
   static bool groupCompareByContents(const MediaGroup& s1,
                                      const MediaGroup& s2);
   static void mergeGroupList(MediaGroupList& list);
