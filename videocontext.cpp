@@ -264,6 +264,10 @@ VideoContext::~VideoContext() {
   if (_p->context) close();
   delete _p;
 }
+//static QMutex* ffGlobalMutex() {
+//  static QMutex mutex;
+//  return &mutex;
+//}
 
 int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   _opt = opt;
@@ -275,7 +279,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   _p->packet.size = 0;
   _p->packet.data = nullptr;
 
-  QMutexLocker locker(&_mutex);
+  //QMutexLocker locker(ffGlobalMutex());//&_mutex);
 
   _path = path;
 
@@ -583,7 +587,7 @@ void VideoContext::close() {
   _numThreads = 1;
   _isHardware = false;
 
-  QMutexLocker locker(&_mutex);
+  //QMutexLocker locker(ffGlobalMutex());//&_mutex);
 
   av_packet_unref(&_p->packet);
 
@@ -906,12 +910,14 @@ bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
               << filterName
               << (_opt.fast ? "fast" : "");
 
+      {
+        //QMutexLocker locker(ffGlobalMutex());
 
       _p->scaler = sws_getContext(
           _p->frame->width, _p->frame->height, AVPixelFormat(_p->frame->format),
           w, h, AVPixelFormat(fmt), filter,
           nullptr, nullptr, nullptr);
-
+      }
       avLoggerSetFileName(_p->scaler, QFileInfo(_path).fileName());
 
       int size = av_image_alloc(_p->scaled.data, _p->scaled.linesize, w, h, AVPixelFormat(fmt), 16);

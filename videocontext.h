@@ -174,7 +174,7 @@ class VideoContext {
   int _videoFrameCount;
   bool _isKey;
   int _consumed;
-  QMutex _mutex;
+  //QMutex _mutex;
   int _errorCount;
   Metadata _metadata;
   int64_t _firstPts;       // pts of first frame for accurate seek
