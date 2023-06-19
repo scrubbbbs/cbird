@@ -40,6 +40,12 @@ Q_STATIC_ASSERT_X(QT_VERSION_MAJOR==6, QT_VERSION_STR " is not a supported qt ve
 #include <QtWidgets/QtWidgets>
 #include <QtGui/QtGui>
 
+using ll = QLatin1StringView;
+using lc = QLatin1Char;
+
+// rename QStringLiteral
+#define qq(str) (QString(QtPrivate::qMakeStringPrivate(QT_UNICODE_LITERAL(str))))
+
 // make sure asserts are always enabled, for now
 #if defined(QT_NO_DEBUG) && !defined(QT_FORCE_ASSERTS)
 #error QT_ASSERT() must be enabled!
