@@ -22,6 +22,7 @@
 #include "mediafolderlistwidget.h"
 #include "videocomparewidget.h"
 #include "cropwidget.h"
+#include "mediabrowser.h"
 
 #include "../lib/jpegquality.h"
 #include "../database.h"
@@ -701,8 +702,11 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addAction(settings, "Choose Selected", Qt::Key_Return, this, SLOT(chooseAction()));
   WidgetHelper::addAction(settings, "Reload", Qt::Key_F5, this, SLOT(reloadAction()));
   WidgetHelper::addAction(settings, "Copy Image", Qt::CTRL|Qt::Key_C, this, SLOT(copyImageAction()));
-  if (_options.db)
-    WidgetHelper::addAction(settings, "Set Index Thumbnail", Qt::Key_H, this, SLOT(thumbnailAction()));
+
+  WidgetHelper::addAction(settings, "Set Index Thumbnail", Qt::Key_H, this, SLOT(thumbnailAction()))
+      ->setEnabled(_options.db != nullptr);
+  WidgetHelper::addAction(settings, "Browse Parent", Qt::Key_Tab, this, SLOT(browseParentAction()))
+      ->setEnabled(_options.db != nullptr);
 
   WidgetHelper::addSeparatorAction(this);
 
@@ -763,6 +767,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 
   WidgetHelper::addAction(settings, "More per Page", Qt::Key_BracketRight, this, SLOT(increasePageSize()));
   WidgetHelper::addAction(settings, "Less per Page", Qt::Key_BracketLeft, this, SLOT(decreasePageSize()));
+
 
   WidgetHelper::addAction(settings, "Move to Next Screen", Qt::SHIFT | Qt::Key_F11,
             this, SLOT(moveToNextScreenAction()));
@@ -2597,4 +2602,46 @@ void MediaGroupListWidget::updateMedia(const QString& path, const Media& m) {
     for (Media& media : group)
       if (media.path() == path) media = m;
   updateItems();
+}
+
+void MediaGroupListWidget::browseParentAction() {
+  const MediaGroup g = selectedMedia();
+  if (g.count() < 1)
+    return;
+  if (!_options.db) {
+    qWarning() << "database is required";
+    return;
+  }
+
+  const Media& m = g.first();
+  QString path;
+  if (m.isArchived())
+    m.archivePaths(&path);
+  else
+    path = m.dirPath();
+
+  const MediaGroup siblings = _options.db->mediaWithPathLike(path + lc('%'));
+
+  MediaWidgetOptions options = _options;
+  options.selectOnOpen = m;
+
+  MediaBrowser::show(Media::splitGroup(siblings, options.maxPerPage),
+                     MediaBrowser::ShowNormal, options);
+}
+
+bool MediaGroupListWidget::selectItem(const Media& item) {
+  int rowIndex = -1;
+  int groupIndex = -1;
+  for (int i = 0; i < _list.count(); ++i)
+    if (0 <= (groupIndex = _list.at(i).indexOf(item))) {
+      rowIndex = i;
+      break;
+    }
+  if (rowIndex <= 0)
+    return false;
+
+  loadRow(rowIndex);
+  setCurrentIndex(model()->index(groupIndex, 0));
+
+  return true;
 }

@@ -235,6 +235,9 @@ void MediaBrowser::showIndex(const MediaGroup& index,
 
 void MediaBrowser::show(const MediaGroupList& list) {
   MediaGroupListWidget* w = new MediaGroupListWidget(list, _options);
+  if (_options.selectOnOpen.isValid())
+    w->selectItem(_options.selectOnOpen);
+
   connect(w, &MediaGroupListWidget::mediaSelected, this, &MediaBrowser::mediaSelected);
   w->show();
   w->activateWindow();

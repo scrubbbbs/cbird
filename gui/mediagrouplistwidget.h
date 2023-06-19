@@ -47,6 +47,9 @@ class MediaGroupListWidget : public QListWidget {
 
   virtual ~MediaGroupListWidget();
 
+  /// move to item's page and select the item; call before show()
+  bool selectItem(const Media& item);
+
   // @note force using show() to ensure save/restore of min/max state
   void show() { _maximized ? super::showMaximized() : super::showNormal(); }
   void showMaximized() = delete;
@@ -175,6 +178,9 @@ class MediaGroupListWidget : public QListWidget {
 
   void increasePageSize() { resizePage(true); }
   void decreasePageSize() { resizePage(false); }
+
+  /// Open new window with all images in the selection's folder
+  void browseParentAction();
 
 private:
   void closeEvent(QCloseEvent* event);

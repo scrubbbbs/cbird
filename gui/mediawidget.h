@@ -40,6 +40,7 @@ class MediaWidgetOptions {
   QString basePath;
   SearchParams params;    /// params for SelectSearch or other things
   Database* db = nullptr; /// database for SelectSearch or other things
+  Media selectOnOpen;     /// media to reveal/select on open
 
   // todo: WidgetParams
   bool trackWeeds = true; /// if true, remember user deletions
