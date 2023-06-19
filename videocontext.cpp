@@ -86,6 +86,23 @@ static void avImgToQImg(uint8_t *planes[4], int linesizes[4], int width,
   }
 }
 
+/*
+static void avImgToQImgNoCopy(uint8_t *planes[4], int linesizes[4], int width,
+                        int height, QImage& dst, AVPixelFormat fmt = AV_PIX_FMT_YUV420P) {
+
+  const QSize size(width, height);
+  const uchar* const data = planes[0];
+  int skip = linesizes[0];
+
+  if (fmt != AV_PIX_FMT_RGB24) {
+    Q_ASSERT(0);
+  } else {
+    QImage::Format format = QImage::QImage::Format_RGB888;
+    dst = QImage(data, width, height, skip, format);
+  }
+}
+*/
+
 static void avImgToCvImg(uint8_t* planes[4], int linesizes[4], int width,
                          int height, cv::Mat& dst,
                          AVPixelFormat fmt = AV_PIX_FMT_YUV420P) {
@@ -178,32 +195,23 @@ void VideoContext::listFormats() {
 }
 
 class VideoContextPrivate {
+  Q_DISABLE_COPY_MOVE(VideoContextPrivate)
+
  public:
-  VideoContextPrivate() { reset(); }
+  VideoContextPrivate() {};
 
-  void reset() {
-    format = nullptr;
-    context = nullptr;
-    codec = nullptr;
-    frame = nullptr;
-    videoStream = nullptr;
-    scaler = nullptr;
-    sar = -1;
-    memset(&scaled, 0, sizeof(scaled));
-  }
-
-  AVFormatContext* format;
-  AVCodecContext* context;
-  const AVCodec* codec;
-  AVFrame* frame;
-  AVStream* videoStream;
+  AVFormatContext* format = nullptr;
+  AVCodecContext* context = nullptr;
+  const AVCodec* codec = nullptr;
+  AVFrame* frame = nullptr;
+  AVStream* videoStream = nullptr;
   AVPacket packet;
-  float sar;
+  float sar = -1.0;
 
-  SwsContext* scaler;
+  SwsContext* scaler = nullptr;
   struct {
-    uint8_t *data[4];
-    int     linesize[4];
+    uint8_t *data[4] = {nullptr};
+    int     linesize[4] = {0};
   } scaled;
 };
 
@@ -283,7 +291,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
   _path = path;
 
-  _p->format = avformat_alloc_context();
+  _p->format = avformat_alloc_context(); // only reason for this is avLogger
   Q_ASSERT(_p->format);
 
   // set context to log source of errors
@@ -294,6 +302,8 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   if ((err=avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, nullptr)) < 0) {
     AV_CRITICAL("cannot open input");
     avLoggerUnsetFileName(_p->format);
+    avformat_free_context(_p->format);
+    _p->format = nullptr;
     return -1;
   }
 
@@ -324,8 +334,9 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     i++;
   }
 
-  avformat_close_input(&_p->format);
   avLoggerUnsetFileName(_p->format);
+  avformat_close_input(&_p->format); // _p->format == nullptr
+  Q_ASSERT(_p->format == nullptr);
 
   err=0;
   if (_firstPts == AV_NOPTS_VALUE) {
@@ -340,14 +351,20 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   if ((err=avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, nullptr)) < 0) {
     AV_CRITICAL("cannot reopen input");
     avLoggerUnsetFileName(_p->format);
+    avformat_free_context(_p->format);
+    _p->format = nullptr;
     return -1;
   }
 
-  avLoggerSetFileName(_p->format, fileName);
+  auto freeFormat = [this]() {
+    avLoggerUnsetFileName(_p->format);
+    avformat_close_input(&_p->format);
+    Q_ASSERT(_p->format == nullptr);
+  };
 
   if ((err=avformat_find_stream_info(_p->format, nullptr)) < 0) {
     AV_CRITICAL("cannot find stream info");
-    avLoggerUnsetFileName(_p->format);
+    freeFormat();
     return -2;
   }
 
@@ -407,7 +424,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   err=0;
   if (videoStreamIndex < 0) {
     AV_CRITICAL("cannot find video stream");
-    avLoggerUnsetFileName(_p->format);
+    freeFormat();
     return -3;
   }
 
@@ -417,22 +434,30 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   const AVCodec* codec = avcodec_find_decoder(_p->videoStream->codecpar->codec_id);
   if (!codec) {
     AV_CRITICAL("could not find video codec");
+    freeFormat();
     return -3;
   }
 
   _p->context = avcodec_alloc_context3(codec);
   if (!_p->context) {
     AV_CRITICAL("could not allocate video codec context");
+    freeFormat();
     return -3;
   }
+  avLoggerSetFileName(_p->context, fileName);
+
+  auto freeContext = [this]() {
+    avLoggerUnsetFileName(_p->context);
+    avcodec_free_context(&_p->context); Q_ASSERT(_p->context == nullptr);
+    avLoggerUnsetFileName(_p->format);
+    avformat_close_input(&_p->format); Q_ASSERT(_p->format == nullptr);
+  };
 
   if (avcodec_parameters_to_context(_p->context, _p->videoStream->codecpar) < 0) {
     AV_CRITICAL("failed to copy codec params to codec context");
+    freeContext();
     return -3;
   }
-
-  avLoggerSetFileName(_p->context, fileName);
-
 
   // fixme: hwdec is probably broken since using current FFmpeg (git ~2022/12)
   bool tryHardware = opt.gpu;
@@ -486,8 +511,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     _p->codec = avcodec_find_decoder(_p->context->codec_id);
     if (!_p->codec) {
       AV_WARNING("no codec found");
-      avLoggerUnsetFileName(_p->format);
-      avLoggerUnsetFileName(_p->context);
+      avLoggerSetFileName(_p->context, fileName);
       return -4;
     }
   } else {
@@ -538,21 +562,18 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       _p->codec = avcodec_find_decoder(_p->context->codec_id);
       if (!_p->codec) {
         AV_WARNING("no codec found");
-        avLoggerUnsetFileName(_p->format);
-        avLoggerUnsetFileName(_p->context);
+        freeContext();
         return -4;
       }
 
       if ((err=avcodec_open2(_p->context, _p->codec, nullptr)) < 0) {
         AV_CRITICAL("could not open fallback codec");
-        avLoggerUnsetFileName(_p->format);
-        avLoggerUnsetFileName(_p->context);
+        freeContext();
         return -5;
       }
     } else {
       AV_CRITICAL("could not open codec");
-      avLoggerUnsetFileName(_p->format);
-      avLoggerUnsetFileName(_p->context);
+      freeContext();
       return -5;
     }
   }
@@ -566,8 +587,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   if (!_p->frame) {
     err=0;
     AV_CRITICAL("could not allocate video frame");
-    avLoggerUnsetFileName(_p->format);
-    avLoggerUnsetFileName(_p->context);
+    freeContext();
     return -6;
   }
 
@@ -581,6 +601,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   return 0;
 }
 
+
 void VideoContext::close() {
   _errorCount = 0;
   _videoFrameCount = 0;
@@ -589,23 +610,34 @@ void VideoContext::close() {
 
   //QMutexLocker locker(ffGlobalMutex());//&_mutex);
 
-  av_packet_unref(&_p->packet);
-
-  avLoggerUnsetFileName(_p->scaler);
-  if (_p->scaler) sws_freeContext(_p->scaler);
-
+  if (_p->scaler) {
+    avLoggerUnsetFileName(_p->scaler);
+    sws_freeContext(_p->scaler);
+    _p->scaler = nullptr;
+  }
   if (_p->scaled.data[0]) av_freep( &(_p->scaled.data[0]) );
 
-  avcodec_close(_p->context);
-  avLoggerUnsetFileName(_p->context);
+  if (_p->context) {
+    avLoggerUnsetFileName(_p->context);
+    avcodec_free_context(&_p->context);
+    Q_ASSERT(_p->context == nullptr);
+  }
 
-  avformat_close_input(&_p->format);
-  avLoggerUnsetFileName(_p->format);
+  if (_p->format) {
+    avLoggerUnsetFileName(_p->format);
+    avformat_close_input(&_p->format);
+    Q_ASSERT(_p->format == nullptr);
+  }
 
-  // av_free(_p->context);
-  av_frame_free(&_p->frame);
+  if (_p->frame) {
+    av_frame_free(&_p->frame);
+    Q_ASSERT(_p->frame == nullptr);
+  }
 
-  _p->reset();
+  //av_packet_unref(&_p->packet);
+
+  delete _p;
+  _p = new VideoContextPrivate;
 }
 
 int VideoContext::ptsToFrame(int64_t pts) const {
@@ -715,7 +747,6 @@ bool VideoContext::seek(int frame, QVector<QImage>* decoded, int* maxDecoded) {
           close();
           open(_path, _opt);
           return seekDumb(frame);
-          return true;
         }
       }
 

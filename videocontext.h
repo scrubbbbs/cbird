@@ -33,8 +33,9 @@ class VideoContextPrivate;
 
 /// Video decoding
 class VideoContext {
- public:
+  Q_DISABLE_COPY_MOVE(VideoContext);
 
+ public:
   struct Metadata {
     bool isEmpty;
     QSize frameSize;
@@ -136,7 +137,7 @@ class VideoContext {
   bool nextFrame(QImage& imgOut);
   bool nextFrame(cv::Mat& outImg);
 
-  QString path() const { return _path; }
+  const QString& path() const { return _path; }
 
   /// display aspect ratio
   /// @note only valid after nextFrame()
