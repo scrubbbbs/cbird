@@ -617,10 +617,15 @@ int64_t VideoContext::frameToPts(int frame) const {
 }
 
 bool VideoContext::seekDumb(int frame) {
-  AV_WARNING("seek dumb decodes all frames");
-  QImage tmp;
+  if (frame > _MAX_DUMBSEEK_FRAMES) {
+    qCritical() << "refusing to seek, too many frames:"  << frame;
+    return false;
+  }
+  AV_WARNING("!! decoding *all* frames !!");
   while (frame--)
-    if (!decodeFrame()) return false;
+    if (!decodeFrame())
+      return false;
+
   return true;
 }
 
@@ -705,7 +710,7 @@ bool VideoContext::seek(int frame, QVector<QImage>* decoded, int* maxDecoded) {
           AV_WARNING("failed after 10 attempts, seeking dumb");
           close();
           open(_path, _opt);
-          seekDumb(frame);
+          return seekDumb(frame);
           return true;
         }
       }

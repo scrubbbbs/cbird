@@ -184,4 +184,6 @@ class VideoContext {
   bool _eof;               // true when eof on input
   int _numThreads;         // max number of threads for decoding
   VideoContext::DecodeOptions _opt;
+
+  const int _MAX_DUMBSEEK_FRAMES = 10000; // do not seek if there are too many
 };
