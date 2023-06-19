@@ -192,7 +192,9 @@ class Media {
       const QString& expr);
 
   /**
+   * @param expr function[,args][#function[,args] ...]
    * @return function that evaluates expr with QVariant argument
+   * @note chain of functions is possible, separated by #
    */
   static std::function<QVariant(const QVariant&)> unaryFunc(const QString& expr);
 

@@ -283,33 +283,58 @@ MediaGroupList Media::splitGroup(const MediaGroup& group, int chunkSize) {
 }
 
 std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
-    // modifier,args...
-    QStringList mod = expr.split(",");
-    QString fn = mod[0];
+
+    // unary functions can be chained
+    const QStringList calls = expr.split(lc('#'));
+    if (calls.count() > 1) {
+      QVector< std::function<QVariant(const QVariant&)> > chain;
+      for (auto& expr : calls)
+        chain.append(unaryFunc(expr)); // recursion ok, # is stripped out
+      return [chain](const QVariant& v) {
+        QVariant r = v;
+        for (auto& f : qAsConst(chain))
+          r = f(r);
+        return r;
+      };
+    }
+
+    const QStringList call = expr.split(",");
+    QString fn = call[0];
 
     // string functions
     if (fn == "mid") {
-      if (mod.count() != 3)
-        qFatal("mid() takes 2 int arguments (begin, length)");
-      int start = mod[1].toInt();
-      int len   = mod[2].toInt();
-      return [=](const QVariant& v) {
+      if (call.count() != 3)
+        qFatal("mid() has two integer arguments (begin, length)");
+      bool ok;
+      int start = call[1].toInt(&ok);
+      if (!ok)
+        qFatal("first argument to mid() is not an integer");
+      int len = call[2].toInt(&ok);
+      if (!ok)
+        qFatal("second argument to mid() is not an integer");
+      return [start,len](const QVariant& v) {
         const QString k = v.toString();
         return QVariant(k.mid(start, len));
       };
     }
     if (fn == "trim") {
-      if (mod.count() != 1)
-          qFatal("trim() has no arguments");
+      if (call.count() != 1)
+        qFatal("trim() has no arguments");
       return [](const QVariant&v) { return v.toString().trimmed(); };
     }
     if (fn == "upper") {
+      if (call.count() != 1)
+        qFatal("upper() has no arguments");
       return [](const QVariant& v) { return v.toString().toUpper(); };
     }
     if (fn == "lower") {
+      if (call.count() != 1)
+        qFatal("lower() has no arguments");
       return [](const QVariant& v) { return v.toString().toLower(); };
     }
     if (fn == "title") {
+      if (call.count() != 1)
+        qFatal("title() has no arguments");
       return [](const QVariant& v) {
         auto s = v.toString().toLower();
         if (s.length() > 0) s[0] = s[0].toUpper();
@@ -317,45 +342,48 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
       };
     }
     if (fn == "pad") {
-      if (mod.count() != 2) qFatal("pad() has one argument (length <integer>)");
+      if (call.count() != 2)
+        qFatal("pad() takes one integer argument (length)");
       bool ok;
-      const int len = mod[1].toInt(&ok);
-      if (!ok) qFatal("pad() length argument (\"%s\") is not an integer", qPrintable(mod[1]));
-      return [=](const QVariant& v) {
+      const int len = call[1].toInt(&ok);
+      if (!ok)
+        qFatal("pad() length argument is not an integer");
+      return [len](const QVariant& v) {
         bool ok;
         int num = v.toInt(&ok);
-        if (!ok) qFatal("pad() input is not integer: %s", qPrintable(v.toString()));
+        if (!ok) qFatal("pad() input is not integer");
         return QString("%1").arg(num, len, 10, QLatin1Char('0'));
       };
     }
     // list functions
     if (fn == "split") {
-      if (mod.count() != 2)
-        qFatal("split() takes 1 regexp argument (separator)");
-      QRegularExpression exp(mod[1]);
+      if (call.count() != 2)
+        qFatal("split() takes one string argument (separator)");
+      auto& arg = call[1];
+      QRegularExpression exp(arg);
       if (exp.isValid())
-        return [=](const QVariant& v) {
+        return [exp](const QVariant& v) {
           return v.toString().split(exp);
         };
 
-      return [=](const QVariant& v) {
-        return v.toString().split(mod[1]);
+      return [arg](const QVariant& v) {
+        return v.toString().split(arg);
       };
     }
     if (fn == "join") {
-      if (mod.count() != 2)
+      if (call.count() != 2)
         qFatal("join() takes one string argument (glue)");
-      return [=](const QVariant& v) {
-        return v.toStringList().join(mod[1]);
+      auto& arg = call[1];
+      return [arg](const QVariant& v) {
+        return v.toStringList().join(arg);
       };
     }
     if (fn == "camelsplit") {
-      if (mod.count() != 1)
+      if (call.count() != 1)
         qFatal("camelsplit() takes no arguments");
 
-      const QRegularExpression exp("[a-z][A-Z]");
-
-      return [=](const QVariant& v) {
+      return [](const QVariant& v) {
+        static const QRegularExpression exp("[a-z][A-Z]");
         QStringList parts;
         QString str = v.toString();
         int pos = str.indexOf(exp);
@@ -370,16 +398,17 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
       };
     }
     if (fn == "push") {
-      if (mod.count() != 2)
+      if (call.count() != 2)
         qFatal("push() takes one string argument (value)");
-      return [=](const QVariant& v) {
+      auto& arg = call[1];
+      return [arg](const QVariant& v) {
         auto r = v.toList();
-        r.append(mod[1]);
+        r.append(arg);
         return r;
       };
     }
     if (fn == "pop") {
-      if (mod.count() != 1)
+      if (call.count() != 1)
         qFatal("pop() has no arguments");
       return [](const QVariant& v) {
         auto r = v.toList();
@@ -387,19 +416,44 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
         return r;
       };
     }
+    if (fn == "shift") {
+      if (call.count() != 1)
+        qFatal("shift() has no arguments");
+      return [](const QVariant& v) {
+        auto r = v.toList();
+        r.removeFirst();
+        return r;
+      };
+    }
+    if (fn == "peek") {
+      if (call.count() != 2)
+        qFatal("peek() takes one argument (index)");
+      bool ok;
+      int index = call.at(1).toInt(&ok);
+      if (!ok)
+        qFatal("argument to peek() is not an integer");
+      return [index](const QVariant& v) {
+        auto r = v.toList();
+        int i = index;
+        if (i < 0) // negative index from end
+          i += r.count();
+        if (i < 0 || i >= r.count())
+          qFatal("argument to peek() is invalid index");
+        return r.at(i);
+      };
+    }
     if (fn == "foreach") {
-      if (mod.count() < 2)
-        qFatal("foreach() takes at least one argument (<func>[|<func>|<func>...]])");
-      // recombine mod and split on |
-      mod.removeFirst();
-      QStringList expr = mod.join(",").split("|");
+      if (call.count() < 2)
+        qFatal("foreach() takes at least one function expression (<func>[|<func>|<func>...]])");
+      // recombine call to associate ',' correctly
+      const QStringList expr = call.sliced(1).join(",").split("|");
       QVector< std::function<QVariant(const QVariant&) > > functions;
-      for (auto e : expr)
+      for (auto& e : expr)
         functions.append( unaryFunc(e) );
-      return [=](const QVariant& v) {
+      return [functions](const QVariant& v) {
         QVariantList list = v.toList();
         for (auto& v : list)
-          for (auto& f : functions)
+          for (auto& f : qAsConst(functions))
             v = f(v);
         return list;
       };
@@ -407,33 +461,36 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
 
     // math functions
     if (fn == "add") {
-      if (mod.count() != 2)
-        qFatal("add() takes one argument (integer)");
+      if (call.count() != 2)
+        qFatal("add() takes one integer argument");
       bool ok;
-      int num = mod[1].toInt(&ok);
+      int num = call[1].toInt(&ok);
       if (!ok)
-        qFatal("add(): argument is not an integer");
-      return [=](const QVariant& v) { return v.toInt() + num; };
+        qFatal("add() argument is not an integer");
+      return [num](const QVariant& v) { return v.toInt() + num; };
     }
 
-    // date functions
+    // date function shortcuts append an argument
+    auto dateCall = call;
     if (fn == "year") {
       fn = "date";
-      mod.append("yyyy");
+      dateCall.append("yyyy");
     } else if (fn == "month") {
       fn = "date";
-      mod.append("yyyy-MM");
+      dateCall.append("yyyy-MM");
     } else if (fn == "day") {
       fn = "date";
-      mod.append("yyyy-MM-dd");
+      dateCall.append("yyyy-MM-dd");
     }
 
     if (fn == "date") {
-      if (mod.count() != 2) qFatal("date() takes 1 string argument (QDateTime format)");
-      return [=](const QVariant& v) {
+      if (dateCall.count() != 2)
+        qFatal("date() takes one string argument (QDateTime format)");
+      const QString dateFormat = dateCall.at(1);
+      return [dateFormat](const QVariant& v) {
         QDateTime d = v.toDateTime(); // should work for exif date tags
         if (!d.isValid()) d = QDateTime::fromString(v.toString(), Qt::DateFormat::ISODate);
-        return d.toString(mod[1]);
+        return d.toString(dateFormat);
       };
     }
     qFatal("invalid function: %s", qPrintable(fn));
@@ -525,8 +582,8 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       /// todo: attr(), VideoContext::metadata
   });
 
-  // prop#args#unaryFunc
-  // prop#unaryFunc
+  // prop#args#unaryFunc[#unaryFunc]...
+  // prop#unaryFunc[#unaryFunc]...
   QStringList args = expr.split("#");
   const QString field = args.front();
   args.pop_front();
@@ -578,7 +635,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
     qFatal("invalid property: %s", qPrintable(field));
 
   if (args.count() > 0) {
-      auto func = unaryFunc(args.front());
+      auto func = unaryFunc(args.join(lc('#')));
       return [=](const Media& m) {
         return func(select(m));
       };

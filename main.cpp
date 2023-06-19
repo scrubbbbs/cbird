@@ -273,7 +273,7 @@ static int printUsage(int argc, char** argv) {
         H2 "    <string>                    - replace whole-words/strings, may not contain any capture"
         H2 "    #0 #1 .. #n                 - capture: the nth capture from <find>, #0 captures the entire string"
         H2 "    %n                          - special: the sequence number, with automatic zero-padding"
-        H2 "    {arg:<func>[:<func>]...}    - special: transform arg (after capture/special expansion) with function(s)"
+        H2 "    {arg:<func>}                - special: transform arg (after capture/special expansion) with function(s)"
         H2 "<binop>                         logical operators for expressions (comparator)"
         H2 "    ==                          - equal to"
         H2 "    =                           - equal to"
@@ -292,6 +292,7 @@ static int printUsage(int argc, char** argv) {
         "%4"
 
         H2 "<func>                          transform a property value or string"
+        H2 "    <func>#<func>[#<func>]...   - chain of functions, separated by #"
         H2 "    mid,from,len                - substring from index (from) with length (len) (see: QString::mid)"
         H2 "    trim                        - remove whitespace from beginning/end"
         H2 "    upper                       - uppercase"
@@ -306,6 +307,8 @@ static int printUsage(int argc, char** argv) {
         H2 "    join,<string>               - join array with string"
         H2 "    push,<string>               - append string to end of array"
         H2 "    pop                         - remove string from end of array"
+        H2 "    shift                       - remove string from front of array"
+        H2 "    peek                        - return string at given index"
         H2 "    foreach,<func>[|func]...    - apply function(s) separated by pipe (|) to each array element"
         H2 "    add,<integer>               - add integer arg to value"
         H2 "    pad,<integer>               - pad integer value with zeros, to width argument"
@@ -1575,21 +1578,11 @@ int main(int argc, char** argv) {
           int funcClose = newName.indexOf("}", funcOpen+1);
           while (funcOpen >= 0 && (funcClose-funcOpen) > 1) {
             auto funcs = newName.mid(funcOpen+1, funcClose-funcOpen-1).split(":");
-            //qWarning() << "rename: function:" << funcs;
-            if (funcs.count() > 0) {
-              QVariant result = funcs[0];
-              funcs.removeFirst();
+            if (funcs.count() != 2)
+              qFatal("rename: invalid syntax between {}, expected {arg:<func>}");
 
-              while (funcs.count() > 0) {
-                result = (Media::unaryFunc(funcs[0]))(result);
-                funcs.removeFirst();
-              }
-              //qDebug() << result;
-              replacements.append( {funcOpen, funcClose+1, result.toString() });
-            }
-            else {
-              qFatal("rename: function missing argument");
-            }
+            QVariant result = (Media::unaryFunc(funcs[1]))(funcs[0]);
+            replacements.append( {funcOpen, funcClose+1, result.toString() });
 
             funcOpen  = newName.indexOf("{", funcClose+1);
             funcClose = newName.indexOf("}", funcOpen+1);
