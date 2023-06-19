@@ -36,7 +36,8 @@ Scanner::Scanner() {
   _imageTypes << "jpg" << "jpeg" << "jfif" << "png" << "bmp" << "gif";
   _jpegTypes << "jpg" << "jpeg" << "jfif";
   _videoTypes << "mp4" << "wmv" << "asf" << "flv" << "mpg" << "mpeg"  << "mov" << "vob" << "ogv"
-              << "rm" << "ram" << "webm"<< "f4v" << "m4v" << "avi" << "qt" << "mkv";
+              << "rm" << "ram" << "webm"<< "f4v" << "m4v" << "avi" << "qt" << "mkv"
+              << "ts" << "mts"  << "m2t";
   _archiveTypes << "zip";
   // clang-format on
 
