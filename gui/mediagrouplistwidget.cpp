@@ -79,13 +79,18 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
 
   int iconW = 0;
   int iconH = 0;
+  int textH = 0;
   for (auto&  m : list) {
     qreal dpr = m.image().devicePixelRatioF();
     QSize size = m.image().size();
     iconW = std::max(iconW, int(size.width()/dpr));
     iconH = std::max(iconH, int(size.height()/dpr));
+    textH = std::max(textH, int(m.path().split(lc('\n')).count()));
   }
   setIconSize({iconW,iconH});
+
+  const int lineH = 16, spacing = 16;
+  setGridSize({iconW+spacing,iconH+spacing+textH*lineH});
 
   // todo: external stylesheet
   setStyleSheet(R"qss(
@@ -97,6 +102,7 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
         margin: 0px;
         padding: 8px;
         background-color: #444;
+        color: #CCC
       }
       QListWidget {
         background-color: black;
