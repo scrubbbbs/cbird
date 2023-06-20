@@ -149,6 +149,18 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
   connect(this, &QListWidget::doubleClicked, this, &self::chooseAction);
 
   WidgetHelper::restoreGeometry(this);
+
+  setMouseTracking(true);
+  _hoverTimer = new QTimer(this);
+  _hoverTimer->setSingleShot(true);
+  _hoverTimer->setInterval(300);
+  connect(_hoverTimer, &QTimer::timeout, this, [this] () {
+    QListWidgetItem* item = itemAt(_hoverPos);
+    if (!item) return;
+    QModelIndex index = indexFromItem(item);
+    _hovering = true;
+    emit beginHover(index.row());
+  });
 }
 
 MediaFolderListWidget::~MediaFolderListWidget() {
@@ -170,6 +182,17 @@ void MediaFolderListWidget::chooseAction() {
   if (!g.empty()) emit mediaSelected(g);
 }
 
+void MediaFolderListWidget::mouseMoveEvent(QMouseEvent* event) {
+  const QPoint& newPos = event->pos();
+  _hoverPos = newPos;
+  _hoverTimer->stop();
+  if (_hovering) {
+    _hovering = false;
+    emit endHover();
+  } else
+    _hoverTimer->start();
+}
+
 MediaGroup MediaFolderListWidget::selectedMedia() const {
   const QList<QListWidgetItem*> items = selectedItems();
   MediaGroup selected;
@@ -177,9 +200,6 @@ MediaGroup MediaFolderListWidget::selectedMedia() const {
     selected.append(_list[item->type()]);
   return selected;
 }
-
-//void MediaFolderListWidget::moveFolderAction() {
-//}
 
 /// Passed in/out of background jobs
 struct ImageWork {

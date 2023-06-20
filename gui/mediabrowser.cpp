@@ -274,6 +274,60 @@ void MediaBrowser::showIndex(const MediaGroup& index,
   MediaFolderListWidget* w = new MediaFolderListWidget(index, _options);
   connect(w, &MediaFolderListWidget::mediaSelected, this, &MediaBrowser::mediaSelected);
   w->show();
+
+  class Animation : public QObject {
+   public:
+    Animation(const MediaWidgetOptions& options, QObject* parent)
+        : QObject(parent), _options(options) {
+      _timer = new QTimer(parent);
+      _timer->setInterval(300);
+      _timer->setSingleShot(true);
+      connect(_timer, &QTimer::timeout, this, &Animation::nextFrame);
+    }
+    void start(QListWidgetItem* item, const MediaGroupList& list) {
+      _item = item;
+      _list = list;
+      _listIndex = 0;
+      _groupIndex = 0;
+      nextFrame();
+    }
+    void stop() {
+      _timer->stop();
+    }
+    void nextFrame() {
+      _timer->start();
+      auto& group = _list.at(_listIndex);
+      QImage img = loadThumb(group.at(_groupIndex), _options);
+      _item->setIcon(QPixmap::fromImage(img));
+      _groupIndex = (_groupIndex + 1) % group.count();
+      if (_groupIndex == 0)
+        _listIndex = (_listIndex + 1) % _list.count();
+    }
+   private:
+    const MediaWidgetOptions _options;
+    QTimer* _timer = nullptr;
+    QListWidgetItem* _item=nullptr;
+    MediaGroupList _list;
+    int _listIndex = 0;
+    int _groupIndex = 0;
+  };
+
+  auto* anim = new Animation(_options, w);
+
+  connect(w, &MediaFolderListWidget::endHover, this, [anim]() {
+    anim->stop();
+  });
+
+  connect(w, &MediaFolderListWidget::beginHover, this, [this,w,anim](int index) {
+    QListWidgetItem* item = w->item(index);
+    if (!item) return;
+
+    const MediaGroupList& gl = _groups->value(item->text());
+    if (gl.count() <= 0) return;
+    if (gl.at(0).count() < 2) return;
+
+    anim->start(item, gl);
+  });
 }
 
 void MediaBrowser::show(const MediaGroupList& list) {

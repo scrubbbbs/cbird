@@ -36,18 +36,22 @@ class MediaFolderListWidget : public QListWidget {
 
  Q_SIGNALS:
   void mediaSelected(const MediaGroup& group);
+  void beginHover(int index);
+  void endHover();
 
  private Q_SLOTS:
   void chooseAction();
-  //void moveFolderAction(); //todo: refactor MGLW moveFolder to make this work
 
  private:
-  void closeEvent(QCloseEvent* event);
+  void mouseMoveEvent(QMouseEvent* event) override;
+  void closeEvent(QCloseEvent* event) override;
   void close();
 
   MediaGroup selectedMedia() const;
-  float requiredMemory(int row) const;
 
   MediaGroup _list;
   MediaWidgetOptions _options;
+  QPoint _hoverPos;
+  QTimer* _hoverTimer = nullptr;
+  bool   _hovering = false;
 };
