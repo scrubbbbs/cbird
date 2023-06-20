@@ -274,6 +274,7 @@ static int printUsage(int argc, char** argv) {
         H2 "    #0 #1 .. #n                 - capture: the nth capture from <find>, #0 captures the entire string"
         H2 "    %n                          - special: the sequence number, with automatic zero-padding"
         H2 "    {arg:<func>}                - special: transform arg (after capture/special expansion) with function(s)"
+        H2 "    {<prop>[#<func>]}           - special: insert property"
         H2 "<binop>                         logical operators for expressions (comparator)"
         H2 "    ==                          - equal to"
         H2 "    =                           - equal to"
@@ -1514,7 +1515,7 @@ int main(int argc, char** argv) {
 
       QStringList newNames;
       MediaGroup toRename;
-      for (auto& m : selection) {
+      for (const Media& m : selection) {
         if (m.isArchived()) {
           qWarning() << "rename: cannot rename archived file:" << m.path();
           continue;
@@ -1577,13 +1578,16 @@ int main(int argc, char** argv) {
           int funcOpen  = newName.indexOf("{");
           int funcClose = newName.indexOf("}", funcOpen+1);
           while (funcOpen >= 0 && (funcClose-funcOpen) > 1) {
-            auto funcs = newName.mid(funcOpen+1, funcClose-funcOpen-1).split(":");
-            if (funcs.count() != 2)
-              qFatal("rename: invalid syntax between {}, expected {arg:<func>}");
+            const QStringList funcs = newName.mid(funcOpen+1, funcClose-funcOpen-1).split(":");
+            QVariant result;
+            if (funcs.count() == 2)
+              result = (Media::unaryFunc(funcs[1]))(funcs[0]);
+            else if (funcs.count() == 1 && !funcs[0].isEmpty())
+              result = (Media::propertyFunc(funcs[0]))(m);
+            else
+              qFatal("rename: invalid syntax between {}, expected {arg:<func>} or {<prop>[#<func>]}");
 
-            QVariant result = (Media::unaryFunc(funcs[1]))(funcs[0]);
             replacements.append( {funcOpen, funcClose+1, result.toString() });
-
             funcOpen  = newName.indexOf("{", funcClose+1);
             funcClose = newName.indexOf("}", funcOpen+1);
           }
