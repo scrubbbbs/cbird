@@ -123,6 +123,9 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
     Q_ASSERT(g.count() > 0);
     const Media& first = g.at(0);
     QString key = first.attributes().value("group"); // use -group-by before path
+    if (!key.isEmpty())
+      key = key.split(qq("==")).back(); // don't display -group-by expression
+
     if (key.isEmpty()) {
       if (first.isArchived())
         first.archivePaths(&key);
