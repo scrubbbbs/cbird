@@ -337,6 +337,8 @@ class Media {
 
   int resolution() const { return _width * _height; }
 
+  float aspectRatio() const { return float(_width) / _height; }
+
   bool isWeed() const { return _matchFlags & MatchIsWeed; }
   void setIsWeed(bool set=true) {
     if (set) _matchFlags |= MatchIsWeed;
