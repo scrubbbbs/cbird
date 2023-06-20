@@ -31,14 +31,54 @@
 extern Engine& engine();
 
 static QImage loadThumb(const Media& m, const MediaWidgetOptions& options) {
-  qreal dpr = qApp->devicePixelRatio();
-  QSize size(0, options.iconSize * dpr);
+  const qreal dpr = qApp->devicePixelRatio();
+  const int iconSize = dpr*options.iconSize;
+
+  const float iconAspect = options.iconAspect;
+  const bool doCrop = iconAspect >= 0;
+
+  // size before scaling, unknown if media isn't indexed
+  int origW = m.width(), origH = m.height();
+
   QImage img;
+
   if (m.type() == Media::TypeVideo) {
     img = VideoContext::frameGrab(m.path(), -1, true);
-    img = Media(img).loadImage(size);
-  } else
-    img = m.loadImage(size);
+  } else if (doCrop && (origW <= 0 || origH <= 0)) {
+    // for crop, we don't know the aspect(yet), can't use fast image loader
+    // note: this could do a fast probe of the file instead
+    qWarning() << "slow path, no width/height information...";
+    img = m.loadImage();
+  }
+
+  if (!doCrop) {
+    QSize size(0, iconSize);
+    img = img.isNull() ? m.loadImage(size) : Media(img).loadImage(size);
+    img.setDevicePixelRatio(dpr);
+    return img;
+  }
+
+  if (origW <= 0 || origH <= 0) {
+    origW = img.width();
+    origH = img.height();
+  }
+
+  const float origAspect = float(origW) / origH;
+
+  if (origAspect < iconAspect) {
+    QSize size(iconSize*iconAspect, 0);
+    img = img.isNull() ? m.loadImage(size) : Media(img).loadImage(size);
+    int h = img.width() / iconAspect;
+    int y = (img.height() - h) / 2;
+    img = img.copy(0, y, img.width(), h);
+  }
+  else {
+    QSize size(0, iconSize);
+    img = img.isNull() ? m.loadImage(size) : Media(img).loadImage(size);
+    int w = img.height() * iconAspect;
+    int x = (img.width() - w) / 2;
+    img = img.copy(x, 0, w, img.height());
+  }
 
   img.setDevicePixelRatio(dpr);
   return img;

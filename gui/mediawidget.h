@@ -47,4 +47,5 @@ class MediaWidgetOptions {
   int maxPerPage = 12;    /// max images for paged views
   int iconSize = 256;     /// thumbnail size for icon views
   int iconTextWidth = 40; /// max icon text width (characters per line)
+  float iconAspect = 3.0/4.0;   /// crop thumbnails to aspect ratio
 };
