@@ -267,6 +267,7 @@ void Database::createTables() {
 }
 
 Database::Database(const QString& path_) {
+  qDebug() << path_;
   QDir dir = QDir::current();
   if (path_ != "") dir = QDir(path_);
 

@@ -23,12 +23,10 @@
 #include "../database.h"
 #include "../engine.h"
 #include "../qtutil.h"
+#include "../scanner.h"
 #include "../videocontext.h"
 #include "mediafolderlistwidget.h"
 #include "mediagrouplistwidget.h"
-
-// todo: use widget options to decouple gui from engine()
-extern Engine& engine();
 
 static QImage loadThumb(const Media& m, const MediaWidgetOptions& options) {
   const qreal dpr = qApp->devicePixelRatio();
@@ -352,16 +350,18 @@ void MediaBrowser::mediaSelected(const MediaGroup& group) {
     if (mw && _options.selectionMode == MediaWidgetOptions::SelectOpen && _groups &&
         _groups->count() > 0)
       show(_groups->value(m.path()));
-    else {
+    else if (_options.db) {
       MediaSearch search;
       search.needle = m;
       search.params = _options.params;
-      search = engine().query(search);
+      search = Engine(_options.db->path(), IndexParams()).query(search);
 
+      // fixme: refactor common filtering logic
       search.matches.prepend(search.needle);
       MediaGroupList list;
-      if (!engine().db->filterMatch(_options.params, search.matches)) list.append(search.matches);
-      engine().db->filterMatches(_options.params, list);
+      if (!_options.db->filterMatch(_options.params, search.matches))
+        list.append(search.matches);
+      _options.db->filterMatches(_options.params, list);
       show(list);
     }
   }
