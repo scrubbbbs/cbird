@@ -566,16 +566,16 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       { "relPath", [](const Media& m) { return QDir().relativeFilePath(m.path()); }},
       { "archive", [](const Media& m) {
           if (m.isArchived()) {
-            QString a, t;
-            m.archivePaths(a, t);
+            QString a;
+            m.archivePaths(&a);
             return a;
           }
           return QString();
       }},
       { "parentPath", [](const Media& m) {
           if (m.isArchived()) {
-            QString a, t;
-            m.archivePaths(a, t);
+            QString a;
+            m.archivePaths(&a);
             return a;
           }
           return m.dirPath();
@@ -1012,8 +1012,8 @@ void Media::openMedia(const Media& m, float seek) {
     */
 #endif
   } else if (m.isArchived()) {
-    QString parent, child;
-    m.archivePaths(parent, child);
+    QString child;
+    m.archivePaths(nullptr, &child);
 
     // todo: open file within archive...have it be browseable
     //       there are various ways this is done depending on
@@ -1061,10 +1061,8 @@ void Media::openMedia(const Media& m, float seek) {
 
 void Media::revealMedia(const Media& m) {
   QString path = m.path();
-  if (m.isArchived()) {
-    QString child;
-    m.archivePaths(path, child);
-  }
+  if (m.isArchived())
+    m.archivePaths(&path);
 
   DesktopHelper::revealPath(path);
 }
@@ -1116,8 +1114,8 @@ QIcon Media::loadIcon(const QSize& size) const {
 int Media::archiveCount() const {
   int count = -1;
   if (isArchived()) {
-    QString zipPath, fileName;
-    archivePaths(zipPath, fileName);
+    QString zipPath;
+    archivePaths(&zipPath);
 
     if (QFileInfo::exists(zipPath)) {
       QuaZip zip(zipPath);
@@ -1160,7 +1158,7 @@ QIODevice* Media::ioDevice() const {
     io = buf;
   } else if (isArchived()) {
     QString zipPath, fileName;
-    archivePaths(zipPath, fileName);
+    archivePaths(&zipPath, &fileName);
     QFileInfo info(zipPath);
     if (info.isFile()) {
       QuaZip zip(zipPath);
@@ -1388,7 +1386,7 @@ void Media::readMetadata() {
       _origSize = _img.text(Media::ImgKey_FileSize).toLongLong();
     } else {
       QString zipPath, fileName;
-      archivePaths(zipPath, fileName);
+      archivePaths(&zipPath, &fileName);
 
       bool ok = false;
       if (QFileInfo::exists(zipPath)) {

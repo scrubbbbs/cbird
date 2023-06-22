@@ -543,13 +543,14 @@ class Media {
   }
 
   QT_DEPRECATED void archivePaths(QString& parent, QString& child) const {
-    archivePaths(_path, parent, child);
+    archivePaths(_path, &parent, &child);
   }
 
   static void archivePaths(const QString& path, QString* parent,
                            QString* child=nullptr) {
     auto parts = path.split(".zip:");
-    *parent = parts.at(0) + ".zip";
+    if (parent)
+      *parent = parts.at(0) + ".zip";
     if (child)
       *child = parts.count() > 1 ? parts.at(1) : "";
   }

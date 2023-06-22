@@ -1353,8 +1353,8 @@ void MediaGroupListWidget::updateItems() {
     if (m.isArchived()) {
       // can be slow for large archives, we can cache since
       // archives are immutable here
-      QString archivePath, filePath;
-      m.archivePaths(archivePath, filePath);
+      QString archivePath;
+      m.archivePaths(&archivePath);
       auto it = _archiveFileCount.find(archivePath);
       if (it != _archiveFileCount.end())
         fileCount = *it;
@@ -1695,10 +1695,8 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
     int index = items[i]->type();
     const Media& m = group[index];
     QString path = m.path();
-    if (m.isArchived()) {
-      QString tmp;
-      m.archivePaths(path, tmp);
-    }
+    if (m.isArchived())
+      m.archivePaths(&path);
 
     if (deleteFiles) {
       if (replace && m.isArchived()) {
@@ -1715,20 +1713,20 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
                               QString("The selected file is a member of \"%1\"\n\n"
                                       "Modification of zip archives is unsupported. Move the entire zip to the trash?"
                                      ).arg(zipPath),
-                               "&No", "&Yes");
+                                     QMessageBox::No|QMessageBox::Yes);
         }
         else if (skipDeleteConfirmation) {
-          button = 2;
+          button = QMessageBox::Yes;
         }
         else {
           QString filePath = _options.db ? path.mid(_options.db->path().length()+1) : path;
           button = QMessageBox::warning(this, "Delete File Confirmation",
                                QString("Move this file to the trash?\n\n%1").arg(filePath),
-                               "&No", "&Yes", "Yes to &All (This Session)");
+                               QMessageBox::No|QMessageBox::Yes|QMessageBox::YesToAll);
         }
 
-        if (button == 0) return;
-        if (button == 2) skipDeleteConfirmation = true;
+        if (button == QMessageBox::YesToAll) skipDeleteConfirmation = true;
+        else if (button != QMessageBox::Yes) return;
       }
 
       if (!DesktopHelper::moveToTrash(path)) return;
@@ -1831,9 +1829,9 @@ void MediaGroupListWidget::renameFileAction() {
     // names of matches
     for (auto& m2 : group) {
         if (m2.isArchived()) {
-          QString z,c;
-          m2.archivePaths(z,c);
-          maybeAppend(completions, c);
+          QString fileName;
+          m2.archivePaths(nullptr, &fileName);
+          maybeAppend(completions, fileName);
         }
         else
           maybeAppend(completions, m2.name());
@@ -1888,9 +1886,9 @@ void MediaGroupListWidget::renameFolderAction() {
   QDir parentDir;
 
   if (m.isArchived()) { // first completion is selection
-    QString z, c;
-    m.archivePaths(z,c);
-    QFileInfo info(z);
+    QString zip;
+    m.archivePaths(&zip);
+    QFileInfo info(zip);
     completions += info.fileName();
     parentDir = info.dir();
   }
@@ -1908,8 +1906,8 @@ void MediaGroupListWidget::renameFolderAction() {
 
   for (const auto& ii : qAsConst(_list[_currentRow])) {
     if (ii.isArchived()) {
-      QString zipPath, childPath;
-      ii.archivePaths(zipPath, childPath);
+      QString zipPath;
+      ii.archivePaths(&zipPath);
       const QFileInfo info(zipPath);
       QString zipName = QFileInfo(zipPath).fileName();
       if (!m.isArchived()) zipName = zipName.mid(0,zipName.lastIndexOf("."));
@@ -1972,10 +1970,8 @@ void MediaGroupListWidget::copyNameAction() {
 
   const QFileInfo info(selected->path());
   QString otherName;
-  if (other->isArchived()) {
-    QString zipPath;
-    other->archivePaths(zipPath,otherName);
-  }
+  if (other->isArchived())
+    other->archivePaths(nullptr, &otherName);
   else
     otherName = other->name(); // fixme: should name() work with archives?
 
@@ -2026,8 +2022,7 @@ void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& ne
   QString newPath = newName;
   QString absSrcPath = QFileInfo(dir.absolutePath()).absoluteFilePath();
   if (child.isArchived()) {
-    QString childPath;
-    child.archivePaths(absSrcPath, childPath);
+    child.archivePaths(&absSrcPath);
     dir = QFileInfo(absSrcPath).dir(); // dir otherwise may refer to a zip dir
     if (!newPath.endsWith(".zip"))
       newPath += ".zip";
@@ -2088,10 +2083,8 @@ void MediaGroupListWidget::moveFolderAction() {
 
   for (Media& m : selectedMedia()) {
     QString srcPath;
-    if (m.isArchived()) {
-      QString child;
-      m.archivePaths(srcPath, child);
-    }
+    if (m.isArchived())
+      m.archivePaths(&srcPath);
     else
       srcPath = m.dirPath();
 

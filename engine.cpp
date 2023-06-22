@@ -97,12 +97,11 @@ void Engine::update(bool wait) {
     //        the invalid paths come from
     QStringList paths = skip.values();  // sort to reduce random access
     paths.sort();
-    QString child;
     QSet<QString> checked;
     int progress = 0;
     for (int i = 0; i < paths.count(); ++i) {
       auto& path = paths[i];
-      if (Media::isArchived(path)) Media::archivePaths(path, path, child);
+      if (Media::isArchived(path)) Media::archivePaths(path, &path);
 
       if (checked.contains(path)) continue; // skip zip members
       checked.insert(path);
@@ -210,15 +209,15 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
 
       // copy some attributes of the needle over so they aren't lost
       Media& m = result.media;
-      m.setCompressionRatio(needle.compressionRatio());
       m.setTransform(needle.transform());
       m.setRoi(needle.roi());
       m.setContentType(needle.contentType());
       m.setMatchRange(needle.matchRange());
       m.setMatchFlags(needle.matchFlags());
       m.setImage(needle.image());
+      m.readMetadata();
 
-      needle = result.media;
+      needle = m;
     }
 
   if (!params.mediaReady(needle)) {

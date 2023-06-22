@@ -1249,12 +1249,12 @@ bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
   // remove match if in the same directory/zip as needle
   if (params.filterParent && match.count() > 1) {
     if (match[0].isArchived()) {
-      QString parent, tmp;
-      match[0].archivePaths(parent, tmp);
+      QString parent;
+      match[0].archivePaths(&parent);
       for (int i = 1; i < match.count(); ++i)
         if (match[i].isArchived()) {
           QString p;
-          match[i].archivePaths(p, tmp);
+          match[i].archivePaths(&p);
           if (p == parent) { match.remove(i); --i; }
         }
     }

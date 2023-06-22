@@ -802,8 +802,7 @@ static void nuke(const MediaGroup& group) {
   for (auto& m : qAsConst(group)) {
     QString path = m.path();
     if (m.isArchived()) {
-      QString child;
-      m.archivePaths(path, child);
+      m.archivePaths(&path);
 
       if (zips.contains(path)) continue;
       zips.insert(path);
