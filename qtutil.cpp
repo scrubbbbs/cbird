@@ -1102,19 +1102,19 @@ void MessageLog::outputThread() {
       // special progress line, everything before the <PL> must be static
       pl = output.indexOf(tokenProgress);
       if (pl > 0)
-        output.remove(pl, tokenProgress.length());
+        output.remove(pl, tokenProgress.size());
 
       // special elide indicator, everything after is elided to terminal width
       // note: must come after <PL> since prefix of <PL> must be static
       int elide = output.indexOf(tokenElide);
       if (elide > 0 && elide > pl) {
         if (_termColumns > 0) {
-          auto toElide = output.mid(elide + tokenElide.length());
+          auto toElide = output.mid(elide + tokenElide.size());
           auto elided = qElide(toElide, _termColumns - elide);
           output = output.mid(0, elide) + elided;
           output += QString().fill(charSpace, _termColumns - output.length());
         } else
-          output.remove(elide, tokenElide.length());
+          output.remove(elide, tokenElide.size());
       }
 
       // find chars to append/prepend
