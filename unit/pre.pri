@@ -23,7 +23,7 @@ LIBS_OPENCV = $$system("pkg-config opencv --libs")
 LIBS_FFMPEG = -lavcodec -lavformat -lavutil -lswscale
 LIBS_QUAZIP = -lquazip1-qt6 -lz
 LIBS_EXIV2  = -lexiv2
-LIBS_CIMG   = -lpng
+LIBS_CIMG   = -lpng -ljpeg
 LIBS_TERM   = -ltermcap
 
 # deps for core 
