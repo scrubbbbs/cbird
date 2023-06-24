@@ -318,7 +318,8 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
   // dct noise, blocking, sharpening)
   CImg<uint8_t> src;
 
-  uint64_t then = nanoTime();
+  uint64_t start = nanoTime();
+  uint64_t then = start;
   uint64_t now;
   int micros;
 
@@ -603,7 +604,7 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
   // float score = 1 - (1*blurMean + 1*blurRatio); // + 0.3*noiseMean +
   // 0.75*noiseRatio);
   int score = 100*edgeRatio + 100*edgeLengthRatio;
-  qDebug("score: %d", score);
+  qDebug("score: %d, time=%dms", score, int((nanoTime()-start) / 1000000));
 
   return score;
 }

@@ -2176,16 +2176,28 @@ void MediaGroupListWidget::qualityScoreAction() {
         m.setAttribute("quality-score", QString::number(score));
 
         // jpeg codec quality factor
-        if (m.type() != Media::TypeImage || // ok; file header is checked too
-            isAnalysis(m))                  // raw image, no i/o device possible
+        if (m.type() != Media::TypeImage ||
+            isAnalysis(m))                  // raw images can't be checked
           return;
 
         auto* io = m.ioDevice();
         if (!io) return;
 
+        // EstimateJpegQuality does a lot of small io's, can be very
+        // slow on network filesystems; so read the whole file to a buffer device
+        if (!io->open(QIODevice::ReadOnly)) {
+          delete io;
+          return;
+        }
+
+        QByteArray buffer = io->readAll();
+        delete io;
+        io = new QBuffer(&buffer);
+
+        // if it isn't jpeg we don't get jq.ok
         const JpegQuality jq = EstimateJpegQuality(io);
         if (jq.ok && jq.isReliable)
-            m.setAttribute("jpeg-quality", QString::number(jq.quality));
+          m.setAttribute("jpeg-quality", QString::number(jq.quality));
       });
 
   qApp->setOverrideCursor(QCursor(Qt::WaitCursor));
