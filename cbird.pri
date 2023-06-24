@@ -60,15 +60,21 @@ INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
 win32 {
     INCLUDEPATH += windows/build-opencv/install/include
-    LIBS *= -L windows/build-opencv/install/x64/mingw/lib
+    LIBS += -Lwindows/build-opencv/install/x64/mingw/lib
     OPENCV_VERSION = 2413
     OPENCV_LIBS *= ml objdetect stitching superres videostab calib3d
     OPENCV_LIBS *= features2d highgui video photo imgproc flann core
     for (CVLIB, OPENCV_LIBS) {
         LIBS *= -lopencv_$${CVLIB}$${OPENCV_VERSION}
     }
-    LIBS *= -lquazip -lz
-    LIBS *= -lpsapi
+
+    INCLUDEPATH += windows/build-mxe/include
+    LIBS += -Lwindows/build-mxe/lib
+   
+    INCLUDEPATH += windows/build-mxe/include/QuaZip-Qt6-1.4
+    LIBS += -lquazip1-qt6
+    
+    LIBS *= -lz -lpsapi
 }
 
 unix {

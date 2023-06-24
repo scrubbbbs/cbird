@@ -3,12 +3,11 @@ VERSION=$1
 ARCH=$2
 BUILD=_win32
 PKG_DIR=$BUILD/cbird
-MXE_DIR=/usr/lib/mxe
 ZIP=cbird-windows-$VERSION-$ARCH.zip
-
 MXE_BIN="$MXE_DIR/usr/$MXE_TARGET/bin"
 OPENCV_BIN=windows/build-opencv/install/x64/mingw/bin
-QT_DIR="$MXE_DIR/usr/$MXE_TARGET/qt5"
+CROSS_BIN=windows/build-mxe/bin
+QT_DIR="$MXE_DIR/usr/$MXE_TARGET/qt6"
 QT_BIN="$QT_DIR/bin"
 
 echo building $VERSION $ARCH in $PKG_DIR
@@ -43,11 +42,12 @@ for exe in cbird.exe; do
         echo "collecting dlls for $exe (pass $PASS) ..."
         LAST=$PASS
         PASS=0
-        DLLS=`wine64 "$PKG_DIR/$exe" -about 2>&1 | grep ^0009:err:module:import_dll | cut -d' ' -f3`
+        DLLS=`wine64 "$PKG_DIR/$exe" -about 2>&1 | grep :err:module:import_dll | cut -d' ' -f3`
         for x in $DLLS; do
             if   [ -e "$MXE_BIN/$x"    ]; then cp -au "$MXE_BIN/$x" "$PKG_DIR/"
             elif [ -e "$QT_BIN/$x"     ]; then cp -au "$QT_BIN/$x" "$PKG_DIR/"
             elif [ -e "$OPENCV_BIN/$x" ]; then cp -au "$OPENCV_BIN/$x" "$PKG_DIR/"
+            elif [ -e "$CROSS_BIN/$x"  ]; then cp -au "$CROSS_BIN/$x" "$PKG_DIR/"
             else
                 echo "can't find dll: $x"
                 exit 1
@@ -58,5 +58,5 @@ for exe in cbird.exe; do
 done
 
 rm -fv "$ZIP"
-(cd "$BUILD" && zip -r ../"$ZIP" cbird)
+#(cd "$BUILD" && zip -r ../"$ZIP" cbird)
 
