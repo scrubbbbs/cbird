@@ -293,9 +293,22 @@ void MediaBrowser::showIndex(const MediaGroup& index,
       _timer->stop();
     }
     void nextFrame() {
+      if (qApp->activeWindow() != parent()) return;
+
       _timer->start();
+
       auto& group = _list.at(_listIndex);
+
+      // if we opened the folder and modified the path
+      // we will not see it here, check if it still exists
+      const Media& m = group.at(_groupIndex);
+      QString filePath = m.path();
+      if (m.isArchived())
+        m.archivePaths(&filePath);
+      if (!QFile::exists(filePath)) return;
+
       QImage img = loadThumb(group.at(_groupIndex), _options);
+      if (img.isNull()) return;
       _item->setIcon(QPixmap::fromImage(img));
       _groupIndex = (_groupIndex + 1) % group.count();
       if (_groupIndex == 0)
