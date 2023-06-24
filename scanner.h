@@ -53,7 +53,11 @@ class IndexParams : public Params {
   bool dryRun = false;           // scan for changes but do not process
   bool followSymlinks = false;   // follow symlinks to files/dirs
   bool resolveLinks = false;     // index the resolved symlink instead of link
+#ifdef Q_OS_WIN
+  bool dupInodes = true;        // symlinks are rarely used; potentially huge performance drop
+#else
   bool dupInodes = false;        // do not ignore duplicate inodes
+#endif
   IndexParams();
 };
 

@@ -62,6 +62,11 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   if (_params.decoderThreads <= 0)
     _params.decoderThreads = QThread::idealThreadCount();
 
+#ifdef Q_OS_WIN
+  if (!_params.dupInodes)
+    qWarning() << "duplicate inode check (-i.dups 0) can be extremely slow on network volumes";
+#endif
+
   // todo: subdirectory limiter for large indexes
   // if (!_params.subdir.isEmpty())
 
