@@ -49,6 +49,11 @@ void Env::memoryUsage(float& virtualKb, float& workingSetKb) {
     workingSetKb = pmc.WorkingSetSize / 1024.0;
   }
 }
+
+void Env::setIdleProcessPriority() {
+  if (!SetPriorityClass(GetCurrentProcess(), IDLE_PRIORITY_CLASS) != 0)
+    qWarning() << "SetPriorityClass() failed";
+}
 #else
 
 #include <sys/resource.h>
