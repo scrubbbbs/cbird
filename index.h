@@ -117,6 +117,11 @@ class SearchParams : public Params {
                               //   matches b and b matches c, then a matches (b,c)
   int progressInterval = 1000; // number of items searched between progress updates
 
+  /*
+   * @return true if the media is compatible with search parameters
+   */
+  bool mediaSupported(const Media& needle) const;
+
   /**
    * @return true if the needle is is indexed to allow a search
    * with these parameters

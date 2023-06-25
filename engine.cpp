@@ -219,6 +219,10 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
 
       needle = m;
     }
+  if (!params.mediaSupported(needle)) {
+    qWarning() << needle.path() << "media type unsupported or disabled with -p.types" << params.queryTypes;
+    return search;
+  }
 
   if (!params.mediaReady(needle)) {
     // todo: state why
@@ -235,7 +239,7 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
   // e.g. params.imageNeeded()
   bool releaseImage = false;
   if (needle.image().isNull() && (params.mirrorMask || params.templateMatch)) {
-    qWarning() << "loading image for reflection or template match" << needle.path();
+    // qWarning() << "loading image for reflection or template match" << needle.path();
     needle.setImage(needle.loadImage());
     releaseImage = true;
   }
@@ -257,7 +261,7 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
 
   if (releaseImage) {
     needle.setImage(QImage());
-    qDebug() << "discarding needle image";
+    // qDebug() << "discarding needle image";
   }
 
   return search;

@@ -1,6 +1,16 @@
 #include "index.h"
 #include "paramsdefs.h"
 
+bool SearchParams::mediaSupported(const Media& needle) const {
+  int type = 0;
+  switch (needle.type()) {
+    case Media::TypeImage: type = FlagImage; break;
+    case Media::TypeVideo: type = FlagVideo; break;
+    case Media::TypeAudio: type = FlagAudio; break;
+  }
+  return queryTypes & type;
+}
+
 bool SearchParams::mediaReady(const Media &needle) const {
   bool ok = false;
   switch (algo) {
