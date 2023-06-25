@@ -1534,8 +1534,7 @@ void MediaGroupListWidget::updateItems() {
 }
 
 void MediaGroupListWidget::loadRow(int row) {
-  static uint64_t start;
-  if (row == 0) start = nanoTime();
+  static uint64_t start = nanoTime();
 
   if (_list.count() <= 0) return;
 
@@ -1615,10 +1614,22 @@ void MediaGroupListWidget::loadRow(int row) {
   }
 
   if (QProcessEnvironment::systemEnvironment().contains(
-          "BENCHMARK_LISTWIDGET")) {
+          "BENCHMARK_LISTWIDGET_LOAD")) {
+    QTimer::singleShot(1, this, [this]() {
+
+      waitLoaders(-1, false);
+      qApp->processEvents();
+
+      double seconds = (nanoTime() - start) / 1000000000.0;
+      qInfo() << "BENCHMARK_LISTWIDGET_LOAD" << QString("%1 s").arg(seconds);
+      exit(0);
+    });
+  }
+  else
+  if (QProcessEnvironment::systemEnvironment().contains(
+          "BENCHMARK_LISTWIDGET_SCROLL")) {
     // load the next row immediately
-    // fixme: will this execute? (exit() prevents event loop return)
-    QTimer::singleShot(1, [=]() { loadRow(row + 1); });
+    QTimer::singleShot(0, [=]() { loadRow(row + 1); });
     if (row == _list.count() - 1) {
       uint64_t pixels = 0;
       uint64_t data = 0;
@@ -1629,7 +1640,8 @@ void MediaGroupListWidget::loadRow(int row) {
         }
 
       double seconds = (nanoTime() - start) / 1000000000.0;
-      qDebug() << QString("%1 s, %2 MB/s, %3 MPx/s")
+      qInfo() << "BENCHMARK_LISTWIDGET_SCROLL" <<
+            QString("%1 s, %2 MB/s, %3 MPx/s")
                       .arg(seconds)
                       .arg(int(data / seconds / (1024 * 1024)))
                       .arg(int(pixels / seconds / (1000 * 1000)));
@@ -2014,6 +2026,7 @@ void MediaGroupListWidget::moveFileAction() {
     if (_options.db->move(m, dirPath))
       updateMedia(path, m);
   }
+  loadRow(_currentRow); // update path in window title
 }
 
 void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& newName) {
