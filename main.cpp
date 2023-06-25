@@ -232,7 +232,6 @@ static int printUsage(int argc, char** argv) {
         H1 "Search Parameters (for -similar*)"
         HR
         H2 "-p.<key> value                   set search parameters"
-        H2 "-p:<key> value                   (alternate)"
         H2 "* default value in [ ]"
         H2 "* alternate value in ( )"
         H2 "* flag names are combined with +, e.g. -p.refl h+v+b == -p.refl 7"
@@ -244,7 +243,6 @@ static int printUsage(int argc, char** argv) {
         H1 "Index Parameters (for -update)"
         HR
         H2 "-i.<key> value                  set index parameters"
-        H2 "-i:<key> value                  (alternate)"
         H2 "* default value in [ ]"
         H2 "* alternate value in ( )"
         H2 "* flag names are combined with +, e.g. -p.types i+v == -p.types 3"
@@ -999,13 +997,23 @@ int main(int argc, char** argv) {
     arg = args.takeFirst();
 
     // clang-format off
-    if (arg.startsWith("-p.") || arg.startsWith("-p:")) {
+#ifdef Q_OS_WIN
+    if (arg == "-p" || arg == "-i") {
+      // PowerShell splits arguments on ".", put it back together
+      if (args.count() > 0 && args.at(0).startsWith(lc('.')))
+        arg += args.takeFirst();
+      else
+        qFatal("-p/-i should be followed by param name and value (-p.dht 3, -i.types i)");
+    }
+#endif
+
+    if (arg.startsWith("-p.")) {
       const QString val = nextArg();
       const QChar sep = arg[2];
       const QString key = arg.split(sep)[1];
       params.setValue(key, val);
     }
-    else if (arg.startsWith("-i.") || arg.startsWith("-i:")) {
+    else if (arg.startsWith("-i.")) {
       const QString val = nextArg();
       const QChar sep = arg[2];
       const QString key = arg.split(sep)[1];
@@ -1342,10 +1350,11 @@ int main(int argc, char** argv) {
 
         // this not the same as similar-in... which is a subset query
         QList<QFuture<MediaSearch>> work;
-        for (const Media& m : needles) {
-          search.needle = m;
-          work.append(QtConcurrent::run(&Engine::query, &engine(), search));
-        }
+        for (const Media& m : needles)
+          if (search.params.mediaSupported(m)) {
+            search.needle = m;
+            work.append(QtConcurrent::run(&Engine::query, &engine(), search));
+          }
 
         int i = 1;
         for (auto& w : work) {
