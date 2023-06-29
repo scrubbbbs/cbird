@@ -97,6 +97,7 @@ int MediaBrowser::show(const MediaGroupList& list, int mode, const MediaWidgetOp
       qCritical() << "empty group in list";
       return 0;
     }
+
   if (mode == ShowNormal) return MediaBrowser::showList(list, options);
   if (mode == ShowPairs) return MediaBrowser::showSets(list, options);
   if (mode == ShowFolders) return MediaBrowser::showFolders(list, options);
@@ -271,6 +272,7 @@ void MediaBrowser::showIndex(const MediaGroup& index,
   _options.selectionMode = MediaWidgetOptions::SelectOpen;
   MediaFolderListWidget* w = new MediaFolderListWidget(index, _options);
   connect(w, &MediaFolderListWidget::mediaSelected, this, &MediaBrowser::mediaSelected);
+
   w->show();
 
   class Animation : public QObject {
