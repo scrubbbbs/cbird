@@ -124,11 +124,11 @@ class DBHelper {
 class MenuHelper {
  public:
   /// build menu for a directory tree
-  static QMenu* dirMenu(const QString& root, QObject* target,
+  static QMenu* dirMenu(const QString& root, QWidget* target,
                         const char* slot, int maxDepth=INT_MAX);
 
  private:
-  static QMenu* makeDirMenu(const QString& root, QObject* target,
+  static QMenu* makeDirMenu(const QString& root, QWidget* target,
                             const char* slot, int maxDepth, int depth);
 };
 

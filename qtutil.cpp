@@ -772,8 +772,7 @@ QDateTime DBHelper::lastModified(const QSqlDatabase &db) {
   return dbInfo.lastModified();
 }
 
-
-QMenu *MenuHelper::dirMenu(const QString &root, QObject *target, const char *slot, int maxDepth) {
+QMenu *MenuHelper::dirMenu(const QString &root, QWidget *target, const char *slot, int maxDepth) {
   QMenu* menu = makeDirMenu(root, target, slot, maxDepth, 0);
   if (!menu) menu = new QMenu;
 
@@ -787,7 +786,7 @@ QMenu *MenuHelper::dirMenu(const QString &root, QObject *target, const char *slo
   return menu;
 }
 
-QMenu *MenuHelper::makeDirMenu(const QString &root, QObject *target, const char *slot,
+QMenu *MenuHelper::makeDirMenu(const QString &root, QWidget* target, const char *slot,
                                int maxDepth, int depth) {
 
   if (depth >= maxDepth) return nullptr;
