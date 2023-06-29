@@ -51,9 +51,12 @@ class MediaGroupListWidget : public QListWidget {
   bool selectItem(const Media& item);
 
   // @note force using show() to ensure save/restore of min/max state
-  void show() { _maximized ? super::showMaximized() : super::showNormal(); }
-  void showMaximized() = delete;
+  void show();
+  void showFullscreen() = delete;
   void showNormal() = delete;
+  void showMaximized() = delete;
+  void showMinimized() = delete;
+
   void close();
 
   bool fastSeek() const { return _options.flags & MediaWidgetOptions::FlagFastSeek; }

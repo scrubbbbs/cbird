@@ -34,6 +34,12 @@ class MediaFolderListWidget : public QListWidget {
                         QWidget* parent = nullptr);
   virtual ~MediaFolderListWidget();
 
+  void show();
+  void showFullscreen() = delete;
+  void showNormal() = delete;
+  void showMaximized() = delete;
+  void showMinimized() = delete;
+
  Q_SIGNALS:
   void mediaSelected(const MediaGroup& group);
   void beginHover(int index);

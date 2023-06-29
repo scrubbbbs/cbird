@@ -63,8 +63,8 @@ class DesktopHelper {
   static void putSetting(const QString& key, const QVariant& value);
   static bool chooseProgram(QStringList& args,
                             const QVector<QStringList>& options,
-                            const char* settingsKey, const char* dialogTitle,
-                            const char* dialogText);
+                            const QString& settingsKey, const QString& dialogTitle,
+                            const QString& dialogText);
   static bool moveFile(const QString& path, const QString& dir);
 };
 
@@ -96,12 +96,17 @@ class WidgetHelper {
 
   static QAction* addSeparatorAction(QWidget* parent);
 
-  /// draw rich text using global style
-  static void drawRichText(QPainter* painter, const QRect& r,
-                           const QString& text);
-
   static QKeySequence getShortcut(QSettings& settings, const QString& label,
                                   const QKeySequence& defaultShortcut);
+
+  /// apply hacks to show window, like avoiding white flash on windows
+  static void hackShowWindow(QWidget* window, bool maximized=false);
+
+  /// if true, make an offscreen window. used to hide white flash on Windows 10
+  static void setWindowCloak(QWidget* window, bool enable);
+
+  /// style platform titlebar, etc not accessible to Qt/stylesheet
+  static void setWindowTheme(QWidget* window, bool dark=true);
 };
 
 class DBHelper {

@@ -1,0 +1,109 @@
+Theme[style="Qt"] {
+  qproperty-more_base: #0F0;
+  qproperty-less_base: #F00;
+  qproperty-same_base: #314cff;
+  qproperty-time_base: #FF0;
+  qproperty-video_base: #0FF;
+  qproperty-audio_base: #F0F;
+  qproperty-archive_base: #FF0;
+  qproperty-file_base: #FFF;
+  qproperty-default_base: #FFF;
+  qproperty-weed_base: #0FF;
+
+  qproperty-more_altbase: #0F0;
+  qproperty-less_altbase: #F00;
+  qproperty-same_altbase: #00F;
+  qproperty-time_altbase: #FF0;
+  qproperty-video_altbase: #0FF;
+  qproperty-audio_altbase: #F0F;
+  qproperty-archive_altbase: #FF0;
+  qproperty-file_altbase: #FFF;
+  qproperty-default_altbase: #FFF;
+  qproperty-weed_altbase: #0FF;
+}
+
+Theme[style="Dark"] {
+  qproperty-more_base: #44ff44;
+  qproperty-less_base: #ff7373;
+  qproperty-same_base: #a7a7ff;
+  qproperty-time_base: #FF0;
+  qproperty-video_base: #0FF;
+  qproperty-audio_base: #F0F;
+  qproperty-archive_base: #FF0;
+  qproperty-file_base: #FFF;
+  qproperty-default_base: #FFF;
+  qproperty-weed_base: #0FF;
+
+  qproperty-more_altbase: #0F0;
+  qproperty-less_altbase: #ff7373;
+  qproperty-same_altbase: #a7a7ff;
+  qproperty-time_altbase: #FF0;
+  qproperty-video_altbase: #0FF;
+  qproperty-audio_altbase: #F0F;
+  qproperty-archive_altbase: #FF0;
+  qproperty-file_altbase: #FFF;
+  qproperty-default_altbase: #FFF;
+  qproperty-weed_altbase: #0FF;
+}
+
+Theme[style="Light"] {
+  qproperty-more_base: #00ba00;
+  qproperty-less_base: #F00;
+  qproperty-same_base: #00F;
+  qproperty-time_base: #c29d00;
+  qproperty-video_base: #0FF;
+  qproperty-audio_base: #F0F;
+  qproperty-archive_base: #C29D00;
+  qproperty-file_base: #FFF;
+  qproperty-default_base: #FFF;
+  qproperty-weed_base: #0FF;
+
+  qproperty-more_altbase: #00ba00;
+  qproperty-less_altbase: #F00;
+  qproperty-same_altbase: #00F;
+  qproperty-time_altbase: #c29d00;
+  qproperty-video_altbase: #00dada;
+  qproperty-audio_altbase: #F0F;
+  qproperty-archive_altbase: #FF0;
+  qproperty-file_altbase: #FFF;
+  qproperty-default_altbase: #FFF;
+  qproperty-weed_altbase: #0FF;
+}
+
+MediaFolderListWidget {
+/*  background-color: #000;
+  color: #FFF;
+  selection-color: #FFF;
+  selection-background-color: #FF0;
+  */
+  font-size: 16px;
+}
+MediaFolderListWidget::item {
+  margin: 0px;
+  padding: 8px;
+}
+/*
+MediaFolderListWidget::item:selected {
+  background-color: #444;
+  color: #CCC;
+}
+QScrollBar {
+  background-color: #000;
+}
+QScrollBar::handle {
+  background-color: #444;
+}
+QScrollBar::add-line, QScrollBar::sub-line {
+  background-color: #000;
+}
+QScrollBar::up-arrow, QScrollBar::down-arrow {
+  background-color: #000;
+}
+*/
+MediaGroupListWidget {
+  /*background-color: #000;
+  color: #FFF;
+  selection-color: #FFF;
+  selection-background-color: #444;
+  */font-size: 16px;
+}

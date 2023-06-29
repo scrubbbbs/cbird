@@ -20,6 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #include "qtutil.h"
 #include "profile.h"
+#include "gui/theme.h" // todo: I don't like this dependency
 
 // qttools/src/qdbus/qdbus/qdbus.cpp
 #ifndef Q_OS_WIN
@@ -252,26 +253,32 @@ void DesktopHelper::putSetting(const QString& key, const QVariant& value) {
 
 bool DesktopHelper::chooseProgram(QStringList& args,
                                   const QVector<QStringList>& options,
-                                  const char* settingsKey,
-                                  const char* dialogTitle,
-                                  const char* dialogText) {
+                                  const QString& settingsKey,
+                                  const QString& dialogTitle,
+                                  const QString& dialogText) {
   if (args.empty() || (qApp->keyboardModifiers() & Qt::ControlModifier)) {
     QStringList items;
-    for (auto& option : qAsConst(options)) items += option.first();
+    for (auto& option : qAsConst(options))
+      items += option.first();
 
     QWidget* parent = qApp->widgetAt(QCursor::pos());
 
-    bool ok = false;
-    QString item =
-        QInputDialog::getItem(parent, dialogTitle,
-                              QString(dialogText) + "\n\n" +
-                                  "To change this setting, press the Control "
-                                  "key while selecting the action.",
-                              items, 0, false, &ok);
-    if (!ok) return false;
+    QString program = items.at(0);
+    {
+      QInputDialog dialog(parent);
+      int result = Theme::instance().execInputDialog(
+          &dialog, dialogTitle,
+          QString(dialogText) + "\n\n" +
+              "To change this setting, press the Control "
+              "key while selecting the action.",
+          program, items);
+      if (result != QInputDialog::Accepted)
+        return false;
+      program = dialog.textValue();
+    }
 
     for (auto& option : qAsConst(options))
-      if (option.first() == item) {
+      if (option.first() == program) {
         args = option;
         args.removeFirst();
         break;
@@ -287,32 +294,35 @@ void DesktopHelper::revealPath(const QString& path) {
   QVector<QStringList> fileManagers;
 
 #ifdef Q_OS_WIN
-  const QStringList defaultArgs{{"explorer", "/select,\"%1\""}};
+  fileManagers = {{"Default", "explorer", "/select,\"%1\""}};
 #else
-  const QStringList defaultArgs;
-  fileManagers += QStringList{{"Default", "DesktopServices"}};
-  fileManagers += QStringList{{"Dolphin (KDE)", "dolphin", "--select", "%1"}};
-  fileManagers += QStringList{{"Gwenview", "gwenview", "%dirname(1)"}};
-  fileManagers += QStringList{
-      {"Krusader (Right Panel)", "DBus", "org.krusader", "/Instances/krusader[0-9]*/right_manager",
-       "", "newTab", "%dirname(1)", "&&", "org.krusader", "/MainWindow_[0-9]*", "", "raise"}};
-  fileManagers += QStringList{
-      {"Krusader (Left Panel)", "DBus", "org.krusader", "/Instances/krusader[0-9]*/left_manager",
-       "", "newTab", "%dirname(1)", "&&", "org.krusader", "/MainWindow_[0-9]*", "", "raise"}};
-  fileManagers += QStringList{{"Nautilus (GNOME)", "nautilus", "-s", "%1"}};
+  fileManagers = {
+      {"Default", "DesktopServices"},
+      {"Dolphin (KDE)", "dolphin", "--select", "%1"},
+      {"Gwenview", "gwenview", "%dirname(1)"},
+      {"Krusader (Right Panel)", "DBus", "org.krusader",
+       "/Instances/krusader[0-9]*/right_manager", "", "newTab", "%dirname(1)",
+       "&&", "org.krusader", "/MainWindow_[0-9]*", "", "raise"},
+      {"Krusader (Left Panel)", "DBus", "org.krusader",
+       "/Instances/krusader[0-9]*/left_manager", "", "newTab", "%dirname(1)",
+       "&&", "org.krusader", "/MainWindow_[0-9]*", "", "raise"},
+      {"Nautilus (GNOME)", "nautilus", "-s", "%1"},
+      {"PCMan (LXDE)", "pcmanfm", "%dirname(1)"},
+      {"thunar (Xfce)", "thunar", "%dirname(1)"},
+      {"gThumb (GNOME)", "gthumb", "%dirname(1)"}
+  };
 #endif
-  const char* settingsKey = "OpenFileLocation";
-  QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
+  const QString settingsKey = qq("OpenFileLocation");
+  QStringList args = getSetting(settingsKey, fileManagers.at(0)).toStringList();
 
   if (!chooseProgram(
-          args, fileManagers, settingsKey, "Choose File Manager",
-          "Please choose the program for viewing a file's location."))
+          args, fileManagers, settingsKey, qq("Choose File Manager"),
+          qq("Please choose the program for viewing a file's location.")))
     return;
 
   // QDesktopServices cannot reveal file location and select it, we need the dir
-  // path
   QString tmp = path;
-  if (args.count() > 0 && args.first() == "DesktopServices")
+  if (args.count() > 0 && args.first() == ll("DesktopServices"))
     tmp = QFileInfo(path).absoluteDir().path();
 
   runProgram(args, false, tmp);
@@ -321,32 +331,30 @@ void DesktopHelper::revealPath(const QString& path) {
 void DesktopHelper::openVideo(const QString& path, double seekSeconds) {
   QStringList args;
   if (abs(seekSeconds) >= 0.1) {
-    const char* settingsKey = "OpenVideoSeek";
-    const QStringList defaultArgs;
+    const QString settingsKey = qq("OpenVideoSeek");
+    const QStringList defaultArgs = QStringList{{"DesktopServices"}};
     args = getSetting(settingsKey, defaultArgs).toStringList();
 
     QVector<QStringList> openVideoSeek;
-    openVideoSeek += QStringList{{"Default", "DesktopServices"}};
 #ifdef Q_OS_WIN
-    openVideoSeek +=
-        QStringList{{"VLC", "\"C:/Program Files (x86)/VideoLan/VLC/vlc.exe\"",
-                     "--start-time=%seek", "\"%1\""}};
-    openVideoSeek +=
-        QStringList{{"FFplay", "ffplay.exe", "-ss", "%seek", "\"%1\""}};
-    openVideoSeek += QStringList{{"MPlayer", "mplayer.exe", "-ss", "%seek", "\"%1\""}};
-    openVideoSeek += QStringList{{"MPV", "mpv.exe", "--start=%seek", "\"%1\""}};
+    openVideoSeek = {
+        {"Default", "DesktopServices"},
+        {"VLC", "\"C:/Program Files (x86)/VideoLan/VLC/vlc.exe\"", "--start-time=%seek", "\"%1\""},
+        {"FFplay", "ffplay.exe", "-ss", "%seek", "\"%1\""},
+        {"MPlayer", "mplayer.exe", "-ss", "%seek", "\"%1\""},
+        {"MPV", "mpv.exe", "--start=%seek", "\"%1\""}};
 #else
-    openVideoSeek += QStringList{
-        {"Celluloid", "celluloid", "--mpv-options=--start=%seek", "%1"}};
-    openVideoSeek += QStringList{{"FFplay", "ffplay", "-ss", "%seek", "%1"}};
-    openVideoSeek += QStringList{{"MPlayer", "mplayer", "-ss", "%seek", "%1"}};
-    openVideoSeek += QStringList{{"MPV", "mpv", "--start=%seek", "%1"}};
-    openVideoSeek +=
-        QStringList{{"SMPlayer", "smplayer", "-start", "%seek(int)", "%1"}};
-    openVideoSeek += QStringList{{"VLC", "vlc", "--start-time=%seek", "%1"}};
+    openVideoSeek = {
+        {"Default", "DesktopServices"},
+        {"Celluloid", "celluloid", "--mpv-options=--start=%seek", "%1"},
+        {"FFplay", "ffplay", "-ss", "%seek", "%1"},
+        {"MPlayer", "mplayer", "-ss", "%seek", "%1"},
+        {"MPV", "mpv", "--start=%seek", "%1"},
+        {"SMPlayer", "smplayer", "-start", "%seek(int)", "%1"},
+        {"VLC", "vlc", "--start-time=%seek", "%1"}};
 #endif
-    if (!chooseProgram(args, openVideoSeek, settingsKey, "Choose Video Player",
-                       "Select the program for viewing video at a timestamp"))
+    if (!chooseProgram(args, openVideoSeek, settingsKey, qq("Choose Video Player"),
+                       qq("Select the program for viewing video at a timestamp")))
       return;
   } else {
     const char* settingsKey = "OpenVideo";
@@ -547,6 +555,130 @@ QKeySequence WidgetHelper::getShortcut(QSettings& settings, const QString& label
   return settings.value(key, defaultShortcut).toString();
 }
 
+#ifndef Q_OS_WIN
+
+void WidgetHelper::setWindowCloak(QWidget* window, bool enable) {
+  (void)window; (void)enable;
+}
+
+void WidgetHelper::setWindowTheme(QWidget* window, bool dark) {
+  (void)window;
+  (void)dark;
+}
+
+void WidgetHelper::hackShowWindow(QWidget* window, bool maximized) {
+  if (maximized)
+    window->showMaximized();
+  else
+    window->show();
+}
+
+#else
+#include <dwmapi.h>
+
+enum PreferredAppMode {
+  Default,
+  AllowDark,
+  ForceDark,
+  ForceLight,
+  Max
+};
+
+enum WINDOWCOMPOSITIONATTRIB {
+  WCA_UNDEFINED = 0,
+  WCA_NCRENDERING_ENABLED = 1,
+  WCA_NCRENDERING_POLICY = 2,
+  WCA_TRANSITIONS_FORCEDISABLED = 3,
+  WCA_ALLOW_NCPAINT = 4,
+  WCA_CAPTION_BUTTON_BOUNDS = 5,
+  WCA_NONCLIENT_RTL_LAYOUT = 6,
+  WCA_FORCE_ICONIC_REPRESENTATION = 7,
+  WCA_EXTENDED_FRAME_BOUNDS = 8,
+  WCA_HAS_ICONIC_BITMAP = 9,
+  WCA_THEME_ATTRIBUTES = 10,
+  WCA_NCRENDERING_EXILED = 11,
+  WCA_NCADORNMENTINFO = 12,
+  WCA_EXCLUDED_FROM_LIVEPREVIEW = 13,
+  WCA_VIDEO_OVERLAY_ACTIVE = 14,
+  WCA_FORCE_ACTIVEWINDOW_APPEARANCE = 15,
+  WCA_DISALLOW_PEEK = 16,
+  WCA_CLOAK = 17,
+  WCA_CLOAKED = 18,
+  WCA_ACCENT_POLICY = 19,
+  WCA_FREEZE_REPRESENTATION = 20,
+  WCA_EVER_UNCLOAKED = 21,
+  WCA_VISUAL_OWNER = 22,
+  WCA_HOLOGRAPHIC = 23,
+  WCA_EXCLUDED_FROM_DDA = 24,
+  WCA_PASSIVEUPDATEMODE = 25,
+  WCA_USEDARKMODECOLORS = 26,
+  WCA_LAST = 27
+};
+
+struct WINDOWCOMPOSITIONATTRIBDATA {
+  WINDOWCOMPOSITIONATTRIB Attrib;
+  PVOID pvData;
+  SIZE_T cbData;
+};
+
+using AllowDarkModeForWindowFunc =  BOOL (WINAPI *)(HWND hWnd, BOOL allow);
+using SetPreferredAppModeFunc = PreferredAppMode (WINAPI *)(PreferredAppMode appMode);
+using SetWindowCompositionAttributeFunc =  BOOL (WINAPI *)(HWND hwnd, WINDOWCOMPOSITIONATTRIBDATA *);
+
+void WidgetHelper::setWindowTheme(QWidget* window, bool dark) {
+  if (!dark) return;
+
+  qDebug() << "Enabling Win32 Dark Mode";
+
+  auto uxThemeLib = LoadLibraryExW(L"uxtheme.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+
+  auto AllowDarkModeForWindow = (AllowDarkModeForWindowFunc)
+      (void*)GetProcAddress(uxThemeLib, MAKEINTRESOURCEA(133));
+
+  auto SetPreferredAppMode = (SetPreferredAppModeFunc)
+      (void*)GetProcAddress(uxThemeLib, MAKEINTRESOURCEA(135));
+
+  auto user32Lib = GetModuleHandleW(L"user32.dll");
+  auto SetWindowCompositionAttribute = (SetWindowCompositionAttributeFunc)
+      (void*)GetProcAddress(user32Lib, "SetWindowCompositionAttribute");
+
+  SetPreferredAppMode(AllowDark);
+
+  HWND hwnd = (HWND)window->winId();
+  BOOL enable = true;
+  AllowDarkModeForWindow(hwnd, enable);
+
+  WINDOWCOMPOSITIONATTRIBDATA data = {
+      WCA_USEDARKMODECOLORS,
+      &enable,
+      sizeof(enable)
+  };
+  SetWindowCompositionAttribute(hwnd, &data);
+}
+
+void WidgetHelper::hackShowWindow(QWidget* window, bool maximized) {
+  // cloak and then uncloak to hide the white window flash
+  // caveat: no fade-in animation
+  setWindowCloak(window, true);
+
+  if (maximized)
+    window->showMaximized();
+  else
+    window->show();
+
+  qApp->processEvents(); // paint the initial background
+
+  setWindowCloak(window, false);
+}
+
+void WidgetHelper::setWindowCloak(QWidget* window, bool enable) {
+  BOOL cloak = enable;
+  auto hwnd = (HWND)window->winId();
+  DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &cloak, sizeof(cloak));
+}
+
+#endif
+
 void WidgetHelper::saveGeometry(const QWidget *w, const char *id) {
   if (!id) id = w->metaObject()->className();
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
@@ -629,38 +761,6 @@ QAction* WidgetHelper::addSeparatorAction(QWidget* parent) {
   return sep;
 }
 
-void WidgetHelper::drawRichText(QPainter *painter, const QRect &r, const QString &text) {
-  // todo: external stylesheet
-  QTextDocument td;
-
-  td.setDefaultStyleSheet(R"qss(
-        table { color:rgba(255,255,255,192); font-size:16px; }
-        tr.even { background-color:rgba(96,96,96,128); } /* even rows of table */
-        tr.odd  { background-color:rgba(64,64,64,128); } /* odd rows of table */
-        .more { color:#9F9; }   /* value is > */
-        .less { color:#F99; }   /* value is < */
-        .same { color:#99F; }   /* value is == */
-        .time { color:#FF9; }   /* value is a timecode or duration */
-        .video { color:#9FF; }  /* value describes video properties */
-        .audio { color:#F9F; }  /* value describes audio properties */
-        .none { color:rgba(0,0,0,0); } /* hide value by matching background color */
-        .archive { color:#FF9; } /* value is archive/zip file */
-        .file { color:#FFF; }    /* value is file */
-        .default { color:#FFF; } /* normal text */
-        .weed { color:#0FF };    /* value is weed */
-        )qss");
-
-  td.setHtml(text);
-  td.setDocumentMargin(0);
-
-  painter->save();
-  painter->translate(r.x(), r.y());
-
-  QRect rect1 = QRect(0, 0, r.width(), r.height());
-  td.drawContents(painter, rect1);
-  painter->restore();
-}
-
 QDateTime DBHelper::lastModified(const QSqlDatabase &db) {
   // this only works with local file database drivers, like sqlite
   QString dbPath = db.databaseName();
@@ -677,10 +777,12 @@ QMenu *MenuHelper::dirMenu(const QString &root, QObject *target, const char *slo
   QMenu* menu = makeDirMenu(root, target, slot, maxDepth, 0);
   if (!menu) menu = new QMenu;
 
-  QAction* action = new QAction("*new folder*", menu);
+  QAction* action = new QAction("Choose Folder...", menu);
   action->connect(action, SIGNAL(triggered(bool)), target, slot);
   action->setData(";newfolder;");
-  menu->insertAction(menu->actions()[0], action);
+
+  menu->insertSeparator(menu->actions().at(0));
+  menu->insertAction(menu->actions().at(0), action);
 
   return menu;
 }

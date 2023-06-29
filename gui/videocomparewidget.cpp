@@ -20,6 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #include "videocomparewidget.h"
 #include "cropwidget.h"
+#include "theme.h"
 
 #include "../cimgops.h"
 #include "../env.h"
@@ -418,6 +419,10 @@ VideoCompareWidget::~VideoCompareWidget() {
   settings.setValue("stacked", _stacked);
 }
 
+void VideoCompareWidget::show() {
+  Theme::instance().showWindow(this, _maximized);
+}
+
 void VideoCompareWidget::drawFrame(QPainter& painter, const FrameCache& cache, const QImage& img,
                                    int iw,
                                    int ih,                     // frame image and scaled size
@@ -470,7 +475,7 @@ void VideoCompareWidget::drawFrame(QPainter& painter, const FrameCache& cache, c
 
   const int tx = cx;
   const int ty = h - infoHeight;
-  WidgetHelper::drawRichText(&painter, QRect(tx+infoMargin, ty + infoMargin, iw, infoHeight), text);
+  Theme::instance().drawRichText(&painter, QRect(tx+infoMargin, ty + infoMargin, iw, infoHeight), text);
 }
 
 void VideoCompareWidget::paintEvent(QPaintEvent* event) {

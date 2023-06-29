@@ -4,5 +4,7 @@
         <file>res/exif.txt</file>
         <file>res/ffmeta.txt</file>
         <file>res/iptc.txt</file>
+        <file>res/cbird.qss</file>
+        <file>res/cbird-richtext.css</file>
     </qresource>
 </RCC>

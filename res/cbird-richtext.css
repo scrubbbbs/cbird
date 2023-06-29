@@ -1,0 +1,41 @@
+
+
+table { background-color:qt(normal,base); color:qt(normal,text); }
+
+.base    { background-color:qt(normal,base); }
+.altbase { background-color:qt(normal,altbase); }
+
+.none    { color:rgba(0,0,0,0); }     /* hide value by matching background color */
+
+/* value is > */
+         .more { color:theme(more_base); }
+.base    .more { color:theme(more_base); }
+.altbase .more { color:theme(more_altbase); }
+
+/* value is < */
+         .less { color:theme(less_base); }
+.base    .less { color:theme(less_base); }
+.altbase .less { color:theme(less_altbase); }
+
+/* value is == */
+         .same { color:theme(same_base); }
+.base    .same { color:theme(same_base); }
+.altbase .same { color:theme(same_altbase); }
+
+/* value is a timecode or duration */
+.time  { color:theme(time_base); }
+
+/* value describes video properties */
+         .video { color:theme(video_base); }
+.base    .video { color:theme(video_base); }
+.altbase .video { color:theme(video_altbase); }
+
+/* value describes audio properties */
+         .audio { color:theme(audio_base); }
+.base    .audio { color:theme(audio_base); }
+.altbase .audio { color:theme(audio_altbase); }
+
+.archive { color:theme(archive_base); } /* value is archive/zip file */
+.file    { color:qt(normal,text); }     /* value is file */
+.default { color:theme(default_base); } /* normal text */
+.weed    { color:theme(weed_base); }    /* value is weed */

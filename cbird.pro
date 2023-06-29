@@ -50,7 +50,7 @@ git.commands = ./tools/gitversion.sh "$$OBJECTS_DIR" "$$VERSION"
 git.depends = .git
 QMAKE_EXTRA_TARGETS += git
 
-RESOURCES += cbird.qrc
+RESOURCES += cbird.qrc qdarkstyle/dark/darkstyle.qrc qdarkstyle/light/lightstyle.qrc
 
 # Input
 HEADERS += $$files(*.h)

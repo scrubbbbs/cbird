@@ -1,0 +1,304 @@
+#include "theme.h"
+#include "../qtutil.h"
+
+Theme::Theme(QWidget* parent) : QWidget(parent) {}
+
+Theme::~Theme() {}
+
+Theme& Theme::instance() {
+  static Theme* theme = nullptr;
+  if (!theme)
+    theme = new Theme(nullptr);
+
+  return *theme;
+}
+
+void Theme::setup() {
+  Q_ASSERT(qApp->thread() == QThread::currentThread());
+
+  QStyle* styleObject = qApp->style();
+
+  const QString darkStyle  = qq("Dark");  // built-in dark stylesheet
+  const QString lightStyle = qq("Light"); // built-in light stylesheet
+  const QString noStyle    = qq("Qt");    // use default qt style
+  const QString autoStyle  = qq("Auto");  // detect dark or light if possible, fallback to qt
+
+  QString style;
+#ifdef Q_OS_WIN
+  style = autoStyle;
+#else
+  style = darkStyle;
+#endif
+
+  if (qEnvironmentVariableIsSet("CBIRD_STYLE"))
+    style = qEnvironmentVariable("CBIRD_STYLE");
+
+  if (style == autoStyle) {
+    Qt::ColorScheme scheme = qApp->styleHints()->colorScheme();
+    switch (scheme) {
+      case Qt::ColorScheme::Dark: style=darkStyle; break;
+      case Qt::ColorScheme::Light: style=lightStyle; break;
+      case Qt::ColorScheme::Unknown: style=noStyle; break;
+    }
+  }
+
+  QStringList styleSheets;
+  if (style == darkStyle)
+    styleSheets += qq(":qdarkstyle/dark/darkstyle.qss");
+  else if (style == lightStyle)
+    styleSheets += qq(":qdarkstyle/light/lightstyle.qss");
+
+  styleSheets += qq(":res/cbird.qss");
+
+  QString styleSheet;
+  for (auto& path : styleSheets) {
+    QFile f(path);
+    if (!f.open(QFile::ReadOnly))
+      qFatal("failed to open stylesheet: %s", qUtf8Printable(path));
+    styleSheet += f.readAll();
+  }
+
+  if (!styleSheet.isEmpty())
+    qApp->setStyleSheet(styleSheet);
+
+  qDebug() << style << styleObject->metaObject()->className() << styleSheets;
+
+  auto& theme = Theme::instance(); // construct Theme
+
+  theme.setProperty("style", style); // visible in stylesheets
+  theme._style = style;              // visible elsewhere
+  theme._baseStyle = styleObject;    // useful info
+
+  theme.style()->polish(&theme);     // get properties from cbird.qss
+  theme.probe();                     // get properties from system theme
+
+  if (qEnvironmentVariableIsSet("CBIRD_THEME_TOOLBOX")) {
+    theme._toolboxActive = true;
+    showToolbox();
+  }
+}
+
+void Theme::probe() {
+  QTableWidget widget(&Theme::instance()); // usually has altbase
+  widget.style()->polish(&widget);         // initialize palette
+
+  QStyleOptionViewItem option; // item for table row background/item
+  option.initFrom(&widget);
+  _base = option.palette.base().color();
+  _altBase = option.palette.alternateBase().color();
+  _text = option.palette.text().color();
+
+  qDebug() << "base:" << _base.name() << "altbase:" << _altBase.name()
+           << "text:" << _text.name();
+}
+
+void Theme::polishWindow(QWidget* window) const {
+  WidgetHelper::setWindowTheme(window, _style == "Dark");
+}
+
+void Theme::showWindow(QWidget* window, bool maximized) const {
+  polishWindow(window);
+  WidgetHelper::hackShowWindow(window, maximized);
+}
+
+QString Theme::richTextStyleSheet() const {
+  // not thread-safe due to static qregexp
+  Q_ASSERT(qApp->thread() == QThread::currentThread());
+  static const auto* exp = new QRegularExpression(qq("(qt|theme)\\((.*?)\\)"));
+
+  QFile f(qq(":res/cbird-richtext.css"));
+  if (!f.open(QFile::ReadOnly))
+    qFatal("failed to open rich text stylesheet");
+
+  const QString inCss = f.readAll();
+  QStringView subject(inCss);
+
+  QString outCss;
+  outCss.reserve(subject.length()); // macro expansion makes it smaller
+
+  QRegularExpressionMatch match;
+  while ((match = exp->match(subject)).hasMatch()) {
+    const auto macro = match.capturedView(1);
+    const auto args = match.capturedView(2).split(lc(','));
+
+    QColor color(Qt::white);
+    if (macro == ll("qt")) {
+      if (Q_UNLIKELY(args.count() != 2))
+        qFatal("qt() requires two arguments");
+      auto& group = args[0];
+      auto& role = args[1];
+      if (Q_UNLIKELY(group != ll("normal")))
+        qFatal("invalid color group: %s", group.toUtf8().constData());
+      else if (role == ll("base"))
+        color = _base;
+      else if (role == ll("altbase"))
+        color = _altBase;
+      else if (role == ll("text"))
+        color = _text;
+      else
+        qFatal("invalid color role: %s", group.toUtf8().constData());
+    }
+    else if (macro == ll("theme")) {
+      if (Q_UNLIKELY(args.count() != 1))
+        qFatal("theme() requires one argument");
+      const auto propertyName = args[0].toUtf8();
+      const QVariant v = this->property(propertyName.constData());
+      if (Q_UNLIKELY(!v.isValid()))
+        qFatal("theme() invalid property: %s", propertyName.constData());
+      color = qvariant_cast<QColor>(v);
+    }
+
+    outCss += subject.mid(0, match.capturedStart());
+    outCss += color.name();
+    subject = subject.mid(match.capturedEnd());
+  }
+  outCss += subject;
+
+  //qDebug().noquote() << outCss;
+
+  return outCss;
+}
+
+void Theme::drawRichText(QPainter *painter, const QRect &r, const QString &text) {
+  Q_ASSERT(QThread::currentThread() == qApp->thread());
+  static QTextDocument* td = nullptr;
+
+  if (Q_UNLIKELY(!td)) {
+    td = new QTextDocument;
+    td->setDocumentMargin(0);
+    td->setDefaultStyleSheet(Theme::instance().richTextStyleSheet());
+  }
+
+  if (Q_UNLIKELY(_toolboxActive))
+    td->setDefaultStyleSheet(Theme::instance().richTextStyleSheet());
+
+  td->setHtml(text);
+
+  painter->save();
+  painter->translate(r.x(), r.y());
+  QRect rect1 = QRect(0, 0, r.width(), r.height());
+
+  td->drawContents(painter, rect1);
+
+  painter->restore();
+}
+
+int Theme::execDialog(QDialog* dialog) const {
+  ShadeWidget shade(dialog->parentWidget());
+  polishWindow(dialog);
+  WidgetHelper::hackShowWindow(dialog);
+  return dialog->exec();
+}
+
+int Theme::execInputDialog(QInputDialog* dialog, const QString& title,
+                           const QString& label, const QString& text,
+                           const QStringList& completions) const {
+  dialog->setInputMode(QInputDialog::TextInput);
+  dialog->setWindowTitle(title);
+  dialog->setLabelText(label);
+  if (completions.count() > 0) {
+    dialog->setComboBoxItems(completions);
+    dialog->setComboBoxEditable(true);
+  }
+  dialog->setTextValue(text);
+
+  return execDialog(dialog);
+}
+
+QString Theme::getExistingDirectory(const QString& title,
+                                    const QString& dirPath,
+                                    QWidget* parent) const {
+  QFileDialog dialog(parent, title);
+
+  dialog.setFileMode(QFileDialog::Directory);
+  dialog.setOptions(QFileDialog::ShowDirsOnly |
+                    QFileDialog::DontUseNativeDialog);
+  dialog.setDirectory(dirPath);
+
+  int result = Theme::instance().execDialog(&dialog);
+  if (result != QFileDialog::Accepted)
+    return QString();
+
+  return dialog.selectedFiles().value(0);
+}
+
+void Theme::showToolbox() {
+  QStringList props;
+  auto dump_props = [&props](QObject* o) {
+    auto mo = o->metaObject();
+    do {
+      for (int i = mo->propertyOffset(); i < mo->propertyCount(); ++i) {
+        QString name = mo->property(i).name();
+        if (name.endsWith(ll("_base")) || name.endsWith(ll("_altbase")))
+          props.append(name);
+      }
+    } while ((mo = mo->superClass()));
+  };
+
+  dump_props(&Theme::instance());
+
+  auto* window = new QWidget;
+  QString info = Theme::instance().property("style").toString() + " | " +
+                 Theme::instance()._baseStyle->metaObject()->className();
+  window->setWindowTitle(info);
+  window->setWindowFlags(Qt::Tool|Qt::WindowStaysOnTopHint);
+
+  auto* hLayout = new QHBoxLayout(window);
+  auto* vLayout = new QVBoxLayout(window);
+  vLayout->setAlignment(Qt::AlignRight);
+  hLayout->addLayout(vLayout);
+
+  for (auto& name : qAsConst(props)) {
+    QVariant prop = Theme::instance().property(qUtf8Printable(name));
+    QColor color = qvariant_cast<QColor>(prop);
+
+    auto* cLayout = new QHBoxLayout(window);
+    vLayout->addLayout(cLayout)    ;
+
+    QPushButton* button = new QPushButton(name, window);
+    button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    cLayout->addWidget(button);
+
+    QLineEdit* edit = new QLineEdit(color.name(), window);
+    cLayout->addWidget(edit);
+
+    QPalette palette = window->palette();
+    palette.setColor(QPalette::Button, Theme::instance()._base);
+    palette.setColor(QPalette::ButtonText, color);
+    button->setPalette(palette);
+
+    connect(button, &QPushButton::pressed, button, [button,edit,window,name]{
+      QVariant prop = Theme::instance().property(qUtf8Printable(name));
+      QColor color = qvariant_cast<QColor>(prop);
+
+      QColorDialog colorDialog(color, window);
+      colorDialog.setWindowTitle(name);
+      colorDialog.setMouseTracking(false);
+      colorDialog.move(window->geometry().topRight());
+
+      connect(&colorDialog, &QColorDialog::currentColorChanged, button, [name](const QColor& color) {
+        Theme::instance().setProperty(qUtf8Printable(name), color);
+        for (auto w : qApp->allWindows())
+          w->requestUpdate();
+      });
+
+      if (QDialog::Accepted != Theme::instance().execDialog(&colorDialog)) {
+        Theme::instance().setProperty(qUtf8Printable(name), color);
+        for (auto w : qApp->allWindows())
+          w->requestUpdate();
+        return;
+      }
+
+      QPalette palette = window->palette();
+      palette.setColor(QPalette::Button, Theme::instance()._base);
+      palette.setColor(QPalette::ButtonText, color);
+      button->setPalette(palette);
+
+      edit->setText(color.name());
+      for (auto w : qApp->allWindows())
+        w->requestUpdate();
+    });
+  }
+
+  Theme::instance().showWindow(window);
+}

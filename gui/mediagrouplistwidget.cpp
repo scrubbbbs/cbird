@@ -23,6 +23,7 @@
 #include "videocomparewidget.h"
 #include "cropwidget.h"
 #include "mediabrowser.h"
+#include "theme.h"
 
 #include "../lib/jpegquality.h"
 #include "../database.h"
@@ -92,31 +93,6 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
   const int lineH = 16, spacing = 16;
   setGridSize({iconW+spacing,iconH+spacing+textH*lineH});
 
-  // todo: external stylesheet
-  setStyleSheet(R"qss(
-      QListWidget::item {
-        margin: 0px;
-        padding: 8px;
-      }
-      QListWidget::item:selected {
-        margin: 0px;
-        padding: 8px;
-        background-color: #444;
-        color: #CCC
-      }
-      QListWidget {
-        background-color: black;
-        selection-color: #FFF;
-        selection-background-color: #FF0;
-        font-size: 16px;
-        color: white;
-      }
-      QScrollBar {
-        width: 32px;
-        background-color: black;
-        color: darkGray;
-      })qss");
-
   int index = 0;
   for (const Media& m : list) {
     // todo: using type() for list index is not necessary since
@@ -165,6 +141,10 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
 
 MediaFolderListWidget::~MediaFolderListWidget() {
   WidgetHelper::saveGeometry(this);
+}
+
+void MediaFolderListWidget::show() {
+  Theme::instance().showWindow(this);
 }
 
 void MediaFolderListWidget::close() {
@@ -492,10 +472,9 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     rect = option.rect;
     rect = rect.adjusted(0,std::max(0, rect.height()-_textHeight),0,0);
 
-    if (option.state & QStyle::State_Selected) {
-      painter->fillRect(rect, palette.highlight());
-      painter->setPen(palette.highlightedText().color());
-    } else
+    //if (option.state & QStyle::State_Selected)
+    //  painter->setPen(palette.highlightedText().color());
+    //else
       painter->setPen(palette.text().color());
 
     QString title = item->data(Qt::UserRole+0).toString();
@@ -504,7 +483,15 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     text = text.replace("@title@", title);
     text = text.replace("@width@", QString::number(rect.width()));
 
-    WidgetHelper::drawRichText(painter, rect, text);
+    Theme::instance().drawRichText(painter, rect, text);
+
+    if (option.state & QStyle::State_Selected) {
+      QBrush selBrush = palette.highlight();
+      QColor c = selBrush.color();
+      c.setAlpha(120);
+      selBrush.setColor(c);
+      painter->fillRect(rect, c);
+    }
 
     if (_debug) {
       painter->setPen(Qt::magenta);
@@ -645,21 +632,6 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-  setStyleSheet(
-      R"qss(
-      QListWidget {
-        background-color: black;
-        selection-color: rgba(255,255,255,255);
-        selection-background-color: #444;
-        font-size: 16px;
-        color: rgba(255,255,255,255);
-      }
-      QScrollBar {
-        width: 32px;
-        background-color: black;
-        color: darkGray;
-      })qss");
-
   if (list.count() > 0) {
     loadRow(0);
     int row = 0;
@@ -676,7 +648,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
     QPainter painter;
     painter.begin(&qImg);
     painter.fillRect(qImg.rect(), green);
-    WidgetHelper::drawRichText(&painter, qImg.rect(), item(0)->text());
+    Theme::instance().drawRichText(&painter, qImg.rect(), item(0)->text());
     painter.end();
 
     int y;
@@ -1460,24 +1432,24 @@ void MediaGroupListWidget::updateItems() {
     const QString text =
         QString(
             "<table width=@width@><tbody>"
-            "<tr class=\"even\"><td class=\"%26\" colspan=\"3\" count=\"%15\">%1<span "
+            "<tr class=\"base\"><td class=\"%26\" colspan=\"3\" count=\"%15\">%1<span "
               "class=\"%16\">(%17)</span></td></tr>"
-            "<tr class=\"odd\">"
+            "<tr class=\"altbase\">"
               "<td>%2x%3</td>"
               "<td><span class=\"%7\">%11%</span></td>"
               "<td><span class=\"%18\">%19</span></td>"
             "</tr>"
-            "<tr class=\"even\">"
+            "<tr class=\"base\">"
               "<td>%4k</td>"
               "<td><span class=\"%8\">%12%</span></td>"
               "<td><span class=\"%20\">%21</span></td>"
             "</tr>"
-            "<tr class=\"odd\">"
+            "<tr class=\"altbase\">"
               "<td>%5:1</td>"
               "<td><span class=\"%9\">%13%</span></td>"
               "<td><span class=\"%22\">%23</span></td>"
             "</tr>"
-            "<tr class=\"even\">"
+            "<tr class=\"base\">"
               "<td>s%6</td>"
               "<td><span class=\"%10\">%14%</span></td>"
               "<td><span class=\"%24\">%25</span></td>"
@@ -1720,21 +1692,26 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
         static bool skipDeleteConfirmation = false;
         int button = 0;
         if (m.isArchived()) {
-          QString zipPath = _options.db ? path.mid(_options.db->path().length()+1) : path;
-          button = QMessageBox::warning(this, "Delete Zip Confirmation",
-                              QString("The selected file is a member of \"%1\"\n\n"
-                                      "Modification of zip archives is unsupported. Move the entire zip to the trash?"
-                                     ).arg(zipPath),
-                                     QMessageBox::No|QMessageBox::Yes);
-        }
-        else if (skipDeleteConfirmation) {
+          QString zipPath =
+              _options.db ? path.mid(_options.db->path().length() + 1) : path;
+          QMessageBox dialog(
+              QMessageBox::Warning, qq("Delete Zip Confirmation"),
+              qq("The selected file is a member of \"%1\"\n\n"
+                      "Modification of zip archives is unsupported. Move the "
+                      "entire zip to the trash?")
+                  .arg(zipPath),
+              QMessageBox::No | QMessageBox::Yes, this);
+          button = Theme::instance().execDialog(&dialog);
+        } else if (skipDeleteConfirmation) {
           button = QMessageBox::Yes;
-        }
-        else {
-          QString filePath = _options.db ? path.mid(_options.db->path().length()+1) : path;
-          button = QMessageBox::warning(this, "Delete File Confirmation",
-                               QString("Move this file to the trash?\n\n%1").arg(filePath),
-                               QMessageBox::No|QMessageBox::Yes|QMessageBox::YesToAll);
+        } else {
+          QString filePath =
+              _options.db ? path.mid(_options.db->path().length() + 1) : path;
+          QMessageBox dialog(
+              QMessageBox::Warning, qq("Delete File Confirmation"),
+              qq("Move this file to the trash?\n\n%1").arg(filePath),
+              QMessageBox::No | QMessageBox::Yes | QMessageBox::YesToAll, this);
+          button = Theme::instance().execDialog(&dialog);
         }
 
         if (button == QMessageBox::YesToAll) skipDeleteConfirmation = true;
@@ -1861,27 +1838,29 @@ void MediaGroupListWidget::renameFileAction() {
       c = parts.join(".");
     }
 
-    int index = completions.indexOf(info.fileName());
+    QString newName = info.fileName();
+    QInputDialog dialog(this);
+    int result = Theme::instance().execInputDialog(
+        &dialog, qq("Rename File"), qq("New Name"), newName, completions);
 
-    bool ok = false;
-    QString newName = QInputDialog::getItem(this, "Rename File", "New Name",
-                                            completions, index, true, &ok);
+    if (result != QInputDialog::Accepted) return;
 
-    if (ok && newName != info.fileName()) {
-      QString path = m.path();
-      if (_options.db) {
-        if (_options.db->rename(m, newName)) updateMedia(path, m);
-        else qWarning() << "rename via database failed";
-      }
-      else {
-        QDir parentDir = info.dir();
-        if (parentDir.rename(info.fileName(), newName)) {
+    newName = dialog.textValue();
+    if (newName == info.fileName()) return;
+
+    QString path = m.path();
+    if (_options.db) {
+      if (_options.db->rename(m, newName))
+          updateMedia(path, m);
+      else
+          qWarning() << "rename via database failed";
+    } else {
+      QDir parentDir = info.dir();
+      if (parentDir.rename(info.fileName(), newName)) {
           m.setPath(parentDir.absoluteFilePath(newName));
           updateMedia(path, m);
-        }
-        else
+      } else
           qWarning() << "rename via filesystem failed";
-      }
     }
   }
 }
@@ -1894,6 +1873,7 @@ void MediaGroupListWidget::renameFolderAction() {
 
   const Media& m = sel[0];
 
+  QString newName;
   QStringList completions;
   QDir parentDir;
 
@@ -1901,15 +1881,17 @@ void MediaGroupListWidget::renameFolderAction() {
     QString zip;
     m.archivePaths(&zip);
     QFileInfo info(zip);
-    completions += info.fileName();
+    newName = info.fileName();
     parentDir = info.dir();
   }
   else {
     QFileInfo info(m.path());
-    completions += info.dir().dirName();
+    newName = info.dir().dirName();
     parentDir = info.dir();
     parentDir.cdUp();
   }
+  completions += newName;
+
 //  for (const auto& ii : qAsConst(_list[_currentRow])) {
 //    const auto it = ii.attributes().find("group");
 //    if (it != ii.attributes().end())
@@ -1931,10 +1913,11 @@ void MediaGroupListWidget::renameFolderAction() {
     }
   }
 
-  bool ok = false;
-  QString newName = QInputDialog::getItem(this, "Rename Folder/Zip", "New Name",
-                                          completions, 0, true, &ok);
-  if (!ok) return;
+  QInputDialog dialog(this);
+  int result = Theme::instance().execInputDialog(
+      &dialog, qq("Rename Folder/Zip"), qq("New Name"), newName, completions);
+
+  if (result != QInputDialog::Accepted) return;
 
   // new path is not index-relative...pass absolute
   QString newPath = parentDir.absoluteFilePath(newName);
@@ -1960,11 +1943,16 @@ bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
 
 bool MediaGroupListWidget::renameWarning() {
   if (!_options.db) {
-    auto button = QMessageBox::warning(
-        this, "Rename Without Database?",
-        "Renaming without a database will invalidate the index.",
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (button != QMessageBox::Yes) return true;
+    QMessageBox dialog(
+        QMessageBox::Warning, qq("Rename Without Database?"),
+        qq("Renaming without a database will invalidate the index."),
+        QMessageBox::Yes | QMessageBox::No, this);
+
+    dialog.setDefaultButton(QMessageBox::No);
+
+    int button = Theme::instance().execDialog(&dialog);
+    if (button != QMessageBox::Yes)
+      return true;
   }
   return false;
 }
@@ -2008,17 +1996,16 @@ void MediaGroupListWidget::copyNameAction() {
 }
 
 void MediaGroupListWidget::moveFileAction() {
-  Q_ASSERT(_options.db); // w/o db we don't have dir menu actions
+  Q_ASSERT(_options.db);
 
   QAction* action = dynamic_cast<QAction*>(sender());
-  if (!action) return;
+  Q_ASSERT(action);
 
   QString dirPath = action->data().toString();
 
-  if (dirPath == ";newfolder;")
-    dirPath =
-        QFileDialog::getExistingDirectory(this, "Choose Folder", _options.db->path());
-
+  if (dirPath == ll(";newfolder;"))
+    dirPath = Theme::instance().getExistingDirectory(qq("Move File: Choose Destination"),
+                                                     _options.db->path(), this);
   if (dirPath.isEmpty()) return;
 
   for (Media& m : selectedMedia()) {
@@ -2026,7 +2013,7 @@ void MediaGroupListWidget::moveFileAction() {
     if (_options.db->move(m, dirPath))
       updateMedia(path, m);
   }
-  loadRow(_currentRow); // update path in window title
+  loadRow(_currentRow); // path in window title may have changed
 }
 
 void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& newName) {
@@ -2079,16 +2066,15 @@ void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& ne
 }
 
 void MediaGroupListWidget::moveFolderAction() {
-  Q_ASSERT(_options.db); // w/o db we don't have dir menu actions
+  Q_ASSERT(_options.db);
 
   QAction* action = dynamic_cast<QAction*>(sender());
-  if (!action) return;
+  Q_ASSERT(action);
 
   QString dirPath = action->data().toString();
 
   if (dirPath == ";newfolder;")
-    dirPath =
-        QFileDialog::getExistingDirectory(this, "Choose Folder", _options.db->path());
+    dirPath = Theme::instance().getExistingDirectory("Move Folder: Choose Destination", _options.db->path(), this);
 
   if (dirPath.isEmpty()) return;
 
@@ -2692,4 +2678,8 @@ bool MediaGroupListWidget::selectItem(const Media& item) {
   setCurrentIndex(model()->index(groupIndex, 0));
 
   return true;
+}
+
+void MediaGroupListWidget::show() {
+  Theme::instance().showWindow(this, _maximized);
 }

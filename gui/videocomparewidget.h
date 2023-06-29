@@ -51,10 +51,11 @@ class VideoCompareWidget : public QWidget {
 
   ~VideoCompareWidget();
 
-  // force using show() to restore saved state
-  void show() { _maximized ? super::showMaximized() : super::showNormal(); }
-  void showMaximized() = delete;
+  void show();
+  void showFullscreen() = delete;
   void showNormal() = delete;
+  void showMaximized() = delete;
+  void showMinimized() = delete;
 
  private:
   void paintEvent(QPaintEvent* event) override;

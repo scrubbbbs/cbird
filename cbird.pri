@@ -74,7 +74,7 @@ win32 {
     INCLUDEPATH += windows/build-mxe/include/QuaZip-Qt6-1.4
     LIBS += -lquazip1-qt6
     
-    LIBS *= -lz -lpsapi
+    LIBS *= -lz -lpsapi -ldwmapi
 }
 
 unix {
