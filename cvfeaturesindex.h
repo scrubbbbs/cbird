@@ -60,9 +60,6 @@ class CvFeaturesIndex : public Index {
   void buildIndex(const cv::Mat& addedDescriptors);
   void loadIndex(const QString& path);
   void saveIndex(const QString& path);
-  QString indexFile(const QString& path) const {
-    return path + "/cvfeatures.mat";
-  }
 
   cv::Mat descriptorsForMediaId(uint32_t mediaId) const;
 

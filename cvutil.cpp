@@ -29,7 +29,6 @@
 
 using std::vector;
 
-
 // todo: new versions of load/save matrix that do not have to
 // read the whole file into memory before we can start reading/writing
 struct MatrixHeader {
@@ -152,25 +151,19 @@ void loadMatrix(const QString& path, cv::Mat& mat) {
 }
 
 void saveMatrix(const cv::Mat& mat, const QString& path) {
-  QFile f(path);
-  bool ok = f.open(QFile::WriteOnly|QFile::Truncate);
-  if (!ok)
-    qFatal("open failed: %d: %s", f.error(),
-           qPrintable(f.errorString()));
+  writeFileAtomically(path, [&mat](QFile& f) {
+    QByteArray data = matrixHeader(0, mat);
+    int len = f.write(data);
+    if (len != data.length())
+      throw f.errorString();
 
-  QByteArray data = matrixHeader(0, mat);
-  int len = f.write(data);
-  if (len != data.length())
-    qFatal("write failed (header): %d: %s", f.error(),
-           qPrintable(f.errorString()));
-
-  int rowLen = mat.cols * int(mat.elemSize());
-  for (int i = 0; i < mat.rows; ++i) {
-    len = f.write(mat.ptr<char>(i), rowLen);
-    if (len != rowLen)
-      qFatal("write failed (row): %d: %s",
-             f.error(), qPrintable(f.errorString()));
-  }
+    int rowLen = mat.cols * int(mat.elemSize());
+    for (int i = 0; i < mat.rows; ++i) {
+      len = f.write(mat.ptr<char>(i), rowLen);
+      if (len != rowLen)
+        throw f.errorString();
+    }
+  });
 }
 
 void showImage(const cv::Mat& img) {

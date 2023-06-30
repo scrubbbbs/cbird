@@ -29,6 +29,10 @@
 #error OpenCV 2.4.13+ is required
 #endif
 
+static QString cacheFile(const QString& cachePath) {
+  return cachePath + qq("/cvfeatures.touch");
+}
+
 CvFeaturesIndex::CvFeaturesIndex() {
   _id = SearchParams::AlgoCVFeatures;
   _index = nullptr;
@@ -163,7 +167,7 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
 
   qint64 then = QDateTime::currentMSecsSinceEpoch();
 
-  bool stale = DBHelper::isCacheFileStale(db, indexFile(cachePath));
+  bool stale = DBHelper::isCacheFileStale(db, cacheFile(cachePath));
 
   if (!_index || stale) {
     _descriptors = cv::Mat();
@@ -271,7 +275,7 @@ Index* CvFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
 void CvFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
   if (!_index) return;
 
-  if (DBHelper::isCacheFileStale(db, indexFile(cachePath)))
+  if (DBHelper::isCacheFileStale(db, cacheFile(cachePath)))
     saveIndex(cachePath);
 }
 
@@ -359,14 +363,19 @@ void CvFeaturesIndex::loadIndex(const QString& path) {
   qInfo("load=%.1fms build=%.2fms", nsLoad / 1000000.0, nsBuild / 1000000.0);
 }
 
-void CvFeaturesIndex::saveIndex(const QString& path) {  
-  qDebug() << "save descriptors";
-  saveMatrix(_descriptors, path + "/cvfeatures.mat");
-  qDebug() << "save ids";
-  saveMap(_idMap, path + "/cvfeatures_idmap.map");
-  qDebug() << "save indices";
-  saveMap(_indexMap, path + "/cvfeatures_indexmap.map");
-  qDebug() << "completed";
+void CvFeaturesIndex::saveIndex(const QString& cachePath) {
+  qInfo() << "<PL>descriptors...";
+  saveMatrix(_descriptors, cachePath + "/cvfeatures.mat");
+  qInfo() << "<PL>ids...        ";
+  saveMap(_idMap, cachePath + "/cvfeatures_idmap.map");
+  qInfo() << "<PL>indices...    ";
+  saveMap(_indexMap, cachePath + "/cvfeatures_indexmap.map");
+  qInfo() << "<PL>marker...     ";
+  writeFileAtomically(cacheFile(cachePath), [](QFile& f) {
+    QByteArray mark("this file indicates index was saved successfully");
+    if (mark.length() != f.write(mark))
+      throw f.errorString();
+  });
 }
 
 cv::Mat CvFeaturesIndex::descriptorsForMediaId(uint32_t mediaId) const {

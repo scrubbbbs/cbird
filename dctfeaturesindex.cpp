@@ -24,6 +24,10 @@
 #include "qtutil.h"
 #include "tree/hammingtree.h"
 
+static QString cacheFile(const QString& cachePath) {
+  return cachePath + qq("/dctfeatures.cache");
+}
+
 DctFeaturesIndex::DctFeaturesIndex() { init(); }
 
 DctFeaturesIndex::~DctFeaturesIndex() { unload(); }
@@ -103,10 +107,8 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
                             const QString& dataPath) {
   (void)dataPath;
 
-  const QString cacheFile = cachePath + "/dctfeatures.cache";
-  bool stale = false;
-
-  if (DBHelper::isCacheFileStale(db, cacheFile)) stale = true;
+  const QString path = cacheFile(cachePath);
+  bool stale = DBHelper::isCacheFileStale(db, path);
 
   if (_tree == nullptr || stale) {
     qint64 then = QDateTime::currentMSecsSinceEpoch();
@@ -116,7 +118,7 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
 
     if (!stale) {
       qDebug("from cache");
-      _tree->read(qUtf8Printable(cacheFile));
+      _tree->read(qUtf8Printable(path));
     } else {
       qDebug("from db");
 
@@ -156,7 +158,7 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
       }
       _tree->insert(values);
       values.clear();
-      _tree->write(qUtf8Printable(cacheFile));
+      save(db, cachePath);
     }
 
     HammingTree::Stats stats = _tree->stats();
@@ -170,12 +172,14 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
 void DctFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
   if (!isLoaded()) return;
 
-  const QString cacheFile = cachePath + "/dctfeatures.cache";
+  const QString path = cacheFile(cachePath);
 
-  if (DBHelper::isCacheFileStale(db, cacheFile)) {
-    qDebug() << "write" << cacheFile;
-    _tree->write(qUtf8Printable(cacheFile));
-  }
+  if (!DBHelper::isCacheFileStale(db, path)) return;
+
+  qInfo() << "save tree";
+  writeFileAtomically(path, [this](QFile& f) {
+    _tree->write(f);
+  });
 }
 
 void DctFeaturesIndex::add(const MediaGroup& media) {

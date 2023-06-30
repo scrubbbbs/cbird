@@ -28,7 +28,6 @@
 #include "../lib/jpegquality.h"
 #include "../database.h"
 #include "../env.h"
-#include "../ioutil.h"
 #include "../profile.h"
 #include "../qtutil.h"
 #include "../templatematcher.h"

@@ -143,13 +143,9 @@ class HammingTree {
   }
 
   /// Write tree to file
-  void write(const char* file) {
-    if (_root) {
-      FILE* fp = fopen(file, "wb");
-      Q_ASSERT(fp);
-      write(_root, fp);
-      fclose(fp);
-    }
+  void write(QFile& f) {
+    if (_root)
+      write(_root, f);
   }
 
   /// Print the tree structure
@@ -376,22 +372,33 @@ class HammingTree {
     return level;
   }
 
-  static void write(const Level* level, FILE* fp) {
-    if (level->left) {
-      bool isLeaf = false;
-      fwrite(&isLeaf, sizeof(isLeaf), 1, fp);
-      fwrite(&level->bit, sizeof(level->bit), 1, fp);
-      write(level->left, fp);
-      write(level->right, fp);
-    } else {
+  static void write(const Level* level, QFile& f) {
+
+    bool isLeaf = level->left == nullptr;
+    if (isLeaf) {
       // todo: compact entries that have been "removed" (index == 0)
-      bool isLeaf = true;
-      fwrite(&isLeaf, sizeof(isLeaf), 1, fp);
-      fwrite(&level->count, sizeof(level->count), 1, fp);
+      QByteArray data;
+      data.append((char*)&isLeaf, sizeof(isLeaf));
+      data.append((char*)&level->count, sizeof(level->count));
+
       if (level->count > 0) {
-        fwrite(level->indices, sizeof(*level->indices) * level->count, 1, fp);
-        fwrite(level->hashes, sizeof(*level->hashes) * level->count, 1, fp);
+        data.append((char*)level->indices,
+                    sizeof(*level->indices) * level->count);
+        data.append((char*)level->hashes,
+                    sizeof(*level->hashes) * level->count);
       }
+
+      if (Q_UNLIKELY(data.length() != f.write(data)))
+        throw f.errorString();
+    } else {
+      QByteArray data;
+      data.append((char*)&isLeaf, sizeof(isLeaf));
+      data.append((char*)&level->bit, sizeof(level->bit));
+      if (Q_UNLIKELY(data.length() != f.write(data)))
+        throw f.errorString();
+
+      write(level->left, f);
+      write(level->right, f);
     }
   }
 

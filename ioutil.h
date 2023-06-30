@@ -53,6 +53,10 @@ QString fullMd5(QIODevice& io);
 /// @note not very useful, full md5 is still needed usually
 QString sparseMd5(QIODevice& file);
 
+/// all-or-nothing file writing
+/// function must throw QString for errors
+void writeFileAtomically(const QString& path, const std::function<void(QFile&)>& fn);
+
 /// read binary blob
 void loadBinaryData(const QString& path, void** data, uint64_t* len,
                     bool compress);
@@ -63,17 +67,20 @@ void saveBinaryData(const void* data, uint64_t len, const QString& path,
 
 /// write std::map (assuming A,B are POD types)
 template <typename A, typename B>
-static void saveMap(const std::map<A, B>& map, const QString& file) {
-  QFile f(file);
-  if (!f.open(QFile::WriteOnly | QFile::Truncate))
-    qFatal("failed to open for writing: %s", qUtf8Printable(f.fileName()));
+static void saveMap(const std::map<A, B>& map, const QString& path) {
 
-  for (const auto& it : map) {
-    const A& key = it.first;
-    const B& value = it.second;
-    f.write(reinterpret_cast<const char*>(&key), sizeof(key));
-    f.write(reinterpret_cast<const char*>(&value), sizeof(value));
-  }
+  writeFileAtomically(path, [&map](QFile& f) {
+    for (const auto& it : map) {
+      const A& key = it.first;
+      const B& value = it.second;
+      auto sk = f.write(reinterpret_cast<const char*>(&key), sizeof(key));
+      if (sk != sizeof(key))
+        throw f.errorString();
+      auto sv = f.write(reinterpret_cast<const char*>(&value), sizeof(value));
+      if (sv != sizeof(value))
+        throw f.errorString();
+    }
+  });
 }
 
 /// read std::map

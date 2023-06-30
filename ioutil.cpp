@@ -120,13 +120,16 @@ void loadBinaryData(const QString& path, void** data, uint64_t* len,
 
 void saveBinaryData(const void* data, uint64_t len, const QString& path,
                     bool compress) {
-  QFile f(path);
-  bool isOpen = f.open(QFile::WriteOnly | QFile::Truncate);
-  Q_ASSERT(isOpen);
-  QByteArray b =
-      QByteArray::fromRawData(reinterpret_cast<const char*>(data), int(len));
-  if (compress) b = qCompress(b);
-  f.write(b);
+  writeFileAtomically(path, [data, len, compress](QFile& f) {
+    QByteArray b = QByteArray::fromRawData(
+        reinterpret_cast<const char*>(data), int(len));
+
+    if (compress) b = qCompress(b);
+
+    auto wrote = f.write(b);
+    if (wrote != b.length())
+      throw f.errorString();
+  });
 }
 
 QString fullMd5(QIODevice& io) {
@@ -202,3 +205,70 @@ QString sparseMd5(QIODevice& file) {
   return QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex();
 }
 #endif
+
+// this isn't useful unless we add signal handling
+// not going down that road yet due to platform differences
+#ifdef ABANDONED
+class Dangling {
+ public:
+  Dangling()  { _this=this; std::atexit(cleanup); }
+  ~Dangling() { _this=nullptr; }
+
+  static void cleanup() {
+    if (!_this) {
+      printf("Dangling: no this*, guess we are destructed\n");
+      return;
+    }
+    for (const QString& path : _this->_files) {
+      printf("Dangling: cleanup: %s\n", qUtf8Printable(path));
+      QFile::remove(path);
+    }
+    printf("no Dangles\n");
+  }
+
+  void add(const QString& path) {
+    QMutexLocker locker(&_mutex);
+    _files.insert(path);
+  }
+
+  void remove(const QString& path) {
+    _files.remove(path);
+  }
+
+ private:
+  QMutex _mutex;
+  QSet<QString>  _files;
+  static const Dangling* _this;
+
+};
+const Dangling* Dangling::_this = nullptr;
+#endif
+
+void writeFileAtomically(const QString& path,
+                         const std::function<void(QFile&)>& fn) {
+  //static auto* d = new Dangling;
+  try {
+    QTemporaryFile f(path);
+    if (!f.open())
+      throw f.errorString();
+
+    //const QString tmpName = f.fileName();
+    //d->add(tmpName);
+
+    fn(f);
+
+    if (QFile::exists(path) && !QFile::remove(path))
+      throw qq("failed to remove old file");
+
+    if (!f.rename(path))
+      throw f.errorString();
+
+    f.setAutoRemove(false);
+
+    //d->remove(tmpName);
+
+  } catch (const QString& error) {
+    qFatal("file system error writing %s: %s", qUtf8Printable(path),
+           qUtf8Printable(error));
+  }
+}
