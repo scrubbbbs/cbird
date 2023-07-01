@@ -163,6 +163,7 @@ CPU_STATE_NICE]; total = inUse + cpuInfo[(CPU_STATE_MAX * i) + CPU_STATE_IDLE];
 #include <mach/processor_info.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 class CPU {
  public:

@@ -24,10 +24,8 @@
 #define CBIRD_HOMEPAGE "https://github.com/scrubbbbs/cbird"
 #define INDEX_DIRNAME  "_index"
 
-// portability macros
 #ifdef __WIN32__
 #define _WIN32_WINNT _WIN32_WINNT_VISTA
-#define malloc_usable_size(x) _msize((x))
 #define __STDC_FORMAT_MACROS 1
 #endif
 

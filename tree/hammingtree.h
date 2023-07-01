@@ -21,7 +21,16 @@
 #pragma once
 #include "../hamm.h"
 
-#include <malloc.h>
+#if defined(Q_OS_DARWIN)
+#  include <malloc/malloc.h>
+#  define malloc_size(x) malloc_size((const void*)(x))
+#elif defined(Q_OS_WIN)
+#  include <malloc.h>
+#  define malloc_size(x) _msize((void*)(x))
+#else
+#  include <malloc.h>
+#  define malloc_size(x) malloc_usable_size((void*)(x))
+#endif
 #include <unordered_set>
 
 /**
@@ -207,8 +216,8 @@ class HammingTree {
       const index_t* indices = level->indices;
       const size_t count = level->count;
 
-      Q_ASSERT(malloc_usable_size((void*)hashes) >= count * sizeof(*hashes));
-      Q_ASSERT(malloc_usable_size((void*)indices) >= count * sizeof(*indices));
+      Q_ASSERT(malloc_size(hashes) >= count * sizeof(*hashes));
+      Q_ASSERT(malloc_size(indices) >= count * sizeof(*indices));
 
       for (size_t i = 0; i < count; i++) {
         distance_t distance = hamm64(hash, hashes[i]);
@@ -326,9 +335,9 @@ class HammingTree {
       Q_ASSERT(level->count);
       Q_ASSERT(level->indices);
       Q_ASSERT(level->hashes);
-      Q_ASSERT(malloc_usable_size((void*)level->hashes) >=
+      Q_ASSERT(malloc_size(level->hashes) >=
                level->count * sizeof(*level->hashes));
-      Q_ASSERT(malloc_usable_size((void*)level->indices) >=
+      Q_ASSERT(malloc_size(level->indices) >=
                level->count * sizeof(*level->indices));
 
       for (size_t i = 0; i < values.size(); i++) {
@@ -362,9 +371,9 @@ class HammingTree {
         level->hashes = (hash_t*)malloc(size);
         Q_ASSERT(fread(level->hashes, size, 1, fp) == 1);
 
-        Q_ASSERT(malloc_usable_size((void*)level->hashes) >=
+        Q_ASSERT(malloc_size(level->hashes) >=
                level->count * sizeof(*level->hashes));
-        Q_ASSERT(malloc_usable_size((void*)level->indices) >=
+        Q_ASSERT(malloc_size(level->indices) >=
                level->count * sizeof(*level->indices));
       }
     }

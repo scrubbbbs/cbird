@@ -774,7 +774,13 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addAction(settings, "Window/Close Window", Qt::CTRL | Qt::Key_W, this, SLOT(close()));
   WidgetHelper::addAction(settings, "Window/Close Window (Alt)", Qt::Key_Escape, this, SLOT(close()));
 
-  WidgetHelper::addAction(settings, "Window/Show Context Menu", Qt::CTRL | Qt::Key_Space, this, [this] {
+  // qt maps ctrl to meta; meta+ctrl is default for spotlight search
+#ifdef Q_OS_MACOS
+  auto key = Qt::META | Qt::Key_Space;
+#else
+  auto key = Qt::CTRL | Qt::Key_Space;
+#endif
+  WidgetHelper::addAction(settings, "Window/Show Context Menu", key, this, [this] {
     QPoint local = frameRect().center();
     auto items = selectedItems();
     QListWidgetItem* item = items.count() > 0 ? items.at(0) : nullptr;
@@ -1583,6 +1589,7 @@ void MediaGroupListWidget::loadRow(int row) {
 
   QString prefix = Media::greatestPathPrefix(group);
   prefix = prefix.mid(0, prefix.lastIndexOf('/') + 1);
+  setWindowFilePath(prefix);
 
   const QString homePath = QDir::homePath();
   if (prefix.startsWith(homePath)) {
@@ -1602,7 +1609,6 @@ void MediaGroupListWidget::loadRow(int row) {
                      .arg(prefix)
                      .arg(_list[row].count())
                      .arg(info));
-
   updateItems();
 
   if (selected.isValid()) restoreSelectedItem(selected);
@@ -2595,28 +2601,29 @@ void MediaGroupListWidget::restoreSelectedItem(const QModelIndex& last) {
 
 void MediaGroupListWidget::keyPressEvent(QKeyEvent* event) {
   // up/down key move to the next group if we're on the first/last row of the group
-  QModelIndexList list = selectedIndexes();
-  if (list.count() == 1 && event->modifiers() == 0)
-    switch (event->key()) {
-      case Qt::Key_Down: {
-        QModelIndex curr = list[0];
-        QModelIndex next = moveCursor(QAbstractItemView::MoveDown, Qt::NoModifier);
+  // note: Mac OS X will set KeypadModifier, so check for valid modifiers too
+  qDebug() << event->key() << event->modifiers();
+  const auto validModifiers = Qt::ShiftModifier | Qt::ControlModifier |
+                              Qt::AltModifier | Qt::MetaModifier;
 
-        if (curr == next && _currentRow + 1 < _list.count()) {
-          loadRow(_currentRow + 1);
-          return;
-        }
-      } break;
-      case Qt::Key_Up: {
-        QModelIndex curr = list[0];
-        QModelIndex next = moveCursor(QAbstractItemView::MoveUp, Qt::NoModifier);
+  bool modifiers = event->modifiers() & validModifiers;
+  const QModelIndexList list = selectedIndexes();
 
-        if (curr == next && _currentRow - 1 >= 0) {
-          loadRow(_currentRow - 1);
-          return;
-        }
-      }
+  if (list.count() == 1 && !modifiers) {
+    const QModelIndex& curr = list.first();
+    if (event->key() == Qt::Key_Down) {
+      QModelIndex next = moveCursor(QAbstractItemView::MoveDown, Qt::NoModifier);
+      if (curr == next && _currentRow + 1 < _list.count())
+        return loadRow(_currentRow + 1);
+    } else if (event->key() == Qt::Key_Up) {
+      qDebug() << "move cursor up";
+      QModelIndex next = moveCursor(QAbstractItemView::MoveUp, Qt::NoModifier);
+      if (curr == next && _currentRow - 1 >= 0)
+        return loadRow(_currentRow - 1);
     }
+  }
+
+  // note: super must also take event; moveCursor doesn't move the selection
   super::keyPressEvent(event);
 }
 

@@ -35,6 +35,7 @@ CC=$$(CC)
 DESTDIR=$$_PRO_FILE_PWD_
 BUILDDIR=_build
 
+macx: BUILDDIR=_mac
 win32: BUILDDIR=_win32
 
 MOC_DIR=$$BUILDDIR
@@ -49,6 +50,8 @@ DEFINES += QT_STRICT_ITERATORS  # find inefficient iterators
 # enable debug build/features, NOT CONFIG += debug
 # DEFINES += DEBUG
 # DEFINES += DEBUG_OPTIMIZED
+contains(BUILD, debug)          { DEFINES += DEBUG }
+contains(BUILD, debugOptimized) { DEFINES += DEBUG_OPTIMIZED }
 
 # private headers for DebugEventFilter
 QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
@@ -77,7 +80,24 @@ win32 {
     LIBS *= -lz -lpsapi -ldwmapi
 }
 
-unix {
+macx {
+    # homebrew configuration
+    QT *= dbus
+
+    INCLUDEPATH *= /usr/local/include
+    LIBS *= -L/usr/local/lib
+    LIBS *= -ltermcap
+
+    OPENCV_LIBS *= ml objdetect stitching superres videostab calib3d
+    OPENCV_LIBS *= features2d highgui video photo imgproc flann core
+    for (CVLIB, OPENCV_LIBS) {
+        LIBS *= -lopencv_$${CVLIB}
+    }
+
+    LIBS *= -lquazip1-qt6
+}
+
+unix:!macx {
     QT += dbus
 
     INCLUDEPATH *= /usr/local/include
@@ -93,7 +113,7 @@ unix {
     LIBS *= $$system("pkg-config opencv --libs")
 
     # quazip uses a funky versioned include directory...and now qt6 doesn't seem
-    # to distribute pkg-config files at all (Ubuntu 22.04) but they're still in the source build
+    # to distribute pkg-config files at all (Ubuntu 22.04) but they're still in the source build 
     # .. so we need to find quazip ourself
     # fixme: qt6 seems to have moved to cmake so throw all of this out..
     QUAZIP_MODULE=quazip1-qt6

@@ -67,13 +67,30 @@ chmod +x cbird-linux-0.5.0-x86_64.AppImage
 - If missing libOpenGL.so.0:
 	+ debian: apt install libopengl0
 	+ redhat: yum install libglvnd-opengl
-	+ arch: ?
 - Required packages: trash-cli
 - Optional packages: ocenaudio, kdenlive
 
-#### Windows 7+ 64-bit
+#### Windows 10 64-bit
 - Unzip the distribution file and run the program
 - Install helpers (optional): vlc, kdenlive
+
+##### Windows PowerShell
+
+Optional: for setting up shortcuts for cbird commands
+
+- Unzip into C:\ so you have C:\cbird\cbird.exe
+- Enable script execution
+	+ Run PowerShell as administrator
+	+ Enter ``Set-Execution-Policy RemoteSigned``
+	+ Close PowerShell
+- Create profile script (if you don't have one)
+	+ Run PowerShell normally
+	+ ``New-Item -Type File $PROFILE -Force``
+- Add cbird shortcut to profile
+	+ `OpenWith $PROFILE`
+	+ `Set-Alias -Name cbird -Value C:\cbird\cbird.exe`
+- Shortcut for pictures folder
+	+ `function cbird-pics {cbird -use $HOME\Pictures $args}`
 
 Running
 ========================
@@ -114,48 +131,51 @@ This is lacking documentation at the moment. But for now...
 Link Handling
 ======================
 
-If the tree contains links, they are handled when scanning for changes (`-update`), otherwise there is no special treatment.
+Links are ignored by default. To follow links, use the index option `-i.links 1`
 
-Links are ignored by default. To follow links use `-i.links 1`
+If the tree contains links, they are only considered when scanning for changes (`-update`), otherwise there is no special treatment. For example, deleting a link is the same as any other deletion operation.
 
-Duplicate inodes (hard links, symbolic links, etc) are not followed by default. If there are duplicate inodes in the tree, the first inode in breadth-first traversal is indexed. To follow all inodes, for example to find hard links, use `-i.dups 1`.
+Duplicate inodes regardless of type (hard link, symbolic link, etc) are not followed by default. If there are duplicate inodes in the tree, the first inode in breadth-first traversal is indexed. To follow all inodes, for example to find duplicate hard links, use `-i.dups 1`.
 
-The index stores relative paths (to the indexed/root path), this makes the index stable if the parent directory or mount point changes. If a path contains links, or is a link, it is stored as-is; which may be less stable than the link target. To store the resolved links instead, use `i.resolve 1`. This is only possible if the link target is a child of the index root.
+The index stores relative paths (to the indexed/root path), this makes the index stable if the parent directory changes. If a path contains links, or is a link, it is stored as-is; which may be less stable than the link target. To store the resolved links instead, use `i.resolve 1`. This is only possible if the link target is a child of the index root.
 
 Note that cbird does not not prevent broken links from occurring, the link check is temporary during the index update.
 
 Using Weeds
 ======================
-A "weed" is a deletion record of a near-duplicate, to allow fast deletion of files that reappear in the future. The record is a pair of file hashes, one is the weed/deleted file, the other is the original/retained file. When the weed shows up again, it can be deleted without inspection (`-nuke-weeds`)
+The "weed" feature allows fast deletion of deleted files that reappear in the future. The record is a pair of file hashes, one is the weed/deleted file, the other is the original/retained file. When the weed shows up again, it can be deleted without inspection (`-nuke-weeds`)
 
-Weeds are tracked when:
+## How weeds are tracked
 
-- two files visible in results view (matching pair, use `-p.mm 1` or `-p.eg 1` to force pairs)
-- neither file is a zip member
-- one of the files is deleted
+- Two files (matching pair) -- use `-p.mm 1` or `-p.eg 1` to force pairs
+- Neither file is a zip member
+- When one of the two files is deleted, it is marked as a weed of the first one
 
-When a weed's file hash reappears, it is only considered valid if the original still exists; this prevents undesired deletions. These "broken weeds" can be unset with the "Forget Weed" command.
+## Broken weeds
+
+When a weed's file hash reappears, it is only considered valid if the original/retained file still exists. If the original is no longer present, the association can be unset with the "Forget Weed" command.
 
 ```
 cbird -weeds -show # show all weeds
 cbird -nuke-weeds  # delete all weeds
-cbird -similar -with isWeed true # show weeds in search results
+cbird -similar -with isWeed true # isolate weeds in search results
 ```
 
 Environment Variables
 ======================
 There are a few for power users.
 
-- `CBIRD_SETTINGS_FILE` overrides the path to the global settings file
+- `CBIRD_SETTINGS_FILE` overrides the path to the settings file (`cbird -about` shows the default)
 - `CBIRD_TRASH_DIR` overrides the path to trash folder, do not use the system trash bin
 - `CBIRD_CONSOLE_WIDTH` set character width of terminal console (default auto-detect)
 - `CBIRD_COLOR_CONSOLE` use colored output even if console says no (default auto-detect)
 - `CBIRD_FORCE_COLORS` use colored output even if console is not detected
-- `CBIRD_LOG_TIMESTAMP` add time delta to log messages
+- `CBIRD_LOG_TIMESTAMP` add time delta to log mes	sages
 - `CBIRD_NO_BUNDLED_PROGS` do not use bundled programs like ffmpeg in the appimage****
 - `QT_IMAGE_ALLOC_LIMIT_MB` maximum memory allocation for image files (default 256)
 - `QT_SCALE_FACTOR` global scale factor for UI
-
+- `TMPDIR` override default directory for temporary files; used for opening zip file contents
+- 
 Search Algorithms
 ====================
 
@@ -299,7 +319,7 @@ Wish List
 
 ### GUI
 - barebones index/search gui
-- reveal in archive (shift+E ?)
+- open zip'd files/dirs directly where supported (dolphin/gwenview/nomacs?)
 - cv min/max filter 8-bit indexed
 - disable/enable relevant actions per selection/other state
 - show results in batches as they are being computed, for slow queries
@@ -308,12 +328,15 @@ Wish List
 - when deleting zip, remove all zip contents from viewer
 - ~~remember past deletions and optionally replay them in the future should they reappear (via traal)~~ added "weeds" feature v0.6
 - detect breaking of symlinks on delete/rename
-- visual indicator of the needle in group view
-- open zip'd files/dirs directly where supported (dolphin/gwenview/nomacs?)
+- visual indicator of the needle in group view, gets lost when rotating
 - side-by-side playback: fix narrow videos
 - video compare: use the same zoom/pan controls as image view
+- select-all, clear-selection
+- action groups to compact the context menu
+- option to force layout to use one row/column
 
 ### Misc
+- QString/char* sweep
 - method declaration sweep
 	- unecessary "virtual"
 	- "override"
@@ -348,6 +371,8 @@ Minor Bugs
 - MGLW: difference image clips white/light shades of grayscale images
 - Windows: white flash when MGLW is displayed
 - replace getenv() calls with qt version
+- weeds: when deleting a file, do something about broken weeds condition
+- weeds: add something to report and fix broken weed records, maybe part of -update
 
 Compiling
 =========================
@@ -371,14 +396,14 @@ This recipe is for Ubuntu 22.04 which includes a working FFmpeg and Qt6 version.
 sudo apt-get install git cmake  g++ qt6-base-dev qt6-base-private-dev libqt6core5compat6-dev libgl-dev libpng-dev libjpeg-turbo8-dev libtiff5-dev libopenexr-dev libexiv2-dev libncurses-dev
 ```
 
-#### 1.2 Compiling OpenCV 2.4
+#### 1.2 Compiling OpenCV
 
 ```
-wget https://github.com/opencv/opencv/archive/2.4.13.6.zip
-unzip 2.4.13.6.zip
+wget https://github.com/opencv/opencv/archive/2.4.13.7.zip
+unzip 2.4.13.7.zip
 mkdir build
 cd build
-cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 CMAKE_INSTALL_PREFIX=/usr/local ../opencv-2.4.13.6/
+cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF CMAKE_INSTALL_PREFIX=/usr/local ../opencv-2.4.13.7/
 make -j8
 sudo make install
 ```
@@ -398,25 +423,29 @@ sudo make install
 
 #### 1.4a Using System FFmpeg
 
+Note: not possible at the moment on 22.04, FFmpeg version is too old.
+
 ```
 apt-get install libavformat-dev libswscale-dev
 ```
 
 #### 1.4b Compiling FFmpeg
 
-The latest ffmpeg will not work due to deprecations, so checkout a working version. For GPU video decoding (Nvidia) we also need nv-codecs-headers and --enable-cuvid.
+The latest ffmpeg may not work due to deprecations, use the revision tag for a known good version. For GPU video decoding (Nvidia) we also need nv-codecs-headers and --enable-cuvid.
 
 With some additional flags (not shown here) you can get more codec support.
 
 ```
+sudo apt-get install nasm libfribidi-dev libsdl2-dev libharfbuzz-dev libfreetype-dev
+
 git clone https://github.com/FFmpeg/nv-codec-headers.git
-cd nv-codecs-headers
+cd nv-codec-headers
 make && sudo make install
 
 git clone https://github.com/FFmpeg/FFmpeg.git
 cd FFmpeg
-git checkout 358c0b
-./configure --enable-gpl --enable-ffplay --enable-cuvid --enable-libfontconfig --enable-libfreetype --enable-libfribidi  --disable-static --enable-shared
+git checkout 1bcb8a7338 # optional, last working version
+./configure --enable-gpl --enable-ffplay --enable-cuvid --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libharfbuzz  --disable-static --enable-shared
 make -j8
 sudo make install
 ```
@@ -436,13 +465,132 @@ sudo make install
 cbird -install
 ```
 
-## Compiling: AppImage
+## Compiling: Windows
+
+The Windows version is compiled using MXE cross-compiler tools from a Linux host. MXE has an apt repository for dependencies to make this easier, but it might not be available for your distro.
+
+#### 2.1 Get the prereqs
+
+```
+apt-get install lzip intltool wine64
+```
+
+#### 2.2a Install mxe from source
+
+```
+cd /path/to/stuff
+
+apt-get install libpcre3-dev
+git clone https://github.com/-mxe/mxe.git
+cd mxe
+make MXE_TARGETS='x86_64-w64-mingw32.shared' cc qt6-qtbase qt6-qt5compat exiv2 sdl2
+
+export MXE_DIR=/path/to/stuff/mxe
+```
+
+#### 2.2b Install mxe from repos
+
+```
+sudo apt-key adv \
+    --keyserver keyserver.ubuntu.com \
+    --recv-keys 86B72ED9 && \
+sudo add-apt-repository \
+    "deb [arch=amd64] https://pkg.mxe.cc/repos/apt `lsb_release -sc` main" && \
+sudo apt-get update
+
+apt install mxe-x86-64-w64-mingw32.shared-cc mxe-x86-64-w64-mingw32.shared-qt6-qtbase mxe-x86-64-w64-mingw32.shared-quazip mxe-x86-64-w64-mingw32.shared-ffmpeg mxe-x86-64-w64-mingw32.shared-exiv2
+
+export MXE_DIR=/usr/lib/mxe
+```
+
+#### 2.3 Compile OpenCV 2.4.x
+
+Once mxe is installed this is like the Linux build. The mxe.env script sets the shell environment to redirect build tools like qmake and cmake. Note this will break the Linux build in the current shell.
+
+```
+cd cbird
+source windows/mxe.env
+cd windows
+unzip <opencv-2.4.13.6.zip>
+mkdir build-opencv
+cd build-opencv
+cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_FAST_MATH=ON -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
+make -j8
+make install
+```
+
+#### 2.4 Cross-compile FFmpeg from source
+
+Optional, if mxe ffmpeg version is incompatible.
+
+```
+source windows/mxe.env
+git clone https://github.com/ffmpeg/FFmpeg.git
+cd FFmpeg
+./configure --cross-prefix=x86_64-w64-mingw32.shared- --enable-cross-compile --arch=x86_64 --target-os=mingw32 --enable-shared --disable-static --yasmexe=x86_64-w64-mingw32.shared-yasm --disable-debug --disable-pthreads --enable-w32threads --disable-doc --enable-gpl --enable-version3 --extra-libs='-mconsole' --extra-ldflags="-fstack-protector" --prefix=../build-mxe
+```
+
+#### 2.5 Cross-compile quazip from source
+
+Optional, if mxe quazip version incompatible.
+
+```
+source windows/mxe.env
+cd windows
+git clone https://github.com/stachenov/quazip
+cd quazip
+cmake -DQUAZIP_QT_MAJOR_VERSION=6 -DCMAKE_INSTALL_PREFIX=../build-mxe .
+make -j8
+make install
+```
+
+#### 2.6 Compile cbird
+
+```
+cd cbird
+source windows/mxe.env
+qmake
+make -j8
+make install
+```
+
+## Compiling: Mac OS X
+
+#### 3.1 Install Homebrew
+
+[Follow Instructions Here](https://brew.sh)
+
+#### 3.2 Install packages
+
+```
+brew install qt6 quazip ffmpeg exiv2
+```
+
+#### 3.3 Compile opencv
+
+See [Compiling opencv](#1.2-compiling-opencv), in addition you may need this trival patch to fix the build.
+
+Apply patch to fix the build ./cbird/mac/opencv.diff
+
+```
+cd opencv-2.xx.x
+patch -p1 < (..)/cbird/mac/opencv.diff
+```
+
+Add `-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0` to suppress link warnings.
+
+#### 3.4 Compile cbird
+
+See [Compiling cbird](#1.5-compiling-quazip)
+
+
+## Compiling: Linux AppImage
 
 The AppImage is built using linuxdeployqt on ubuntu 18.04 LTS.
 
-Using QEMU with cpu target "Westmere" to ensure binary compatibility with older systems.
+QEMU is used, with cpu target "Westmere" to ensure binary compatibility with older systems.
 
-#### apt packages
+#### 4.1 Packages
 
 ```
 sudo apt-get install bison build-essential gperf flex ruby python git mercurial nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev libncurses5-dev libfribidi-dev g++-8
@@ -450,7 +598,7 @@ sudo apt-get install bison build-essential gperf flex ruby python git mercurial 
 sudo apt-get install libxcb*-dev libx11*-dev libxext-dev libxfixes-dev libxi-dev libxcd*-dev libxkb*-dev libxrender-dev libfontconfig1-dev libfreetype6-dev libdrm-dev libegl1-mesa-dev libxcursor-dev libxcomposite-dev libxdamage-dev libxrandr-dev libfontconfig1-dev libxss-dev libevent-dev 
 ```
 
-#### environment
+#### 4.2 Environment
 
 ```
 # make sure we can't use g++7...incompatible with qt6
@@ -464,7 +612,7 @@ export CC=gcc-8
 export Qt6_DIR=/usr/local/Qt-6.4.
 ```
 
-#### cmake 3.24+
+#### 4.3 cmake 3.24+
 
 ```
 wget https://github.com/Kitware/CMake/archive/refs/tags/v3.25.0.tar.gz
@@ -476,7 +624,7 @@ sudo make install
 cmake --version
 ```
 
-#### qt base
+#### 4.4 Qt 6
 
 ```
 for x in qtbase qtimageformats qtwayland qt5compat; do
@@ -493,22 +641,11 @@ cmake --build . --parallel
 sudo cmake --install .
 ```
 
-#### qt submodules
-
-```
-for x in qtimageformats qtwayland qt5compat; do
-  (cd "$x-everywhere-src-6.4.0" && \
-   cmake . && \
-   cmake --build . --parallel && \
-   sudo cmake --install .)
-done
-```
-
-#### ffmpeg
+#### 4.5 FFmpeg
 
 See [Compiling FFmpeg](#1.4b-compiling-ffmpeg)
 
-#### opencv
+#### 4.6 opencv
 
 See [Compiling opencv](#1.2-compiling-opencv), except for cpu flags for compatibility.
 
@@ -516,11 +653,11 @@ See [Compiling opencv](#1.2-compiling-opencv), except for cpu flags for compatib
 cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_FAST_MATH=ON -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
 ```
 
-#### quazip
+#### 4.7 quazip
 
 See [Compiling quazip](#1.3-compiling-quazip)
 
-#### cbird
+#### 4.8 cbird
 
 "make appimage" should work if linuxdeployqt is in ~/Downloads/
 
@@ -530,60 +667,6 @@ $Qt6_DIR/bin/qmake -r
 make -j8
 make appimage
 ```
-
-## Compiling: Windows
-
-The Windows version is compiled using MXE cross-compiler tools from a Linux host. MXE has an apt repository for dependencies to make this easier, the steps are shown here.
-
-2.1 Get the prereqs
-
-```
-apt-get install lzip intltool wine64
-```
-
-2.2 Add mxe apt repository
-
-```
-sudo apt-key adv \
-    --keyserver keyserver.ubuntu.com \
-    --recv-keys 86B72ED9 && \
-sudo add-apt-repository \
-    "deb [arch=amd64] https://pkg.mxe.cc/repos/apt `lsb_release -sc` main" && \
-sudo apt-get update
-```
-
-2.3 Install mxe toolchain and libraries into /usr/lib/mxe
-
-```
-apt-get install mxe-x86-64-w64-mingw32.shared-cc mxe-x86-64-w64-mingw32.shared-qtbase mxe-x86-64-w64-mingw32.shared-quazip mxe-x86-64-w64-mingw32.shared-ffmpeg mxe-x86-64-w64-mingw32.shared-exiv2
-```
-
-2.4 Compile OpenCV 2.4.x
-
-Once mxe is installed this is like the Linux build. The mxe.env script sets the shell environment to redirect build tools like qmake and cmake. Note this will break the Linux build in the current shell.
-
-```
-cd cbird
-source windows/mxe.env
-cd windows
-unzip <opencv-2.4.13.6.zip>
-mkdir build-opencv
-cd build-opencv
-cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_FAST_MATH=ON -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
-make -j8
-make install
-```
-
-2.5 Compile cbird
-
-```
-cd cbird
-source windows/mxe.env
-qmake
-make -j8
-make install
-```
-
 
 Development
 =========================
@@ -615,6 +698,15 @@ make -f <test>.pro.make -j
 
 Release Notes
 =============
+
+#### v0.6.3
+- Image views are display-dpi aware (100%==actual pixels)
+- Use idle process priority when indexing
+- Update for current FFmpeg (60)
+- Much faster jpeg indexing using idct scaling
+- Sort filenames correctly when containing numbers
+- Functions: make chainable and consistent in all contexts
+- Mac OS X support
 
 #### v0.6.2
 

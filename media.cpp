@@ -600,6 +600,9 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
     args.pop_front();
 
     select = [=](const Media& m) {
+      if (m.type() != Media::TypeImage)
+        return QVariant();
+
       const QString cacheKey = m.path() + ":" + field + exifKeys.join(",");
       {
         QMutexLocker locker(cacheMutex);
@@ -917,7 +920,7 @@ void Media::playSideBySide(const Media& left, float seekLeft,
 
 void Media::openMedia(const Media& m, float seek) {
   if (m.type() == Media::TypeVideo) {
-#ifdef __APPLE__
+#if 0 // defined(__APPLE__)
     QString script = QString(
                          "tell application \"VLC\"\n"
                          "activate\n"
@@ -933,9 +936,7 @@ void Media::openMedia(const Media& m, float seek) {
     process.closeWriteChannel();
     process.waitForFinished(10000);
 #else
-    qDebug() << "open video: " << m.path();
-    DesktopHelper::openVideo(QFileInfo(m.path()).absoluteFilePath(),
-                             double(seek));
+    DesktopHelper::openVideo(QFileInfo(m.path()).absoluteFilePath(), double(seek));
 #endif
 
 #if 0
@@ -1042,7 +1043,9 @@ void Media::openMedia(const Media& m, float seek) {
       f.write(io->readAll());
       f.close(); // necessary because file was opened excl mode (win32)
 
-      QDesktopServices::openUrl(QUrl::fromLocalFile(temporaryName));
+      QUrl url = QUrl::fromLocalFile(temporaryName);
+      qDebug() << "QDesktopServices::openUrl" << url;
+      QDesktopServices::openUrl(url);
     }
     delete io;
   } else {
@@ -1053,8 +1056,8 @@ void Media::openMedia(const Media& m, float seek) {
       if (info.isFile()) path = info.absoluteFilePath();
       url = QUrl::fromLocalFile(path);
     }
-    qDebug() << "QDesktopServices::openUrl" << url;
 
+    qDebug() << "QDesktopServices::openUrl" << url;
     QDesktopServices::openUrl(url);
   }
 }

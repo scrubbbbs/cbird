@@ -9,8 +9,10 @@ QT *= widgets
 # use DEFINES += DEBUG for debugging
 CONFIG -= debug_and_release
 CONFIG -= debug_and_release_target
-CONFIG += release silent
+CONFIG += release
+CONFIG += silent
 
+contains(BUILD, verbose) { CONFIG -= silent }
 include(cbird.pri)
 
 CONFIG += precompile_header
@@ -50,9 +52,9 @@ git.commands = ./tools/gitversion.sh "$$OBJECTS_DIR" "$$VERSION"
 git.depends = .git
 QMAKE_EXTRA_TARGETS += git
 
+# input
 RESOURCES += cbird.qrc qdarkstyle/dark/darkstyle.qrc qdarkstyle/light/lightstyle.qrc
 
-# Input
 HEADERS += $$files(*.h)
 HEADERS += $$files(gui/*.h)
 HEADERS += $$files(lib/*.h)
@@ -62,11 +64,9 @@ SOURCES += $$files(*.cpp)
 SOURCES += $$files(gui/*.cpp)
 SOURCES += $$files(lib/*.cpp)
 
-!contains(DEFINES, ENABLE_CIMG):SOURCES -= cimgops.cpp
+!contains(DEFINES, ENABLE_CIMG): SOURCES -= cimgops.cpp
 
-DISTFILES += \
-    index.pri
-
+# make install hackery
 win32: {
     INSTALLS += target
     target.path = $$BUILDDIR/cbird
@@ -77,6 +77,9 @@ win32: {
 }
 
 unix: {
+    # qt bug: only strip if binary
+    QMAKE_STRIP = tools/strip.sh
+
     # installation location override
     PREFIX=/usr/local
     !equals('',$$(PREFIX)) {
@@ -92,20 +95,26 @@ unix: {
     INSTALLS += target
     target.path = $$PREFIX/bin
 
+    scripts.files = tools/ffplay-sbs tools/ff-compare-audio
+    scripts.path  = $$PREFIX/bin/
+    INSTALLS += scripts
+}
+
+macx: {
+
+}
+
+unix!macx: {
+
     desktop.files = cbird.desktop
     desktop.path = $$PREFIX/share/applications
 
     icon.files = cbird.svg
     icon.path = $$PREFIX/share/icons/hicolor/scalable
 
-    scripts.files = tools/ffplay-sbs tools/ff-compare-audio
-    scripts.path  = $$PREFIX/bin/
     #scripts.extra = echo extra
 
-    # qt bug: only strip if exe
-    QMAKE_STRIP = tools/strip.sh
-
-    INSTALLS += desktop icon scripts
+    INSTALLS += desktop icon
 
     # appimage target "make appimage"
     #   linuxdeployqt doesn't bring over qt6 plugins so add them manually
@@ -144,9 +153,12 @@ unix: {
     QMAKE_EXTRA_TARGETS += appimage
 }
 
-message("QT=" $$QT)
-message("CONFIG=" $$CONFIG)
-message("COMPILERS= $$QMAKE_CC $$QMAKE_CXX $$QMAKE_LINK")
-message("CXXFLAGS=" $$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE)
-message("INCLUDEPATH="  $$INCLUDEPATH)
-message("LIBS=" $$LIBS)
+contains(BUILD, verbose) {
+  message("QT=" $$QT)
+  message("CONFIG=" $$CONFIG)
+  message("COMPILERS= $$QMAKE_CC $$QMAKE_CXX $$QMAKE_LINK")
+  message("CXXFLAGS=" $$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE)
+  message("INCLUDEPATH="  $$INCLUDEPATH)
+  message("DEFINES=" $$DEFINES)
+  message("LIBS=" $$LIBS)
+}

@@ -256,14 +256,19 @@ bool DesktopHelper::chooseProgram(QStringList& args,
                                   const QString& settingsKey,
                                   const QString& dialogTitle,
                                   const QString& dialogText) {
+  if (options.count() == 1 && args.empty()) {
+    args = options.at(0).mid(1);
+    putSetting(settingsKey, args);
+  }
+
   if (args.empty() || (qApp->keyboardModifiers() & Qt::ControlModifier)) {
-    QStringList items;
+    QStringList optionLabels;
     for (auto& option : qAsConst(options))
-      items += option.first();
+      optionLabels += option.first();
 
     QWidget* parent = qApp->widgetAt(QCursor::pos());
 
-    QString program = items.at(0);
+    QString program = optionLabels.at(0);
     {
       QInputDialog dialog(parent);
       int result = Theme::instance().execInputDialog(
@@ -271,7 +276,7 @@ bool DesktopHelper::chooseProgram(QStringList& args,
           QString(dialogText) + "\n\n" +
               "To change this setting, press the Control "
               "key while selecting the action.",
-          program, items);
+          program, optionLabels);
       if (result != QInputDialog::Accepted)
         return false;
       program = dialog.textValue();
@@ -293,11 +298,13 @@ bool DesktopHelper::chooseProgram(QStringList& args,
 void DesktopHelper::revealPath(const QString& path) {
   QVector<QStringList> fileManagers;
 
-#ifdef Q_OS_WIN
-  fileManagers = {{"Default", "explorer", "/select,\"%1\""}};
+#if defined(Q_OS_WIN)
+  fileManagers = {{"Explorer", "explorer", "/select,\"%1\""}};
+#elif defined(Q_OS_MACOS)
+  fileManagers = {{"Finder", "open", "-R", "%1"}};
 #else
   fileManagers = {
-      {"Default", "DesktopServices"},
+      {"Desktop Default", "DesktopServices"},
       {"Dolphin (KDE)", "dolphin", "--select", "%1"},
       {"Gwenview", "gwenview", "%dirname(1)"},
       {"Krusader (Right Panel)", "DBus", "org.krusader",
@@ -313,7 +320,7 @@ void DesktopHelper::revealPath(const QString& path) {
   };
 #endif
   const QString settingsKey = qq("OpenFileLocation");
-  QStringList args = getSetting(settingsKey, fileManagers.at(0)).toStringList();
+  QStringList args = getSetting(settingsKey, {}).toStringList();
 
   if (!chooseProgram(
           args, fileManagers, settingsKey, qq("Choose File Manager"),
@@ -338,14 +345,14 @@ void DesktopHelper::openVideo(const QString& path, double seekSeconds) {
     QVector<QStringList> openVideoSeek;
 #ifdef Q_OS_WIN
     openVideoSeek = {
-        {"Default", "DesktopServices"},
+        {"Desktop Default (No Timestamp)", "DesktopServices"},
         {"VLC", "\"C:/Program Files (x86)/VideoLan/VLC/vlc.exe\"", "--start-time=%seek", "\"%1\""},
         {"FFplay", "ffplay.exe", "-ss", "%seek", "\"%1\""},
         {"MPlayer", "mplayer.exe", "-ss", "%seek", "\"%1\""},
         {"MPV", "mpv.exe", "--start=%seek", "\"%1\""}};
 #else
     openVideoSeek = {
-        {"Default", "DesktopServices"},
+        {"Desktop Default (No Timestamp)", "DesktopServices"},
         {"Celluloid", "celluloid", "--mpv-options=--start=%seek", "%1"},
         {"FFplay", "ffplay", "-ss", "%seek", "%1"},
         {"MPlayer", "mplayer", "-ss", "%seek", "%1"},

@@ -24,7 +24,7 @@ void Theme::setup() {
   const QString autoStyle  = qq("Auto");  // detect dark or light if possible, fallback to qt
 
   QString style;
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
   style = autoStyle;
 #else
   style = darkStyle;
@@ -33,9 +33,10 @@ void Theme::setup() {
   if (qEnvironmentVariableIsSet("CBIRD_STYLE"))
     style = qEnvironmentVariable("CBIRD_STYLE");
 
+  const Qt::ColorScheme hint = qApp->styleHints()->colorScheme();
+
   if (style == autoStyle) {
-    Qt::ColorScheme scheme = qApp->styleHints()->colorScheme();
-    switch (scheme) {
+    switch (hint) {
       case Qt::ColorScheme::Dark: style=darkStyle; break;
       case Qt::ColorScheme::Light: style=lightStyle; break;
       case Qt::ColorScheme::Unknown: style=noStyle; break;
@@ -61,7 +62,7 @@ void Theme::setup() {
   if (!styleSheet.isEmpty())
     qApp->setStyleSheet(styleSheet);
 
-  qDebug() << style << styleObject->metaObject()->className() << styleSheets;
+  qDebug() << hint << style << styleObject->metaObject()->className() << styleSheets;
 
   auto& theme = Theme::instance(); // construct Theme
 
