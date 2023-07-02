@@ -20,6 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #include "dctvideoindex.h"
 #include "tree/hammingtree.h"
+#include "../profile.h"
 
 DctVideoIndex::DctVideoIndex() {
   _id = SearchParams::AlgoVideo;
@@ -87,13 +88,13 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
   QMutexLocker locker(&_mutex);
 
   if (!_tree) {
-    HammingTree* tree = new HammingTree;
+    auto* tree = new HammingTree;
     for (size_t i = 0; i < _mediaId.size(); i++)
       insertHashes(int(i), tree, params);
 
     HammingTree::Stats stats = tree->stats();
-    qInfo("%d/%d hashes %.1f MB, nodes=%d maxHeight=%d skip=%d",
-          count(), stats.numValues, stats.memory / 1024.0 / 1024.0,
+    qInfo("%d/%d hashes %.1f MB, nodes=%d maxHeight=%d vtrim=%d",
+          int(tree->size()), stats.numValues, stats.memory / 1024.0 / 1024.0,
           stats.numNodes, stats.maxHeight, params.skipFrames);
 
     _tree = tree;
@@ -105,12 +106,15 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath,
   (void)cachePath;
   _dataPath = dataPath;
 
+  uint64_t start = nanoTime();
+
   QSqlQuery query(db);
   query.setForwardOnly(true);
-  if (!query.prepare("select id from media where type=:type order by id"))
-    SQL_FATAL(prepare);
+
+  if (!query.prepare("select id from media where type=:type order by id")) SQL_FATAL(prepare);
 
   query.bindValue(":type", Media::TypeVideo);
+
   if (!query.exec()) SQL_FATAL(exec);
 
   delete _tree;
@@ -121,10 +125,13 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath,
   while (query.next()) _mediaId.push_back(query.value(0).toUInt());
 
   if (_mediaId.size() > 0xFFFF)
-    qFatal("maximum of %d videos can be indexed", 0xFFFF);
+    qFatal("maximum of %d videos can be searched", 0xFFFF);
 
   // lazy load the tree since findFrame may not need it
   _isLoaded = true;
+
+  uint64_t end = nanoTime();
+  qInfo("%d videos, %dms", int(_mediaId.size()), int((end - start) / 1000000));
 }
 
 void DctVideoIndex::save(QSqlDatabase& db, const QString& cachePath) {

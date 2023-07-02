@@ -103,8 +103,7 @@ size_t DctFeaturesIndex::memoryUsage() const {
 
 bool DctFeaturesIndex::isLoaded() const { return _tree != nullptr; }
 
-void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
-                            const QString& dataPath) {
+void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) {
   (void)dataPath;
 
   const QString path = cacheFile(cachePath);
@@ -117,54 +116,62 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
     _tree = new HammingTree;
 
     if (!stale) {
-      qDebug("from cache");
+      qInfo("from cache");
       _tree->read(qUtf8Printable(path));
     } else {
-      qDebug("from db");
-
-      int numHashes = 0;
-      std::vector<HammingTree::Value> values;
-
       QSqlQuery query(db);
       query.setForwardOnly(true);
-      query.exec("select media_id,hashes from kphash");
+
+      // progress bar
+      if (!query.exec("select count(0) from kphash")) SQL_FATAL(exec);
+      if (!query.next()) SQL_FATAL(next);
+
+      const uint64_t rowCount = query.value(0).toLongLong();
+      uint64_t currentRow = 0;
+      const QLocale locale;
+      uint64_t numHashes = 0;                 // total hashes seen
+
+      std::vector<HammingTree::Value> chunk;  // build tree in chunks to reduce temp memory
+      const int minChunkSize = 100000;
+
+      if (!query.exec("select media_id,hashes from kphash"))
+        SQL_FATAL(exec);
 
       while (query.next()) {
+        currentRow++;
+
         const uint32_t mediaId = query.value(0).toUInt();
         const QByteArray hashes = query.value(1).toByteArray();
 
-        Q_ASSERT(size_t(hashes.size()) % sizeof(uint64_t) == 0);
+        if (size_t(hashes.size()) % sizeof(uint64_t) != 0) {
+          qCritical() << "sql: ignoring invalid data @ media_id=" << mediaId;
+          continue;
+        }
 
-        const uint64_t* ptr =
-            reinterpret_cast<const uint64_t*>(hashes.constData());
+        const uint64_t* ptr = reinterpret_cast<const uint64_t*>(hashes.constData());
         const int len = int(size_t(hashes.size()) / sizeof(uint64_t));
 
-        for (int j = 0; j < len; j++)
-          values.push_back(HammingTree::Value(mediaId, ptr[j]));
+        for (int j = 0; j < len; j++) chunk.push_back(HammingTree::Value(mediaId, ptr[j]));
 
         numHashes += len;
 
-        // build index incrementally to minimize the max memory required.
-        // todo: the batch size seems to have an effect on how well the tree
-        // works
-        if (values.size() > 100000) {
-          _tree->insert(values);
-          values.clear();
+        if (chunk.size() >= minChunkSize) {  // todo: this size seems to have some small effect
+          _tree->insert(chunk);
+          chunk.clear();  // no reallocation
 
-          qInfo("sql query:<PL> %d %dms %.2fGB",
-                 numHashes, int(QDateTime::currentMSecsSinceEpoch() - then),
-                 numHashes* int(sizeof(HammingTree::Value)) / 1000000000.0);
+          qInfo("sql query:<PL> %d%% %s hashes", int(currentRow * 100 / rowCount),
+                qPrintable(locale.toString(numHashes)));
         }
       }
-      _tree->insert(values);
-      values.clear();
+      _tree->insert(chunk);
+      chunk.clear();
       save(db, cachePath);
     }
 
     HammingTree::Stats stats = _tree->stats();
 
-    qInfo("%dKhash, height=%d nodes=%d %dMB %dms", stats.numValues / 1000,
-          stats.maxHeight, stats.numNodes, int(stats.memory / 1000000),
+    qInfo("%dKhash, height=%d nodes=%d %dMB %dms", stats.numValues / 1000, stats.maxHeight,
+          stats.numNodes, int(stats.memory / 1000000),
           int(QDateTime::currentMSecsSinceEpoch() - then));
   }
 }

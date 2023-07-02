@@ -123,8 +123,8 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath,
   QSqlQuery query(db);
 
   // item count for memory allocation
-  query.exec("select count(media_id) from color");
-  if (!query.first()) qFatal("query error");
+  if (!query.exec("select count(0) from color")) SQL_FATAL(exec);
+  if (!query.next()) SQL_FATAL(next);
 
   _count = query.value(0).toInt();
 
@@ -138,12 +138,13 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath,
   _mediaId = strict_malloc(_mediaId, _count);
 
   query.exec("select media_id,color_desc from color");
-  if (!query.first()) qFatal("query error");
+  if (!query.first()) SQL_FATAL(exec);
 
+  QLocale locale;
   int i = 0;
   int empty = 0;
   do {
-    // database could be written between our two queries
+    // buffer overflow guard
     if (i >= _count) {
       qCritical() << "database modified during loading:" << (i-_count+1) << "new records ignored";
       break;
@@ -163,7 +164,10 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath,
     }
     i++;
 
-    if (i % 20000 == 0) qInfo("sql query:<PL>%d", i);
+    if (i % 20000 == 0)
+      qInfo("sql query:<PL> %d%% %s descriptors",
+            int(uint64_t(i) * 100 / _count),
+            qPrintable(locale.toString(i)));
 
   } while (query.next());
 

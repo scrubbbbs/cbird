@@ -2,18 +2,15 @@
 
 About cbird
 =========================
-cbird is a command-line program for managing a media collection, with focus on Content-Based Image Retrieval (Computer Vision) methods for finding duplicates.
+cbird is a command-line program for finding duplicate images and videos that  cannot be found by general methods such as file hashing. Rather, cbird uses Content-Based Image Recognition (CBIR) methods that consider the content of files to compute comparable features and "perceptual" hash codes.
 
 The main features are:
 
-- Command-line interface
-- Threaded C++ architecture, helps with large collections
-- Portable, local, per-collection database 
-- MD5 hashing for duplicates, bitrot detection
-- Perceptual search for images and video
-- Renaming and sorting tools
-- Efficient GUI for duplicate evaluation & removal
-- Comparative analysis tools
+- CBIR image and video search
+- Command-line interface to customize a workflow
+- Fast C++ design helps with large collections
+- Per-collection database is stable when file system changes
+- Efficient graphical interface for duplicate evaluation
 - Zip file support
 
 Use Cases
@@ -29,22 +26,22 @@ Use Cases
 	- Align and flip between matching pairs
 	- Zoom-in to examine details
 	- False-color visualization of differences
-	- No-reference quality metric
-	- Jpeg quality setting estimate
+	- No-reference subjective quality estimate
+	- Jpeg compression quality estimate
 	- Align and compare videos side-by-side or stacked
-- General management
+- File management
 	- Sort/rename based on similarity
 	- Rename using regular expressions
 
 Format Support
 =========================
-Available formats will vary based on the configuration of Qt and FFmpeg.
+Common formats are supported, as well as many obscure formats. The available formats will ultimately vary based on the configuration of Qt and FFmpeg.
 
 `cbird -about` lists the image and video extensions. Note that video extensions are not checked against FFmpeg at runtime, so they could be unavailable.
 
 Additionally, zip files are supported for images.
 
-To get the most formats you will need to compile FFmpeg and Qt with the necessary options. Additional image formats are available with [kimageformats](https://invent.kde.org/frameworks/kimageformats).
+To get the most formats you will need to compile FFmpeg and Qt with the necessary options. Additional image formats are also available with [kimageformats](https://invent.kde.org/frameworks/kimageformats).
 
 License
 =========================
@@ -53,15 +50,15 @@ cbird is free software under the GPL v2. See COPYING file for details.
 Installing
 =========================
 
-### Binary Packages
+### Download
 
-	https://github.com/scrubbbbs/cbird/releases
+[Download binaries on Github](https://github.com/scrubbbbs/cbird/releases)
 
 #### Linux AppImage 64-bit:
 
 ```
 chmod +x cbird-linux-0.5.0-x86_64.AppImage
-./cbird-linux-0.5.0-AppImage -install # install to /usr/local
+./cbird-linux-0.5.0-AppImage -install # optional install to /usr/local
 ```
 
 - If missing libOpenGL.so.0:
@@ -76,7 +73,7 @@ chmod +x cbird-linux-0.5.0-x86_64.AppImage
 
 ##### Windows PowerShell
 
-Optional: for setting up shortcuts for cbird commands
+Optional: for setting up shortcuts to cbird commands
 
 - Unzip into C:\ so you have C:\cbird\cbird.exe
 - Enable script execution
@@ -107,15 +104,15 @@ Running
 
 `cbird -update`
 
-#### Exact duplicates
+#### MD5 Checksums
 
 `cbird -use <path> -dups -show`
 
-#### Find near duplicates, medium threshold
+#### Similarity, medium threshold
 
 `cbird -use <path> -similar -show`
 
-#### Find near duplicates, lowest threshold
+#### Similarity, lowest threshold
 
 `cbird -use <path> -p.dht 1 -similar -show`
 
@@ -133,27 +130,27 @@ Link Handling
 
 Links are ignored by default. To follow links, use the index option `-i.links 1`
 
-If the tree contains links, they are only considered when scanning for changes (`-update`), otherwise there is no special treatment. For example, deleting a link is the same as any other deletion operation.
+If the search path contains links, they are only considered when scanning for changes (`-update`), otherwise there is no special treatment. For example, deleting a link is the same as any other deletion operation.
 
-Duplicate inodes regardless of type (hard link, symbolic link, etc) are not followed by default. If there are duplicate inodes in the tree, the first inode in breadth-first traversal is indexed. To follow all inodes, for example to find duplicate hard links, use `-i.dups 1`.
+Duplicate inodes are not followed by default. If there are duplicate inodes in the tree, the first inode in breadth-first traversal is indexed. To follow all inodes, for example to find duplicate hard links, use `-i.dups 1`.
 
-The index stores relative paths (to the indexed/root path), this makes the index stable if the parent directory changes. If a path contains links, or is a link, it is stored as-is; which may be less stable than the link target. To store the resolved links instead, use `i.resolve 1`. This is only possible if the link target is a child of the index root.
+The index stores relative paths (to the indexed/root path), this makes the index stable if the parent directory changes. However, if a path contains links, or is a link itself, it is stored as-is; which may be less stable than the storing the link target. To store the resolved links instead, use `i.resolve 1`. This is only possible if the link target is a child of the index root.
 
 Note that cbird does not not prevent broken links from occurring, the link check is temporary during the index update.
 
 Using Weeds
 ======================
-The "weed" feature allows fast deletion of deleted files that reappear in the future. The record is a pair of file hashes, one is the weed/deleted file, the other is the original/retained file. When the weed shows up again, it can be deleted without inspection (`-nuke-weeds`)
+The "weed" feature allows fast deletion of deleted files that reappear in the future. A weed record is a pair of file hashes, one is the weed/deleted file, the other is the original/retained file. When the weed shows up again, it can be deleted without inspection (`-nuke-weeds`)
 
-## How weeds are tracked
+## How weeds are recorded
 
-- Two files (matching pair) -- use `-p.mm 1` or `-p.eg 1` to force pairs
-- Neither file is a zip member
-- When one of the two files is deleted, it is marked as a weed of the first one
+1. Two files are examined (matching pair) -- use `-p.mm 1` or `-p.eg 1` to force pairs
+2. Neither file is a zip member
+3. When one of the two files is deleted, it is marked as a weed of the first one
 
 ## Broken weeds
 
-When a weed's file hash reappears, it is only considered valid if the original/retained file still exists. If the original is no longer present, the association can be unset with the "Forget Weed" command.
+There is nothing to prevent deletion of the original/retained file, so the weed record can become invalidated. If the original is no longer present, the association can be unset with the "Forget Weed" command.
 
 ```
 cbird -weeds -show # show all weeds
@@ -175,27 +172,28 @@ There are a few for power users.
 - `QT_IMAGE_ALLOC_LIMIT_MB` maximum memory allocation for image files (default 256)
 - `QT_SCALE_FACTOR` global scale factor for UI
 - `TMPDIR` override default directory for temporary files; used for opening zip file contents
-- 
+
 Search Algorithms
 ====================
+There are several algorithms, some are better than others depending on the situation.
 
 #### Discrete Cosine Transform (DCT) Hash (`-p.alg dct`)
 Uses one 64-bit hash per image, similar to pHash. Very fast, good for rescaled images and lightly cropped images.
 
 #### DCT Features `-p.alg fdct`
-Uses DCT hashes around features, up to 400 per image. Good for heavily cropped images, much faster than ORB.
+Uses DCT hashes centered on scale/rotation invariant features, up to 400 per image. Good for heavily cropped images, much faster than ORB.
 
-#### Oriented Rotated Brief (ORB) Features `-p.alg orb`
-Uses 256-bit scale/rotation invariant feature descriptors, up to 400 per image, and searches using FLANN-based matcher. Good for rotated and cropped images, but slow.
+#### Oriented Rotated Brief (ORB) Descriptors `-p.alg orb`
+Uses 256-bit scale/rotation invariant feature descriptors, up to 400 per image. Good for rotated and cropped images, but slow.
 
 #### Color Histogram `-p.alg color`
 Uses histogram of up to 32 colors (256-byte) per image. Sometimes works when all else fails. This is the only algorithm that finds reflected images, others require `-p.refl` and must rehash the reflected image (very slow)
 
 #### DCT Video Index `-p.alg video`
-Uses DCT hashes of video frames, with compression of nearby similar hashes. Frames are pre-processed to remove letterboxing. Compatible with image hashes (fdct) for finding video thumbnails.
+Uses DCT hashes of video frames. Frames are preprocessed to remove letterboxing. Can also find video thumbnails in the source video since they have the same hash type.
 
 #### Template Matcher `-p.tm 1`
-Technically a results filter and not search algorithm. Helps  discard poor results. Uses up to 1000 features to find an affine transform between two images, then uses DCT hash of the mapped region to validate. Since it requires decompressing the source/destination image it is extremely slow. It can help to reduce the maximum number of matches per image with `-p.mm #`
+Filters results with a high resolution secondary matcher that finds the exact overlap of an image pair. This is most useful to drop poor matches from fdct and orb. Since it requires decompressing the source/destination image it is extremely slow. It can help to reduce the maximum number of matches per image with `-p.mm #`
 
 How it Performs
 ====================
@@ -204,7 +202,7 @@ How it Performs
 
 Indexing happens when `-update` is used. It can take a while the first time, however subsequent updates only consider changes.
 
-Unused algorithms can be disabled to speed up indexing or save space. If you have large images, you may as well enable all algorithms because jpeg decompression dominates.
+Unused algorithms can be disabled to speed up indexing or save space. If you have large images, you may as well enable all algorithms because image decompression dominates the process.
 
 #### Table 1: Indexing 1000 6000px images, 8 GB, SSD
 
@@ -219,7 +217,7 @@ Arguments | Note | Time (seconds)
 
 ### Searching
 
-Search speed varies with algorithm. The OpenCV search tree for ORB is quite slow compared to others. It is better suited for `-similar-to` to search a subset.
+Search speed varies with algorithm. The OpenCV search tree for ORB is quite slow compared to others. It is better suited for `-similar-to` to search a smaller subset suspected to have duplicates.
 
 #### Table 2: Searching 1000 images
 
@@ -246,7 +244,7 @@ Arguments | Note | Rate (Img/s) | Time (minutes)
 
 For N^2 search (`-similar`) only DCT hash is practical, and it degrades exponentially as the threshold increases.
 
-#### Table 4: Searching 500k images:
+#### Table 4: Searching 500k images
 
 Arguments | Note | Time (s)
 -----|------|------ 
@@ -260,16 +258,17 @@ For K*N (K needle images, N haystack images) the slower algorithms can be practi
 
 `cbird -p.alg fdct -select-sql "select * from media limit 10"  -similar-to @`
 
-#### Table 5: Searching for 10 images in 500k dataset:
+#### Table 5: Searching for 10 images in 500k dataset
 
 Arguments | Note | Time (s)
 -----|------|------ 
 -p.alg dct -p.dht 2  | dct, threshold 2           | 1.3
 -p.alg fdct -p.dht 7 | dct-features, threshold 7  | 1.5
 -p.alg orb           | orb-features               | 84.4**
--p.alg color         | colors                     | --
+-p.alg color         | colors                     | dnf***
 
-**OpenCV search tree is not cached on disk, slow to start
+**OpenCV search tree only partially cached on disk, slow to start
+***Color search lacks a search tree, not usable for large sets
 
 Wish List
 =========================

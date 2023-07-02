@@ -100,7 +100,7 @@ class SearchParams : public Params {
 
   //QVector<int> resultTypes{Media::TypeImage,Media::TypeVideo};  // list of Media::Type to include in result set
   //QVector<int> queryTypes{Media::TypeImage};   // list of Media::Type to include in query set
-  int queryTypes=FlagImage;
+  int queryTypes = FlagImage;
 
   int skipFrames = 300;
   //int skipFramesIn = 300;    // video search: ignore N frames at start of video (intros)

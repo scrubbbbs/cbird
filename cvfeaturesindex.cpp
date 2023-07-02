@@ -161,8 +161,7 @@ void CvFeaturesIndex::remove(const QVector<int>& ids) {
   }
 }
 
-void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
-                           const QString& dataPath) {
+void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) {
   (void)dataPath;
 
   qint64 then = QDateTime::currentMSecsSinceEpoch();
@@ -180,17 +179,26 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
     } else {
       QSqlQuery query(db);
       query.setForwardOnly(true);
-      query.exec(
-          "select media_id,rows,cols,type,stride,data from matrix order by "
-          "media_id");
 
-      size_t nextProgress = 50000;
-      uint32_t numDesc = 0;
+      if (!query.exec("select count(0) from matrix")) SQL_FATAL(exec);
+      if (!query.next()) SQL_FATAL(next);
 
-      size_t i = 0;
-      uint32_t lastId = 0;
+      const uint64_t rowCount = query.value(0).toLongLong();
+      uint64_t currentRow = 0;
+      const QLocale locale;
+
+      if (!query.exec("select media_id,rows,cols,type,stride,data from matrix order by media_id"))
+        SQL_FATAL(exec)
+
+      const int progressStep = 50000; // descriptors
+      uint64_t nextProgress = progressStep;
+
+      uint32_t numDesc = 0; // descriptor position of id
+      uint32_t lastId = 0;  // verify sequential and unique id
 
       while (query.next()) {
+        currentRow++;
+
         uint32_t id;
         int rows, cols, type, stride;
         QByteArray data;
@@ -206,10 +214,11 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
 
         loadMatrix(rows, cols, type, stride, data, desc);
 
-        Q_ASSERT(lastId < id);  // must be true for _idMap to work
-        Q_ASSERT(desc.type() == type);
-        Q_ASSERT(desc.size().width == cols);
-        Q_ASSERT(desc.size().height == rows);
+        if (lastId >= id ||  // must be true for _idMap to work
+            desc.type() != type || desc.size().width != cols || desc.size().height != rows) {
+          qCritical() << "sql: ignoring invalid data @ media_id=" << id;
+          continue;
+        }
 
         // smoosh all features into one big cv::Mat
         for (int j = 0; j < desc.rows; j++) _descriptors.push_back(desc.row(j));
@@ -218,18 +227,18 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
         _idMap[id] = numDesc;
         _indexMap[numDesc] = id;
 
-        i++;
-        numDesc += uint32_t(desc.rows);
+        numDesc += desc.rows;
         lastId = id;
 
         if (numDesc > nextProgress) {
-          qInfo("sql query:<PL>%d", int(numDesc));
-          nextProgress = numDesc + 50000;
+          qInfo("sql query:<PL> %d%% %s descriptors", int(currentRow * 100 / rowCount),
+                qPrintable(locale.toString(numDesc)));
+          nextProgress = numDesc + progressStep;
         }
       }
       Q_ASSERT(_descriptors.rows == int(numDesc));
 
-      // build the actual flann index
+      // build flann index
       buildIndex(cv::Mat());
 
       saveIndex(cachePath);
@@ -240,9 +249,8 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath,
     _indexMap[uint32_t(_descriptors.rows)] = 0;
   }
 
-  qInfo("%d descriptors %dms %dMB", _descriptors.rows,
-        int(QDateTime::currentMSecsSinceEpoch() - then),
-        int(memoryUsage() / 1000000));
+  qInfo("%d descriptors %dMB %dms", _descriptors.rows, int(memoryUsage() / 1000000),
+        int(QDateTime::currentMSecsSinceEpoch() - then));
 }
 
 Index* CvFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
@@ -314,10 +322,8 @@ void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
 
   int indexKb = tables * numBuckets * descPerBucket * descSize / 1024;
 
-  qInfo(
-      "descSize=%d keySize=%d buckets=%d descriptors/bucket=%d kb/bucket=%d "
-      "indexKb=%d",
-      descSize, keySize, numBuckets, descPerBucket, kbPerBucket, indexKb);
+  qDebug("descSize=%d keySize=%d buckets=%d descriptors/bucket=%d kb/bucket=%d indexKb=%d",
+         descSize, keySize, numBuckets, descPerBucket, kbPerBucket, indexKb);
 
   cv::flann::LshIndexParams indexParams(tables, keySize, 1);
 
@@ -335,14 +341,14 @@ void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
       int upper = std::min(i + 10000, _descriptors.rows);
       _index->build(_descriptors.rowRange(0, upper),
                     _descriptors.rowRange(i, upper), indexParams);
-      qInfo("adding descriptors:<PL> %d / %d", i, _descriptors.rows);
+      qInfo("adding descriptors:<PL> %d%%", int(int64_t(i)*100/_descriptors.rows));
     }
   }
 
   ms = QDateTime::currentMSecsSinceEpoch() - ms;
 
-  qInfo("%d descriptors, %d added, %dms %.2fus/desc", _descriptors.rows,
-        addedDescriptors.rows, int(ms), ms * 1000.0 / _descriptors.rows);
+  qDebug("%d descriptors, %d added, %dms %.2fus/desc", _descriptors.rows,
+         addedDescriptors.rows, int(ms), ms * 1000.0 / _descriptors.rows);
 }
 
 void CvFeaturesIndex::loadIndex(const QString& path) {
@@ -360,7 +366,7 @@ void CvFeaturesIndex::loadIndex(const QString& path) {
   now = nanoTime();
   uint64_t nsBuild = now - then;
 
-  qInfo("load=%.1fms build=%.2fms", nsLoad / 1000000.0, nsBuild / 1000000.0);
+  qDebug("load=%.1fms build=%.2fms", nsLoad / 1000000.0, nsBuild / 1000000.0);
 }
 
 void CvFeaturesIndex::saveIndex(const QString& cachePath) {
@@ -376,6 +382,7 @@ void CvFeaturesIndex::saveIndex(const QString& cachePath) {
     if (mark.length() != f.write(mark))
       throw f.errorString();
   });
+  qInfo() << "<PL>complete      ";
 }
 
 cv::Mat CvFeaturesIndex::descriptorsForMediaId(uint32_t mediaId) const {

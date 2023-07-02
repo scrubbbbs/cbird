@@ -79,8 +79,15 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath,
 
     {
       QSqlQuery query(db);
-
       query.setForwardOnly(true);
+
+      // progress bar
+      if (!query.exec("select count(0) from media")) SQL_FATAL(exec);
+      if (!query.next()) SQL_FATAL(next);
+
+      const uint64_t rowCount = query.value(0).toLongLong();
+      const QLocale locale;
+
       if (!query.exec(hashQuery())) SQL_FATAL(exec);
 
       if (!query.first()) qInfo("empty database");
@@ -96,7 +103,8 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath,
           _hashes = strict_realloc(_hashes, capacity);
           _mediaId = strict_realloc(_mediaId, capacity);
 
-          qInfo("sql query:<PL> %d", i);
+          qInfo("sql query:<PL> %d%% %s hashes", int(uint64_t(i) * 100 / rowCount),
+                qPrintable(locale.toString(i)));
         }
 
         _mediaId[i] = query.value(0).toUInt();
@@ -106,14 +114,12 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath,
       } while (query.next());
 
       _numHashes = i;
-
-      qInfo("sql query:<PL> %d", i);
     }
+
+    buildTree();
 
     uint64_t end = nanoTime();
     qInfo("%d hashes, %dms", _numHashes, int((end - start) / 1000000));
-
-    buildTree();
   }
 }
 

@@ -1426,6 +1426,7 @@ ShadeWidget::ShadeWidget(QWidget *parent) : QLabel(parent) {
 }
 
 int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const QStringView& b) {
+  // fixme: this can be sped up massively by eliminating the regexps
   static const QRegularExpression numberStartExp(qq("[0-9]"));
 
   // non-digit not preceded by digit or .
