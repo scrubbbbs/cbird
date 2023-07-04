@@ -686,10 +686,10 @@ void TestCvUtil::testColorDescriptor() {
   cv::Mat img2 = cv::imread(qCString(file2));
 
   ColorDescriptor desc1, desc2;
-  colorDescriptor(img1, desc1);
-  colorDescriptor(img2, desc2);
+  ColorDescriptor::create(img1, desc1);
+  ColorDescriptor::create(img2, desc2);
 
-  float dist = colorDistance(desc1, desc2);
+  float dist = ColorDescriptor::distance(desc1, desc2);
   QCOMPARE(int(dist), distance);
 }
 

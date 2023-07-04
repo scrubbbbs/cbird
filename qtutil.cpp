@@ -257,6 +257,7 @@ bool DesktopHelper::chooseProgram(QStringList& args, const QVector<QStringList>&
     QWidget* parent = qApp->widgetAt(QCursor::pos());
 
     QString program = optionLabels.at(0);
+#ifndef QT_TESTLIB_LIB // remove Theme dependency in unit tests
     {
       QInputDialog dialog(parent);
       int result =
@@ -268,6 +269,7 @@ bool DesktopHelper::chooseProgram(QStringList& args, const QVector<QStringList>&
       if (result != QInputDialog::Accepted) return false;
       program = dialog.textValue();
     }
+#endif
 
     for (auto& option : qAsConst(options))
       if (option.first() == program) {

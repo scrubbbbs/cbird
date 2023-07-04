@@ -33,7 +33,8 @@ FILES_INDEX = index ioutil media videocontext cvutil qtutil database scanner tem
 # deps for gui
 LIBS_GUI = $$LIBS_CIMG
 FILES_GUI = gui/mediagrouplistwidget gui/mediafolderlistwidget env \
-    lib/jpegquality gui/videocomparewidget cimgops nleutil gui/cropwidget
+    lib/jpegquality gui/videocomparewidget cimgops nleutil gui/cropwidget \
+    gui/theme
 
 # using this hack to share precomp header with all targets,
 # instead of PRECOMPILED_HEADER, so it is only compiled once
