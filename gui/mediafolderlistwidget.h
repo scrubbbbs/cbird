@@ -59,5 +59,5 @@ class MediaFolderListWidget : public QListWidget {
   MediaWidgetOptions _options;
   QPoint _hoverPos;
   QTimer* _hoverTimer = nullptr;
-  bool   _hovering = false;
+  bool _hovering = false;
 };

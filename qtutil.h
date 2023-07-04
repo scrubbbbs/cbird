@@ -34,8 +34,8 @@ class DesktopHelper {
   static void compareAudio(const QString& path1, const QString& path2);
 
   /// play two videos side-by-side with seek for alignment
-  static void playSideBySide(const QString& path1, double seek1,
-                             const QString& path2, double seek2);
+  static void playSideBySide(const QString& path1, double seek1, const QString& path2,
+                             double seek2);
 
   /// location of settings file
   static QString settingsFile();
@@ -53,16 +53,15 @@ class DesktopHelper {
    *       open, which makes it impossible to pass the file name
    *       to another process on win32 (due to exclusive open)
    */
-  static QString tempName(const QString& templateName, QObject* parent=nullptr, int maxLifetime=60);
+  static QString tempName(const QString& templateName, QObject* parent = nullptr,
+                          int maxLifetime = 60);
 
  private:
-  static void runProgram(QStringList& args, bool wait,
-                         const QString& inPath = "", double seek = 0.0,
-                         const QString& inPath2 = "", double seek2 = 0.0);
+  static void runProgram(QStringList& args, bool wait, const QString& inPath = "",
+                         double seek = 0.0, const QString& inPath2 = "", double seek2 = 0.0);
   static QVariant getSetting(const QString& key, const QVariant& defaultValue);
   static void putSetting(const QString& key, const QVariant& value);
-  static bool chooseProgram(QStringList& args,
-                            const QVector<QStringList>& options,
+  static bool chooseProgram(QStringList& args, const QVector<QStringList>& options,
                             const QString& settingsKey, const QString& dialogTitle,
                             const QString& dialogText);
   static bool moveFile(const QString& path, const QString& dir);
@@ -86,13 +85,11 @@ class WidgetHelper {
   static bool restoreTableState(QTableView* w, const char* id = nullptr);
 
   /// one-liner for adding actions
-  static QAction* addAction(QSettings& settings, const QString& label,
-                            const QKeySequence& shortcut, QWidget* target,
-                            const char* slot);
+  static QAction* addAction(QSettings& settings, const QString& label, const QKeySequence& shortcut,
+                            QWidget* target, const char* slot);
 
-  static QAction* addAction(QSettings& settings, const QString& label,
-                            const QKeySequence& shortcut, QWidget* target,
-                            std::function<void(void)> fn);
+  static QAction* addAction(QSettings& settings, const QString& label, const QKeySequence& shortcut,
+                            QWidget* target, std::function<void(void)> fn);
 
   static QAction* addSeparatorAction(QWidget* parent);
 
@@ -100,21 +97,20 @@ class WidgetHelper {
                                   const QKeySequence& defaultShortcut);
 
   /// apply hacks to show window, like avoiding white flash on windows
-  static void hackShowWindow(QWidget* window, bool maximized=false);
+  static void hackShowWindow(QWidget* window, bool maximized = false);
 
   /// if true, make an offscreen window. used to hide white flash on Windows 10
   static void setWindowCloak(QWidget* window, bool enable);
 
   /// style platform titlebar, etc not accessible to Qt/stylesheet
-  static void setWindowTheme(QWidget* window, bool dark=true);
+  static void setWindowTheme(QWidget* window, bool dark = true);
 };
 
 class DBHelper {
  public:
   static bool isCacheFileStale(const QSqlDatabase& db, const QString& cacheFile) {
     QFileInfo cacheInfo(cacheFile);
-    return !cacheInfo.exists() ||
-           lastModified(db) > cacheInfo.lastModified();
+    return !cacheInfo.exists() || lastModified(db) > cacheInfo.lastModified();
   }
 
   static QDateTime lastModified(const QSqlDatabase& db);
@@ -124,15 +120,15 @@ class DBHelper {
 class MenuHelper {
  public:
   /// build menu for a directory tree
-  static QMenu* dirMenu(const QString& root, QWidget* target,
-                        const char* slot, int maxDepth=INT_MAX);
+  static QMenu* dirMenu(const QString& root, QWidget* target, const char* slot,
+                        int maxDepth = INT_MAX);
 
  private:
-  static QMenu* makeDirMenu(const QString& root, QWidget* target,
-                            const char* slot, int maxDepth, int depth);
+  static QMenu* makeDirMenu(const QString& root, QWidget* target, const char* slot, int maxDepth,
+                            int depth);
 };
 
-/// cover up parent to emphasize foreground
+/// obscure parent to emphasize foreground
 class ShadeWidget : public QLabel {
  public:
   ShadeWidget(QWidget* parent);
@@ -149,7 +145,7 @@ int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const Q
 /// elide string in the middle
 QString qElide(const QString& str, int maxLen = 80);
 
-/// get rotation angle represented by matrix
+/// rotation angle represented by matrix
 double qRotationAngle(const QTransform& mat);
 
 /// use with QObject::installEventFilter to log events
@@ -163,8 +159,7 @@ class DebugEventFilter : public QObject {
 
 /// custom log handler with compression, color, etc,
 /// enable with qInstallMessageHandler(qColorMessageOutput)
-void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context,
-                         const QString& msg);
+void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context, const QString& msg);
 
 /// flush logger, required before using printf/scanf etc
 void qFlushMessageLog();
@@ -175,6 +170,7 @@ QThreadStorage<QString>& qMessageContext();
 /// scoped log message extra context (preferred over qMessageContext())
 class MessageContext {
   NO_COPY_NO_DEFAULT(MessageContext, QObject);
+
  public:
   MessageContext(const QString& context);
   ~MessageContext();
@@ -184,20 +180,20 @@ class MessageContext {
 QPartialOrdering qVariantCompare(const QVariant& a, const QVariant& b);
 
 Q_ALWAYS_INLINE bool operator<(const QVariant& a, const QVariant& b) {
-  return qVariantCompare(a,b) == QPartialOrdering::Less;
+  return qVariantCompare(a, b) == QPartialOrdering::Less;
 }
 
 Q_ALWAYS_INLINE bool operator>(const QVariant& a, const QVariant& b) {
-  return qVariantCompare(a,b) == QPartialOrdering::Greater;
+  return qVariantCompare(a, b) == QPartialOrdering::Greater;
 }
 
 Q_ALWAYS_INLINE bool operator<=(const QVariant& a, const QVariant& b) {
-  auto ord = qVariantCompare(a,b);
+  auto ord = qVariantCompare(a, b);
   return ord == QPartialOrdering::Less || ord == QPartialOrdering::Equivalent;
 }
 
 Q_ALWAYS_INLINE bool operator>=(const QVariant& a, const QVariant& b) {
-  auto ord = qVariantCompare(a,b);
+  auto ord = qVariantCompare(a, b);
   return ord == QPartialOrdering::Greater || ord == QPartialOrdering::Equivalent;
 }
 #endif

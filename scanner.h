@@ -42,26 +42,25 @@ class IndexParams : public Params {
   bool retainImage = false;     // retain the decompressed image
   bool retainData = false;      // retain the compressed image data
   bool useHardwareDec = false;  // try hardware decoder for supported formats
-  int decoderThreads = 0;  // threads per item decoder (hardwaredec always == 1)
-  int indexThreads = 0;    // total max threads (cpu) <=0 means auto detect
-  int gpuThreads = 1;      // number of parallel hardware decoders
-  int videoThreshold = 8;  // dct threshold for skipping similar nearby frames
-  // int resizeFilter;          // filter for resizing
-  int writeBatchSize = 1024;     // size of item batch when writing to database
-  bool estimateCost = true;      // estimate indexing cost to schedule jobs better
-  bool showIgnored = false;      // show all ignored files/dirs
-  bool dryRun = false;           // scan for changes but do not process
-  bool followSymlinks = false;   // follow symlinks to files/dirs
-  bool resolveLinks = false;     // index the resolved symlink instead of link
+  int decoderThreads = 0;       // threads per item decoder (hardwaredec always == 1)
+  int indexThreads = 0;         // total max threads (cpu) <=0 means auto detect
+  int gpuThreads = 1;           // number of parallel hardware decoders
+  int videoThreshold = 8;       // dct threshold for skipping similar nearby frames
+  int writeBatchSize = 1024;    // size of item batch when writing to database
+  bool estimateCost = true;     // estimate indexing cost to schedule jobs better
+  bool showIgnored = false;     // show all ignored files/dirs
+  bool dryRun = false;          // scan for changes but do not process
+  bool followSymlinks = false;  // follow symlinks to files/dirs
+  bool resolveLinks = false;    // index the resolved symlink instead of link
 #ifdef Q_OS_WIN
-  bool dupInodes = true;        // symlinks are rarely used; potentially huge performance drop
+  bool dupInodes = true;  // symlinks are rarely used; potentially huge performance drop
 #else
-  bool dupInodes = false;        // do not ignore duplicate inodes
+  bool dupInodes = false; // do not ignore duplicate inodes
 #endif
   IndexParams();
 };
 
-/// Stores result of image/video processing, prior to saving
+/// Result of image/video processing, prior to saving
 class IndexResult {
  public:
   bool ok = false;
@@ -69,8 +68,6 @@ class IndexResult {
   Media media;
   VideoContext* context = nullptr;
 };
-
-class VideoProcess;
 
 /// Finds candidate files and processes
 class Scanner : public QObject {
@@ -90,7 +87,6 @@ class Scanner : public QObject {
   static constexpr const char* ErrorZipFilter = "skipped by zip filter";
   static constexpr const char* ErrorZipUnsupported = "unsupported in zip container";
 
-
   /**
    * error list writable by worker threads
    * @note use staticMutex() to protect while reading
@@ -108,7 +104,7 @@ class Scanner : public QObject {
    * @note could be different than raw sum (ideally metadata is not hashed)
    * @note exif section of jpg is not hashed (only the content)
    */
-  static QString hash(const QString& path, int type, qint64* bytesRead=nullptr);
+  static QString hash(const QString& path, int type, qint64* bytesRead = nullptr);
 
   void setIndexParams(const IndexParams& params) { _params = params; }
   const IndexParams& indexParams() const { return _params; }
@@ -131,9 +127,9 @@ class Scanner : public QObject {
    *
    * @note Connect signals to get the results of the scan
    */
-  void scanDirectory(const QString& dir, QSet<QString>& expected,
-                     const QDateTime& modifiedSince=
-                         QDateTime::fromSecsSinceEpoch(0).addYears(1000));
+  void scanDirectory(
+      const QString& dir, QSet<QString>& expected,
+      const QDateTime& modifiedSince = QDateTime::fromSecsSinceEpoch(0).addYears(1000));
 
   /**
    * process compressed image
@@ -141,12 +137,10 @@ class Scanner : public QObject {
    * @param bytes raw compressed data, if empty, read from path
    * @return media object containing index structures and the decompressed data
    **/
-  IndexResult processImageFile(const QString& path,
-                               const QByteArray& bytes = QByteArray()) const;
+  IndexResult processImageFile(const QString& path, const QByteArray& bytes = QByteArray()) const;
 
   /// process decompressed image
-  IndexResult processImage(const QString& path, const QString& digest,
-                           const QImage& qImg) const;
+  IndexResult processImage(const QString& path, const QString& digest, const QImage& qImg) const;
 
   /// process video
   IndexResult processVideoFile(const QString& path) const;
@@ -200,8 +194,7 @@ class Scanner : public QObject {
   void processFinished();
 
   // prepare video to process in the main thread
-  VideoContext* initVideoProcess(const QString& path, bool tryGpu,
-                                 int cpuThreads) const;
+  VideoContext* initVideoProcess(const QString& path, bool tryGpu, int cpuThreads) const;
 
   // process video (in a thread)
   IndexResult processVideo(VideoContext* video) const;
@@ -213,7 +206,9 @@ class Scanner : public QObject {
 
   bool isQueued(const QString& path) const { return _queuedWork.contains(path); }
 
-  int remainingWork() const { return _activeWork.count()+_videoQueue.count()+_imageQueue.count(); }
+  int remainingWork() const {
+    return _activeWork.count() + _videoQueue.count() + _imageQueue.count();
+  }
 
   static void setError(const QString& path, const QString& error);
 
@@ -223,14 +218,14 @@ class Scanner : public QObject {
   QStringList _jpegTypes;
   QStringList _archiveTypes;
 
-  QHash<FileId, QString> _inodes; // unique files (inodes) seen during scan (link tracking)
+  QHash<FileId, QString> _inodes;  // unique files (inodes) seen during scan (link tracking)
 
-  QList<QFutureWatcher<IndexResult>*> _work; // qtconcurrent-issued jobs
+  QList<QFutureWatcher<IndexResult>*> _work;  // qtconcurrent-issued jobs
 
   // jobs exist in (only) one of these lists
-  QSet<QString> _activeWork;    // qtconcurrent-issued
-  QStringList _videoQueue;      // waiting video jobs
-  QStringList _imageQueue;      // waiting image jobs
+  QSet<QString> _activeWork;  // qtconcurrent-issued
+  QStringList _videoQueue;    // waiting video jobs
+  QStringList _imageQueue;    // waiting image jobs
 
   // additional set for fast lookup
   QSet<QString> _queuedWork;

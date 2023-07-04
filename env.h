@@ -22,17 +22,16 @@
 
 /// Get information about the operating system / environment
 class Env {
+  Env() = delete;
+  ~Env() = delete;
+
  public:
+  /// memory state of all processes and kernel
   static void systemMemory(float& totalKb, float& freeKb);
+
+  /// memory state of current process
   static void memoryUsage(float& vmKb, float& workingSetKb);
 
-  /**
-   * @brief set calling process to lowest/idle priority
-   */
+  /// set calling process to lowest/idle priority
   static void setIdleProcessPriority();
-
- private:
-  Env();
-  virtual ~Env();
 };
-

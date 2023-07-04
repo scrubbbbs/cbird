@@ -19,12 +19,16 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "videocomparewidget.h"
+
 #include "cropwidget.h"
 #include "theme.h"
 
 #include "../cimgops.h"
 #include "../env.h"
+#include "../nleutil.h"
 #include "../qtutil.h"
+
+#include "opencv2/core.hpp"
 
 /// frame cache entry
 class Frame {
@@ -54,15 +58,13 @@ class FrameCache {
     QImage firstFrame;
     if (_ctx.open(m.path(), opt) < 0) {
       _end = 1;
-    }
-    else {
+    } else {
       _end = _ctx.metadata().duration * _ctx.metadata().frameRate;
-      if (!_ctx.nextFrame(firstFrame))
-        _end = 1;
+      if (!_ctx.nextFrame(firstFrame)) _end = 1;
     }
 
     if (firstFrame.isNull()) {
-      firstFrame = QImage(16,16,QImage::Format_RGB888);
+      firstFrame = QImage(16, 16, QImage::Format_RGB888);
       firstFrame.fill(_ERROR_COLOR);
     }
 
@@ -99,9 +101,8 @@ class FrameCache {
 
     // recycle the furthest frames from pos
     auto keys = _cache.keys();
-    std::sort(keys.begin(),keys.end(),[pos](int a, int b) {
-      return abs(a - pos) > abs(b - pos);
-    });
+    std::sort(keys.begin(), keys.end(),
+              [pos](int a, int b) { return abs(a - pos) > abs(b - pos); });
 
     // note: calls to malloc/free stop due to implict sharing of QImage,
     // so heap usage won't fluctuate (and image pixels won't be copied)
@@ -195,17 +196,16 @@ class FrameCache {
 };
 
 VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
-                                       const MatchRange& range,
-                                       const MediaWidgetOptions& options,
+                                       const MatchRange& range, const MediaWidgetOptions& options,
                                        QWidget* parent)
     : super(parent), _options(options) {
   float totalKb, cacheKb;
   Env::systemMemory(totalKb, cacheKb);
 
   // use almost all available memory, helpful for 4k video
-  //cacheKb = (cacheKb - 2 * 1024 * 1024) / 2;   // 1GB for other things
-  //cacheKb = std::max(cacheKb, 512 * 1024.0f);  // 21 4k frames
-  cacheKb = 1024*1024;
+  // cacheKb = (cacheKb - 2 * 1024 * 1024) / 2;   // 1GB for other things
+  // cacheKb = std::max(cacheKb, 512 * 1024.0f);  // 21 4k frames
+  cacheKb = 1024 * 1024;
 
   _video[0].media = left;
   _video[0].side = "A";
@@ -215,7 +215,7 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   _video[1].side = "B";
   _video[1].in = range.dstIn >= 0 ? range.dstIn : 0;
 
-  //qWarning() << "range in:" << range.srcIn << range.dstIn << range.len;
+  // qWarning() << "range in:" << range.srcIn << range.dstIn << range.len;
 
   const QString prefix =
       Media::greatestPathPrefix({_video[0].media.path(), _video[1].media.path()});
@@ -237,16 +237,15 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
   }
 
   int matchLen = 0;
-  if (range.len > 0)
-    matchLen = range.len /  _video[0].cache->rateFactor(); // len is in dst units
+  if (range.len > 0) matchLen = range.len / _video[0].cache->rateFactor();  // len is in dst units
 
   Q_ASSERT(matchLen >= 0);
 
   // get max legal out frame between the two videos (shortest video duration)
   int maxOut = INT_MAX;
   for (int i = 0; i < 2; ++i) {
-    _video[i].out = (_video[i].meta->duration * _video[i].meta->frameRate - 15) /
-                                       _video[i].cache->rateFactor();
+    _video[i].out =
+        (_video[i].meta->duration * _video[i].meta->frameRate - 15) / _video[i].cache->rateFactor();
     maxOut = std::min(maxOut, _video[i].out);
   }
 
@@ -255,8 +254,7 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
     _video[i].out = matchLen > 0 ? std::min(_video[i].in + matchLen, _video[i].out) : maxOut;
 
   // endPos is limit of cursor, which is relative to video.in (negative cursor is before inpoint)
-  _endPos = std::min(_video[0].out - _video[0].in,
-                     _video[1].out - _video[1].in);
+  _endPos = std::min(_video[0].out - _video[0].in, _video[1].out - _video[1].in);
 
   // fps for positioning based on seconds, is the highest fps
   _fps = std::max(_video[0].cache->ctx().fps(), _video[1].cache->ctx().fps());
@@ -265,7 +263,7 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
 
   setStyleSheet(
       "VideoCompareWidget { "
-      "  background-color: #111; " // non-black to help spot letterboxing
+      "  background-color: #111; "  // non-black to help spot letterboxing
       "  font-size: 16px; "
       "  color: white; "
       "}");
@@ -288,57 +286,38 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
     _scrub = -1;
     update();
   });
-  WidgetHelper::addAction(settings, "Goto Start", Qt::Key_Home, this, [&]() {
-    seekFrame(0);
-  });
-  WidgetHelper::addAction(settings, "Goto End", Qt::Key_End, this, [&]() {
-    seekFrame(_endPos - 1);
-  });
-  WidgetHelper::addAction(settings, "Forward 1f", Qt::Key_Right, this, [&]() {
-    seekFrame(_cursor + 1);
-  });
-  WidgetHelper::addAction(settings, "Backward 1f", Qt::Key_Left, this, [&]() {
-    seekFrame(_cursor - 1);
-  });
-  WidgetHelper::addAction(settings, "Forward 1s", Qt::Key_Down, this, [&]() {
-    skipSeconds(1);
-  });
-  WidgetHelper::addAction(settings, "Backward 1s", Qt::Key_Up, this, [&]() {
-    skipSeconds(-1);
-  });
-  WidgetHelper::addAction(settings, "Forward 10s", Qt::CTRL | Qt::Key_Down, this, [&]() {
-    skipSeconds(10);
-  });
-  WidgetHelper::addAction(settings, "Backward 10s", Qt::CTRL | Qt::Key_Up, this, [&]() {
-    skipSeconds(-10);
-  });
-  WidgetHelper::addAction(settings, "Forward 1m", Qt::Key_PageDown, this, [&]() {
-    skipSeconds(60);
-  });
-  WidgetHelper::addAction(settings, "Backward 1m", Qt::Key_PageUp, this, [&]() {
-    skipSeconds(-60);
-  });
+  WidgetHelper::addAction(settings, "Goto Start", Qt::Key_Home, this, [&]() { seekFrame(0); });
+  WidgetHelper::addAction(settings, "Goto End", Qt::Key_End, this,
+                          [&]() { seekFrame(_endPos - 1); });
+  WidgetHelper::addAction(settings, "Forward 1f", Qt::Key_Right, this,
+                          [&]() { seekFrame(_cursor + 1); });
+  WidgetHelper::addAction(settings, "Backward 1f", Qt::Key_Left, this,
+                          [&]() { seekFrame(_cursor - 1); });
+  WidgetHelper::addAction(settings, "Forward 1s", Qt::Key_Down, this, [&]() { skipSeconds(1); });
+  WidgetHelper::addAction(settings, "Backward 1s", Qt::Key_Up, this, [&]() { skipSeconds(-1); });
+  WidgetHelper::addAction(settings, "Forward 10s", Qt::CTRL | Qt::Key_Down, this,
+                          [&]() { skipSeconds(10); });
+  WidgetHelper::addAction(settings, "Backward 10s", Qt::CTRL | Qt::Key_Up, this,
+                          [&]() { skipSeconds(-10); });
+  WidgetHelper::addAction(settings, "Forward 1m", Qt::Key_PageDown, this,
+                          [&]() { skipSeconds(60); });
+  WidgetHelper::addAction(settings, "Backward 1m", Qt::Key_PageUp, this,
+                          [&]() { skipSeconds(-60); });
 
   WidgetHelper::addSeparatorAction(this);
 
-  WidgetHelper::addAction(settings, "Offset +1f", Qt::SHIFT | Qt::Key_Right, this, [&]() {
-    offsetFrames(1);
-  });
-  WidgetHelper::addAction(settings, "Offset -1f", Qt::SHIFT | Qt::Key_Left, this, [&]() {
-    offsetFrames(-1);
-  });
-  WidgetHelper::addAction(settings, "Offset +1s", Qt::SHIFT | Qt::Key_Down, this, [&]() {
-    offsetSeconds(1);
-  });
-  WidgetHelper::addAction(settings, "Offset -1s", Qt::SHIFT | Qt::Key_Up, this, [&]() {
-    offsetSeconds(-1);
-  });
-  WidgetHelper::addAction(settings, "Offset +1m", Qt::SHIFT | Qt::Key_PageDown, this, [&]() {
-    offsetSeconds(+60);
-  });
-  WidgetHelper::addAction(settings, "Offset -1m", Qt::SHIFT | Qt::Key_PageUp, this, [&]() {
-    offsetSeconds(-60);
-  });
+  WidgetHelper::addAction(settings, "Offset +1f", Qt::SHIFT | Qt::Key_Right, this,
+                          [&]() { offsetFrames(1); });
+  WidgetHelper::addAction(settings, "Offset -1f", Qt::SHIFT | Qt::Key_Left, this,
+                          [&]() { offsetFrames(-1); });
+  WidgetHelper::addAction(settings, "Offset +1s", Qt::SHIFT | Qt::Key_Down, this,
+                          [&]() { offsetSeconds(1); });
+  WidgetHelper::addAction(settings, "Offset -1s", Qt::SHIFT | Qt::Key_Up, this,
+                          [&]() { offsetSeconds(-1); });
+  WidgetHelper::addAction(settings, "Offset +1m", Qt::SHIFT | Qt::Key_PageDown, this,
+                          [&]() { offsetSeconds(+60); });
+  WidgetHelper::addAction(settings, "Offset -1m", Qt::SHIFT | Qt::Key_PageUp, this,
+                          [&]() { offsetSeconds(-60); });
 
   WidgetHelper::addSeparatorAction(this);
 
@@ -387,7 +366,7 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
     const auto& v = _video[0].visual;
     if (v.count() > 0) {
       _visualIndex++;
-      _visualIndex %= v.count() + 1; // index 0==no visual
+      _visualIndex %= v.count() + 1;  // index 0==no visual
       update();
     }
   });
@@ -401,8 +380,8 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
                           [&]() { compareInKdenlive(); });
 
   if (_options.db) {
-    WidgetHelper::addAction(settings, "Thumbnail A", Qt::Key_H, this,[&]() { writeThumbnail(0); });
-    WidgetHelper::addAction(settings, "Thumbnail B", Qt::Key_J, this,[&]() { writeThumbnail(1); });
+    WidgetHelper::addAction(settings, "Thumbnail A", Qt::Key_H, this, [&]() { writeThumbnail(0); });
+    WidgetHelper::addAction(settings, "Thumbnail B", Qt::Key_J, this, [&]() { writeThumbnail(1); });
   }
 
   WidgetHelper::addAction(settings, "Close", Qt::CTRL | Qt::Key_W, this, SLOT(close()));
@@ -419,9 +398,7 @@ VideoCompareWidget::~VideoCompareWidget() {
   settings.setValue("stacked", _stacked);
 }
 
-void VideoCompareWidget::show() {
-  Theme::instance().showWindow(this, _maximized);
-}
+void VideoCompareWidget::show() { Theme::instance().showWindow(this, _maximized); }
 
 void VideoCompareWidget::drawFrame(QPainter& painter, const FrameCache& cache, const QImage& img,
                                    int iw,
@@ -430,7 +407,7 @@ void VideoCompareWidget::drawFrame(QPainter& painter, const FrameCache& cache, c
                                    int currPos,  // current position, relative to matchIn
                                    const QString& text, int x, int y, int w,
                                    int h) const {  // x,y,w,h location
-  (void)w; // w is == iw in this case, so unused
+  (void)w;                                         // w is == iw in this case, so unused
 
   int infoMargin = 16;
   int infoHeight = 130;
@@ -452,11 +429,11 @@ void VideoCompareWidget::drawFrame(QPainter& painter, const FrameCache& cache, c
       cache.ctx().metadata().duration * cache.ctx().metadata().frameRate / cache.rateFactor();
 
   const int cx = ip.x();
-  const int cy = ip.y()+ih;
+  const int cy = ip.y() + ih;
 
-  painter.fillRect(QRect(cx + (matchIn / numFrames * iw), cy,
-                         matchLen / numFrames * iw, infoMargin),
-                   Qt::darkGray);
+  painter.fillRect(
+      QRect(cx + (matchIn / numFrames * iw), cy, matchLen / numFrames * iw, infoMargin),
+      Qt::darkGray);
 
   // cursor
   {
@@ -464,18 +441,18 @@ void VideoCompareWidget::drawFrame(QPainter& painter, const FrameCache& cache, c
     const int half = infoMargin / 2;
     if (pos < 0) {
       painter.drawLine(cx + half, cy, cx, cy + half);
-      painter.drawLine(cx, cy + half, cx + half, cy + infoMargin-1);
+      painter.drawLine(cx, cy + half, cx + half, cy + infoMargin - 1);
     } else if (pos > iw) {
       painter.drawLine(cx + iw - half, cy, cx + iw, cy + half);
-      painter.drawLine(cx + iw, cy + half, cx + iw - half, cy + infoMargin-1);
-    }
-    else
+      painter.drawLine(cx + iw, cy + half, cx + iw - half, cy + infoMargin - 1);
+    } else
       painter.drawLine(cx + pos, cy, cx + pos, cy + infoMargin - 1);
   }
 
   const int tx = cx;
   const int ty = h - infoHeight;
-  Theme::instance().drawRichText(&painter, QRect(tx+infoMargin, ty + infoMargin, iw, infoHeight), text);
+  Theme::instance().drawRichText(&painter, QRect(tx + infoMargin, ty + infoMargin, iw, infoHeight),
+                                 text);
 }
 
 void VideoCompareWidget::paintEvent(QPaintEvent* event) {
@@ -488,17 +465,15 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
 
   const auto& v = _video;
   bool showVisual = false;
-  if (v[0].visualFrame == _cursor + v[0].in + v[0].offset &&
-      _visualIndex > 0 && v[0].visual.count() > 0 &&
-      (_visualIndex - 1) < v[0].visual.count())
+  if (v[0].visualFrame == _cursor + v[0].in + v[0].offset && _visualIndex > 0 &&
+      v[0].visual.count() > 0 && (_visualIndex - 1) < v[0].visual.count())
     showVisual = true;
 
   // decode frames
   QFuture<Frame*> work[2];
   for (int i = 0; i < 2; ++i)
     work[i] = (QtConcurrent::run(&FrameCache::frame, v[i].cache.get(),
-                                 v[i].in + _cursor + v[i].offset,
-                                 _scrub));
+                                 v[i].in + _cursor + v[i].offset, _scrub));
 
   // accurate seek is often slow due to interframe decoding,  show beach ball
   bool waitCursor = false;
@@ -558,9 +533,8 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
         "<br/>In:[%d+%d+%d]=%d src={%d} "
         "Out:[%d]<br/>",
         qPrintable(v.side), qPrintable(v.label), qPrintable(v.meta->toString(true)),
-        p.frame->image.width(), p.frame->image.height(),
-        qPrintable(p.img.text("format")), v.cache->ctx().pixelAspectRatio(),
-        v.in, _cursor, v.offset, v.in +_cursor+ v.offset,
+        p.frame->image.width(), p.frame->image.height(), qPrintable(p.img.text("format")),
+        v.cache->ctx().pixelAspectRatio(), v.in, _cursor, v.offset, v.in + _cursor + v.offset,
         p.img.text("frame").toInt(), v.out);
 
     if (p.frame->quality >= 0) p.text += "<br/>Q:" + QString::number(p.frame->quality);
@@ -594,7 +568,7 @@ void VideoCompareWidget::paintEvent(QPaintEvent* event) {
     const auto& s = !_swap ? setup[k] : setup[!k];
     const auto& v = _video[s.i];
     const auto& p = pane[s.i];
-    drawFrame(painter, *v.cache, p.img, s.w, s.h, v.in, v.out-v.in, _cursor + v.offset, p.text,
+    drawFrame(painter, *v.cache, p.img, s.w, s.h, v.in, v.out - v.in, _cursor + v.offset, p.text,
               s.x + k * iw, s.y, iw, geom.height());
 
     if (_stacked) break;
@@ -676,16 +650,14 @@ void VideoCompareWidget::alignTemporally() {
   int minOffset = offset;
 
   int64_t minSad = 0;
-  for (int i = 0; i < windowSize; i++)
-    minSad += sad128(i);
+  for (int i = 0; i < windowSize; i++) minSad += sad128(i);
   minSad /= windowSize;
 
   offset -= 30;
 
   for (int forwardFrames = 0; forwardFrames < 60; forwardFrames++) {
     int64_t sad = 0;
-    for (int i = 0; i < windowSize; i++)
-      sad += sad128(i);
+    for (int i = 0; i < windowSize; i++) sad += sad128(i);
     sad /= windowSize;
 
     if (sad < minSad) {
@@ -744,23 +716,20 @@ void VideoCompareWidget::playSideBySide() {
   Media::playSideBySide(_video[0].media, seek[0], _video[1].media, seek[1]);
 }
 
-#include "../nleutil.h"
-
 void VideoCompareWidget::compareInKdenlive() {
-
-  const float templateFps = 29.97; // todo: read from template
-  const QString templateFile=":/res/template.kdenlive";
+  const float templateFps = 29.97;  // todo: read from template
+  const QString templateFile = ":/res/template.kdenlive";
   KdenEdit edit(templateFile);
 
   for (int i = 0; i < 2; ++i) {
     const auto& v = _video[i];
-    int inFrame = (v.in + v.offset + _cursor) * v.cache->rateFactor(); // native frames
-    inFrame = inFrame * templateFps / v.cache->ctx().fps(); // template frames
+    int inFrame = (v.in + v.offset + _cursor) * v.cache->rateFactor();  // native frames
+    inFrame = inFrame * templateFps / v.cache->ctx().fps();             // template frames
     int p = edit.addProducer(_video[i].media.path());
-    QString track = QString("Video ") + QString::number(i+1);
+    QString track = QString("Video ") + QString::number(i + 1);
     edit.addTrack(track);
     edit.addBlank(track, 150);
-    edit.addClip(track, p, inFrame, inFrame+300);
+    edit.addClip(track, p, inFrame, inFrame + 300);
   }
 
   QString outFile = DesktopHelper::tempName("cbird.XXXXXX.kdenlive", this);
@@ -768,7 +737,7 @@ void VideoCompareWidget::compareInKdenlive() {
   QDesktopServices::openUrl(QUrl::fromLocalFile(outFile));
 }
 
-void VideoCompareWidget::writeThumbnail(int index)  {
+void VideoCompareWidget::writeThumbnail(int index) {
   Q_ASSERT(_options.db);
   const auto& v = _video[index];
   const Frame* frame = v.cache->frame(v.in + _cursor + v.offset);

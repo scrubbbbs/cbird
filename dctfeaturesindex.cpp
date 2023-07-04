@@ -19,14 +19,13 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "dctfeaturesindex.h"
+
 #include "ioutil.h"
 #include "profile.h"
 #include "qtutil.h"
 #include "tree/hammingtree.h"
 
-static QString cacheFile(const QString& cachePath) {
-  return cachePath + qq("/dctfeatures.cache");
-}
+static QString cacheFile(const QString& cachePath) { return cachePath + qq("/dctfeatures.cache"); }
 
 DctFeaturesIndex::DctFeaturesIndex() { init(); }
 
@@ -41,13 +40,11 @@ void DctFeaturesIndex::createTables(QSqlDatabase& db) const {
                     " );"))
       SQL_FATAL(exec);
 
-    if (!query.exec("create index kphash_media_id_index on kphash(media_id);"))
-      SQL_FATAL(exec);
+    if (!query.exec("create index kphash_media_id_index on kphash(media_id);")) SQL_FATAL(exec);
   }
 }
 
-void DctFeaturesIndex::addRecords(QSqlDatabase& db,
-                                  const MediaGroup& media) const {
+void DctFeaturesIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) const {
   bool isValid = false;
   for (const Media& m : media)
     if (m.keyPointHashes().size() > 0) {
@@ -59,8 +56,7 @@ void DctFeaturesIndex::addRecords(QSqlDatabase& db,
 
   QSqlQuery query(db);
 
-  QString sql =
-      "insert into kphash (media_id, hashes) values (:media_id, :hashes)";
+  QString sql = "insert into kphash (media_id, hashes) values (:media_id, :hashes)";
 
   if (!query.prepare(sql)) SQL_FATAL(prepare);
 
@@ -68,21 +64,18 @@ void DctFeaturesIndex::addRecords(QSqlDatabase& db,
     const KeyPointHashList& hashes = m.keyPointHashes();
     if (hashes.size() > 0) {
       query.bindValue(":media_id", m.id());
-      query.bindValue(":hashes",
-                      QByteArray(reinterpret_cast<const char*>(hashes.data()),
-                                 int(hashes.size() * sizeof(uint64_t))));
+      query.bindValue(":hashes", QByteArray(reinterpret_cast<const char*>(hashes.data()),
+                                            int(hashes.size() * sizeof(uint64_t))));
 
       if (!query.exec()) SQL_FATAL(exec);
     }
   }
 }
 
-void DctFeaturesIndex::removeRecords(QSqlDatabase& db,
-                                     const QVector<int>& mediaIds) const {
+void DctFeaturesIndex::removeRecords(QSqlDatabase& db, const QVector<int>& mediaIds) const {
   QSqlQuery query(db);
   for (auto id : mediaIds)
-    if (!query.exec("delete from kphash where media_id=" + QString::number(id)))
-      SQL_FATAL(exec);
+    if (!query.exec("delete from kphash where media_id=" + QString::number(id))) SQL_FATAL(exec);
 }
 
 void DctFeaturesIndex::init() {
@@ -97,9 +90,7 @@ void DctFeaturesIndex::unload() {
 
 int DctFeaturesIndex::count() const { return _tree ? int(_tree->size()) : 0; }
 
-size_t DctFeaturesIndex::memoryUsage() const {
-  return _tree ? _tree->stats().memory : 0;
-}
+size_t DctFeaturesIndex::memoryUsage() const { return _tree ? _tree->stats().memory : 0; }
 
 bool DctFeaturesIndex::isLoaded() const { return _tree != nullptr; }
 
@@ -129,13 +120,12 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
       const uint64_t rowCount = query.value(0).toLongLong();
       uint64_t currentRow = 0;
       const QLocale locale;
-      uint64_t numHashes = 0;                 // total hashes seen
+      uint64_t numHashes = 0;  // total hashes seen
 
       std::vector<HammingTree::Value> chunk;  // build tree in chunks to reduce temp memory
       const int minChunkSize = 100000;
 
-      if (!query.exec("select media_id,hashes from kphash"))
-        SQL_FATAL(exec);
+      if (!query.exec("select media_id,hashes from kphash")) SQL_FATAL(exec);
 
       while (query.next()) {
         currentRow++;
@@ -184,9 +174,7 @@ void DctFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
   if (!DBHelper::isCacheFileStale(db, path)) return;
 
   qInfo() << "save tree";
-  writeFileAtomically(path, [this](QFile& f) {
-    _tree->write(f);
-  });
+  writeFileAtomically(path, [this](QFile& f) { _tree->write(f); });
 }
 
 void DctFeaturesIndex::add(const MediaGroup& media) {
@@ -194,8 +182,7 @@ void DctFeaturesIndex::add(const MediaGroup& media) {
 
   std::vector<HammingTree::Value> values;
   for (const Media& m : media)
-    for (uint64_t hash : m.keyPointHashes())
-      values.push_back(HammingTree::Value(m.id(), hash));
+    for (uint64_t hash : m.keyPointHashes()) values.push_back(HammingTree::Value(m.id(), hash));
 
   _tree->insert(values);
 }
@@ -222,15 +209,14 @@ Index* DctFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
 
   HammingTree::Stats stats = chunk->_tree->stats();
 
-  qInfo("%dKhash, height=%d nodes=%d %dMB %dms", stats.numValues / 1000,
-        stats.maxHeight, stats.numNodes, int(stats.memory / 1000000),
+  qInfo("%dKhash, height=%d nodes=%d %dMB %dms", stats.numValues / 1000, stats.maxHeight,
+        stats.numNodes, int(stats.memory / 1000000),
         int(QDateTime::currentMSecsSinceEpoch() - then));
 
   return chunk;
 }
 
-QVector<Index::Match> DctFeaturesIndex::find(const Media& needle,
-                                             const SearchParams& params) {
+QVector<Index::Match> DctFeaturesIndex::find(const Media& needle, const SearchParams& params) {
   KeyPointHashList hashes = needle.keyPointHashes();
 
   //
@@ -243,8 +229,7 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle,
   if (hashes.size() <= 0) {
     // if we don't have hashes for the needle,
     // we can get them from tree
-    if (needle.id() > 0)
-      _tree->findIndex(needle.id(), hashes);
+    if (needle.id() > 0) _tree->findIndex(needle.id(), hashes);
 
     if (hashes.size() <= 0) {
       qWarning() << "no hashes for needle id" << needle.id() << needle.path();
@@ -260,8 +245,7 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle,
   // todo: investigate if it may be possible to prune the search
   // - if a hash has no matches, nearby hashes probably also have no matches
   std::vector<HammingTree::Match> cand[numNeedleHashes];
-  for (int j = 0; j < numNeedleHashes; j++)
-    _tree->search(nHash[j], params.dctThresh, cand[j]);
+  for (int j = 0; j < numNeedleHashes; j++) _tree->search(nHash[j], params.dctThresh, cand[j]);
 
   QMap<uint32_t, uint32_t> matches;  // map
   QMap<uint32_t, int> scores;
@@ -290,15 +274,14 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle,
         scores[mediaId] = match.distance;
       }
 
-      if (needle.id() != mediaId)
-        maxMatches = std::max(matches[mediaId], maxMatches);
+      if (needle.id() != mediaId) maxMatches = std::max(matches[mediaId], maxMatches);
     }
   }
 
   now = nanoTime();
   if (params.verbose)
-    qInfo("%d features, %lld results, %.1f ms rate=%.1f Mhash/sec",
-          numNeedleHashes, matches.count(), (now - then) / 1000000.0,
+    qInfo("%d features, %lld results, %.1f ms rate=%.1f Mhash/sec", numNeedleHashes,
+          matches.count(), (now - then) / 1000000.0,
           (_tree->size() * numNeedleHashes) / ((now - then) / 1000.0));
 
   QVector<Index::Match> results;
@@ -314,8 +297,7 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle,
       // qDebug("score=%.2f matches=%d maxMatches=%d", avgScore, matches[mediaId], maxMatches);
       if (mediaId == uint32_t(needle.id()))
         match.score = -1;
-      else
-      if (maxMatches == 1) {
+      else if (maxMatches == 1) {
         // only one match, use the avg score
         match.score = 10 * avgScore;
       } else {

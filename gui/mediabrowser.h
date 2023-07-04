@@ -28,9 +28,9 @@ class MediaBrowser : public QObject {
 
  public:
   enum {
-    ShowNormal = 0, /// use MediaGroupListWidget, no grouping
-    ShowPairs = 1,  /// use MediaFolderWidget, group search results by folder pairs
-    ShowFolders = 2 /// use MediaFolderWidget, group by folder
+    ShowNormal = 0,  /// use MediaGroupListWidget, no grouping
+    ShowPairs = 1,   /// use MediaFolderWidget, group search results by folder pairs
+    ShowFolders = 2  /// use MediaFolderWidget, group by folder
   };
 
   /**

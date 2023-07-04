@@ -31,9 +31,7 @@ KdenEdit::KdenEdit(const QString &templateFile) {
   _producerCount = 0;  // increment when we add a producer
 }
 
-KdenEdit::~KdenEdit() {
-  delete _doc;
-}
+KdenEdit::~KdenEdit() { delete _doc; }
 
 QDomElement KdenEdit::newProperty(const QString &name, const QString &value) {
   QDomElement el = _doc->createElement("property");
@@ -252,7 +250,7 @@ void KdenEdit::saveXml(const QString &xmlFile) {
 
   file.write(_doc->toByteArray());
 
-  //saveEDL(xmlFile);
+  // saveEDL(xmlFile);
 }
 
 QString KdenEdit::framesToTimeCode(int num) {

@@ -21,6 +21,7 @@
 #include "env.h"
 
 #include <unistd.h>
+
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -28,16 +29,17 @@
 
 #ifdef Q_OS_WIN
 
-#include <psapi.h>
+#  include <psapi.h>
 
 void Env::systemMemory(float& totalKb, float& freeKb) {
   totalKb = freeKb = 0;
   MEMORYSTATUSEX status;
   status.dwLength = sizeof(status);
   if (GlobalMemoryStatusEx(&status)) {
-      (void)totalKb; (void)freeKb;
-      totalKb = status.ullTotalPhys / 1024.0;
-      freeKb = status.ullAvailPhys / 1024.0;
+    (void)totalKb;
+    (void)freeKb;
+    totalKb = status.ullTotalPhys / 1024.0;
+    freeKb = status.ullAvailPhys / 1024.0;
   }
 }
 
@@ -55,9 +57,9 @@ void Env::setIdleProcessPriority() {
     qWarning() << "SetPriorityClass() failed";
 }
 
-#elif defined(__gnu_linux__)
+#elif defined(Q_OS_LINUX)
 
-#include <sys/resource.h>
+#  include <sys/resource.h>
 
 void Env::systemMemory(float& totalKb, float& freeKb) {
   QFile f("/proc/meminfo");
@@ -67,7 +69,7 @@ void Env::systemMemory(float& totalKb, float& freeKb) {
     return;
   }
   QString line;
-  while ( ! (line = f.readLine()).isEmpty() ) {
+  while (!(line = f.readLine()).isEmpty()) {
     float value = line.split(" ", Qt::SkipEmptyParts).at(1).toFloat();
     if (line.startsWith("MemTotal:"))
       totalKb = value;
@@ -99,10 +101,9 @@ void Env::memoryUsage(float& virtualKb, float& workingSetKb) {
   unsigned long vsize;
   long rss;
 
-  stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >>
-      tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt >> utime >>
-      stime >> cutime >> cstime >> priority >> nice >> O >> itrealvalue >>
-      starttime >> vsize >> rss;  // don't care about the rest
+  stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags >>
+      minflt >> cminflt >> majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >>
+      nice >> O >> itrealvalue >> starttime >> vsize >> rss;  // don't care about the rest
 
   stat_stream.close();
 
@@ -119,19 +120,19 @@ void Env::setIdleProcessPriority() {
 
 #elif defined(Q_OS_DARWIN)
 
-#include <sys/types.h>
-#include <sys/sysctl.h>
-#include <mach/vm_statistics.h>
-#include <mach/mach_types.h>
-#include <mach/mach_init.h>
-#include <mach/mach_host.h>
+#  include <mach/mach_host.h>
+#  include <mach/mach_init.h>
+#  include <mach/mach_types.h>
+#  include <mach/vm_statistics.h>
+#  include <sys/sysctl.h>
+#  include <sys/types.h>
 
 void Env::systemMemory(float& totalKb, float& freeKb) {
   totalKb = freeKb = 0;
   // totalKb = sysctl -a hw.memsize
   // freeKb = vm_stat + foo
 
-  int mib[2] = { CTL_HW, HW_MEMSIZE };
+  int mib[2] = {CTL_HW, HW_MEMSIZE};
   int64_t totalBytes = 0;
   size_t length = sizeof(totalBytes);
 
@@ -145,16 +146,14 @@ void Env::systemMemory(float& totalKb, float& freeKb) {
   mach_msg_type_number_t count = sizeof(vm) / sizeof(natural_t);
 
   if (KERN_SUCCESS == host_page_size(port, &pageSize) &&
-      KERN_SUCCESS == host_statistics64(port, HOST_VM_INFO,
-                                        (host_info64_t)&vm, &count))
-  {
+      KERN_SUCCESS == host_statistics64(port, HOST_VM_INFO, (host_info64_t)&vm, &count)) {
     // This api doesn't provide all the details of Activity Monitor
     // The free count is very small if we don't consider cached pages,
     // but the api doesn't report them.
     //
     // So it might be ok to guess that we can have a chunk of the inactive pages.
-    auto freePages = vm.free_count + vm.inactive_count/2;
-    //auto usedPages = vm.active_count + vm.wire_count + vm.inactive_count/2;
+    auto freePages = vm.free_count + vm.inactive_count / 2;
+    // auto usedPages = vm.active_count + vm.wire_count + vm.inactive_count/2;
     freeKb = freePages * pageSize / 1024.0;
   }
 }
@@ -181,8 +180,6 @@ void Env::memoryUsage(float& virtualKb, float& workingSetKb) {
   workingSetKb = 0.0;
 }
 
-void Env::setIdleProcessPriority() {
-  qCritical() << "unsupported";
-}
+void Env::setIdleProcessPriority() { qCritical() << "unsupported"; }
 
 #endif

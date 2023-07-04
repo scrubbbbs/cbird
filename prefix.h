@@ -22,21 +22,20 @@
 
 #define CBIRD_PROGNAME "cbird"
 #define CBIRD_HOMEPAGE "https://github.com/scrubbbbs/cbird"
-#define INDEX_DIRNAME  "_index"
+#define INDEX_DIRNAME "_index"
 
 #ifdef __WIN32__
 #define _WIN32_WINNT _WIN32_WINNT_VISTA
 #define __STDC_FORMAT_MACROS 1
 #endif
 
-#include <QtCore/QtCore>
-
-Q_STATIC_ASSERT_X(QT_VERSION_MAJOR==6, QT_VERSION_STR " is not a supported qt version");
+#include <QtCore/QtVersion>
+Q_STATIC_ASSERT_X(QT_VERSION_MAJOR == 6, "Qt " QT_VERSION_STR " is not a supported qt version");
 
 #include <QtConcurrent/QtConcurrent>
 #include <QtSql/QtSql>
-#include <QtWidgets/QtWidgets>
 #include <QtGui/QtGui>
+#include <QtWidgets/QtWidgets>
 
 using ll = QLatin1String;
 using lc = QLatin1Char;
@@ -57,18 +56,18 @@ using lc = QLatin1Char;
 // most classes are qobject subclasses and should not have
 // copy/move constructors or default constructors
 // typedefs are useful for overloads and signal/slot connections
-#define NO_COPY(className,superClassName) \
-    Q_DISABLE_COPY_MOVE(className) \
-    typedef superClassName super; \
-    typedef className self;
+#define NO_COPY(className, superClassName) \
+  Q_DISABLE_COPY_MOVE(className)           \
+  typedef superClassName super;            \
+  typedef className self;
 
-#define NO_COPY_NO_DEFAULT(className,superClassName) \
-    NO_COPY(className,superClassName) \
-    className() = delete;
+#define NO_COPY_NO_DEFAULT(className, superClassName) \
+  NO_COPY(className, superClassName)                  \
+  className() = delete;
 
 // malloc/realloc that uses size of the pointer and count for allocation
 #define strict_malloc(ptr, count) \
-   reinterpret_cast<decltype(ptr)>(malloc(uint(count)*sizeof(*ptr)))
+  reinterpret_cast<decltype(ptr)>(malloc(uint(count) * sizeof(*ptr)))
 
 #define strict_realloc(ptr, count) \
-   reinterpret_cast<decltype(ptr)>(realloc(ptr, uint(count)*sizeof(*ptr)))
+  reinterpret_cast<decltype(ptr)>(realloc(ptr, uint(count) * sizeof(*ptr)))

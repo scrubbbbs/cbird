@@ -29,10 +29,9 @@ class MediaItemDelegate;
  * @class MediaGroupListWidget
  * @brief The MediaGroupListWidget class is used to display and manage a list of
  *        Media objects. Each MediaGroup is displayed on one screenful,
- *        and is resized to fit so there is no vertical scroll.
+ *        and is resized so there is no horizontal/vertical scroll.
  *
- *        Operations are in the right-click context menu and apply
- *        to the selected items.
+ *        Operations are in the context menu and apply to selected items
  */
 class MediaGroupListWidget : public QListWidget {
   Q_OBJECT
@@ -185,7 +184,7 @@ class MediaGroupListWidget : public QListWidget {
   /// Open new window with all images in the selection's folder
   void browseParentAction();
 
-private:
+ private:
   void closeEvent(QCloseEvent* event);
   void keyPressEvent(QKeyEvent* event);
   void wheelEvent(QWheelEvent* event);
@@ -247,7 +246,7 @@ private:
   void loadMedia(int row);
 
   /// Block and finish loaders for row (-1 for all rows)
-  void waitLoaders(int row = -1, bool cancel=true);
+  void waitLoaders(int row = -1, bool cancel = true);
 
   /// Cancel image loaders except for the given row
   void cancelOtherLoaders(int row);
@@ -268,7 +267,7 @@ private:
   void restoreSelectedItem(const QModelIndex& last);
 
   /// Return true if there is a pair displayed and one is selected
-  bool selectedPair(Media **selected, Media **other);
+  bool selectedPair(Media** selected, Media** other);
 
   /// Warn about renaming w/o database present
   bool renameWarning();
@@ -289,9 +288,9 @@ private:
   MediaWidgetOptions _options;
   MediaItemDelegate* _itemDelegate;
 
-  QList<QFutureWatcher<void>*> _loaders; // loadMedia() threadpool tasks
-  QList<int> _lruRows;                   // least-recently-used rows
-  QHash<QString, int> _archiveFileCount; // cache # files in an archive
+  QList<QFutureWatcher<void>*> _loaders;  // loadMedia() threadpool tasks
+  QList<int> _lruRows;                    // least-recently-used rows
+  QHash<QString, int> _archiveFileCount;  // cache # files in an archive
 
   int _currentRow = -1;
   double _zoom = 1.0;

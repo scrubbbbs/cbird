@@ -34,9 +34,10 @@
 #include "../videocontext.h"
 #include "../cimgops.h"
 
+#include "opencv2/imgproc/imgproc.hpp"
 #include <memory>
 
-#define LW_MIN_FREE_MEMORY_KB (256*1024)
+#define LW_MIN_FREE_MEMORY_KB (256 * 1024)
 #define LW_MAX_CACHED_ROWS (5)
 
 #define LW_PAN_STEP (10.0)
@@ -44,31 +45,27 @@
 #define LW_ZOOM_OUT_STEP (1.1)
 
 #define LW_ITEM_SPACING (8)
-#define LW_ITEM_MIN_IMAGE_HEIGHT (16)  // do not draw image below this
-#define LW_ITEM_HISTOGRAM_PADDING (16) // distance from item edge
-#define LW_ITEM_HISTOGRAM_SIZE (32)    // width of histogram plot
-#define LW_ITEM_TITLE_FUZZ (24)        // fixme: unknown extra space needed for title text
+#define LW_ITEM_MIN_IMAGE_HEIGHT (16)   // do not draw image below this
+#define LW_ITEM_HISTOGRAM_PADDING (16)  // distance from item edge
+#define LW_ITEM_HISTOGRAM_SIZE (32)     // width of histogram plot
+#define LW_ITEM_TITLE_FUZZ (24)         // fixme: unknown extra space needed for title text
 
 static bool isDifferenceAnalysis(const Media& m) { return m.path().endsWith("-diff***"); }
 static bool isAnalysis(const Media& m) { return m.path().endsWith("***"); }
 static Media newDifferenceAnalysis() {
   // needs unique "path" for image loader, this is probably fine
   QString id = QString::number(nanoTime(), 16);
-  Media m(id+"-diff***", Media::TypeImage);
+  Media m(id + "-diff***", Media::TypeImage);
   return m;
 }
 static int countNonAnalysis(const MediaGroup& group) {
-  return std::count_if(group.begin(), group.end(), [](const Media& m) {
-    return !isAnalysis(m);
-  });
+  return std::count_if(group.begin(), group.end(), [](const Media& m) { return !isAnalysis(m); });
 }
 
 MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
-                                             const MediaWidgetOptions& options,
-                                             QWidget* parent)
+                                             const MediaWidgetOptions& options, QWidget* parent)
     : super(parent), _list(list), _options(options) {
-  setWindowTitle(
-      QString("Group-List Set : %2 [x%1]").arg(_list.count()).arg(_options.basePath));
+  setWindowTitle(QString("Group-List Set : %2 [x%1]").arg(_list.count()).arg(_options.basePath));
 
   setViewMode(QListView::IconMode);
   setResizeMode(QListView::Adjust);
@@ -80,17 +77,17 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
   int iconW = 0;
   int iconH = 0;
   int textH = 0;
-  for (auto&  m : list) {
+  for (auto& m : list) {
     qreal dpr = m.image().devicePixelRatioF();
     QSize size = m.image().size();
-    iconW = std::max(iconW, int(size.width()/dpr));
-    iconH = std::max(iconH, int(size.height()/dpr));
+    iconW = std::max(iconW, int(size.width() / dpr));
+    iconH = std::max(iconH, int(size.height() / dpr));
     textH = std::max(textH, int(m.path().split(lc('\n')).count()));
   }
-  setIconSize({iconW,iconH});
+  setIconSize({iconW, iconH});
 
   const int lineH = 16, spacing = 16;
-  setGridSize({iconW+spacing,iconH+spacing+textH*lineH});
+  setGridSize({iconW + spacing, iconH + spacing + textH * lineH});
 
   int index = 0;
   for (const Media& m : list) {
@@ -100,17 +97,14 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
     item->setIcon(QIcon(QPixmap::fromImage(m.image())));
     addItem(item);
   }
-  setCurrentIndex( model()->index(0,0) );
+  setCurrentIndex(model()->index(0, 0));
 
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(staticMetaObject.className() + qq(".shortcuts"));
 
-  WidgetHelper::addAction(settings, "Close Window", Qt::CTRL | Qt::Key_W,
-                          this, SLOT(close()));
-  WidgetHelper::addAction(settings, "Close Window (Alt)", Qt::Key_Escape,
-                          this, SLOT(close()));
-  WidgetHelper::addAction(settings, "Choose Selected", Qt::Key_Return,
-                          this, SLOT(chooseAction()));
+  WidgetHelper::addAction(settings, "Close Window", Qt::CTRL | Qt::Key_W, this, SLOT(close()));
+  WidgetHelper::addAction(settings, "Close Window (Alt)", Qt::Key_Escape, this, SLOT(close()));
+  WidgetHelper::addAction(settings, "Choose Selected", Qt::Key_Return, this, SLOT(chooseAction()));
 
   setContextMenuPolicy(Qt::ActionsContextMenu);
 
@@ -122,7 +116,7 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
   _hoverTimer = new QTimer(this);
   _hoverTimer->setSingleShot(true);
   _hoverTimer->setInterval(300);
-  connect(_hoverTimer, &QTimer::timeout, this, [this] () {
+  connect(_hoverTimer, &QTimer::timeout, this, [this]() {
     QListWidgetItem* item = itemAt(_hoverPos);
     if (!item) return;
     QModelIndex index = indexFromItem(item);
@@ -131,13 +125,9 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
   });
 }
 
-MediaFolderListWidget::~MediaFolderListWidget() {
-  WidgetHelper::saveGeometry(this);
-}
+MediaFolderListWidget::~MediaFolderListWidget() { WidgetHelper::saveGeometry(this); }
 
-void MediaFolderListWidget::show() {
-  Theme::instance().showWindow(this);
-}
+void MediaFolderListWidget::show() { Theme::instance().showWindow(this); }
 
 void MediaFolderListWidget::close() {
   super::close();
@@ -168,18 +158,17 @@ void MediaFolderListWidget::mouseMoveEvent(QMouseEvent* event) {
 MediaGroup MediaFolderListWidget::selectedMedia() const {
   const QList<QListWidgetItem*> items = selectedItems();
   MediaGroup selected;
-  for (auto& item : items)
-    selected.append(_list[item->type()]);
+  for (auto& item : items) selected.append(_list[item->type()]);
   return selected;
 }
 
 /// Passed in/out of background jobs
 struct ImageWork {
-  Media media;          // copy of target
-  QVector<Media> input; // copy of target
-  int row=-1, index=-1; // row/index of the job (debugging)
-  QFuture<void> future; // cancellation
-  bool isReady = false; // cancellation
+  Media media;               // copy of target
+  QVector<Media> input;      // copy of target
+  int row = -1, index = -1;  // row/index of the job (debugging)
+  QFuture<void> future;      // cancellation
+  bool isReady = false;      // cancellation
 };
 
 /// Filter for resizing images (bicubic, nearest, etc)
@@ -191,8 +180,7 @@ struct ScaleFilter {
 /// Custom painting and layout of list view items
 class MediaItemDelegate : public QAbstractItemDelegate {
  public:
-  MediaItemDelegate(MediaGroupListWidget* parent)
-      : QAbstractItemDelegate(parent) {
+  MediaItemDelegate(MediaGroupListWidget* parent) : QAbstractItemDelegate(parent) {
     _filters.push_back({-1, "Qt"});
     _filters.push_back({cv::INTER_LINEAR, "Linear"});
     _filters.push_back({cv::INTER_AREA, "Area"});
@@ -206,7 +194,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
   virtual ~MediaItemDelegate() {}
 
   void setAverageItemRatio(double ratio) { _avgItemRatio = ratio; }
-  void setZoom(double zoom) { _zoom = zoom; } // 0.0-1.0; 1.0==no zoom
+  void setZoom(double zoom) { _zoom = zoom; }  // 0.0-1.0; 1.0==no zoom
   void setPan(const QPointF& pan) { _pan = pan; }
   void setTextHeight(int height) { _textHeight = height; }
 
@@ -282,18 +270,18 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     const Media& m = group[index.row()];
 
     // offset rectangle for image
-    QRect rect = option.rect.adjusted(0,0,0, -_textHeight);
+    QRect rect = option.rect.adjusted(0, 0, 0, -_textHeight);
 
     // draw image
     if (rect.height() > LW_ITEM_MIN_IMAGE_HEIGHT) {
       const QImage& full = m.image();
 
       QTransform i2v;  // image-to-viewport transform
-      QRect dstRect;  // destination paint rectangle (viewport coordinates)
+      QRect dstRect;   // destination paint rectangle (viewport coordinates)
       double scale;    // scale factor for scale-to-fit
       const qreal dpr = parent->devicePixelRatioF();
 
-      const QRect fullRect = !full.isNull() ? full.rect() : QRect(0,0,m.width(),m.height());
+      const QRect fullRect = !full.isNull() ? full.rect() : QRect(0, 0, m.width(), m.height());
       calculate(fullRect, rect, dpr, scale, dstRect, i2v);
 
       if (_debug) {
@@ -303,7 +291,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
         painter->drawRect(rect);
         painter->save();
 
-        painter->scale(1.0/dpr, 1.0/dpr);
+        painter->scale(1.0 / dpr, 1.0 / dpr);
         painter->setPen(Qt::red);
         painter->drawRect(dstRect);
 
@@ -320,7 +308,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       double rotation = 0.0;
 
       if (m.roi().count() > 0) {
-        if (countNonAnalysis(group) != 2)//index.model()->rowCount() != 2)
+        if (countNonAnalysis(group) != 2)  // index.model()->rowCount() != 2)
           qWarning("item count must be 2 for transform display");
         else {
           isRoi = true;
@@ -331,8 +319,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
           // the template image is the other one
           int tmplIndex = (index.row() + 1) % index.model()->rowCount();
 
-          const QRect& tmplRect =
-              parent->_list[parent->_currentRow][tmplIndex].image().rect();
+          const QRect& tmplRect = parent->_list[parent->_currentRow][tmplIndex].image().rect();
 
           QTransform tx;
           calculate(tmplRect, rect, dpr, scale, dstRect, tx);
@@ -369,18 +356,17 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       int filterId = _filters[filterIndex].id;
 
       // fill with grey to show what parts are missing
-      //if (isRoi) painter->fillRect(dstRect, Qt::gray);
+      // if (isRoi) painter->fillRect(dstRect, Qt::gray);
 
       painter->save();
-      painter->scale(1.0/dpr,1.0/dpr);
+      painter->scale(1.0 / dpr, 1.0 / dpr);
 
       if (full.isNull()) {
         // draw outline of image to show it is loading
         // we may not know what the dimensions are so we can't always do it
         if (fullRect.height() > 0)
-          painter->fillRect(dstRect, QBrush(Qt::darkGray,Qt::FDiagPattern));
-      }
-      else if (filterId == -1) {
+          painter->fillRect(dstRect, QBrush(Qt::darkGray, Qt::FDiagPattern));
+      } else if (filterId == -1) {
         painter->setRenderHint(QPainter::SmoothPixmapTransform);
 
         // this is slower, only use if there is a rotation
@@ -390,27 +376,24 @@ class MediaItemDelegate : public QAbstractItemDelegate {
           painter->setTransform(i2v, true);
           painter->drawImage(full.rect(), full);
         } else {
-          QRectF srcRect = i2v.inverted().mapRect(
-              QRectF(0,0,dstRect.width(),dstRect.height()));
+          QRectF srcRect = i2v.inverted().mapRect(QRectF(0, 0, dstRect.width(), dstRect.height()));
           painter->drawImage(dstRect, full, srcRect);
         }
 
       } else {
-        Q_ASSERT(!full.isNull()); // opencv exception/segfault
+        Q_ASSERT(!full.isNull());  // opencv exception/segfault
         // OpenCV scaling
         cv::Mat cvImg;
         qImageToCvImgNoCopy(full, cvImg);
 
         // note: OpenCV uses CCW rotation, so swap 21,11
-        double mat[2][3] = {{i2v.m11(), i2v.m21(), i2v.dx()},
-                            {i2v.m12(), i2v.m22(), i2v.dy()}};
+        double mat[2][3] = {{i2v.m11(), i2v.m21(), i2v.dx()}, {i2v.m12(), i2v.m22(), i2v.dy()}};
 
         cv::Mat xForm(2, 3, CV_64FC(1), mat);
 
         cv::Mat subImg;
-        cv::warpAffine(cvImg, subImg, xForm,
-                       cv::Size(dstRect.width(), dstRect.height()),
-                       filterId, cv::BORDER_CONSTANT);
+        cv::warpAffine(cvImg, subImg, xForm, cv::Size(dstRect.width(), dstRect.height()), filterId,
+                       cv::BORDER_CONSTANT);
 
         QImage qImg;
         cvImgToQImageNoCopy(subImg, qImg);
@@ -423,23 +406,22 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
       QString info = QString("%1% %2(%3) %4")
                          .arg(int(totalScale * 100))
-                         .arg(_actualSize ? "[1:1]" : _scaleToFit ? "[Fit] " : "")
+                         .arg(_actualSize   ? "[1:1]"
+                              : _scaleToFit ? "[Fit] "
+                                            : "")
                          .arg(_filters[filterIndex].name)
-                         .arg(isRoi ?
-                                    QString("[ROI] %1\xC2\xB0").arg(rotation, 0, 'f', 1)
-                                    : "");
+                         .arg(isRoi ? QString("[ROI] %1\xC2\xB0").arg(rotation, 0, 'f', 1) : "");
       int h1 = painter->fontMetrics().lineSpacing();
 
-      painter->setPen(QColor(128,128,128,255));
-      painter->drawText(QPoint{rect.x()+h1, rect.y()+h1}, info);
+      painter->setPen(QColor(128, 128, 128, 255));
+      painter->drawText(QPoint{rect.x() + h1, rect.y() + h1}, info);
 
       const ColorDescriptor& cd = m.colorDescriptor();
-      if (cd.numColors > 0)    {
+      if (cd.numColors > 0) {
         painter->save();
         int xOffset = LW_ITEM_HISTOGRAM_PADDING;
         int yOffset = h1 + LW_ITEM_HISTOGRAM_PADDING;
-        painter->translate(rect.x() + xOffset,
-                           rect.y() + yOffset);
+        painter->translate(rect.x() + xOffset, rect.y() + yOffset);
 
         int totalWeight = 1;  // prevent divide-by-zero
         for (int i = 0; i < cd.numColors; i++) totalWeight += cd.colors[i].w;
@@ -451,26 +433,27 @@ class MediaItemDelegate : public QAbstractItemDelegate {
           const DescriptorColor& dc = cd.colors[i];
           QColor rgb = dc.toQColor();
           int w = LW_ITEM_HISTOGRAM_SIZE;
-          int h = int(dc.w) * (rect.height()-yOffset) / totalWeight;
+          int h = int(dc.w) * (rect.height() - yOffset) / totalWeight;
 
           painter->fillRect(x, y, w, h, rgb);
           painter->drawLine(x, y + h, x + w + 2, y + h);
           y += h;
         }
         painter->restore();
-      } // histogram
-    } // image
+      }  // histogram
+    }    // image
 
     rect = option.rect;
-    rect = rect.adjusted(0,std::max(0, rect.height()-_textHeight),0,0);
+    rect = rect.adjusted(0, std::max(0, rect.height() - _textHeight), 0, 0);
 
-    //if (option.state & QStyle::State_Selected)
-    //  painter->setPen(palette.highlightedText().color());
-    //else
-      painter->setPen(palette.text().color());
+    // if (option.state & QStyle::State_Selected)
+    //   painter->setPen(palette.highlightedText().color());
+    // else
+    painter->setPen(palette.text().color());
 
-    QString title = item->data(Qt::UserRole+0).toString();
-    title = painter->fontMetrics().elidedText(title, Qt::ElideLeft, rect.width()-LW_ITEM_TITLE_FUZZ, 0);
+    QString title = item->data(Qt::UserRole + 0).toString();
+    title = painter->fontMetrics().elidedText(title, Qt::ElideLeft,
+                                              rect.width() - LW_ITEM_TITLE_FUZZ, 0);
     QString text = item->text();
     text = text.replace("@title@", title);
     text = text.replace("@width@", QString::number(rect.width()));
@@ -491,8 +474,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     }
   }
 
-  QSize sizeHint(const QStyleOptionViewItem& option,
-                 const QModelIndex& index) const {
+  QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
     (void)index;
 
     auto* parent = dynamic_cast<const MediaGroupListWidget*>(option.widget);
@@ -503,8 +485,8 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     const QSize& viewSize = parent->frameRect().size();
 
     const int spacing = parent->spacing();
-    //const int scrollbarWidth =
-    //    option.widget->style()->pixelMetric(QStyle::PM_ScrollBarExtent,nullptr,parent->verticalScrollBar());
+    // const int scrollbarWidth =
+    //     option.widget->style()->pixelMetric(QStyle::PM_ScrollBarExtent,nullptr,parent->verticalScrollBar());
     const int textHeight = _textHeight;
 
     int numCols = 0, numRows = 0;
@@ -521,16 +503,19 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       for (int nCols = 1; nCols <= itemCount; ++nCols)
         if ((nRows * nCols) >= itemCount) {
           // estimate w/o scrollbar since it shouldn't be visible
-          const double fw = (viewSize.width() - spacing*(nCols+1)) / double(nCols); // full item w/h
-          const double fh = (viewSize.height() - spacing*(nRows+1)) / double(nRows);
+          const double fw =
+              (viewSize.width() - spacing * (nCols + 1)) / double(nCols);  // full item w/h
+          const double fh = (viewSize.height() - spacing * (nRows + 1)) / double(nRows);
 
-          const double iw = (viewSize.width()  - spacing*(nCols+1)) / double(nCols); // image w/h
-          const double ih = (viewSize.height() - textHeight*nRows - spacing*(nRows+1)) / double(nRows);
+          const double iw =
+              (viewSize.width() - spacing * (nCols + 1)) / double(nCols);  // image w/h
+          const double ih =
+              (viewSize.height() - textHeight * nRows - spacing * (nRows + 1)) / double(nRows);
           double itemAspect = iw / ih;
 
           if (iw < 0 || ih < 0) continue;
 
-          int emptyCount = nRows*nCols - itemCount;
+          int emptyCount = nRows * nCols - itemCount;
 
           double sw, sh;
           if (_avgItemRatio < itemAspect) {
@@ -541,15 +526,14 @@ class MediaItemDelegate : public QAbstractItemDelegate {
             sh = sw / _avgItemRatio;
           }
 
-          int iconArea = sw*sh * itemCount;
+          int iconArea = sw * sh * itemCount;
 
-          int emptyArea = (iw*ih*itemCount) - iconArea + (fw*fh*emptyCount);
+          int emptyArea = (iw * ih * itemCount) - iconArea + (fw * fh * emptyCount);
 
-          if (emptyArea < minWasted &&
-              iconArea >= maxUsed) {
-            //qWarning() << itemCount << i << j << sw
-            //           << sw << sh
-            //           << _avgItemRatio << itemAspect << minWasted << maxUsed;
+          if (emptyArea < minWasted && iconArea >= maxUsed) {
+            // qWarning() << itemCount << i << j << sw
+            //            << sw << sh
+            //            << _avgItemRatio << itemAspect << minWasted << maxUsed;
             minWasted = emptyArea;
             maxUsed = iconArea;
             numCols = nCols;
@@ -558,7 +542,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
         }
 
     // fixme: should probably be minimum that forces scrollbar
-    //if (ih < 32 || iw <32) continue;
+    // if (ih < 32 || iw <32) continue;
 
     // sanity check
     if (numRows < 1) numRows = 1;
@@ -566,7 +550,6 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
     if (numRows == 1) numCols = itemCount;
     if (numCols == 1) numRows = itemCount;
-
 
     // todo: we want to force 1-row in some situations, make it a toggle/option
     // possible options:
@@ -583,19 +566,17 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     // fixme: cannot seem to tell what the true spacing, add extra to prevent scrollbar
     // - there is additional unknown space on the right besides the scrollbar
     // - we shouldn't have to subtract scrollbarWidth, unless forcing a minimum
-    QSize hint(
-        (viewSize.width() - spacing*(numCols+2))  / numCols,
-        (viewSize.height() - spacing*(numRows+2)) / numRows);
+    QSize hint((viewSize.width() - spacing * (numCols + 2)) / numCols,
+               (viewSize.height() - spacing * (numRows + 2)) / numRows);
 
-    if (_debug)
-      qInfo() << numCols << "x" << numRows << hint;
+    if (_debug) qInfo() << numCols << "x" << numRows << hint;
 
     return hint;
   }
 
  private:
   QVector<ScaleFilter> _filters;
-  double _avgItemRatio = 2.0/3.0;
+  double _avgItemRatio = 2.0 / 3.0;
   double _zoom = 1.0;
   QPointF _pan;
   int _equalFilter = 0, _minFilter = 0, _magFilter = 0;
@@ -606,10 +587,8 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 };
 
 MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
-                                           const MediaWidgetOptions& options,
-                                           QWidget* parent)
+                                           const MediaWidgetOptions& options, QWidget* parent)
     : QListWidget(parent), _list(list), _options(options) {
-
   _itemDelegate = new MediaItemDelegate(this);
 
   setViewMode(QListView::IconMode);
@@ -619,7 +598,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   setItemDelegate(_itemDelegate);
   setSpacing(LW_ITEM_SPACING);
   setSelectionMode(QAbstractItemView::ExtendedSelection);
-  setMinimumSize(QSize{320,240});
+  setMinimumSize(QSize{320, 240});
   setUniformItemSizes(true);
   setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -627,8 +606,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   if (list.count() > 0) {
     loadRow(0);
     int row = 0;
-    if (!(_options.flags & MediaWidgetOptions::FlagSelectFirst))
-      row = model()->rowCount() - 1;
+    if (!(_options.flags & MediaWidgetOptions::FlagSelectFirst)) row = model()->rowCount() - 1;
     setCurrentIndex(model()->index(row, 0));
   }
 
@@ -636,7 +614,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   if (count() > 0) {
     QImage qImg(640, 480, QImage::Format_RGB32);
 
-    const auto green = qRgb(0,0,255);
+    const auto green = qRgb(0, 0, 255);
     QPainter painter;
     painter.begin(&qImg);
     painter.fillRect(qImg.rect(), green);
@@ -644,13 +622,12 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
     painter.end();
 
     int y;
-    for (y = qImg.height()-1; y >= 0; --y )
-      if (qImg.pixel(10, y) != green)
-        break;
+    for (y = qImg.height() - 1; y >= 0; --y)
+      if (qImg.pixel(10, y) != green) break;
 
-//    QLabel* label = new QLabel;
-//    label->setPixmap(QPixmap::fromImage(qImg));
-//    label->show();
+    //    QLabel* label = new QLabel;
+    //    label->setPixmap(QPixmap::fromImage(qImg));
+    //    label->show();
 
     qDebug() << "estimated text box height:" << y;
     _itemDelegate->setTextHeight(y);
@@ -662,22 +639,23 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
     this->updateItems();
   });
 
-  connect(this, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this,
-          SLOT(openAction()));
+  connect(this, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(openAction()));
 
   setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(this, &QWidget::customContextMenuRequested,
-          this, &MediaGroupListWidget::execContextMenu);
+  connect(this, &QWidget::customContextMenuRequested, this, &MediaGroupListWidget::execContextMenu);
 
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(staticMetaObject.className() + qq(".shortcuts"));
 
   WidgetHelper::addAction(settings, "File/Open File", Qt::Key_X, this, SLOT(openAction()));
-  WidgetHelper::addAction(settings, "File/Open Enclosing Folder", Qt::Key_E, this, SLOT(openFolderAction()));
+  WidgetHelper::addAction(settings, "File/Open Enclosing Folder", Qt::Key_E, this,
+                          SLOT(openFolderAction()));
 
   WidgetHelper::addAction(settings, "File/Rename", Qt::Key_F2, this, SLOT(renameFileAction()));
-  WidgetHelper::addAction(settings, "File/Copy Name", Qt::SHIFT | Qt::Key_F2, this, SLOT(copyNameAction()));
-  WidgetHelper::addAction(settings, "File/Rename Parent", Qt::Key_F3, this, SLOT(renameFolderAction()));
+  WidgetHelper::addAction(settings, "File/Copy Name", Qt::SHIFT | Qt::Key_F2, this,
+                          SLOT(copyNameAction()));
+  WidgetHelper::addAction(settings, "File/Rename Parent", Qt::Key_F3, this,
+                          SLOT(renameFolderAction()));
 
   WidgetHelper::addAction(settings, "File/Delete File", Qt::Key_D, this, SLOT(deleteAction()))
       ->setEnabled(!(_options.flags & MediaWidgetOptions::FlagDisableDelete));
@@ -685,46 +663,57 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addAction(settings, "File/Replace File", Qt::Key_F, this, SLOT(replaceAction()))
       ->setEnabled(!(_options.flags & MediaWidgetOptions::FlagDisableDelete));
 
-  QAction* a = WidgetHelper::addAction(settings, "File/Move File", Qt::Key_G, this, SLOT(moveFileAction()));
+  QAction* a =
+      WidgetHelper::addAction(settings, "File/Move File", Qt::Key_G, this, SLOT(moveFileAction()));
   a->setEnabled(_options.db != nullptr);
   a->setData(ll(";newfolder;"));
 
-  a = WidgetHelper::addAction(settings, "File/Move Parent", Qt::Key_B, this, SLOT(moveFolderAction()));
+  a = WidgetHelper::addAction(settings, "File/Move Parent", Qt::Key_B, this,
+                              SLOT(moveFolderAction()));
   a->setEnabled(_options.db != nullptr);
   a->setData(ll(";newfolder;"));
 
-  WidgetHelper::addAction(settings, "File/Copy Image Buffer", Qt::CTRL|Qt::Key_C, this, SLOT(copyImageAction()));
-  WidgetHelper::addAction(settings, "File/Set Index Thumbnail", Qt::Key_H, this, SLOT(thumbnailAction()))
+  WidgetHelper::addAction(settings, "File/Copy Image Buffer", Qt::CTRL | Qt::Key_C, this,
+                          SLOT(copyImageAction()));
+  WidgetHelper::addAction(settings, "File/Set Index Thumbnail", Qt::Key_H, this,
+                          SLOT(thumbnailAction()))
       ->setEnabled(_options.db != nullptr);
 
   WidgetHelper::addSeparatorAction(this);
 
   WidgetHelper::addAction(settings, "Compare/Rotate Items", Qt::Key_R, this, SLOT(rotateAction()));
   WidgetHelper::addAction(settings, "Compare/Remove Item", Qt::Key_A, this, SLOT(clearAction()));
-  WidgetHelper::addAction(settings, "Compare/Quality Score", Qt::Key_Q, this, SLOT(qualityScoreAction()));
-  WidgetHelper::addAction(settings, "Compare/Template Match", Qt::Key_T, this, SLOT(templateMatchAction()));
+  WidgetHelper::addAction(settings, "Compare/Quality Score", Qt::Key_Q, this,
+                          SLOT(qualityScoreAction()));
+  WidgetHelper::addAction(settings, "Compare/Template Match", Qt::Key_T, this,
+                          SLOT(templateMatchAction()));
   WidgetHelper::addAction(settings, "Compare/Toggle Differences", Qt::Key_Z, this,
-            SLOT(toggleAutoDifferenceAction()));
+                          SLOT(toggleAutoDifferenceAction()));
   WidgetHelper::addAction(settings, "Compare/Compare Videos", Qt::Key_V, this,
-            SLOT(compareVideosAction()));
-  WidgetHelper::addAction(settings, "Compare/Compare Audio", Qt::Key_C, this, SLOT(compareAudioAction()));
+                          SLOT(compareVideosAction()));
+  WidgetHelper::addAction(settings, "Compare/Compare Audio", Qt::Key_C, this,
+                          SLOT(compareAudioAction()));
   WidgetHelper::addAction(settings, "Compare/Reset", Qt::Key_F5, this, SLOT(reloadAction()));
 
   WidgetHelper::addSeparatorAction(this);
 
   // for building test/validation data sets
-  WidgetHelper::addAction(settings, "Tag/Record Good Match", Qt::Key_Y, this, SLOT(recordMatchTrueAction()));
-  WidgetHelper::addAction(settings, "Tag/Record Bad Match", Qt::Key_N, this, SLOT(recordMatchFalseAction()));
+  WidgetHelper::addAction(settings, "Tag/Record Good Match", Qt::Key_Y, this,
+                          SLOT(recordMatchTrueAction()));
+  WidgetHelper::addAction(settings, "Tag/Record Bad Match", Qt::Key_N, this,
+                          SLOT(recordMatchFalseAction()));
   WidgetHelper::addAction(settings, "Tag/Forget Weed", Qt::Key_W, this, SLOT(forgetWeedsAction()));
-  WidgetHelper::addAction(settings, "Tag/Add to Negative Matches", Qt::Key_Minus, this, SLOT(negMatchAction()))
+  WidgetHelper::addAction(settings, "Tag/Add to Negative Matches", Qt::Key_Minus, this,
+                          SLOT(negMatchAction()))
       ->setEnabled(_options.db != nullptr);
   WidgetHelper::addAction(settings, "Tag/Add All to Negative Matches", Qt::SHIFT | Qt::Key_Minus,
-            this, SLOT(negMatchAllAction()))
+                          this, SLOT(negMatchAllAction()))
       ->setEnabled(_options.db != nullptr);
 
   WidgetHelper::addSeparatorAction(this);
 
-  WidgetHelper::addAction(settings, "Display/Toggle Scale-to-Fit", Qt::Key_S, this, SLOT(normalizeAction()));
+  WidgetHelper::addAction(settings, "Display/Toggle Scale-to-Fit", Qt::Key_S, this,
+                          SLOT(normalizeAction()));
   WidgetHelper::addAction(settings, "Display/Zoom In", Qt::Key_9, this, SLOT(zoomInAction()));
   WidgetHelper::addAction(settings, "Display/Zoom Out", Qt::Key_7, this, SLOT(zoomOutAction()));
   WidgetHelper::addAction(settings, "Display/Zoom 100%", Qt::Key_0, this, [&]() {
@@ -736,43 +725,62 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addAction(settings, "Display/Pan Right", Qt::Key_6, this, SLOT(panRightAction()));
   WidgetHelper::addAction(settings, "Display/Pan Up", Qt::Key_8, this, SLOT(panUpAction()));
   WidgetHelper::addAction(settings, "Display/Pan Down", Qt::Key_2, this, SLOT(panDownAction()));
-  WidgetHelper::addAction(settings, "Display/Cycle Min Filter", Qt::Key_1, this, SLOT(cycleMinFilter()));
-  WidgetHelper::addAction(settings, "Display/Cycle Max Filter", Qt::Key_3, this, SLOT(cycleMagFilter()));
-  WidgetHelper::addAction(settings, "Display/More per Page", Qt::Key_BracketRight, this, SLOT(increasePageSize()));
-  WidgetHelper::addAction(settings, "Display/Less per Page", Qt::Key_BracketLeft, this, SLOT(decreasePageSize()));
+  WidgetHelper::addAction(settings, "Display/Cycle Min Filter", Qt::Key_1, this,
+                          SLOT(cycleMinFilter()));
+  WidgetHelper::addAction(settings, "Display/Cycle Max Filter", Qt::Key_3, this,
+                          SLOT(cycleMagFilter()));
+  WidgetHelper::addAction(settings, "Display/More per Page", Qt::Key_BracketRight, this,
+                          SLOT(increasePageSize()));
+  WidgetHelper::addAction(settings, "Display/Less per Page", Qt::Key_BracketLeft, this,
+                          SLOT(decreasePageSize()));
 
   WidgetHelper::addSeparatorAction(this);
 
   QString text;
   switch (_options.selectionMode) {
-    case MediaWidgetOptions::SelectSearch:   text = "Navigate/Search Selected"; break;
-    case MediaWidgetOptions::SelectOpen:     text = "Navigate/Open Selected";   break;
-    case MediaWidgetOptions::SelectExitCode: text = "Navigate/Choose Selected"; break;
+    case MediaWidgetOptions::SelectSearch:
+      text = "Navigate/Search Selected";
+      break;
+    case MediaWidgetOptions::SelectOpen:
+      text = "Navigate/Open Selected";
+      break;
+    case MediaWidgetOptions::SelectExitCode:
+      text = "Navigate/Choose Selected";
+      break;
   }
   WidgetHelper::addAction(settings, text, Qt::Key_Return, this, SLOT(chooseAction()));
 
-  WidgetHelper::addAction(settings, "Navigate/Browse Parent", Qt::Key_Tab, this, SLOT(browseParentAction()))
+  WidgetHelper::addAction(settings, "Navigate/Browse Parent", Qt::Key_Tab, this,
+                          SLOT(browseParentAction()))
       ->setEnabled(_options.db != nullptr);
 
-  WidgetHelper::addAction(settings, "Navigate/Forward", Qt::ALT | Qt::Key_Down, this, SLOT(nextGroupAction()))
+  WidgetHelper::addAction(settings, "Navigate/Forward", Qt::ALT | Qt::Key_Down, this,
+                          SLOT(nextGroupAction()))
       ->setEnabled(_list.count() > 1);
-  WidgetHelper::addAction(settings, "Navigate/Back", Qt::ALT | Qt::Key_Up, this, SLOT(prevGroupAction()))
+  WidgetHelper::addAction(settings, "Navigate/Back", Qt::ALT | Qt::Key_Up, this,
+                          SLOT(prevGroupAction()))
       ->setEnabled(_list.count() > 1);
-  WidgetHelper::addAction(settings, "Navigate/Jump Forward", Qt::Key_PageDown, this, SLOT(jumpForwardAction()))
+  WidgetHelper::addAction(settings, "Navigate/Jump Forward", Qt::Key_PageDown, this,
+                          SLOT(jumpForwardAction()))
       ->setEnabled(_list.count() > 1);
-  WidgetHelper::addAction(settings, "Navigate/Jump Back", Qt::Key_PageUp, this, SLOT(jumpBackAction()))
+  WidgetHelper::addAction(settings, "Navigate/Jump Back", Qt::Key_PageUp, this,
+                          SLOT(jumpBackAction()))
       ->setEnabled(_list.count() > 1);
-  WidgetHelper::addAction(settings, "Navigate/Jump to Start", Qt::Key_Home, this, SLOT(jumpToStartAction()))
+  WidgetHelper::addAction(settings, "Navigate/Jump to Start", Qt::Key_Home, this,
+                          SLOT(jumpToStartAction()))
       ->setEnabled(_list.count() > 1);
-  WidgetHelper::addAction(settings, "Navigate/Jump to End", Qt::Key_End, this, SLOT(jumpToEndAction()))
+  WidgetHelper::addAction(settings, "Navigate/Jump to End", Qt::Key_End, this,
+                          SLOT(jumpToEndAction()))
       ->setEnabled(_list.count() > 1);
 
   WidgetHelper::addSeparatorAction(this);
 
-  WidgetHelper::addAction(settings, "Window/Move to Next Screen", Qt::SHIFT | Qt::Key_F11,
-            this, SLOT(moveToNextScreenAction()));
-  WidgetHelper::addAction(settings, "Window/Close Window", Qt::CTRL | Qt::Key_W, this, SLOT(close()));
-  WidgetHelper::addAction(settings, "Window/Close Window (Alt)", Qt::Key_Escape, this, SLOT(close()));
+  WidgetHelper::addAction(settings, "Window/Move to Next Screen", Qt::SHIFT | Qt::Key_F11, this,
+                          SLOT(moveToNextScreenAction()));
+  WidgetHelper::addAction(settings, "Window/Close Window", Qt::CTRL | Qt::Key_W, this,
+                          SLOT(close()));
+  WidgetHelper::addAction(settings, "Window/Close Window (Alt)", Qt::Key_Escape, this,
+                          SLOT(close()));
 
   // qt maps ctrl to meta; meta+ctrl is default for spotlight search
 #ifdef Q_OS_MACOS
@@ -784,8 +792,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
     QPoint local = frameRect().center();
     auto items = selectedItems();
     QListWidgetItem* item = items.count() > 0 ? items.at(0) : nullptr;
-    if (item)
-      local = this->visualItemRect(item).center();
+    if (item) local = this->visualItemRect(item).center();
     auto* evt = new QContextMenuEvent(QContextMenuEvent::Keyboard, local, QPoint());
     qApp->sendEvent(this, evt);
   });
@@ -901,7 +908,7 @@ void MediaGroupListWidget::execContextMenu(const QPoint& p) {
  * @return
  */
 static QImage differenceImage(const Media& ml, const Media& mr,
-                              const QFuture<void>* future=nullptr) {
+                              const QFuture<void>* future = nullptr) {
   QImage nullImage;
   QImage inLeft = ml.image();
   QImage inRight = mr.image();
@@ -1048,7 +1055,7 @@ static void loadImage(ImageWork* work, bool fastSeek) {
   }
 
   now = nanoTime();
-  uint64_t t1 = now-then;
+  uint64_t t1 = now - then;
   then = now;
 
   if (work->future.isCanceled()) {
@@ -1066,12 +1073,11 @@ static void loadImage(ImageWork* work, bool fastSeek) {
     QImage ri = right.image();
 
     img = differenceImage(left, right, &work->future);
-  }
-  else if (m.type() == Media::TypeImage) {
+  } else if (m.type() == Media::TypeImage) {
     img = m.loadImage(QSize(), &work->future);
   } else if (m.type() == Media::TypeVideo) {
     VideoContext::DecodeOptions opt;
-    opt.fast = true; // faster scaler
+    opt.fast = true;  // faster scaler
     img = VideoContext::frameGrab(m.path(), m.matchRange().dstIn, fastSeek, opt, &work->future);
     if (work->future.isCanceled()) return;
     auto meta = loadVideo(m);
@@ -1083,8 +1089,7 @@ static void loadImage(ImageWork* work, bool fastSeek) {
 
   if (!img.isNull()) {
     // rgb32 is best for painting
-    if (img.format() != QImage::Format_RGB32)
-      img = img.convertToFormat(QImage::Format_RGB32);
+    if (img.format() != QImage::Format_RGB32) img = img.convertToFormat(QImage::Format_RGB32);
 
     m.setImage(img);
     m.setWidth(img.width());
@@ -1096,10 +1101,8 @@ static void loadImage(ImageWork* work, bool fastSeek) {
   ts = ts / 1000000;
   t1 = t1 / 1000000;
   if (ts > 1000) {
-    qWarning("%d %2d %dms[%d] %dk : %s", work->row, work->index,
-           int(ts), int(t1),
-           int(m.originalSize() / 1024),
-           qUtf8Printable(m.path()));
+    qWarning("%d %2d %dms[%d] %dk : %s", work->row, work->index, int(ts), int(t1),
+             int(m.originalSize() / 1024), qUtf8Printable(m.path()));
   }
 }
 
@@ -1114,8 +1117,7 @@ float MediaGroupListWidget::requiredMemory(int row) const {
   qint64 requiredMemory = 0;
   for (const auto& m : _list[row]) {
     const auto& img = m.image();
-    if (img.isNull())
-      requiredMemory += 4 * m.width() * m.height();
+    if (img.isNull()) requiredMemory += 4 * m.width() * m.height();
   }
   return requiredMemory / 1024.0;
 }
@@ -1132,26 +1134,25 @@ void MediaGroupListWidget::loadMedia(int row) {
   // it is possible we were passed a crapton of items,
   // which would exhaust system memory, attempt to purge items
 
-  auto shouldPurge = [](const Media& m) {
-    return isAnalysis(m) || m.isReloadable();
-  };
+  auto shouldPurge = [](const Media& m) { return isAnalysis(m) || m.isReloadable(); };
 
-//  auto then = nanoTime();
+  //  auto then = nanoTime();
 
   do {
     float totalKb, freeKb;
     Env::systemMemory(totalKb, freeKb);
 
     float requiredKb = 0;
-    for (auto& r : _lruRows)
-      requiredKb += requiredMemory(r);
+    for (auto& r : _lruRows) requiredKb += requiredMemory(r);
 
-    if (_lruRows.count() <= LW_MAX_CACHED_ROWS && // we have purged enough
-        requiredKb < freeKb - LW_MIN_FREE_MEMORY_KB) break; // we have enough
+    if (_lruRows.count() <= LW_MAX_CACHED_ROWS &&  // we have purged enough
+        requiredKb < freeKb - LW_MIN_FREE_MEMORY_KB)
+      break;  // we have enough
 
     int lru = _lruRows.takeFirst();
 
-    qDebug() << "purge row" << lru << "lru:" << _lruRows << "reqKb" << requiredKb << "freeKb" << freeKb;
+    qDebug() << "purge row" << lru << "lru:" << _lruRows << "reqKb" << requiredKb << "freeKb"
+             << freeKb;
 
     // cannot purge the current displayed row, move it to the back
     if (lru == _currentRow) {
@@ -1173,23 +1174,22 @@ void MediaGroupListWidget::loadMedia(int row) {
         // memory use increasing...
         qWarning() << "unpurgable item, heap expanding" << m.path();
 
-    if (lru == row) { // we just purged ourself, nothing else we can do
-      qWarning() << "row" << row+1 << "cannot be loaded due to low memory"
-                 << _lruRows;
+    if (lru == row) {  // we just purged ourself, nothing else we can do
+      qWarning() << "row" << row + 1 << "cannot be loaded due to low memory" << _lruRows;
       return;
     }
 
-  } while(true);
+  } while (true);
 
-//  auto now = nanoTime();
-//  qCritical() << "purge:" << (now-then) / 100000.0 << "ms";
+  //  auto now = nanoTime();
+  //  qCritical() << "purge:" << (now-then) / 100000.0 << "ms";
 
-  int groupIndex=-1;
+  int groupIndex = -1;
   for (Media& m : group) {
     groupIndex++;
     if (m.image().isNull()) {
       ImageWork* iw = new ImageWork;
-      iw->row = row+1; // match gui display
+      iw->row = row + 1;  // match gui display
       iw->index = groupIndex;
       iw->media = m;
 
@@ -1201,23 +1201,20 @@ void MediaGroupListWidget::loadMedia(int row) {
       }
 
       // match needle video range to result if it is missing
-      if (group.count() == 2 && groupIndex == 0 &&
-          group[0].type() == Media::TypeVideo &&
-          group[1].type() == Media::TypeVideo &&
-          group[0].matchRange().dstIn < 0 &&
+      if (group.count() == 2 && groupIndex == 0 && group[0].type() == Media::TypeVideo &&
+          group[1].type() == Media::TypeVideo && group[0].matchRange().dstIn < 0 &&
           group[1].matchRange().srcIn >= 0) {
-
         iw->media.setMatchRange({-1, group[1].matchRange().srcIn, 0});
       }
 
       QFutureWatcher<void>* w = new QFutureWatcher<void>(this);
       _loaders.append(w);
 
-//      connect(w, &QFutureWatcher<bool>::canceled, [=]{
-//        qWarning() << row+1 << groupIndex << "canceled";
-//      });
+      //      connect(w, &QFutureWatcher<bool>::canceled, [=]{
+      //        qWarning() << row+1 << groupIndex << "canceled";
+      //      });
 
-      connect(w, &QFutureWatcher<void>::finished, [this,w,iw] {
+      connect(w, &QFutureWatcher<void>::finished, [this, w, iw] {
         if (w->isCanceled()) {
           if (!iw->media.image().isNull())
             __canceledComplete = true;
@@ -1236,9 +1233,9 @@ void MediaGroupListWidget::loadMedia(int row) {
               if (m.path() == path && m.image().isNull()) {
                 m = iw->media;
                 if (row == _currentRow) {
-                  _updateTimer.stop();                  // coalesce updates
-                  _updateTimer.setProperty("row", row); // don't update rows we can't see
-                  _updateTimer.start(1000/60);          // 60hz is plenty
+                  _updateTimer.stop();                   // coalesce updates
+                  _updateTimer.setProperty("row", row);  // don't update rows we can't see
+                  _updateTimer.start(1000 / 60);         // 60hz is plenty
                 }
                 break;
               }
@@ -1246,11 +1243,8 @@ void MediaGroupListWidget::loadMedia(int row) {
             // run difference image once dependents are loaded and
             // the row was not canceled
             auto& group = _list[row];
-            if (!w->isCanceled() &&
-                group.count() == 3 &&
-                isDifferenceAnalysis(group[2]) &&
-                !group[0].image().isNull() &&
-                !group[1].image().isNull() &&
+            if (!w->isCanceled() && group.count() == 3 && isDifferenceAnalysis(group[2]) &&
+                !group[0].image().isNull() && !group[1].image().isNull() &&
                 group[2].image().isNull()) {
               loadMedia(row);
             }
@@ -1294,34 +1288,33 @@ void MediaGroupListWidget::waitLoaders(int row, bool cancel) {
 }
 
 // return if two values are, less, more or the same (for color-coding text)
-template<typename T>
+template <typename T>
 static const char* relativeLabel(const T& a, const T& b) {
   return a < b ? "less" : (b < a ? "more" : "same");
 };
 
 void MediaGroupListWidget::updateItems() {
-  qDebug() << _currentRow
-           << __started << (__finished + __canceled)
-           << __canceled << __canceledComplete;
+  qDebug() << _currentRow << __started << (__finished + __canceled) << __canceled
+           << __canceledComplete;
 
   if (_list[_currentRow].count() <= 0) return;
 
-// I don't like this anymore
-//
-//  const Media& icon = _list[_currentRow].first();
-//  if (!icon.image().isNull() &&
-//      property("iconPath").toString() != icon.path()) {
-//    setWindowIcon(QIcon(QPixmap::fromImage(
-//        icon.image().scaledToHeight(LW_WM_ICON_SIZE))));
-//    setProperty("iconPath", icon.path());
-//  }
+  // I don't like this anymore
+  //
+  //  const Media& icon = _list[_currentRow].first();
+  //  if (!icon.image().isNull() &&
+  //      property("iconPath").toString() != icon.path()) {
+  //    setWindowIcon(QIcon(QPixmap::fromImage(
+  //        icon.image().scaledToHeight(LW_WM_ICON_SIZE))));
+  //    setProperty("iconPath", icon.path());
+  //  }
 
   MediaGroup& group = _list[_currentRow];
 
   QString prefix = Media::greatestPathPrefix(group);
   prefix = prefix.mid(0, prefix.lastIndexOf('/') + 1);
 
-  QHash<QString, int> fsFileCount; // cache file count for large folders
+  QHash<QString, int> fsFileCount;  // cache file count for large folders
 
   // store the attributes of the first item and compare to the others
   struct {
@@ -1340,10 +1333,10 @@ void MediaGroupListWidget::updateItems() {
 
   for (int i = 0; i < group.count(); i++) {
     const Media& m = group[i];
-    //QString fmt;
+    // QString fmt;
     bool isVideo = m.type() == Media::TypeVideo;
-    //if (isVideo)
-    //  fmt = " :: " + m.attributes().value("vformat");
+    // if (isVideo)
+    //   fmt = " :: " + m.attributes().value("vformat");
 
     int64_t size = m.originalSize();
     int pixels = m.resolution();
@@ -1390,12 +1383,13 @@ void MediaGroupListWidget::updateItems() {
     QDateTime date;
     QString camera;
     if (m.type() == Media::TypeImage && !isAnalysis(m)) {
-      static auto dateFunc = Media::propertyFunc("exif#Photo.DateTimeOriginal,Photo.DateTimeDigitized");
-      static auto camFunc = Media::propertyFunc("exif#Image.UniqueCameraModel,Image.Model,Image.Make");
+      static auto dateFunc =
+          Media::propertyFunc("exif#Photo.DateTimeOriginal,Photo.DateTimeDigitized");
+      static auto camFunc =
+          Media::propertyFunc("exif#Image.UniqueCameraModel,Image.Model,Image.Make");
       date = dateFunc(m).toDateTime();
       camera = camFunc(m).toString();
-    }
-    else if (m.type() == Media::TypeVideo) {
+    } else if (m.type() == Media::TypeVideo) {
       static auto dateFunc = Media::propertyFunc("ffmeta#creation_time");
       date = dateFunc(m).toDateTime();
     }
@@ -1404,8 +1398,8 @@ void MediaGroupListWidget::updateItems() {
     // group the labels assigned are referenced in the stylesheet to change the
     // color of the value
     struct {
-      QString compression, pixels, size, score, fileCount, date, duration, frameRate,
-          jpegQuality, qualityScore;
+      QString compression, pixels, size, score, fileCount, date, duration, frameRate, jpegQuality,
+          qualityScore;
     } compare;
 
     if (i == 0) {
@@ -1420,21 +1414,23 @@ void MediaGroupListWidget::updateItems() {
       first.duration = duration;
       first.fps = fps;
 
-      compare.compression = compare.pixels = compare.score = compare.size =
-          compare.fileCount = "none";
+      compare.compression = compare.pixels = compare.score = compare.size = compare.fileCount =
+          "none";
       compare.date = "same";
-      compare.duration = "same"; //isVideo ? "same" : "none"; // do not hide
-      compare.frameRate = "same"; //isVideo ? "same" : "none";
-      compare.jpegQuality = jpegQuality==0 ? "none" : "same"; // hide unless computed
-      compare.qualityScore = qualityScore==0 ? "none" : "same";
+      compare.duration = "same";   // isVideo ? "same" : "none"; // do not hide
+      compare.frameRate = "same";  // isVideo ? "same" : "none";
+      compare.jpegQuality = jpegQuality == 0 ? "none" : "same";  // hide unless computed
+      compare.qualityScore = qualityScore == 0 ? "none" : "same";
     } else {
       compare.compression = relativeLabel(first.compression, compression);
       compare.pixels = relativeLabel(pixels, first.pixels);
       compare.size = relativeLabel(size, first.size);
       compare.score = relativeLabel(score, first.score);
       compare.fileCount = relativeLabel(fileCount, first.fileCount);
-      compare.jpegQuality = jpegQuality==0 ? "none" : relativeLabel(jpegQuality, first.jpegQuality);
-      compare.qualityScore = qualityScore==0 ? "none" : relativeLabel(qualityScore, first.qualityScore);
+      compare.jpegQuality =
+          jpegQuality == 0 ? "none" : relativeLabel(jpegQuality, first.jpegQuality);
+      compare.qualityScore =
+          qualityScore == 0 ? "none" : relativeLabel(qualityScore, first.qualityScore);
 
       compare.duration = isVideo ? relativeLabel(duration, first.duration) : "same";
       compare.frameRate = isVideo ? relativeLabel(fps, first.fps) : "same";
@@ -1475,26 +1471,26 @@ void MediaGroupListWidget::updateItems() {
         QString(
             "<table width=@width@><tbody>"
             "<tr class=\"base\"><td class=\"%26\" colspan=\"3\" count=\"%15\">%1<span "
-              "class=\"%16\">(%17)</span></td></tr>"
+            "class=\"%16\">(%17)</span></td></tr>"
             "<tr class=\"altbase\">"
-              "<td>%2x%3</td>"
-              "<td><span class=\"%7\">%11%</span></td>"
-              "<td><span class=\"%18\">%19</span></td>"
+            "<td>%2x%3</td>"
+            "<td><span class=\"%7\">%11%</span></td>"
+            "<td><span class=\"%18\">%19</span></td>"
             "</tr>"
             "<tr class=\"base\">"
-              "<td>%4k</td>"
-              "<td><span class=\"%8\">%12%</span></td>"
-              "<td><span class=\"%20\">%21</span></td>"
+            "<td>%4k</td>"
+            "<td><span class=\"%8\">%12%</span></td>"
+            "<td><span class=\"%20\">%21</span></td>"
             "</tr>"
             "<tr class=\"altbase\">"
-              "<td>%5:1</td>"
-              "<td><span class=\"%9\">%13%</span></td>"
-              "<td><span class=\"%22\">%23</span></td>"
+            "<td>%5:1</td>"
+            "<td><span class=\"%9\">%13%</span></td>"
+            "<td><span class=\"%22\">%23</span></td>"
             "</tr>"
             "<tr class=\"base\">"
-              "<td>s%6</td>"
-              "<td><span class=\"%10\">%14%</span></td>"
-              "<td><span class=\"%24\">%25</span></td>"
+            "<td>s%6</td>"
+            "<td><span class=\"%10\">%14%</span></td>"
+            "<td><span class=\"%24\">%25</span></td>"
             "</tr>"
             "</tbody></table>")
             .arg("@title@")
@@ -1522,7 +1518,9 @@ void MediaGroupListWidget::updateItems() {
             .arg(isVideo ? QString::number(fps) : QString::number(jpegQuality))
             .arg(compare.qualityScore)
             .arg(qualityScore)
-            .arg(m.isWeed() ? "weed" : m.isArchived() ? "archive" : "file");
+            .arg(m.isWeed()       ? "weed"
+                 : m.isArchived() ? "archive"
+                                  : "file");
 
     // note: the "type" attribute of QListWidgetItem will be used to refer
     // back to the associated Media object
@@ -1535,11 +1533,10 @@ void MediaGroupListWidget::updateItems() {
       insertItem(i, item);
     }
     if (isAnalysis(m)) {
-      item->setFlags(Qt::NoItemFlags); // disable selection
-    }
-    else {
+      item->setFlags(Qt::NoItemFlags);  // disable selection
+    } else {
       item->setText(text);
-      item->setData(Qt::UserRole+0, title);
+      item->setData(Qt::UserRole + 0, title);
       item->setToolTip(path);
     }
   }
@@ -1570,7 +1567,7 @@ void MediaGroupListWidget::loadRow(int row) {
   if (rowStride == 0) {
     // if we deleted a row, _currentRow doesn't change
     // but we want to preload the next row
-    rowStride = _currentRow == _list.count()-1 ? -1 : 1;
+    rowStride = _currentRow == _list.count() - 1 ? -1 : 1;
   }
   _currentRow = row;
   clear();
@@ -1622,15 +1619,12 @@ void MediaGroupListWidget::loadRow(int row) {
   if (preloadNextRow) {
     QTimer::singleShot(100, [=]() {
       // if it is still valid after timer
-      if (_currentRow + rowStride == nextRow)
-        loadMedia(nextRow);
+      if (_currentRow + rowStride == nextRow) loadMedia(nextRow);
     });
   }
 
-  if (QProcessEnvironment::systemEnvironment().contains(
-          "BENCHMARK_LISTWIDGET_LOAD")) {
+  if (QProcessEnvironment::systemEnvironment().contains("BENCHMARK_LISTWIDGET_LOAD")) {
     QTimer::singleShot(1, this, [this]() {
-
       waitLoaders(-1, false);
       qApp->processEvents();
 
@@ -1638,10 +1632,7 @@ void MediaGroupListWidget::loadRow(int row) {
       qInfo() << "BENCHMARK_LISTWIDGET_LOAD" << QString("%1 s").arg(seconds);
       exit(0);
     });
-  }
-  else
-  if (QProcessEnvironment::systemEnvironment().contains(
-          "BENCHMARK_LISTWIDGET_SCROLL")) {
+  } else if (QProcessEnvironment::systemEnvironment().contains("BENCHMARK_LISTWIDGET_SCROLL")) {
     // load the next row immediately
     QTimer::singleShot(0, [=]() { loadRow(row + 1); });
     if (row == _list.count() - 1) {
@@ -1654,11 +1645,11 @@ void MediaGroupListWidget::loadRow(int row) {
         }
 
       double seconds = (nanoTime() - start) / 1000000000.0;
-      qInfo() << "BENCHMARK_LISTWIDGET_SCROLL" <<
-            QString("%1 s, %2 MB/s, %3 MPx/s")
-                      .arg(seconds)
-                      .arg(int(data / seconds / (1024 * 1024)))
-                      .arg(int(pixels / seconds / (1000 * 1000)));
+      qInfo() << "BENCHMARK_LISTWIDGET_SCROLL"
+              << QString("%1 s, %2 MB/s, %3 MPx/s")
+                     .arg(seconds)
+                     .arg(int(data / seconds / (1024 * 1024)))
+                     .arg(int(pixels / seconds / (1000 * 1000)));
       exit(0);
     }
   }
@@ -1675,8 +1666,7 @@ void MediaGroupListWidget::updateCurrentRow(const MediaGroup& group) {
     _list.removeAt(_currentRow);
     _lruRows.removeAll(_currentRow);
     for (auto& row : _lruRows)
-      if (row > _currentRow)
-        row--;
+      if (row > _currentRow) row--;
 
     if (_list.count() < 1) {
       qInfo() << "closing view, nothing left to display";
@@ -1684,8 +1674,7 @@ void MediaGroupListWidget::updateCurrentRow(const MediaGroup& group) {
     }
   }
 
-  if (_autoDifference)
-    addDifferenceAnalysis();
+  if (_autoDifference) addDifferenceAnalysis();
 
   loadRow(_currentRow);
 }
@@ -1699,9 +1688,7 @@ void MediaGroupListWidget::loadNextRow(bool closeAtEnd) {
 
 void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
   QList<QListWidgetItem*> items = selectedItems();
-  Q_ASSERT((!deleteFiles && !replace) ||
-           (deleteFiles && !replace) ||
-           (deleteFiles && replace));
+  Q_ASSERT((!deleteFiles && !replace) || (deleteFiles && !replace) || (deleteFiles && replace));
 
   MediaGroup& group = _list[_currentRow];
 
@@ -1710,7 +1697,7 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
     qWarning() << "preventing accidental deletion of entire group";
     return;
   }
-  if (deleteFiles && replace && items.count()==1 && countNonAnalysis(group) != 2) {
+  if (deleteFiles && replace && items.count() == 1 && countNonAnalysis(group) != 2) {
     qWarning() << "delete+replace is only possible with 1 selection in 2 items";
     return;
   }
@@ -1721,8 +1708,7 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
     int index = items[i]->type();
     const Media& m = group[index];
     QString path = m.path();
-    if (m.isArchived())
-      m.archivePaths(&path);
+    if (m.isArchived()) m.archivePaths(&path);
 
     if (deleteFiles) {
       if (replace && m.isArchived()) {
@@ -1734,54 +1720,50 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
         static bool skipDeleteConfirmation = false;
         int button = 0;
         if (m.isArchived()) {
-          QString zipPath =
-              _options.db ? path.mid(_options.db->path().length() + 1) : path;
-          QMessageBox dialog(
-              QMessageBox::Warning, qq("Delete Zip Confirmation"),
-              qq("The selected file is a member of \"%1\"\n\n"
-                      "Modification of zip archives is unsupported. Move the "
-                      "entire zip to the trash?")
-                  .arg(zipPath),
-              QMessageBox::No | QMessageBox::Yes, this);
+          QString zipPath = _options.db ? path.mid(_options.db->path().length() + 1) : path;
+          QMessageBox dialog(QMessageBox::Warning, qq("Delete Zip Confirmation"),
+                             qq("The selected file is a member of \"%1\"\n\n"
+                                "Modification of zip archives is unsupported. Move the "
+                                "entire zip to the trash?")
+                                 .arg(zipPath),
+                             QMessageBox::No | QMessageBox::Yes, this);
           button = Theme::instance().execDialog(&dialog);
         } else if (skipDeleteConfirmation) {
           button = QMessageBox::Yes;
         } else {
-          QString filePath =
-              _options.db ? path.mid(_options.db->path().length() + 1) : path;
-          QMessageBox dialog(
-              QMessageBox::Warning, qq("Delete File Confirmation"),
-              qq("Move this file to the trash?\n\n%1").arg(filePath),
-              QMessageBox::No | QMessageBox::Yes | QMessageBox::YesToAll, this);
+          QString filePath = _options.db ? path.mid(_options.db->path().length() + 1) : path;
+          QMessageBox dialog(QMessageBox::Warning, qq("Delete File Confirmation"),
+                             qq("Move this file to the trash?\n\n%1").arg(filePath),
+                             QMessageBox::No | QMessageBox::Yes | QMessageBox::YesToAll, this);
           button = Theme::instance().execDialog(&dialog);
         }
 
-        if (button == QMessageBox::YesToAll) skipDeleteConfirmation = true;
-        else if (button != QMessageBox::Yes) return;
+        if (button == QMessageBox::YesToAll)
+          skipDeleteConfirmation = true;
+        else if (button != QMessageBox::Yes)
+          return;
       }
 
       if (!DesktopHelper::moveToTrash(path)) return;
 
       if (_options.db) {
         if (m.isArchived()) {
-            QString like = path;
-            like.replace("%", "\\%").replace("_", "\\_");
-            like += ":%";
-            MediaGroup zipGroup = _options.db->mediaWithPathLike(like);
-            _options.db->remove(zipGroup);
-            if (_options.trackWeeds)
-              qWarning() << "Cannot track weeds when deleting zip files";
+          QString like = path;
+          like.replace("%", "\\%").replace("_", "\\_");
+          like += ":%";
+          MediaGroup zipGroup = _options.db->mediaWithPathLike(like);
+          _options.db->remove(zipGroup);
+          if (_options.trackWeeds) qWarning() << "Cannot track weeds when deleting zip files";
         } else {
           _options.db->remove(group[index].id());
-          if (_options.trackWeeds && countNonAnalysis(group)==2) {
+          if (_options.trackWeeds && countNonAnalysis(group) == 2) {
             int otherIndex = (index + 1) % 2;
             Media& other = group[otherIndex];
             Q_ASSERT(!isAnalysis(other));
-            if (group[index].md5() != other.md5() &&
-                !_options.db->addWeed(group[index], other))
+            if (group[index].md5() != other.md5() && !_options.db->addWeed(group[index], other))
               qWarning() << "Failed to add weed" << group[index].md5() << other.md5();
           }
-          if (replace && countNonAnalysis(group)==2) {
+          if (replace && countNonAnalysis(group) == 2) {
             int otherIndex = (index + 1) % 2;
             Media& other = group[otherIndex];
             Q_ASSERT(!isAnalysis(other));
@@ -1789,12 +1771,10 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
             const QFileInfo otherInfo(other.path());
 
             // the new name must keep the suffix, could be different
-            QString newName = info.completeBaseName() + "." +
-                              otherInfo.suffix();
+            QString newName = info.completeBaseName() + "." + otherInfo.suffix();
 
             // rename (if needed) and then move
-            if (otherInfo.fileName() == newName ||
-                _options.db->rename(other, newName))
+            if (otherInfo.fileName() == newName || _options.db->rename(other, newName))
               _options.db->move(other, info.dir().absolutePath());
           }
         }
@@ -1811,22 +1791,19 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
   MediaGroup newGroup;
   const int oldCount = group.count();
   for (int i = 0; i < oldCount; ++i)
-    if (!removed.contains(i))
-      newGroup.append(group[i]);
+    if (!removed.contains(i)) newGroup.append(group[i]);
   group = newGroup;
   updateCurrentRow(group);
 }
 
 void MediaGroupListWidget::removeAnalysis() {
   for (auto& g : _list)
-    if (isAnalysis(g.last()))
-      g.removeLast();
+    if (isAnalysis(g.last())) g.removeLast();
 }
 
 void MediaGroupListWidget::addDifferenceAnalysis() {
   for (auto& g : _list)
-    if (g.count() == 2 && !isAnalysis(g.last()))
-      g.append(newDifferenceAnalysis());
+    if (g.count() == 2 && !isAnalysis(g.last())) g.append(newDifferenceAnalysis());
 }
 
 static void maybeAppend(QStringList& sl, const QString& s) {
@@ -1859,13 +1836,12 @@ void MediaGroupListWidget::renameFileAction() {
 
     // names of matches
     for (auto& m2 : group) {
-        if (m2.isArchived()) {
-          QString fileName;
-          m2.archivePaths(nullptr, &fileName);
-          maybeAppend(completions, fileName);
-        }
-        else
-          maybeAppend(completions, m2.name());
+      if (m2.isArchived()) {
+        QString fileName;
+        m2.archivePaths(nullptr, &fileName);
+        maybeAppend(completions, fileName);
+      } else
+        maybeAppend(completions, m2.name());
     }
 
     // also files in same directory
@@ -1882,8 +1858,8 @@ void MediaGroupListWidget::renameFileAction() {
 
     QString newName = info.fileName();
     QInputDialog dialog(this);
-    int result = Theme::instance().execInputDialog(
-        &dialog, qq("Rename File"), qq("New Name"), newName, completions);
+    int result = Theme::instance().execInputDialog(&dialog, qq("Rename File"), qq("New Name"),
+                                                   newName, completions);
 
     if (result != QInputDialog::Accepted) return;
 
@@ -1893,16 +1869,16 @@ void MediaGroupListWidget::renameFileAction() {
     QString path = m.path();
     if (_options.db) {
       if (_options.db->rename(m, newName))
-          updateMedia(path, m);
+        updateMedia(path, m);
       else
-          qWarning() << "rename via database failed";
+        qWarning() << "rename via database failed";
     } else {
       QDir parentDir = info.dir();
       if (parentDir.rename(info.fileName(), newName)) {
-          m.setPath(parentDir.absoluteFilePath(newName));
-          updateMedia(path, m);
+        m.setPath(parentDir.absoluteFilePath(newName));
+        updateMedia(path, m);
       } else
-          qWarning() << "rename via filesystem failed";
+        qWarning() << "rename via filesystem failed";
     }
   }
 }
@@ -1919,14 +1895,13 @@ void MediaGroupListWidget::renameFolderAction() {
   QStringList completions;
   QDir parentDir;
 
-  if (m.isArchived()) { // first completion is selection
+  if (m.isArchived()) {  // first completion is selection
     QString zip;
     m.archivePaths(&zip);
     QFileInfo info(zip);
     newName = info.fileName();
     parentDir = info.dir();
-  }
-  else {
+  } else {
     QFileInfo info(m.path());
     newName = info.dir().dirName();
     parentDir = info.dir();
@@ -1934,11 +1909,11 @@ void MediaGroupListWidget::renameFolderAction() {
   }
   completions += newName;
 
-//  for (const auto& ii : qAsConst(_list[_currentRow])) {
-//    const auto it = ii.attributes().find("group");
-//    if (it != ii.attributes().end())
-//      maybeAppend(completions, it.value());
-//  }
+  //  for (const auto& ii : qAsConst(_list[_currentRow])) {
+  //    const auto it = ii.attributes().find("group");
+  //    if (it != ii.attributes().end())
+  //      maybeAppend(completions, it.value());
+  //  }
 
   for (const auto& ii : qAsConst(_list[_currentRow])) {
     if (ii.isArchived()) {
@@ -1946,7 +1921,7 @@ void MediaGroupListWidget::renameFolderAction() {
       ii.archivePaths(&zipPath);
       const QFileInfo info(zipPath);
       QString zipName = QFileInfo(zipPath).fileName();
-      if (!m.isArchived()) zipName = zipName.mid(0,zipName.lastIndexOf("."));
+      if (!m.isArchived()) zipName = zipName.mid(0, zipName.lastIndexOf("."));
       maybeAppend(completions, zipName);
     } else {
       QString dirName = QFileInfo(ii.path()).dir().dirName();
@@ -1956,8 +1931,8 @@ void MediaGroupListWidget::renameFolderAction() {
   }
 
   QInputDialog dialog(this);
-  int result = Theme::instance().execInputDialog(
-      &dialog, qq("Rename Folder/Zip"), qq("New Name"), newName, completions);
+  int result = Theme::instance().execInputDialog(&dialog, qq("Rename Folder/Zip"), qq("New Name"),
+                                                 newName, completions);
 
   if (result != QInputDialog::Accepted) return;
 
@@ -1976,7 +1951,7 @@ bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
   int otherIndex = !selIndex;
 
   // assumes we keep analysis images at the end
-  Q_ASSERT( !isAnalysis(group[otherIndex]) );
+  Q_ASSERT(!isAnalysis(group[otherIndex]));
 
   *selected = &group[selIndex];
   *other = &group[!selIndex];
@@ -1985,16 +1960,14 @@ bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
 
 bool MediaGroupListWidget::renameWarning() {
   if (!_options.db) {
-    QMessageBox dialog(
-        QMessageBox::Warning, qq("Rename Without Database?"),
-        qq("Renaming without a database will invalidate the index."),
-        QMessageBox::Yes | QMessageBox::No, this);
+    QMessageBox dialog(QMessageBox::Warning, qq("Rename Without Database?"),
+                       qq("Renaming without a database will invalidate the index."),
+                       QMessageBox::Yes | QMessageBox::No, this);
 
     dialog.setDefaultButton(QMessageBox::No);
 
     int button = Theme::instance().execDialog(&dialog);
-    if (button != QMessageBox::Yes)
-      return true;
+    if (button != QMessageBox::Yes) return true;
   }
   return false;
 }
@@ -2015,24 +1988,21 @@ void MediaGroupListWidget::copyNameAction() {
   if (other->isArchived())
     other->archivePaths(nullptr, &otherName);
   else
-    otherName = other->name(); // fixme: should name() work with archives?
+    otherName = other->name();  // fixme: should name() work with archives?
 
-  QString newName = QFileInfo(otherName).completeBaseName() +
-                          "." + info.suffix();
+  QString newName = QFileInfo(otherName).completeBaseName() + "." + info.suffix();
   const QString oldPath = selected->path();
   if (_options.db) {
     if (_options.db->rename(*selected, newName))
       updateMedia(oldPath, *selected);
     else
       qWarning() << "rename via database failed";
-  }
-  else {
+  } else {
     QDir dir = info.dir();
     if (dir.rename(oldPath, newName)) {
-      selected->setPath( dir.absoluteFilePath(newName) );
+      selected->setPath(dir.absoluteFilePath(newName));
       updateMedia(oldPath, *selected);
-    }
-    else
+    } else
       qWarning() << "rename via filesystem failed";
   }
 }
@@ -2052,10 +2022,9 @@ void MediaGroupListWidget::moveFileAction() {
 
   for (Media& m : selectedMedia()) {
     QString path = m.path();
-    if (_options.db->move(m, dirPath))
-      updateMedia(path, m);
+    if (_options.db->move(m, dirPath)) updateMedia(path, m);
   }
-  loadRow(_currentRow); // path in window title may have changed
+  loadRow(_currentRow);  // path in window title may have changed
 }
 
 void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& newName) {
@@ -2065,11 +2034,9 @@ void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& ne
   QString absSrcPath = QFileInfo(dir.absolutePath()).absoluteFilePath();
   if (child.isArchived()) {
     child.archivePaths(&absSrcPath);
-    dir = QFileInfo(absSrcPath).dir(); // dir otherwise may refer to a zip dir
-    if (!newPath.endsWith(".zip"))
-      newPath += ".zip";
-  }
-  else if (!dir.cdUp()) {
+    dir = QFileInfo(absSrcPath).dir();  // dir otherwise may refer to a zip dir
+    if (!newPath.endsWith(".zip")) newPath += ".zip";
+  } else if (!dir.cdUp()) {
     // use parent for direct rename/updating
     qWarning() << "cdUp() failed";
     return;
@@ -2116,7 +2083,8 @@ void MediaGroupListWidget::moveFolderAction() {
   QString dirPath = action->data().toString();
 
   if (dirPath == ";newfolder;")
-    dirPath = Theme::instance().getExistingDirectory("Move Parent: Choose Destination", _options.db->path(), this);
+    dirPath = Theme::instance().getExistingDirectory("Move Parent: Choose Destination",
+                                                     _options.db->path(), this);
 
   if (dirPath.isEmpty()) return;
 
@@ -2129,7 +2097,7 @@ void MediaGroupListWidget::moveFolderAction() {
     else
       srcPath = m.dirPath();
 
-    if (moved.contains(srcPath)) // already moved
+    if (moved.contains(srcPath))  // already moved
       continue;
 
     const QString dstPath = dirPath + "/" + QFileInfo(srcPath).fileName();
@@ -2163,15 +2131,13 @@ void MediaGroupListWidget::compareVideosAction() {
   Media left = group[0];
   Media right = group[items[0]->type()];
 
-  if (left.type() != Media::TypeVideo || right.type() != Media::TypeVideo)
-    return;
+  if (left.type() != Media::TypeVideo || right.type() != Media::TypeVideo) return;
 
   MatchRange range(0, 0, -1);
 
   // if right is needle, left is match; set range
   if (left.matchRange().srcIn < 0)
-    range = MatchRange(right.matchRange().srcIn, right.matchRange().dstIn,
-                       right.matchRange().len);
+    range = MatchRange(right.matchRange().srcIn, right.matchRange().dstIn, right.matchRange().len);
 
   VideoCompareWidget* comp = new VideoCompareWidget(left, right, range, _options);
   comp->setAttribute(Qt::WA_DeleteOnClose);
@@ -2217,8 +2183,7 @@ void MediaGroupListWidget::qualityScoreAction() {
         m.setAttribute("quality-score", QString::number(score));
 
         // jpeg codec quality factor
-        if (m.type() != Media::TypeImage ||
-            isAnalysis(m))                  // raw images can't be checked
+        if (m.type() != Media::TypeImage || isAnalysis(m))  // raw images can't be checked
           return;
 
         auto* io = m.ioDevice();
@@ -2237,8 +2202,7 @@ void MediaGroupListWidget::qualityScoreAction() {
 
         // if it isn't jpeg we don't get jq.ok
         const JpegQuality jq = EstimateJpegQuality(io);
-        if (jq.ok && jq.isReliable)
-          m.setAttribute("jpeg-quality", QString::number(jq.quality));
+        if (jq.ok && jq.isReliable) m.setAttribute("jpeg-quality", QString::number(jq.quality));
       });
 
   qApp->setOverrideCursor(QCursor(Qt::WaitCursor));
@@ -2305,8 +2269,7 @@ bool MediaGroupListWidget::addNegMatch(bool all) {
 
   if (all || countNonAnalysis(group) == 2) {
     for (int i = 1; i < group.size(); i++)
-      if (!isAnalysis(group[i]))
-        _options.db->addNegativeMatch(group[0], group[i]);
+      if (!isAnalysis(group[i])) _options.db->addNegativeMatch(group[0], group[i]);
 
     return true;
   } else {
@@ -2339,7 +2302,7 @@ void MediaGroupListWidget::templateMatchAction() {
   if (items.count() == 1) {
     MediaGroup filtered;
     int selectedIndex = items[0]->type();
-    int otherIndex = selectedIndex==0 ? (selectedIndex + 1)%group.count() : 0;
+    int otherIndex = selectedIndex == 0 ? (selectedIndex + 1) % group.count() : 0;
     filtered.append(group[otherIndex]);
     filtered.append(group[selectedIndex]);
     group = filtered;
@@ -2380,7 +2343,7 @@ void MediaGroupListWidget::reloadAction() {
     auto& m = g[i];
     m.setRoi(QVector<QPoint>());
     m.setTransform(QTransform());
-    if (isAnalysis(m)) g.remove(i--); // recompute
+    if (isAnalysis(m)) g.remove(i--);  // recompute
   }
   resetZoom();
   updateCurrentRow(g);
@@ -2389,7 +2352,7 @@ void MediaGroupListWidget::reloadAction() {
 void MediaGroupListWidget::copyImageAction() {
   auto sel = selectedMedia();
   if (sel.count() <= 0) return;
-  const Media&m = sel[0];
+  const Media& m = sel[0];
   qApp->clipboard()->setImage(m.image());
 }
 
@@ -2411,7 +2374,7 @@ void MediaGroupListWidget::moveToNextScreenAction() {
   QRect newGeom;
   for (int i = 0; i < screens.count(); ++i) {
     if (screens[i]->geometry().contains(contentsPos)) {
-      i = (i+1) % screens.count();
+      i = (i + 1) % screens.count();
       newGeom = screens[i]->availableGeometry();
       break;
     }
@@ -2438,8 +2401,8 @@ void MediaGroupListWidget::moveToNextScreenAction() {
     geom.setHeight(newGeom.height() - winOffset.height());
 
   // resize regardless...otherwise seem to get artifacts on some WMs
-  resize(geom.width(),geom.height()); // does not include window frame
-  move(QPoint(newX, newY));           // position on screen, includes window frame
+  resize(geom.width(), geom.height());  // does not include window frame
+  move(QPoint(newX, newY));             // position on screen, includes window frame
 }
 
 void MediaGroupListWidget::zoomInAction() {
@@ -2480,8 +2443,7 @@ void MediaGroupListWidget::panDownAction() {
   repaint();
 }
 
-void MediaGroupListWidget::resetZoom()
-{
+void MediaGroupListWidget::resetZoom() {
   _zoom = 1.0;
   _panX = 0.0;
   _panY = 0.0;
@@ -2502,15 +2464,15 @@ void MediaGroupListWidget::resizePage(bool more) {
   // preset of small sizes, multiples of largest size thereafter
   const int numSizes = 5;
   const int sizes[numSizes] = {1, 2, 4, 6, 12};
-  const int scale = sizes[numSizes - 1 ];
+  const int scale = sizes[numSizes - 1];
 
   int newSize;
 
-  if (oldSize >= scale*2)
-    newSize = ((oldSize / scale) + (more ? 1 : -1) ) * scale;
+  if (oldSize >= scale * 2)
+    newSize = ((oldSize / scale) + (more ? 1 : -1)) * scale;
   else {
     if (more) {
-      newSize = scale*2;
+      newSize = scale * 2;
       for (auto p : sizes)
         if (oldSize < p) {
           newSize = p;
@@ -2575,8 +2537,10 @@ void MediaGroupListWidget::cycleMagFilter() {
 }
 
 void MediaGroupListWidget::toggleAutoDifferenceAction() {
-  if (_autoDifference) removeAnalysis();
-  else addDifferenceAnalysis();
+  if (_autoDifference)
+    removeAnalysis();
+  else
+    addDifferenceAnalysis();
 
   _autoDifference = !_autoDifference;
   loadRow(_currentRow);
@@ -2585,7 +2549,7 @@ void MediaGroupListWidget::toggleAutoDifferenceAction() {
 void MediaGroupListWidget::rotateGroup(int row) {
   MediaGroup& group = _list[row];
   int offset = 1;
-  if (isAnalysis(group.last())) // do not rotate the analysis image
+  if (isAnalysis(group.last()))  // do not rotate the analysis image
     offset = 2;
   group.move(0, group.count() - offset);
   updateItems();
@@ -2595,16 +2559,15 @@ void MediaGroupListWidget::restoreSelectedItem(const QModelIndex& last) {
   const MediaGroup& group = _list.at(_currentRow);
   int count = countNonAnalysis(group);
   int selIndex = std::min(last.row(), count - 1);
-  if (selIndex >= 0)
-    setCurrentIndex(model()->index(selIndex, 0));
+  if (selIndex >= 0) setCurrentIndex(model()->index(selIndex, 0));
 }
 
 void MediaGroupListWidget::keyPressEvent(QKeyEvent* event) {
   // up/down key move to the next group if we're on the first/last row of the group
   // note: Mac OS X will set KeypadModifier, so check for valid modifiers too
   qDebug() << event->key() << event->modifiers();
-  const auto validModifiers = Qt::ShiftModifier | Qt::ControlModifier |
-                              Qt::AltModifier | Qt::MetaModifier;
+  const auto validModifiers =
+      Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier;
 
   bool modifiers = event->modifiers() & validModifiers;
   const QModelIndexList list = selectedIndexes();
@@ -2613,13 +2576,11 @@ void MediaGroupListWidget::keyPressEvent(QKeyEvent* event) {
     const QModelIndex& curr = list.first();
     if (event->key() == Qt::Key_Down) {
       QModelIndex next = moveCursor(QAbstractItemView::MoveDown, Qt::NoModifier);
-      if (curr == next && _currentRow + 1 < _list.count())
-        return loadRow(_currentRow + 1);
+      if (curr == next && _currentRow + 1 < _list.count()) return loadRow(_currentRow + 1);
     } else if (event->key() == Qt::Key_Up) {
       qDebug() << "move cursor up";
       QModelIndex next = moveCursor(QAbstractItemView::MoveUp, Qt::NoModifier);
-      if (curr == next && _currentRow - 1 >= 0)
-        return loadRow(_currentRow - 1);
+      if (curr == next && _currentRow - 1 >= 0) return loadRow(_currentRow - 1);
     }
   }
 
@@ -2679,11 +2640,11 @@ void MediaGroupListWidget::updateMedia(const QString& path, const Media& m) {
 
 void MediaGroupListWidget::browseParentAction() {
 #ifdef QT_TESTLIB_LIB
-  qWarning() << "browseParentAction() disabled for unit tests"; // MediaBrowser dependency breaks tests
+  qWarning()
+      << "browseParentAction() disabled for unit tests";  // MediaBrowser dependency breaks tests
 #else
   const MediaGroup g = selectedMedia();
-  if (g.count() < 1)
-    return;
+  if (g.count() < 1) return;
   if (!_options.db) {
     qWarning() << "database is required";
     return;
@@ -2701,8 +2662,8 @@ void MediaGroupListWidget::browseParentAction() {
   MediaWidgetOptions options = _options;
   options.selectOnOpen = m;
 
-  MediaBrowser::show(Media::splitGroup(siblings, options.maxPerPage),
-                     MediaBrowser::ShowNormal, options);
+  MediaBrowser::show(Media::splitGroup(siblings, options.maxPerPage), MediaBrowser::ShowNormal,
+                     options);
 #endif
 }
 
@@ -2714,8 +2675,7 @@ bool MediaGroupListWidget::selectItem(const Media& item) {
       rowIndex = i;
       break;
     }
-  if (rowIndex <= 0)
-    return false;
+  if (rowIndex <= 0) return false;
 
   loadRow(rowIndex);
   setCurrentIndex(model()->index(groupIndex, 0));
@@ -2723,6 +2683,4 @@ bool MediaGroupListWidget::selectItem(const Media& item) {
   return true;
 }
 
-void MediaGroupListWidget::show() {
-  Theme::instance().showWindow(this, _maximized);
-}
+void MediaGroupListWidget::show() { Theme::instance().showWindow(this, _maximized); }

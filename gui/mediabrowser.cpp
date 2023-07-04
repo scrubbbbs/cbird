@@ -20,17 +20,18 @@
    <https://www.gnu.org/licenses/>.  */
 #include "mediabrowser.h"
 
+#include "mediafolderlistwidget.h"
+#include "mediagrouplistwidget.h"
+
 #include "../database.h"
 #include "../engine.h"
 #include "../qtutil.h"
 #include "../scanner.h"
 #include "../videocontext.h"
-#include "mediafolderlistwidget.h"
-#include "mediagrouplistwidget.h"
 
 static QImage loadThumb(const Media& m, const MediaWidgetOptions& options) {
   const qreal dpr = qApp->devicePixelRatio();
-  const int iconSize = dpr*options.iconSize;
+  const int iconSize = dpr * options.iconSize;
 
   const float iconAspect = options.iconAspect;
   const bool doCrop = iconAspect >= 0;
@@ -64,13 +65,12 @@ static QImage loadThumb(const Media& m, const MediaWidgetOptions& options) {
   const float origAspect = float(origW) / origH;
 
   if (origAspect < iconAspect) {
-    QSize size(iconSize*iconAspect, 0);
+    QSize size(iconSize * iconAspect, 0);
     img = img.isNull() ? m.loadImage(size) : Media(img).loadImage(size);
     int h = img.width() / iconAspect;
     int y = (img.height() - h) / 2;
     img = img.copy(0, y, img.width(), h);
-  }
-  else {
+  } else {
     QSize size(0, iconSize);
     img = img.isNull() ? m.loadImage(size) : Media(img).loadImage(size);
     int w = img.height() * iconAspect;
@@ -121,14 +121,13 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
   for (const MediaGroup& g : list) {
     Q_ASSERT(g.count() > 0);
     const Media& first = g.at(0);
-    QString key = first.attributes().value("group"); // use -group-by before path
-    if (!key.isEmpty())
-      key = key.split(qq("==")).back(); // don't display -group-by expression
+    QString key = first.attributes().value("group");       // use -group-by before path
+    if (!key.isEmpty()) key = key.split(qq("==")).back();  // don't display -group-by expression
 
     if (key.isEmpty()) {
       if (first.isArchived())
         first.archivePaths(&key);
-      else if (first.type() == Media::TypeVideo) // don't group videos todo: option
+      else if (first.type() == Media::TypeVideo)  // don't group videos todo: option
         key = first.path();
       else
         key = first.dirPath();
@@ -202,8 +201,7 @@ int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions&
         m.archivePaths(&path);
       else
         path = m.dirPath();
-      if (!dirPaths.contains(path))
-        dirPaths.append(path);
+      if (!dirPaths.contains(path)) dirPaths.append(path);
     }
 
     // we have a pair, add it
@@ -243,8 +241,7 @@ int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions&
       }
     }
 
-  if (sets[unpairedKey].isEmpty())
-    index.removeFirst();
+  if (sets[unpairedKey].isEmpty()) index.removeFirst();
 
   auto f = QtConcurrent::map(index, [&](Media& m) {
     m.setImage(loadThumb(sets[m.path()][0][0], options));
@@ -291,9 +288,7 @@ void MediaBrowser::showIndex(const MediaGroup& index,
       _groupIndex = 0;
       nextFrame();
     }
-    void stop() {
-      _timer->stop();
-    }
+    void stop() { _timer->stop(); }
     void nextFrame() {
       if (qApp->activeWindow() != parent()) return;
 
@@ -305,21 +300,20 @@ void MediaBrowser::showIndex(const MediaGroup& index,
       // we will not see it here, check if it still exists
       const Media& m = group.at(_groupIndex);
       QString filePath = m.path();
-      if (m.isArchived())
-        m.archivePaths(&filePath);
+      if (m.isArchived()) m.archivePaths(&filePath);
       if (!QFile::exists(filePath)) return;
 
       QImage img = loadThumb(group.at(_groupIndex), _options);
       if (img.isNull()) return;
       _item->setIcon(QPixmap::fromImage(img));
       _groupIndex = (_groupIndex + 1) % group.count();
-      if (_groupIndex == 0)
-        _listIndex = (_listIndex + 1) % _list.count();
+      if (_groupIndex == 0) _listIndex = (_listIndex + 1) % _list.count();
     }
+
    private:
     const MediaWidgetOptions _options;
     QTimer* _timer = nullptr;
-    QListWidgetItem* _item=nullptr;
+    QListWidgetItem* _item = nullptr;
     MediaGroupList _list;
     int _listIndex = 0;
     int _groupIndex = 0;
@@ -327,11 +321,9 @@ void MediaBrowser::showIndex(const MediaGroup& index,
 
   auto* anim = new Animation(_options, w);
 
-  connect(w, &MediaFolderListWidget::endHover, this, [anim]() {
-    anim->stop();
-  });
+  connect(w, &MediaFolderListWidget::endHover, this, [anim]() { anim->stop(); });
 
-  connect(w, &MediaFolderListWidget::beginHover, this, [this,w,anim](int index) {
+  connect(w, &MediaFolderListWidget::beginHover, this, [this, w, anim](int index) {
     QListWidgetItem* item = w->item(index);
     if (!item) return;
 
@@ -345,8 +337,7 @@ void MediaBrowser::showIndex(const MediaGroup& index,
 
 void MediaBrowser::show(const MediaGroupList& list) {
   MediaGroupListWidget* w = new MediaGroupListWidget(list, _options);
-  if (_options.selectOnOpen.isValid())
-    w->selectItem(_options.selectOnOpen);
+  if (_options.selectOnOpen.isValid()) w->selectItem(_options.selectOnOpen);
 
   connect(w, &MediaGroupListWidget::mediaSelected, this, &MediaBrowser::mediaSelected);
   w->show();
@@ -374,8 +365,7 @@ void MediaBrowser::mediaSelected(const MediaGroup& group) {
       // fixme: refactor common filtering logic
       search.matches.prepend(search.needle);
       MediaGroupList list;
-      if (!_options.db->filterMatch(_options.params, search.matches))
-        list.append(search.matches);
+      if (!_options.db->filterMatch(_options.params, search.matches)) list.append(search.matches);
       _options.db->filterMatches(_options.params, list);
       show(list);
     }

@@ -21,15 +21,15 @@
 #include "scanner.h"
 
 #include "cvutil.h"
+#include "fsutil.h"
+#include "index.h"
 #include "ioutil.h"
 #include "media.h"
-#include "videocontext.h"
 #include "qtutil.h"
-#include "index.h"
-#include "fsutil.h"
+#include "videocontext.h"
 
+#include "opencv2/core.hpp"
 #include "quazip/quazip.h"
-#include "quazip/quazipfile.h"
 
 Scanner::Scanner() {
   // clang-format off
@@ -56,11 +56,8 @@ Scanner::~Scanner() { flush(); }
 
 void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
                             const QDateTime& modifiedSince) {
-  if (_params.indexThreads <= 0)
-    _params.indexThreads = QThread::idealThreadCount();
-
-  if (_params.decoderThreads <= 0)
-    _params.decoderThreads = QThread::idealThreadCount();
+  if (_params.indexThreads <= 0) _params.indexThreads = QThread::idealThreadCount();
+  if (_params.decoderThreads <= 0) _params.decoderThreads = QThread::idealThreadCount();
 
 #ifdef Q_OS_WIN
   if (!_params.dupInodes)
@@ -88,36 +85,29 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   // - this is slow; so try to avoid it
   // - pointless if codecs are all multithreaded
   // - little difference if there are a lot of jobs
-  if (_params.estimateCost &&
-      _params.algos & SearchParams::AlgoVideo &&
+  if (_params.estimateCost && _params.algos & SearchParams::AlgoVideo &&
       _videoQueue.count() <= _params.indexThreads) {
     QMap<QString, float> cost;
     for (auto& path : qAsConst(_videoQueue)) {
       cost[path] = -1.0f;
 
-      const QString context = path.mid(_topDirPath.length()+1);
+      const QString context = path.mid(_topDirPath.length() + 1);
       const MessageContext mc(context);
 
       // todo: cost could be better by considering codec/decoder
       VideoContext v;
-      VideoContext::DecodeOptions opt;
-      opt.threads = _params.decoderThreads;
       if (v.open(path) < 0) continue;
 
       VideoContext::Metadata d = v.metadata();
-      cost[path] = (d.frameRate * d.duration * d.frameSize.width() *
-                    d.frameSize.height()) /
-                   v.threadCount();
+      cost[path] =
+          (d.frameRate * d.duration * d.frameSize.width() * d.frameSize.height()) / v.threadCount();
     }
 
     std::sort(_videoQueue.begin(), _videoQueue.end(),
-              [&cost](const QString& a, const QString& b) {
-                return cost[a] > cost[b];
-              });
+              [&cost](const QString& a, const QString& b) { return cost[a] > cost[b]; });
 
     for (auto path : _videoQueue)
-      qDebug("estimate cost=%.2f path=%s", double(cost[path]),
-             qUtf8Printable(path));
+      qDebug("estimate cost=%.2f path=%s", double(cost[path]), qUtf8Printable(path));
   }
 
   if (_params.dryRun) {
@@ -128,8 +118,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   if (_imageQueue.count() > 0 || _videoQueue.count() > 0) {
     qInfo() << "scan completed, indexing" << remainingWork() << "additions...";
     QTimer::singleShot(1, this, &Scanner::processOne);
-  }
-  else {
+  } else {
     qInfo() << "scan completed, nothing to index";
     QTimer::singleShot(1, this, [&] { emit scanCompleted(); });
   }
@@ -163,8 +152,7 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
         skipped.append(zipPath);
         _existingFiles++;
         continue;
-      }
-      else {
+      } else {
         _modifiedFiles++;
       }
     }
@@ -177,8 +165,7 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
         _imageQueue.append(zipPath);
         _queuedWork.insert(zipPath);
       }
-    }
-    else {
+    } else {
       _ignoredFiles++;
       if (_params.showIgnored) setError(zipPath, ErrorZipUnsupported);
     }
@@ -205,17 +192,18 @@ QMutex* Scanner::staticMutex() {
 }
 
 void Scanner::scanProgress(const QString& path) const {
-  const QString elided = qElide(path.mid(_topDirPath.length()+1), 80);
+  const QString elided = qElide(path.mid(_topDirPath.length() + 1), 80);
 
-  QString status = QString::asprintf(
-          "<NC>%s<PL> i:%lld v:%lld ign:%d mod:%d ok:%d <EL>%s",
-          qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(), _ignoredFiles,
-         _modifiedFiles, _existingFiles, qUtf8Printable(elided));
+  QString status =
+      QString::asprintf("<NC>%s<PL> i:%lld v:%lld ign:%d mod:%d ok:%d <EL>%s",
+                        qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(),
+                        _ignoredFiles, _modifiedFiles, _existingFiles, qUtf8Printable(elided));
   qInfo().noquote() << status;
 }
 
 void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
-  if (!QDir(dirPath).exists()) {
+  const QDir dir(dirPath);
+  if (!dir.exists()) {
     qWarning("%s does not exist", qUtf8Printable(dirPath));
     return;
   }
@@ -225,7 +213,7 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
 
   QDir::Filters filters = QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot;
 
-  for (const QString& name : QDir(dirPath).entryList(filters)) {
+  for (const QString& name : dir.entryList(filters)) {
     QString path = dirPath + "/" + name;
     const QFileInfo entry(path);
 
@@ -259,12 +247,12 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
     // - allows links to be used for organizing, without re-indexing
     if (_params.resolveLinks && (entry.isSymLink() || entry.isJunction())) {
       QString canonical;
-#ifdef Q_OS_WIN32
-      if (entry.isJunction()) // qt will not resolve it ...
+#ifdef Q_OS_WIN
+      if (entry.isJunction())  // qt will not resolve it ...
         canonical = resolveJunction(path);
       else
 #endif
-      canonical = entry.canonicalFilePath();
+        canonical = entry.canonicalFilePath();
       if (canonical.startsWith(_topDirPath)) {
         path = canonical;
         _imageQueue.removeOne(path);
@@ -300,9 +288,8 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
       if ((_params.types & IndexParams::TypeImage) && _imageTypes.contains(type)) {
         if (entry.size() < _params.minFileSize) {
           _ignoredFiles++;
-          setError(path, ErrorTooSmall); 
-        }
-        else if (!isQueued(path)) {
+          setError(path, ErrorTooSmall);
+        } else if (!isQueued(path)) {
           _imageQueue.append(path);
           _queuedWork.insert(path);
         }
@@ -310,8 +297,7 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         if (entry.size() < _params.minFileSize) {
           _ignoredFiles++;
           setError(path, ErrorTooSmall);
-        }
-        else if (!isQueued(path))
+        } else if (!isQueued(path))
           _videoQueue.append(path);
       } else if (_archiveTypes.contains(type)) {
         // todo: attempt to skip deep scan of zip files... this is slow
@@ -357,8 +343,7 @@ void Scanner::flush(bool wait) {
   // todo: clear started slow-running jobs (process video)
 
   // in case this is called for no reason
-  if (cancelled <= 0 && _activeWork.count() <= 0)
-    qDebug() << "nothing to flush";
+  if (cancelled <= 0 && _activeWork.count() <= 0) qDebug() << "nothing to flush";
 
   if (wait) {
     // it isn't ideal to block, but the nature of flush() is that it must,
@@ -394,9 +379,8 @@ void Scanner::finish() {
     QString status = QString::asprintf(
         "<NC>queued:<PL>image=%lld,video=%lld:batch=%lld,threadpool:gpu=%d,video=%d,global=%"
         "d    ",
-        _imageQueue.count(), _videoQueue.count(), _activeWork.count(),
-        _gpuPool.activeThreadCount(), _videoPool.activeThreadCount(),
-        QThreadPool::globalInstance()->activeThreadCount());
+        _imageQueue.count(), _videoQueue.count(), _activeWork.count(), _gpuPool.activeThreadCount(),
+        _videoPool.activeThreadCount(), QThreadPool::globalInstance()->activeThreadCount());
     qInfo().noquote() << status;
     timer.setInterval(100);
   });
@@ -425,9 +409,9 @@ void Scanner::processOne() {
   if (_videoQueue.empty()) {
     queueLimit = _params.writeBatchSize;
 
-    if (_activeWork.count() < _params.indexThreads && // not enough work queued
-        _imageQueue.size() > queueLimit && // there is enough available
-        _processedFiles > queueLimit) // we have already processed some
+    if (_activeWork.count() < _params.indexThreads &&  // not enough work queued
+        _imageQueue.size() > queueLimit &&             // there is enough available
+        _processedFiles > queueLimit)                  // we have already processed some
       qWarning() << "worker starvation, maybe increase writeBatchSize (-i.bsize)";
   }
 
@@ -435,17 +419,31 @@ void Scanner::processOne() {
     QString path;
     if (!_videoQueue.empty()) {
       path = _videoQueue.first();
-      const MessageContext mc(path.mid(_topDirPath.length()+1));
+      const MessageContext mc(path.mid(_topDirPath.length() + 1));
 
-      bool tryGpu = _params.useHardwareDec &&
-                    _gpuPool.activeThreadCount() < _gpuPool.maxThreadCount();
-      int cpuThreads =
-          qMin(_params.decoderThreads,
-               _videoPool.maxThreadCount() - _videoPool.activeThreadCount());
+      bool tryGpu =
+          _params.useHardwareDec && _gpuPool.activeThreadCount() < _gpuPool.maxThreadCount();
+      const int availThreads = _videoPool.maxThreadCount() - _videoPool.activeThreadCount();
 
+      int cpuThreads = 0;
+      if (availThreads >= _params.decoderThreads) cpuThreads = _params.decoderThreads;
+
+      // not mp-aware-codec gets 1 thread
+      if (QFileInfo(path).suffix().toLower() == ll("wmv")) cpuThreads = qMin(availThreads, 1);
+
+      // something is wrong with this logic, we end up with 1 thread on everything
+      //      if (_videoQueue.count() > _videoPool.maxThreadCount()) {
+      //        // try fully utilizing machine when there are a lot of videos
+      //        // this will take longer if one video is very long and the others are short
+      //        cpuThreads = 1;
+      //      }
+      //      else
+
+      // there is one video left, it can have all the available threads
       if (_videoQueue.count() == 1) {
-        // there is one video left, it can have all the available threads
-        cpuThreads = _videoPool.maxThreadCount() - _videoPool.activeThreadCount();
+        if (availThreads > _params.decoderThreads) cpuThreads = availThreads;
+        // else
+        //   cpuThreads = _videoPool.maxThreadCount() - _videoPool.activeThreadCount();
       }
 
       if (tryGpu || cpuThreads > 0) {
@@ -459,8 +457,7 @@ void Scanner::processOne() {
             pool = &_videoPool;
             // qDebug() << "cpu pool" << v->threadCount();
             if (v->threadCount() > 1)
-              pool->setMaxThreadCount(
-                  qMax(1, pool->maxThreadCount() - v->threadCount() + 1));
+              pool->setMaxThreadCount(qMax(1, pool->maxThreadCount() - v->threadCount() + 1));
           }
 
           if (!pool && tryGpu) {
@@ -475,23 +472,21 @@ void Scanner::processOne() {
             f = QtConcurrent::run(pool, &Scanner::processVideo, this, v);
             _videoQueue.removeFirst();
           }
-        }
-        else
-          _videoQueue.removeFirst(); // failed to open
-        //printf("v");
-        //fflush(stdout);
+        } else
+          _videoQueue.removeFirst();  // failed to open
+        // printf("v");
+        // fflush(stdout);
       }
     } else if (!_imageQueue.empty()) {
       path = _imageQueue.takeFirst();
       _queuedWork.remove(path);
-      f = QtConcurrent::run(&Scanner::processImageFile, this, path,
-                            QByteArray());
+      f = QtConcurrent::run(&Scanner::processImageFile, this, path, QByteArray());
       queuedImage = true;
-      //printf("i");
-      //fflush(stdout);
+      // printf("i");
+      // fflush(stdout);
     } else {
-      //printf(".");
-      //fflush(stdout);
+      // printf(".");
+      // fflush(stdout);
     }
 
     if (!f.isCanceled()) {
@@ -529,7 +524,7 @@ void Scanner::processFinished() {
     // if cancelled we cannot call .result()
     result.path = w->property("path").toString();
     result.ok = false;
-  } else {    
+  } else {
     _processedFiles++;
     result = w->future().result();
     Media& m = result.media;
@@ -538,8 +533,8 @@ void Scanner::processFinished() {
     VideoContext* v = result.context;
     if (v) {
       if (!v->isHardware() && v->threadCount() > 1) {
-        int threads = qMin(_params.indexThreads,
-                           _videoPool.maxThreadCount() + v->threadCount() - 1);
+        int threads =
+            qMin(_params.indexThreads, _videoPool.maxThreadCount() + v->threadCount() - 1);
         _videoPool.setMaxThreadCount(threads);
       }
 
@@ -552,8 +547,8 @@ void Scanner::processFinished() {
     // up the commit
   }
 
-  //printf("%c", result.ok ? '+' : 'X');
-  //fflush(stdout);
+  // printf("%c", result.ok ? '+' : 'X');
+  // fflush(stdout);
 
   _activeWork.remove(result.path);
   _work.removeOne(w);
@@ -572,7 +567,7 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
 
   // opencv throws exceptions
   try {
-    const QString shortPath = path.mid(_topDirPath.length()+1);
+    const QString shortPath = path.mid(_topDirPath.length() + 1);
     const MessageContext mc(shortPath);
     const CVErrorLogger cvLogger(shortPath);
 
@@ -591,7 +586,7 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
     }
 
     cv::Mat cvImg;
-    qImageToCvImg(qImg, cvImg); // can this use nocopy?
+    qImageToCvImg(qImg, cvImg);  // can this use nocopy?
 
     // note: this should probably only be used
     // for algos without features
@@ -602,28 +597,24 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
     uint64_t dctHash = 0;
     if (_params.algos & (1 << SearchParams::AlgoDCT)) dctHash = dctHash64(cvImg);
 
-    result.media =
-        Media(path, Media::TypeImage, width, height, digest, dctHash);
+    result.media = Media(path, Media::TypeImage, width, height, digest, dctHash);
     Media& m = result.media;
 
     if (_params.retainImage) m.setImage(qImg);
 
     if (_params.algos & (1 << SearchParams::AlgoColor)) {
       ColorDescriptor colorDesc;
-      colorDescriptor(cvImg, colorDesc);
+      ColorDescriptor::create(cvImg, colorDesc);
       m.setColorDescriptor(colorDesc);
     }
 
-    if (_params.algos & (1 << SearchParams::AlgoDCTFeatures |
-                         1 << SearchParams::AlgoCVFeatures)) {
+    if (_params.algos & (1 << SearchParams::AlgoDCTFeatures | 1 << SearchParams::AlgoCVFeatures)) {
       sizeLongestSide(cvImg, _params.resizeLongestSide);
       m.makeKeyPoints(cvImg, _params.numFeatures);
 
-      if (_params.algos & (1 << SearchParams::AlgoCVFeatures))
-        m.makeKeyPointDescriptors(cvImg);
+      if (_params.algos & (1 << SearchParams::AlgoCVFeatures)) m.makeKeyPointDescriptors(cvImg);
 
-      if (_params.algos & (1 << SearchParams::AlgoDCTFeatures))
-        m.makeKeyPointHashes(cvImg);
+      if (_params.algos & (1 << SearchParams::AlgoDCTFeatures)) m.makeKeyPointHashes(cvImg);
     }
 
     result.ok = true;
@@ -671,9 +662,7 @@ QByteArray Scanner::jpegPayload(const QByteArray& bytes) {
       if (i < size) {
         int code = ptr[i];
         if (code != 0xFF && code != 0x00 &&
-            ((code >= 0xD0 && code <= 0xDD) ||
-             (code >= 0xE0 && code <= 0xEF)))
-        {
+            ((code >= 0xD0 && code <= 0xDD) || (code >= 0xE0 && code <= 0xEF))) {
           int start = i - 1;
           // qDebug("marker@%d 0xFF%.2x", start, code);
 
@@ -715,8 +704,7 @@ bool Scanner::findJpegMarker(const QByteArray& bytes, const QString& path) {
   return isJpeg;
 }
 
-IndexResult Scanner::processImageFile(const QString& path,
-                                      const QByteArray& data) const {
+IndexResult Scanner::processImageFile(const QString& path, const QByteArray& data) const {
   IndexResult result;
   result.path = path;
 
@@ -738,7 +726,7 @@ IndexResult Scanner::processImageFile(const QString& path,
 
   // decompress, may perform exif orientation
   QImage qImg;
-  QSize size(-1,-1);
+  QSize size(-1, -1);
   if (_params.algos) {
     ImageLoadOptions opt;
     opt.fastJpegIdct = true;
@@ -750,28 +738,22 @@ IndexResult Scanner::processImageFile(const QString& path,
       setError(path, ErrorLoad);
       return result;
     }
-  }
-  else {
+  } else {
     // we only want the md5, get size w/o decoding
     QBuffer buffer(&bytes);
     QImageReader reader;
     reader.setDevice(&buffer);
-    if (reader.canRead() &&
-        reader.supportsOption(QImageIOHandler::Size))
-      size = reader.size();
+    if (reader.canRead() && reader.supportsOption(QImageIOHandler::Size)) size = reader.size();
   }
 
   // hash the payload of the jpeg, ignoring exif
   if (isJpeg) bytes = jpegPayload(bytes);
 
   // md5
-  QString digest =
-      QString(QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex());
-
+  QString digest = QString(QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex());
 
   if (!_params.algos) {
-    result.media = Media(path, Media::TypeImage, size.width(),
-                         size.height(), digest, 0);
+    result.media = Media(path, Media::TypeImage, size.width(), size.height(), digest, 0);
     result.ok = true;
     return result;
   }
@@ -782,8 +764,7 @@ IndexResult Scanner::processImageFile(const QString& path,
   return result;
 }
 
-VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu,
-                                        int cpuThreads) const {
+VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu, int cpuThreads) const {
   VideoContext* video = new VideoContext;
 
   int deviceIndex = -1;
@@ -792,25 +773,24 @@ VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu,
   opt.threads = cpuThreads;
   opt.gpu = tryGpu;
   opt.deviceIndex = deviceIndex;
-  opt.maxH = 128;                 // need just enough to detect/crop borders
+  opt.maxH = 128;  // need just enough to detect/crop borders
   opt.maxW = 128;
-  opt.fast = true;                // enable speeds ok for indexing
-  opt.gray = true;                // only look at the "Y" channel, dct algo is grayscale
+  opt.fast = true;  // enable speeds ok for indexing
+  opt.gray = true;  // only look at the "Y" channel, dct algo is grayscale
   if (video->open(path, opt) < 0) {
     setError(path, ErrorLoad);
     delete video;
     return nullptr;
   }
 
-  //qDebug("decode using %s, threads=%d\n\n", video->isHardware() ? "gpu" : "cpu",
-  //      video->threadCount());
+  // qDebug("decode using %s, threads=%d\n\n", video->isHardware() ? "gpu" : "cpu",
+  //       video->threadCount());
 
   return video;
 }
 
 IndexResult Scanner::processVideo(VideoContext* video) const {
-
-  const QString context = video->path().mid(_topDirPath.length()+1);
+  const QString context = video->path().mid(_topDirPath.length() + 1);
   const CVErrorLogger cvLogger("processVideo:" + context);
   const MessageContext mc(context);
 
@@ -832,8 +812,8 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
   result.media = Media(result.path, Media::TypeVideo, 0, 0, md5, 0);
   Media& m = result.media;
 
-  if (!(_params.algos & (1<<SearchParams::AlgoVideo))) {
-    //qWarning("video index disabled, storing md5 and metadata");
+  if (!(_params.algos & (1 << SearchParams::AlgoVideo))) {
+    // qWarning("video index disabled, storing md5 and metadata");
     m.setWidth(video->width());
     m.setHeight(video->height());
   } else {
@@ -845,11 +825,10 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
 
     VideoContext::Metadata d = video->metadata();
     float framePixelsPerMs =
-        (d.duration * d.frameRate * video->width() * video->height()) /
-        (end - start);
+        (d.duration * d.frameRate * video->width() * video->height()) / (end - start);
 
-    qDebug("perf codec=%s bitrate=%d pixels/ms=%.1f", qUtf8Printable(d.videoCodec),
-           d.videoBitrate, double(framePixelsPerMs));
+    qDebug("perf codec=%s bitrate=%d pixels/ms=%.1f", qUtf8Printable(d.videoCodec), d.videoBitrate,
+           double(framePixelsPerMs));
   }
 
   result.ok = true;
@@ -857,8 +836,7 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
 }
 
 IndexResult Scanner::processVideoFile(const QString& path) const {
-  VideoContext* video =
-      initVideoProcess(path, _params.useHardwareDec, _params.decoderThreads);
+  VideoContext* video = initVideoProcess(path, _params.useHardwareDec, _params.decoderThreads);
 
   if (!video) {
     IndexResult result;
@@ -880,7 +858,7 @@ IndexResult Scanner::processVideoFile(const QString& path) const {
 IndexParams::IndexParams() {
   static const QVector<NamedValue> emptyValues;
   static const QVector<int> emptyRange;
-  //static const QVector<int> percent{1, 100};
+  // static const QVector<int> percent{1, 100};
   static const QVector<int> positive{0, INT_MAX};
   static const QVector<int> nonzero{1, INT_MAX};
 
@@ -888,29 +866,28 @@ IndexParams::IndexParams() {
   {
     // note: identical to SearchParams::algo except bit shift
     static const QVector<NamedValue> bits{
-      {1<<SearchParams::AlgoDCT, "dct", "DCT image hash"},
-      {1<<SearchParams::AlgoDCTFeatures, "fdct", "DCT image hashes of features"},
-      {1<<SearchParams::AlgoCVFeatures, "orb", "ORB descriptors of features"},
-      {1<<SearchParams::AlgoColor, "color", "Color histogram"},
-      {1<<SearchParams::AlgoVideo, "video", "DCT image hashes of video frames"}};
-    add({"algos", "Enabled algorithms", Value::Flags, counter++,
-         SET_FLAGS("algos", algos, bits), GET(algos), GET_CONST(bits), NO_RANGE});
+        {1 << SearchParams::AlgoDCT, "dct", "DCT image hash"},
+        {1 << SearchParams::AlgoDCTFeatures, "fdct", "DCT image hashes of features"},
+        {1 << SearchParams::AlgoCVFeatures, "orb", "ORB descriptors of features"},
+        {1 << SearchParams::AlgoColor, "color", "Color histogram"},
+        {1 << SearchParams::AlgoVideo, "video", "DCT image hashes of video frames"}};
+    add({"algos", "Enabled algorithms", Value::Flags, counter++, SET_FLAGS("algos", algos, bits),
+         GET(algos), GET_CONST(bits), NO_RANGE});
   }
 
   {
-    static const QVector<NamedValue> bits{
-        {TypeImage, "i", "Image files"},
-        {TypeVideo, "v", "Video files"},
-        {TypeAudio, "a", "Audio files"}};
-    add({"types", "Enabled media types", Value::Flags, counter++,
-         SET_FLAGS("types", types, bits), GET(types), GET_CONST(bits), NO_RANGE});
+    static const QVector<NamedValue> bits{{TypeImage, "i", "Image files"},
+                                          {TypeVideo, "v", "Video files"},
+                                          {TypeAudio, "a", "Audio files"}};
+    add({"types", "Enabled media types", Value::Flags, counter++, SET_FLAGS("types", types, bits),
+         GET(types), GET_CONST(bits), NO_RANGE});
   }
 
-  add({"dirs", "Enable indexing of subdirectories", Value::Bool, counter++,
-       SET_BOOL(recursive),GET(recursive),NO_NAMES, NO_RANGE});
+  add({"dirs", "Enable indexing of subdirectories", Value::Bool, counter++, SET_BOOL(recursive),
+       GET(recursive), NO_NAMES, NO_RANGE});
 
-  add({"ignored", "Log all ignored files", Value::Bool, counter++,
-       SET_INT(showIgnored), GET(showIgnored), NO_NAMES, NO_RANGE});
+  add({"ignored", "Log all ignored files", Value::Bool, counter++, SET_INT(showIgnored),
+       GET(showIgnored), NO_NAMES, NO_RANGE});
 
   add({"links", "Follow symlinks to files and directories", Value::Bool, counter++,
        SET_BOOL(followSymlinks), GET(followSymlinks), NO_NAMES, NO_RANGE});
@@ -924,20 +901,20 @@ IndexParams::IndexParams() {
   add({"ljf", "Estimate job cost and process longest jobs first", Value::Bool, counter++,
        SET_BOOL(estimateCost), GET(estimateCost), NO_NAMES, NO_RANGE});
 
-  add({"dryrun", "Dry run, only show what would be done", Value::Bool, counter++,
-       SET_BOOL(dryRun), GET(dryRun), NO_NAMES, NO_RANGE});
+  add({"dryrun", "Dry run, only show what would be done", Value::Bool, counter++, SET_BOOL(dryRun),
+       GET(dryRun), NO_NAMES, NO_RANGE});
 
   add({"fsize", "Minimum file size in bytes, ignore smaller files", Value::Int, counter++,
        SET_INT(minFileSize), GET(minFileSize), NO_NAMES, GET_CONST(positive)});
 
-  add({"bsize", "Size of database write batches", Value::Int, counter++,
-       SET_INT(writeBatchSize), GET(writeBatchSize), NO_NAMES, GET_CONST(nonzero)});
+  add({"bsize", "Size of database write batches", Value::Int, counter++, SET_INT(writeBatchSize),
+       GET(writeBatchSize), NO_NAMES, GET_CONST(nonzero)});
 
-  add({"crop", "Enable border detect/crop of video", Value::Bool, counter++,
-       SET_BOOL(autocrop), GET(autocrop), NO_NAMES, NO_RANGE});
+  add({"crop", "Enable border detect/crop of video", Value::Bool, counter++, SET_BOOL(autocrop),
+       GET(autocrop), NO_NAMES, NO_RANGE});
 
-  add({"nfeat", "Number of features per image", Value::Int, counter++,
-       SET_INT(numFeatures), GET(numFeatures), NO_NAMES, GET_CONST(positive)});
+  add({"nfeat", "Number of features per image", Value::Int, counter++, SET_INT(numFeatures),
+       GET(numFeatures), NO_NAMES, GET_CONST(positive)});
 
   add({"rsize", "Dimension for prescaling images before processing", Value::Int, counter++,
        SET_INT(resizeLongestSide), GET(resizeLongestSide), NO_NAMES, GET_CONST(nonzero)});
@@ -946,15 +923,14 @@ IndexParams::IndexParams() {
        SET_INT(videoThreshold), GET(videoThreshold), NO_NAMES, GET_CONST(nonzero)});
 
   add({"gpu", "Enable gpu video decoding (Nvidia)", Value::Bool, counter++,
-       SET_BOOL(useHardwareDec), GET(useHardwareDec),
-       NO_NAMES, NO_RANGE});
+       SET_BOOL(useHardwareDec), GET(useHardwareDec), NO_NAMES, NO_RANGE});
 
   add({"decthr", "Max threads for video decoding (0==auto)", Value::Int, counter++,
        SET_INT(decoderThreads), GET(decoderThreads), NO_NAMES, GET_CONST(positive)});
 
-  add({"idxthr", "Max threads for all jobs (0==auto)", Value::Int, counter++,
-       SET_INT(indexThreads), GET(indexThreads), NO_NAMES, GET_CONST(positive)});
+  add({"idxthr", "Max threads for all jobs (0==auto)", Value::Int, counter++, SET_INT(indexThreads),
+       GET(indexThreads), NO_NAMES, GET_CONST(positive)});
 
-  add({"gputhr", "Max decoders per gpu", Value::Int, counter++,
-       SET_INT(gpuThreads), GET(gpuThreads), NO_NAMES, GET_CONST(nonzero)});
+  add({"gputhr", "Max decoders per gpu", Value::Int, counter++, SET_INT(gpuThreads),
+       GET(gpuThreads), NO_NAMES, GET_CONST(nonzero)});
 }

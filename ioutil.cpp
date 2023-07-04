@@ -20,18 +20,16 @@
    <https://www.gnu.org/licenses/>.  */
 #include "ioutil.h"
 
-QCancelableIODevice::QCancelableIODevice(QIODevice *io, const QFuture<void>* future)
+QCancelableIODevice::QCancelableIODevice(QIODevice* io, const QFuture<void>* future)
     : _io(io), _future(future) {
   setOpenMode(_io->openMode());
 }
 
-QCancelableIODevice::~QCancelableIODevice() {
-  delete _io;
-}
+QCancelableIODevice::~QCancelableIODevice() { delete _io; }
 
 bool QCancelableIODevice::open(QIODevice::OpenMode flags) {
   bool ok = _io->open(flags);
-  setOpenMode(_io->openMode()|QIODevice::Unbuffered);
+  setOpenMode(_io->openMode() | QIODevice::Unbuffered);
   _io->seek(0);
   return ok;
 }
@@ -41,36 +39,32 @@ void QCancelableIODevice::close() {
   return _io->close();
 }
 
-qint64 QCancelableIODevice::size() const {
-  return _io->size();
-}
+qint64 QCancelableIODevice::size() const { return _io->size(); }
 
 bool QCancelableIODevice::reset() {
   super::seek(0);
   return _io->reset();
 }
 
-//bool QCancelableIODevice::atEnd() const {
-//  return _io->atEnd();
-//}
+// bool QCancelableIODevice::atEnd() const {
+//   return _io->atEnd();
+// }
 
-//bool QCancelableIODevice::canReadLine() const {
-//  if (_future->isCanceled()) return false;
-//  return _io->canReadLine();
-//}
+// bool QCancelableIODevice::canReadLine() const {
+//   if (_future->isCanceled()) return false;
+//   return _io->canReadLine();
+// }
 
-//qint64 QCancelableIODevice::pos() const {
-//  return _io->pos();
-//}
+// qint64 QCancelableIODevice::pos() const {
+//   return _io->pos();
+// }
 
 bool QCancelableIODevice::seek(qint64 pos) {
   super::seek(pos);
   return _io->seek(pos);
 }
 
-bool QCancelableIODevice::isSequential() const {
-  return _io->isSequential();
-}
+bool QCancelableIODevice::isSequential() const { return _io->isSequential(); }
 
 qint64 QCancelableIODevice::readData(char* data, qint64 len) {
   if (_future->isCanceled()) return -1;
@@ -83,8 +77,7 @@ qint64 QCancelableIODevice::writeData(const char* data, qint64 len) {
   return -1;
 }
 
-void loadBinaryData(const QString& path, void** data, uint64_t* len,
-                    bool compress) {
+void loadBinaryData(const QString& path, void** data, uint64_t* len, bool compress) {
   *data = nullptr;
   *len = 0;
 
@@ -100,35 +93,30 @@ void loadBinaryData(const QString& path, void** data, uint64_t* len,
       memcpy(ptr, b.data(), size_t(b.size()));
       *data = ptr;
       *len = size_t(b.size());
-    }
-    else {
+    } else {
       qint64 size = f.size();
       char* ptr = strict_malloc(ptr, size);
       if (!ptr) throw std::bad_alloc();
       if (size != f.read(ptr, size))
-        qFatal("failed to read file %d: %s",
-               f.error(), qPrintable(f.errorString()));
+        qFatal("failed to read file %d: %s", f.error(), qPrintable(f.errorString()));
       *data = ptr;
       *len = size;
     }
 
-  } catch (std::bad_alloc &e) {
+  } catch (std::bad_alloc& e) {
     // could be from QByteArray or malloc
     qFatal("bad_alloc");
   }
 }
 
-void saveBinaryData(const void* data, uint64_t len, const QString& path,
-                    bool compress) {
+void saveBinaryData(const void* data, uint64_t len, const QString& path, bool compress) {
   writeFileAtomically(path, [data, len, compress](QFile& f) {
-    QByteArray b = QByteArray::fromRawData(
-        reinterpret_cast<const char*>(data), int(len));
+    QByteArray b = QByteArray::fromRawData(reinterpret_cast<const char*>(data), int(len));
 
     if (compress) b = qCompress(b);
 
     auto wrote = f.write(b);
-    if (wrote != b.length())
-      throw f.errorString();
+    if (wrote != b.length()) throw f.errorString();
   });
 }
 
@@ -136,7 +124,7 @@ QString fullMd5(QIODevice& io) {
 #define THREADED_IO (1)
 #if THREADED_IO
   // todo: qt5 md5 seems slower than it should be
-  QSemaphore producer(2); // todo: settings
+  QSemaphore producer(2);  // todo: maybe setting for queue depth
   QSemaphore consumer;
   QMutex mutex;
   QList<QByteArray> chunks;
@@ -147,10 +135,10 @@ QString fullMd5(QIODevice& io) {
   ioPool.start([&]() {
     while (!io.atEnd()) {
       producer.acquire();
-      QByteArray buf = io.read(128*1024); // todo: setting for file i/o buffer size
+      QByteArray buf = io.read(128 * 1024);  // todo: setting for file i/o buffer size
       {
         QMutexLocker locker(&mutex);
-        chunks.append( buf );
+        chunks.append(buf);
       }
       consumer.release();
     }
@@ -164,7 +152,7 @@ QString fullMd5(QIODevice& io) {
     {
       QMutexLocker locker(&mutex);
       if (chunks.empty()) break;
-      buf = chunks[0]; // implicit sharing, no copy of data
+      buf = chunks[0];  // implicit sharing, no copy of data
       chunks.removeFirst();
     }
     producer.release();
@@ -211,8 +199,11 @@ QString sparseMd5(QIODevice& file) {
 #ifdef ABANDONED
 class Dangling {
  public:
-  Dangling()  { _this=this; std::atexit(cleanup); }
-  ~Dangling() { _this=nullptr; }
+  Dangling() {
+    _this = this;
+    std::atexit(cleanup);
+  }
+  ~Dangling() { _this = nullptr; }
 
   static void cleanup() {
     if (!_this) {
@@ -231,44 +222,36 @@ class Dangling {
     _files.insert(path);
   }
 
-  void remove(const QString& path) {
-    _files.remove(path);
-  }
+  void remove(const QString& path) { _files.remove(path); }
 
  private:
   QMutex _mutex;
-  QSet<QString>  _files;
+  QSet<QString> _files;
   static const Dangling* _this;
-
 };
 const Dangling* Dangling::_this = nullptr;
 #endif
 
-void writeFileAtomically(const QString& path,
-                         const std::function<void(QFile&)>& fn) {
-  //static auto* d = new Dangling;
+void writeFileAtomically(const QString& path, const std::function<void(QFile&)>& fn) {
+  // static auto* d = new Dangling;
   try {
     QTemporaryFile f(path);
-    if (!f.open())
-      throw f.errorString();
+    if (!f.open()) throw f.errorString();
 
-    //const QString tmpName = f.fileName();
-    //d->add(tmpName);
+    // const QString tmpName = f.fileName();
+    // d->add(tmpName);
 
     fn(f);
 
-    if (QFile::exists(path) && !QFile::remove(path))
-      throw qq("failed to remove old file");
+    if (QFile::exists(path) && !QFile::remove(path)) throw qq("failed to remove old file");
 
-    if (!f.rename(path))
-      throw f.errorString();
+    if (!f.rename(path)) throw f.errorString();
 
     f.setAutoRemove(false);
 
-    //d->remove(tmpName);
+    // d->remove(tmpName);
 
   } catch (const QString& error) {
-    qFatal("file system error writing %s: %s", qUtf8Printable(path),
-           qUtf8Printable(error));
+    qFatal("file system error writing %s: %s", qUtf8Printable(path), qUtf8Printable(error));
   }
 }

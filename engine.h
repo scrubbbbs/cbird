@@ -35,7 +35,7 @@ struct MediaSearch {
   MediaGroup matches;
 };
 
-/// Integration of search components
+/// Integration of indexing, search queries, and filters
 class Engine : public QObject {
   Q_OBJECT
   Q_DISABLE_COPY_MOVE(Engine)
@@ -58,9 +58,9 @@ class Engine : public QObject {
    * Search for newly added or removed files
    * @param wait block until scan is complete
    *
-   * If block=false, destruct of Engine will wait for update to complete
+   * If wait=false, destruct of Engine will discard pending items
    *
-   * Emits fileAdded if a new file was added
+   * Emits fileAdded when a new file was added or modified
    */
   void update(bool wait = false);
 

@@ -20,19 +20,26 @@
    <https://www.gnu.org/licenses/>.  */
 #include "media.h"
 #include "cvutil.h"
-//#include "opencv2/highgui/highgui.hpp"
 
 #include "hamm.h"
 #include "ioutil.h"
 #include "qtutil.h"
 #include "videocontext.h"
 
-//#include <QtNetwork/QtNetwork>  // httpRequest
-//#include <memory>
-
 #include "exiv2/exiv2.hpp"
 #include "quazip/quazip.h"
 #include "quazip/quazipfile.h"
+
+#include "opencv2/features2d/features2d.hpp"
+
+class Media::SharedData {
+ public:
+  KeyPointList keyPoints;
+  KeyPointDescriptors descriptors;
+  KeyPointRectList kpRects;
+  KeyPointHashList kpHashes;
+  VideoIndex videoIndex;
+};
 
 void Media::setDefaults() {
   _id = 0;
@@ -45,6 +52,7 @@ void Media::setDefaults() {
   _score = -1;
   _position = -1;
   _type = TypeImage;
+  __sharedData.reset(new SharedData);
 }
 
 Media::Media(const QImage& qImg, int originalSize) {
@@ -68,13 +76,33 @@ void Media::imageHash() {
       qImageToCvImg(_img, cvImg);
 
       _dctHash = dctHash64(cvImg);
-      ::colorDescriptor(cvImg, _colorDescriptor);
+      ColorDescriptor::create(cvImg, _colorDescriptor);
     } catch (...) {
       qCritical("hash failed with exception");
     }
   } else
     qCritical("_img is unset, nothing to do");
 }
+
+// void Media::setKeyPoints(const KeyPointList& keyPoints) {
+//   shared().keyPoints = keyPoints;
+// }
+
+// void Media::setKeyPointDescriptors(const KeyPointDescriptors& desc) {
+//   shared().descriptors = desc;
+// }
+
+// void Media::setKeyPointRects(const KeyPointRectList& rects) {
+//   shared().kpRects = rects;
+// }
+
+// void Media::setKeyPointHashes(const KeyPointHashList &hashes) {
+//   shared().kpHashes = hashes;
+// }
+
+Media::SharedData& Media::shared() { return *(__sharedData.get()); }
+
+const Media::SharedData& Media::shared() const { return *(__sharedData.get()); }
 
 Media::Media(const QString& path, int type, int width, int height) {
   setDefaults();
@@ -84,8 +112,8 @@ Media::Media(const QString& path, int type, int width, int height) {
   _height = height;
 }
 
-Media::Media(const QString& path, int type, int width, int height,
-             const QString& md5, const uint64_t dctHash) {
+Media::Media(const QString& path, int type, int width, int height, const QString& md5,
+             const uint64_t dctHash) {
   setDefaults();
   _type = type;
   _path = path;
@@ -95,21 +123,21 @@ Media::Media(const QString& path, int type, int width, int height,
   _dctHash = dctHash;
 }
 
-Media::Media(const QString& path, int type, int width, int height,
-             const QString& md5, const uint64_t dctHash,
-             const ColorDescriptor& colorDesc, const KeyPointList& keyPoints,
-             const KeyPointDescriptors& descriptors) {
-  setDefaults();
-  _path = path;
-  _type = type;
-  _width = width;
-  _height = height;
-  _md5 = md5;
-  _dctHash = dctHash;
-  _colorDescriptor = colorDesc;
-  _keyPoints = keyPoints;
-  _descriptors = descriptors;
-}
+// Media::Media(const QString& path, int type, int width, int height,
+//              const QString& md5, const uint64_t dctHash,
+//              const ColorDescriptor& colorDesc, const KeyPointList& keyPoints,
+//              const KeyPointDescriptors& descriptors) {
+//   setDefaults();
+//   _path = path;
+//   _type = type;
+//   _width = width;
+//   _height = height;
+//   _md5 = md5;
+//   _dctHash = dctHash;
+//   _colorDescriptor = colorDesc;
+//   setKeyPoints(keyPoints);
+//   setKeyPointDescriptors(descriptors);
+// }
 
 void Media::print(const Media& media) {
   qInfo("------------------------------------");
@@ -120,9 +148,8 @@ void Media::print(const Media& media) {
   qInfo() << "size  =" << media.width() << "x" << media.height();
   qInfo() << "type  =" << media.type();
   qInfo() << "isZip =" << media.isArchived();
-  qInfo("score = %d rangeIn={%d, %d, %d}", media.score(),
-        media.matchRange().srcIn, media.matchRange().dstIn,
-        media.matchRange().len);
+  qInfo("score = %d rangeIn={%d, %d, %d}", media.score(), media.matchRange().srcIn,
+        media.matchRange().dstIn, media.matchRange().len);
 
   qInfo() << "image =" << media.image();
   qInfo() << "dataSz=" << media.data().size();
@@ -227,10 +254,10 @@ void Media::sortGroup(MediaGroup& group, const QString& key, bool reverse) {
   collator.setNumericMode(true);
 
   auto cmp = [&](const Media& a, const Media& b) {
-      const QString sa = f(a).toString();
-      const QString sb = f(b).toString();
-      return reverse ^ (0 > qNumericSubstringCompare(collator, sa, sb));
-    };
+    const QString sa = f(a).toString();
+    const QString sb = f(b).toString();
+    return reverse ^ (0 > qNumericSubstringCompare(collator, sa, sb));
+  };
 
   std::stable_sort(group.begin(), group.end(), cmp);
 }
@@ -251,10 +278,10 @@ static QString greatestPrefix(const QStringList& list) {
   }
 
   // remove trailing part up to next directory (like dirname)
-  int j = prefix.length()-1;
+  int j = prefix.length() - 1;
   for (; j >= 0; --j)
     if (prefix[j] == '/') break;
-  prefix.truncate(j+1);
+  prefix.truncate(j + 1);
 
   return prefix;
 }
@@ -262,12 +289,11 @@ static QString greatestPrefix(const QStringList& list) {
 QString Media::greatestPathPrefix(const MediaGroupList& gl) {
   QStringList list;
   // fixme: path could be http:// or @tag or data-url://
-  for (const MediaGroup& g : gl)
-    list.append(greatestPathPrefix(g));
+  for (const MediaGroup& g : gl) list.append(greatestPathPrefix(g));
   return greatestPrefix(list);
 }
 
-QString Media:: greatestPathPrefix(const MediaGroup& group) {
+QString Media::greatestPathPrefix(const MediaGroup& group) {
   // fixme: path could be http:// or @tag or data-url://
   QStringList list;
   for (const Media& m : group)
@@ -277,223 +303,188 @@ QString Media:: greatestPathPrefix(const MediaGroup& group) {
 
 MediaGroupList Media::splitGroup(const MediaGroup& group, int chunkSize) {
   MediaGroupList list;
-  for (int i = 0; i < group.count(); i += chunkSize)
-    list.append(group.mid(i, chunkSize));
+  for (int i = 0; i < group.count(); i += chunkSize) list.append(group.mid(i, chunkSize));
   return list;
 }
 
 std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
+  // unary functions can be chained
+  const QStringList calls = expr.split(lc('#'));
+  if (calls.count() > 1) {
+    QVector<std::function<QVariant(const QVariant&)>> chain;
+    for (auto& expr : calls) chain.append(unaryFunc(expr));  // recursion ok, # is stripped out
+    return [chain](const QVariant& v) {
+      QVariant r = v;
+      for (auto& f : qAsConst(chain)) r = f(r);
+      return r;
+    };
+  }
 
-    // unary functions can be chained
-    const QStringList calls = expr.split(lc('#'));
-    if (calls.count() > 1) {
-      QVector< std::function<QVariant(const QVariant&)> > chain;
-      for (auto& expr : calls)
-        chain.append(unaryFunc(expr)); // recursion ok, # is stripped out
-      return [chain](const QVariant& v) {
-        QVariant r = v;
-        for (auto& f : qAsConst(chain))
-          r = f(r);
-        return r;
-      };
-    }
+  const QStringList call = expr.split(",");
+  QString fn = call[0];
 
-    const QStringList call = expr.split(",");
-    QString fn = call[0];
-
-    // string functions
-    if (fn == "mid") {
-      if (call.count() != 3)
-        qFatal("mid() has two integer arguments (begin, length)");
+  // string functions
+  if (fn == "mid") {
+    if (call.count() != 3) qFatal("mid() has two integer arguments (begin, length)");
+    bool ok;
+    int start = call[1].toInt(&ok);
+    if (!ok) qFatal("first argument to mid() is not an integer");
+    int len = call[2].toInt(&ok);
+    if (!ok) qFatal("second argument to mid() is not an integer");
+    return [start, len](const QVariant& v) {
+      const QString k = v.toString();
+      return QVariant(k.mid(start, len));
+    };
+  }
+  if (fn == "trim") {
+    if (call.count() != 1) qFatal("trim() has no arguments");
+    return [](const QVariant& v) { return v.toString().trimmed(); };
+  }
+  if (fn == "upper") {
+    if (call.count() != 1) qFatal("upper() has no arguments");
+    return [](const QVariant& v) { return v.toString().toUpper(); };
+  }
+  if (fn == "lower") {
+    if (call.count() != 1) qFatal("lower() has no arguments");
+    return [](const QVariant& v) { return v.toString().toLower(); };
+  }
+  if (fn == "title") {
+    if (call.count() != 1) qFatal("title() has no arguments");
+    return [](const QVariant& v) {
+      auto s = v.toString().toLower();
+      if (s.length() > 0) s[0] = s[0].toUpper();
+      return s;
+    };
+  }
+  if (fn == "pad") {
+    if (call.count() != 2) qFatal("pad() takes one integer argument (length)");
+    bool ok;
+    const int len = call[1].toInt(&ok);
+    if (!ok) qFatal("pad() length argument is not an integer");
+    return [len](const QVariant& v) {
       bool ok;
-      int start = call[1].toInt(&ok);
-      if (!ok)
-        qFatal("first argument to mid() is not an integer");
-      int len = call[2].toInt(&ok);
-      if (!ok)
-        qFatal("second argument to mid() is not an integer");
-      return [start,len](const QVariant& v) {
-        const QString k = v.toString();
-        return QVariant(k.mid(start, len));
-      };
-    }
-    if (fn == "trim") {
-      if (call.count() != 1)
-        qFatal("trim() has no arguments");
-      return [](const QVariant&v) { return v.toString().trimmed(); };
-    }
-    if (fn == "upper") {
-      if (call.count() != 1)
-        qFatal("upper() has no arguments");
-      return [](const QVariant& v) { return v.toString().toUpper(); };
-    }
-    if (fn == "lower") {
-      if (call.count() != 1)
-        qFatal("lower() has no arguments");
-      return [](const QVariant& v) { return v.toString().toLower(); };
-    }
-    if (fn == "title") {
-      if (call.count() != 1)
-        qFatal("title() has no arguments");
-      return [](const QVariant& v) {
-        auto s = v.toString().toLower();
-        if (s.length() > 0) s[0] = s[0].toUpper();
-        return s;
-      };
-    }
-    if (fn == "pad") {
-      if (call.count() != 2)
-        qFatal("pad() takes one integer argument (length)");
-      bool ok;
-      const int len = call[1].toInt(&ok);
-      if (!ok)
-        qFatal("pad() length argument is not an integer");
-      return [len](const QVariant& v) {
-        bool ok;
-        int num = v.toInt(&ok);
-        if (!ok) qFatal("pad() input is not integer");
-        return QString("%1").arg(num, len, 10, QLatin1Char('0'));
-      };
-    }
-    // list functions
-    if (fn == "split") {
-      if (call.count() != 2)
-        qFatal("split() takes one string argument (separator)");
-      auto& arg = call[1];
-      QRegularExpression exp(arg);
-      if (exp.isValid())
-        return [exp](const QVariant& v) {
-          return v.toString().split(exp);
-        };
+      int num = v.toInt(&ok);
+      if (!ok) qFatal("pad() input is not integer");
+      return QString("%1").arg(num, len, 10, QLatin1Char('0'));
+    };
+  }
+  // list functions
+  if (fn == "split") {
+    if (call.count() != 2) qFatal("split() takes one string argument (separator)");
+    auto& arg = call[1];
+    QRegularExpression exp(arg);
+    if (exp.isValid()) return [exp](const QVariant& v) { return v.toString().split(exp); };
 
-      return [arg](const QVariant& v) {
-        return v.toString().split(arg);
-      };
-    }
-    if (fn == "join") {
-      if (call.count() != 2)
-        qFatal("join() takes one string argument (glue)");
-      auto& arg = call[1];
-      return [arg](const QVariant& v) {
-        return v.toStringList().join(arg);
-      };
-    }
-    if (fn == "camelsplit") {
-      if (call.count() != 1)
-        qFatal("camelsplit() takes no arguments");
+    return [arg](const QVariant& v) { return v.toString().split(arg); };
+  }
+  if (fn == "join") {
+    if (call.count() != 2) qFatal("join() takes one string argument (glue)");
+    auto& arg = call[1];
+    return [arg](const QVariant& v) { return v.toStringList().join(arg); };
+  }
+  if (fn == "camelsplit") {
+    if (call.count() != 1) qFatal("camelsplit() takes no arguments");
 
-      return [](const QVariant& v) {
-        static const QRegularExpression exp("[a-z][A-Z]");
-        QStringList parts;
-        QString str = v.toString();
-        int pos = str.indexOf(exp);
-        while (pos >= 0) {
-          parts.append(str.mid(0, pos+1));
-          str = str.mid(pos+1);
-          pos = str.indexOf(exp);
-        }
-        if (!str.isEmpty())
-          parts.append(str);
-        return parts;
-      };
-    }
-    if (fn == "push") {
-      if (call.count() != 2)
-        qFatal("push() takes one string argument (value)");
-      auto& arg = call[1];
-      return [arg](const QVariant& v) {
-        auto r = v.toList();
-        r.append(arg);
-        return r;
-      };
-    }
-    if (fn == "pop") {
-      if (call.count() != 1)
-        qFatal("pop() has no arguments");
-      return [](const QVariant& v) {
-        auto r = v.toList();
-        r.removeLast();
-        return r;
-      };
-    }
-    if (fn == "shift") {
-      if (call.count() != 1)
-        qFatal("shift() has no arguments");
-      return [](const QVariant& v) {
-        auto r = v.toList();
-        r.removeFirst();
-        return r;
-      };
-    }
-    if (fn == "peek") {
-      if (call.count() != 2)
-        qFatal("peek() takes one argument (index)");
-      bool ok;
-      int index = call.at(1).toInt(&ok);
-      if (!ok)
-        qFatal("argument to peek() is not an integer");
-      return [index](const QVariant& v) {
-        auto r = v.toList();
-        int i = index;
-        if (i < 0) // negative index from end
-          i += r.count();
-        if (i < 0 || i >= r.count())
-          qFatal("argument to peek() is invalid index");
-        return r.at(i);
-      };
-    }
-    if (fn == "foreach") {
-      if (call.count() < 2)
-        qFatal("foreach() takes at least one function expression (<func>[|<func>|<func>...]])");
-      // recombine call to associate ',' correctly
-      const QStringList expr = call.sliced(1).join(",").split("|");
-      QVector< std::function<QVariant(const QVariant&) > > functions;
-      for (auto& e : expr)
-        functions.append( unaryFunc(e) );
-      return [functions](const QVariant& v) {
-        QVariantList list = v.toList();
-        for (auto& v : list)
-          for (auto& f : qAsConst(functions))
-            v = f(v);
-        return list;
-      };
-    }
+    return [](const QVariant& v) {
+      static const QRegularExpression exp("[a-z][A-Z]");
+      QStringList parts;
+      QString str = v.toString();
+      int pos = str.indexOf(exp);
+      while (pos >= 0) {
+        parts.append(str.mid(0, pos + 1));
+        str = str.mid(pos + 1);
+        pos = str.indexOf(exp);
+      }
+      if (!str.isEmpty()) parts.append(str);
+      return parts;
+    };
+  }
+  if (fn == "push") {
+    if (call.count() != 2) qFatal("push() takes one string argument (value)");
+    auto& arg = call[1];
+    return [arg](const QVariant& v) {
+      auto r = v.toList();
+      r.append(arg);
+      return r;
+    };
+  }
+  if (fn == "pop") {
+    if (call.count() != 1) qFatal("pop() has no arguments");
+    return [](const QVariant& v) {
+      auto r = v.toList();
+      r.removeLast();
+      return r;
+    };
+  }
+  if (fn == "shift") {
+    if (call.count() != 1) qFatal("shift() has no arguments");
+    return [](const QVariant& v) {
+      auto r = v.toList();
+      r.removeFirst();
+      return r;
+    };
+  }
+  if (fn == "peek") {
+    if (call.count() != 2) qFatal("peek() takes one argument (index)");
+    bool ok;
+    int index = call.at(1).toInt(&ok);
+    if (!ok) qFatal("argument to peek() is not an integer");
+    return [index](const QVariant& v) {
+      auto r = v.toList();
+      int i = index;
+      if (i < 0)  // negative index from end
+        i += r.count();
+      if (i < 0 || i >= r.count()) qFatal("argument to peek() is invalid index");
+      return r.at(i);
+    };
+  }
+  if (fn == "foreach") {
+    if (call.count() < 2)
+      qFatal("foreach() takes at least one function expression (<func>[|<func>|<func>...]])");
+    // recombine call to associate ',' correctly
+    const QStringList expr = call.sliced(1).join(",").split("|");
+    QVector<std::function<QVariant(const QVariant&)>> functions;
+    for (auto& e : expr) functions.append(unaryFunc(e));
+    return [functions](const QVariant& v) {
+      QVariantList list = v.toList();
+      for (auto& v : list)
+        for (auto& f : qAsConst(functions)) v = f(v);
+      return list;
+    };
+  }
 
-    // math functions
-    if (fn == "add") {
-      if (call.count() != 2)
-        qFatal("add() takes one integer argument");
-      bool ok;
-      int num = call[1].toInt(&ok);
-      if (!ok)
-        qFatal("add() argument is not an integer");
-      return [num](const QVariant& v) { return v.toInt() + num; };
-    }
+  // math functions
+  if (fn == "add") {
+    if (call.count() != 2) qFatal("add() takes one integer argument");
+    bool ok;
+    int num = call[1].toInt(&ok);
+    if (!ok) qFatal("add() argument is not an integer");
+    return [num](const QVariant& v) { return v.toInt() + num; };
+  }
 
-    // date function shortcuts append an argument
-    auto dateCall = call;
-    if (fn == "year") {
-      fn = "date";
-      dateCall.append("yyyy");
-    } else if (fn == "month") {
-      fn = "date";
-      dateCall.append("yyyy-MM");
-    } else if (fn == "day") {
-      fn = "date";
-      dateCall.append("yyyy-MM-dd");
-    }
+  // date function shortcuts append an argument
+  auto dateCall = call;
+  if (fn == "year") {
+    fn = "date";
+    dateCall.append("yyyy");
+  } else if (fn == "month") {
+    fn = "date";
+    dateCall.append("yyyy-MM");
+  } else if (fn == "day") {
+    fn = "date";
+    dateCall.append("yyyy-MM-dd");
+  }
 
-    if (fn == "date") {
-      if (dateCall.count() != 2)
-        qFatal("date() takes one string argument (QDateTime format)");
-      const QString dateFormat = dateCall.at(1);
-      return [dateFormat](const QVariant& v) {
-        QDateTime d = v.toDateTime(); // should work for exif date tags
-        if (!d.isValid()) d = QDateTime::fromString(v.toString(), Qt::DateFormat::ISODate);
-        return d.toString(dateFormat);
-      };
-    }
-    qFatal("invalid function: %s", qPrintable(fn));
+  if (fn == "date") {
+    if (dateCall.count() != 2) qFatal("date() takes one string argument (QDateTime format)");
+    const QString dateFormat = dateCall.at(1);
+    return [dateFormat](const QVariant& v) {
+      QDateTime d = v.toDateTime();  // should work for exif date tags
+      if (!d.isValid()) d = QDateTime::fromString(v.toString(), Qt::DateFormat::ISODate);
+      return d.toString(dateFormat);
+    };
+  }
+  qFatal("invalid function: %s", qPrintable(fn));
 }
 
 QList<QPair<const char*, const char*>> Media::propertyList() {
@@ -533,15 +524,19 @@ QList<QPair<const char*, const char*>> Media::propertyList() {
 }
 
 std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
-
   static QHash<QString, QVariant> propCache;
   static QMutex* cacheMutex = new QMutex;
 
   std::function<QVariant(const Media&)> select;
 
+  // shortcut for properties that have accessor with the same name
+#define PAIR(prop)                                \
+  {                                               \
+  # prop, [](const Media& m) { return m.prop(); } \
+  }
+
   // lookup table for stateless properties
-#define PAIR(prop) { #prop ,  [](const Media& m) { return m.prop(); } }
-  static const QHash<QString,decltype(select)> props({
+  static const QHash<QString, decltype(select)> props({
       PAIR(id),
       PAIR(isValid),
       PAIR(md5),
@@ -562,24 +557,26 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       PAIR(isArchived),
       PAIR(archiveCount),
       PAIR(isWeed),
-      { "res",     [](const Media& m) { return qMax(m.width(),m.height()); } },
-      { "relPath", [](const Media& m) { return QDir().relativeFilePath(m.path()); }},
-      { "archive", [](const Media& m) {
-          if (m.isArchived()) {
-            QString a;
-            m.archivePaths(&a);
-            return a;
-          }
-          return QString();
-      }},
-      { "parentPath", [](const Media& m) {
-          if (m.isArchived()) {
-            QString a;
-            m.archivePaths(&a);
-            return a;
-          }
-          return m.dirPath();
-      }},
+      {"res", [](const Media& m) { return qMax(m.width(), m.height()); }},
+      {"relPath", [](const Media& m) { return QDir().relativeFilePath(m.path()); }},
+      {"archive",
+       [](const Media& m) {
+         if (m.isArchived()) {
+           QString a;
+           m.archivePaths(&a);
+           return a;
+         }
+         return QString();
+       }},
+      {"parentPath",
+       [](const Media& m) {
+         if (m.isArchived()) {
+           QString a;
+           m.archivePaths(&a);
+           return a;
+         }
+         return m.dirPath();
+       }},
 
       /// todo: attr(), VideoContext::metadata
   });
@@ -593,15 +590,13 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
   auto it = props.find(field);
   if (it != props.end()) {
     select = *it;
-  }
-  else if (field == "exif" || field == "iptc" || field == "xmp") {
+  } else if (field == "exif" || field == "iptc" || field == "xmp") {
     if (args.count() == 0) qFatal("exif/iptc/xmp require tag name(s)");
     QStringList exifKeys = args.front().split(",");
     args.pop_front();
 
     select = [=](const Media& m) {
-      if (m.type() != Media::TypeImage)
-        return QVariant();
+      if (m.type() != Media::TypeImage) return QVariant();
 
       const QString cacheKey = m.path() + ":" + field + exifKeys.join(",");
       {
@@ -625,8 +620,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       return result;
     };
   } else if (field == "ffmeta") {
-    if (args.count() == 0)
-      qFatal("ffmeta sort requires metadata field name(s)");
+    if (args.count() == 0) qFatal("ffmeta sort requires metadata field name(s)");
     QStringList ffKeys = args.front().split(",");
     args.pop_front();
     select = [=](const Media& m) {
@@ -640,18 +634,15 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
     qFatal("invalid property: %s", qPrintable(field));
 
   if (args.count() > 0) {
-      auto func = unaryFunc(args.join(lc('#')));
-      return [=](const Media& m) {
-        return func(select(m));
-      };
+    auto func = unaryFunc(args.join(lc('#')));
+    return [=](const Media& m) { return func(select(m)); };
   } else
     return select;
 
   Q_UNREACHABLE();
 }
 
-void Media::recordMatch(const Media& match, int matchIndex,
-                        int numMatches) const {
+void Media::recordMatch(const Media& match, int matchIndex, int numMatches) const {
   QString line;
 
   if (match.path() != "") {
@@ -676,11 +667,12 @@ size_t Media::memSize() const {
 
   total += size_t(_data.size());
 
-  total += VECTOR_SIZE(_kpHashes);
-  total += VECTOR_SIZE(_keyPoints);
-  total += _videoIndex.memSize();
-  total += VECTOR_SIZE(_kpRects);
-  total += CVMAT_SIZE(_descriptors);
+  total += videoIndex().memSize();
+  total += CVMAT_SIZE(keyPointDescriptors());
+
+  total += keyPoints().capacity() * sizeof(cv::KeyPoint);
+  total += keyPointRects().capacity() * sizeof(cv::Rect);
+  total += keyPointHashes().capacity() * sizeof(uint64_t);
 
   total += size_t(_img.bytesPerLine() * _img.height());
 
@@ -693,25 +685,33 @@ void Media::makeKeyPoints(const cv::Mat& cvImg, int numKeyPoints) {
   cv::OrbFeatureDetector detector(numKeyPoints, 1.2f, 12, 31, 0, 2,
                                   cv::OrbFeatureDetector::HARRIS_SCORE, 31);
 
-  _keyPoints.clear();
+  auto& keyPoints = shared().keyPoints;
+  keyPoints.clear();
 
   // todo: use mask to exclude borders/watermarks etc
-  detector.detect(cvImg, _keyPoints);
+  detector.detect(cvImg, keyPoints);
 }
 
 void Media::makeKeyPointDescriptors(const cv::Mat& cvImg) {
   cv::OrbDescriptorExtractor extractor;
 
-  _descriptors.empty();
+  auto& keyPoints = shared().keyPoints;
+  auto& descriptors = shared().descriptors;
 
-  extractor.compute(cvImg, _keyPoints, _descriptors);
+  descriptors.empty();
+
+  extractor.compute(cvImg, keyPoints, descriptors);
 }
 
 void Media::makeKeyPointHashes(const cv::Mat& cvImg) {
-  _kpRects.clear();
-  _kpHashes.clear();
+  const auto& points = constShared().keyPoints;
+  auto& rects = shared().kpRects;
+  auto& hashes = shared().kpHashes;
 
-  for (const cv::KeyPoint& kp : _keyPoints) {
+  rects.clear();
+  hashes.clear();
+
+  for (const cv::KeyPoint& kp : points) {
     float size = kp.size;
 
     // printf("kp size=%.2f octave=%d class=%d\n", size, kp.octave,
@@ -732,15 +732,15 @@ void Media::makeKeyPointHashes(const cv::Mat& cvImg) {
       int y = int(floor(y0));
       int s = int(ceil(size));
 
-      _kpRects.push_back(cv::Rect(x, y, s, s));
+      rects.push_back(cv::Rect(x, y, s, s));
     }
   }
 
   // rectangles to hashes
-  for (const cv::Rect& r : _kpRects) {
+  const auto& kpRects = rects;
+  for (const cv::Rect& r : kpRects) {
     // extract sub-image and store hash
-    cv::Mat sub =
-        cvImg.colRange(r.x, r.x + r.width).rowRange(r.y, r.y + r.height);
+    cv::Mat sub = cvImg.colRange(r.x, r.x + r.width).rowRange(r.y, r.y + r.height);
 
     uint64_t hash = dctHash64(sub);
 
@@ -753,15 +753,14 @@ void Media::makeKeyPointHashes(const cv::Mat& cvImg) {
         }
     */
 
-    _kpHashes.push_back(hash);
+    hashes.push_back(hash);
   }
 }
 
 void Media::makeVideoIndex(VideoContext& video, int threshold) {
-  _videoIndex.hashes.clear();
-  _videoIndex.frames.clear();
-
-  VideoIndex index;
+  auto& index = shared().videoIndex;
+  index.hashes.clear();
+  index.frames.clear();
 
   int numFrames = 0;
   int curFrames = 0;
@@ -776,8 +775,7 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
 
   cv::Mat img;
 
-  const int totalFrames =
-      int(video.metadata().frameRate * video.metadata().duration);
+  const int totalFrames = int(video.metadata().frameRate * video.metadata().duration);
 
   _width = video.width();
   _height = video.height();
@@ -790,19 +788,17 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
     // fixme: index settings
     autocrop(img, 20);
     uint64_t hash = dctHash64(img);
-    _videoIndex.hashes.push_back(hash);
-    _videoIndex.frames.push_back(numFrames & 0xFFFF);
+    index.hashes.push_back(hash);
+    index.frames.push_back(numFrames & 0xFFFF);
     numFrames++;
   }
 
   while (video.nextFrame(img)) {
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (now - then > 5000) {
-      qDebug("%dx%d %dpx %d:1 %s(%d) %dfps %d%% ", _width, _height,
-             qMax(img.cols, img.rows),
-            numFrames / std::max(numFrames - nearFrames, 1),
-             (video.isHardware() ? "GPU" : "CPU"), video.threadCount(),
-            int(curFrames * 1000 / (now - then)),
+      qDebug("%dx%d %dpx %d:1 %s(%d) %dfps %d%% ", _width, _height, qMax(img.cols, img.rows),
+             numFrames / std::max(numFrames - nearFrames, 1), (video.isHardware() ? "GPU" : "CPU"),
+             video.threadCount(), int(curFrames * 1000 / (now - then)),
              numFrames * 100 / std::max(totalFrames, 1));
       curFrames = 0;
       then = now;
@@ -823,15 +819,15 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
 
       if (close != window.size()) {
         window.clear();
-        _videoIndex.hashes.push_back(hash);
-        _videoIndex.frames.push_back(numFrames & 0xFFFF);
+        index.hashes.push_back(hash);
+        index.frames.push_back(numFrames & 0xFFFF);
       } else
         nearFrames++;
 
       window.push_back(hash);
     } else {
-      _videoIndex.hashes.push_back(hash);
-      _videoIndex.frames.push_back(numFrames & 0xFFFF);
+      index.hashes.push_back(hash);
+      index.frames.push_back(numFrames & 0xFFFF);
     }
 
     numFrames++;
@@ -844,15 +840,24 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
   }
 
   // always include the last frame so it can be used as a reference
-  if (_videoIndex.frames.size() > 0 &&
-      _videoIndex.frames.back() != numFrames - 1) {
-    _videoIndex.hashes.push_back(window.back());
-    _videoIndex.frames.push_back((numFrames - 1) & 0xFFFF);
+  if (index.frames.size() > 0 && index.frames.back() != numFrames - 1) {
+    index.hashes.push_back(window.back());
+    index.frames.push_back((numFrames - 1) & 0xFFFF);
   }
 
-  qDebug("%s nframes=%d near=%d filt=%d corrupt=%d", qUtf8Printable(video.path()),
-         numFrames, nearFrames, filteredFrames, corruptFrames);
+  qDebug("%s nframes=%d near=%d filt=%d corrupt=%d", qUtf8Printable(video.path()), numFrames,
+         nearFrames, filteredFrames, corruptFrames);
 }
+
+const KeyPointList& Media::keyPoints() const { return shared().keyPoints; }
+
+const KeyPointDescriptors& Media::keyPointDescriptors() const { return shared().descriptors; }
+
+const KeyPointRectList& Media::keyPointRects() const { return shared().kpRects; }
+
+const KeyPointHashList& Media::keyPointHashes() const { return shared().kpHashes; }
+
+const VideoIndex& Media::videoIndex() const { return shared().videoIndex; }
 
 void VideoIndex::save(const QString& file) const {
   MessageContext ctx(file);
@@ -860,16 +865,13 @@ void VideoIndex::save(const QString& file) const {
   if (!indexFile) qFatal("failed to open");
 
   uint16_t numFrames = frames.size() & 0xFFFF;
-  if (1 != fwrite(&numFrames, sizeof(numFrames), 1, indexFile))
-    qFatal("write fail at start");
+  if (1 != fwrite(&numFrames, sizeof(numFrames), 1, indexFile)) qFatal("write fail at start");
 
   for (uint16_t frame : frames)
-    if (1 != fwrite(&frame, sizeof(frame), 1, indexFile))
-      qFatal("write fail on frames");
+    if (1 != fwrite(&frame, sizeof(frame), 1, indexFile)) qFatal("write fail on frames");
 
   for (uint64_t hash : hashes)
-    if (1 != fwrite(&hash, sizeof(hash), 1, indexFile))
-      qFatal("write fail on hashes");
+    if (1 != fwrite(&hash, sizeof(hash), 1, indexFile)) qFatal("write fail on hashes");
 
   fclose(indexFile);
 }
@@ -912,15 +914,13 @@ void VideoIndex::load(const QString& file) {
   fclose(indexFile);
 }
 
-void Media::playSideBySide(const Media& left, float seekLeft,
-                           const Media& right, float seekRight) {
-  DesktopHelper::playSideBySide(left.path(), double(seekLeft), right.path(),
-                                double(seekRight));
+void Media::playSideBySide(const Media& left, float seekLeft, const Media& right, float seekRight) {
+  DesktopHelper::playSideBySide(left.path(), double(seekLeft), right.path(), double(seekRight));
 }
 
 void Media::openMedia(const Media& m, float seek) {
   if (m.type() == Media::TypeVideo) {
-#if 0 // defined(__APPLE__)
+#if 0  // defined(__APPLE__)
     QString script = QString(
                          "tell application \"VLC\"\n"
                          "activate\n"
@@ -1026,8 +1026,8 @@ void Media::openMedia(const Media& m, float seek) {
     if (io && io->open(QIODevice::ReadOnly)) {
       child = child.split("/").last();
       QFileInfo info(child);
-      QString temporaryName = DesktopHelper::tempName(info.completeBaseName() +
-                                                      ".unzipped.XXXXXX." + info.suffix());
+      QString temporaryName =
+          DesktopHelper::tempName(info.completeBaseName() + ".unzipped.XXXXXX." + info.suffix());
 
       if (temporaryName.isEmpty()) {
         qWarning() << "open archived file: cannot get temporary file";
@@ -1035,13 +1035,13 @@ void Media::openMedia(const Media& m, float seek) {
       }
 
       QFile f(temporaryName);
-      if (!f.open(QFile::WriteOnly|QFile::Truncate)) {
+      if (!f.open(QFile::WriteOnly | QFile::Truncate)) {
         qWarning() << "open archived file: cannot write temporary file";
         return;
       }
 
       f.write(io->readAll());
-      f.close(); // necessary because file was opened excl mode (win32)
+      f.close();  // necessary because file was opened excl mode (win32)
 
       QUrl url = QUrl::fromLocalFile(temporaryName);
       qDebug() << "QDesktopServices::openUrl" << url;
@@ -1050,7 +1050,7 @@ void Media::openMedia(const Media& m, float seek) {
     delete io;
   } else {
     QUrl url(m.path());
-    if (url.scheme().length() < 2) { // empty or a drive letter
+    if (url.scheme().length() < 2) {  // empty or a drive letter
       QString path = m.path();
       QFileInfo info(path);
       if (info.isFile()) path = info.absoluteFilePath();
@@ -1064,14 +1064,12 @@ void Media::openMedia(const Media& m, float seek) {
 
 void Media::revealMedia(const Media& m) {
   QString path = m.path();
-  if (m.isArchived())
-    m.archivePaths(&path);
+  if (m.isArchived()) m.archivePaths(&path);
 
   DesktopHelper::revealPath(path);
 }
 
 QColor Media::matchColor() const {
-
   // no match gets dark yellow
   QColor c = QColor(Qt::yellow).darker();
 
@@ -1142,9 +1140,7 @@ QStringList Media::listArchive(const QString& path) {
   const auto zipList = zip.getFileNameList();
   for (auto& file : zipList) {
     // todo: setting for ignored dirnames (same as scanner...);
-    if (file.endsWith("/") || file.startsWith(".") ||
-        file.startsWith("__MACOSX"))
-      continue;
+    if (file.endsWith("/") || file.startsWith(".") || file.startsWith("__MACOSX")) continue;
 
     list.append(Media::virtualPath(path, file));
   }
@@ -1172,8 +1168,7 @@ QIODevice* Media::ioDevice() const {
         QBuffer* buf = new QBuffer;
         buf->setData(file.readAll());
         io = buf;
-      }
-      else {
+      } else {
         qWarning() << "failed to unzip" << zipPath << "for" << fileName;
       }
     } else {
@@ -1192,10 +1187,8 @@ QIODevice* Media::ioDevice() const {
   return io;
 }
 
-QImage Media::loadImage(const QByteArray& data, const QSize& size,
-                        const QString& name, const QFuture<void>* future,
-                        const ImageLoadOptions& options) {
-
+QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString& name,
+                        const QFuture<void>* future, const ImageLoadOptions& options) {
   const QString fileName = QFileInfo(name).fileName();
   qMessageContext().setLocalData(QLatin1String("QImageReader: ") + fileName);
 
@@ -1206,13 +1199,12 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   // svg loader does not like having io terminated early, deadlocks
   if (future) {
     const auto lcName = name.toLower();
-    if (lcName.endsWith(QLatin1String(".svg")) ||
-        lcName.endsWith(QLatin1String(".svgz")))
+    if (lcName.endsWith(QLatin1String(".svg")) || lcName.endsWith(QLatin1String(".svgz")))
       future = nullptr;
   }
 
   if (future)
-    io.reset( new QCancelableIODevice(buffer, future) );
+    io.reset(new QCancelableIODevice(buffer, future));
   else
     io.reset(buffer);
 
@@ -1221,57 +1213,52 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
 
   auto format = reader.format();
 
-  if (options.fastJpegIdct && format == "jpeg")
-    reader.setQuality(0); // use libjpeg JDCT_IFAST
+  if (options.fastJpegIdct && format == "jpeg") reader.setQuality(0);  // use libjpeg JDCT_IFAST
 
   QSize origSize = reader.size();
   const int maxDim = qMax(origSize.width(), origSize.height());
-  if (options.readScaled && origSize.isValid() &&
-      maxDim > options.maxSize &&
+  if (options.readScaled && origSize.isValid() && maxDim > options.maxSize &&
       reader.supportsOption(QImageIOHandler::ScaledSize)) {
+    // jpeg idct scaling supports n/8 for n=[16-1]
+    // for downscaling we get 1/8, 2/8, ... 7/8
+    int numerator;
+    for (numerator = 7; numerator > 1; --numerator) {
+      int scaled = maxDim * numerator / 8;
+      if (scaled >= options.minSize && scaled <= options.maxSize) break;
+    }
 
-      // jpeg idct scaling supports n/8 for n=[16-1]
-      // for downscaling we get 1/8, 2/8, ... 7/8
-      int numerator;
-      for (numerator = 7; numerator > 1; --numerator) {
-        int scaled = maxDim * numerator / 8;
-        if (scaled >= options.minSize && scaled <= options.maxSize) break;
-      }
+    // could get something < min if range is too narrow
+    if (maxDim * numerator / 8 < options.minSize) {
+      ;  // qWarning() << "ignoring readScaled, no suitable scale factor. maybe increase range?";
+    } else {
+      //
+      // qjpeg shenanigans...
+      // see: qtbase/src/plugins/imageformats/jpeg/qjpeghandler.cpp
+      //
+      // qjpeghandler will use (n+1) idct and scale down if
+      // we don't set the size just right. This is bad since
+      // qt scaler seems to add noise/aliasing that affects
+      // search algorithms
+      //
+      // qt will *always* invoke the scaler, however if we are
+      // already really close the noise/aliasing seems to be reduced
+      // or insignificant
+      //
+      // note: can verify the correct scale was selected from
+      // profiler, e.g.  jpeg_idct7 for the 7/8 downscale
+      //
+      int rw = origSize.width() & ~0x7;
+      int rh = origSize.height() & ~0x7;
 
-      // could get something < min if range is too narrow
-      if (maxDim * numerator / 8 < options.minSize) {
-        ;//qWarning() << "ignoring readScaled, no suitable scale factor. maybe increase range?";
-      }
-      else {
+      QSize ssize(int(rw / 8 * numerator), int(rh / 8 * numerator));
+      reader.setScaledSize(ssize);
 
-        //
-        // qjpeg shenanigans...
-        // see: qtbase/src/plugins/imageformats/jpeg/qjpeghandler.cpp
-        //
-        // qjpeghandler will use (n+1) idct and scale down if
-        // we don't set the size just right. This is bad since
-        // qt scaler seems to add noise/aliasing that affects
-        // search algorithms
-        //
-        // qt will *always* invoke the scaler, however if we are
-        // already really close the noise/aliasing seems to be reduced
-        // or insignificant
-        //
-        // note: can verify the correct scale was selected from
-        // profiler, e.g.  jpeg_idct7 for the 7/8 downscale
-        //
-        int rw = origSize.width() & ~0x7;
-        int rh = origSize.height() & ~0x7;
-
-        QSize ssize(int(rw / 8 * numerator), int(rh / 8 * numerator));
-        reader.setScaledSize(ssize);
-
-        //qDebug() << "downscale " << rw << rh << ssize << numerator;
-      }
+      // qDebug() << "downscale " << rw << rh << ssize << numerator;
+    }
   }
   QImage img = reader.read();
 
-  if (future && future->isCanceled()) // io could have been canceled, assume incomplete image
+  if (future && future->isCanceled())  // io could have been canceled, assume incomplete image
     img = QImage();
 
   img.setText(ImgKey_FileSize, QString::number(data.length()));
@@ -1280,12 +1267,12 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
 
   if (!origSize.isValid()) {
     if (reader.scaledSize().isEmpty())
-        origSize = img.size();
+      origSize = img.size();
     else
-        qWarning("%s: unknown original dimensions", format.data());
+      qWarning("%s: unknown original dimensions", format.data());
   }
 
-  img.setText(ImgKey_FileWidth,  QString::number(origSize.width()));
+  img.setText(ImgKey_FileWidth, QString::number(origSize.width()));
   img.setText(ImgKey_FileHeight, QString::number(origSize.height()));
 
   qMessageContext().setLocalData(fileName);
@@ -1293,11 +1280,9 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   // setAutoTransform() will pull orientation from thumbnail IFD if it is not present in the image
   // IFD, resulting in incorrect rotation
   long exifOrientation = 0;
-  if (format == "jpeg" &&
-      reader.transformation() != 0) {
-
-    auto exif = Exiv2::ImageFactory::open(
-        reinterpret_cast<const Exiv2::byte*>(data.constData()), data.size());
+  if (format == "jpeg" && reader.transformation() != 0) {
+    auto exif = Exiv2::ImageFactory::open(reinterpret_cast<const Exiv2::byte*>(data.constData()),
+                                          data.size());
     if (exif.get()) {
       exif->readMetadata();
       auto& exifData = exif->exifData();
@@ -1329,9 +1314,8 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size,
   if (size != QSize()) img = constrainedResize(img, size);
 
   if (reader.error())
-    qWarning("%s: xform=0x%x orient=%d size=%dx%d error=%s",
-             format.data(), int(reader.transformation()),
-             int(exifOrientation), img.width(), img.height(),
+    qWarning("%s: xform=0x%x orient=%d size=%dx%d error=%s", format.data(),
+             int(reader.transformation()), int(exifOrientation), img.width(), img.height(),
              qPrintable(reader.errorString()));
 
   qMessageContext().setLocalData(QString());
@@ -1411,8 +1395,7 @@ void Media::readMetadata() {
     if (info.exists()) _origSize = info.size();
   }
 
-  if (_origSize && !_img.isNull())
-    _compressionRatio = float(_img.sizeInBytes()) / _origSize;
+  if (_origSize && !_img.isNull()) _compressionRatio = float(_img.sizeInBytes()) / _origSize;
 }
 
 QStringList Media::exifVersion() {
@@ -1426,8 +1409,7 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
   const MessageContext mc(QFileInfo(path()).fileName());
 
   QVariantList values;
-  for (int i = 0; i < keys.count(); ++i)
-    values.append(QVariant());
+  for (int i = 0; i < keys.count(); ++i) values.append(QVariant());
 
   try {
     std::unique_ptr<Exiv2::Image> image;
@@ -1443,9 +1425,8 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
     }
 
     if (!data.isEmpty())
-      image = Exiv2::ImageFactory::open(
-          reinterpret_cast<const Exiv2::byte*>(data.constData()),
-          data.size());
+      image = Exiv2::ImageFactory::open(reinterpret_cast<const Exiv2::byte*>(data.constData()),
+                                        data.size());
     else
       image = Exiv2::ImageFactory::open(qUtf8Printable(path()));
 
@@ -1457,46 +1438,45 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
     if (type == "exif") {
       const auto& exifData = image->exifData();
       if (exifData.empty()) return values;
-      findKey=[&exifData](const QString& key) {
+      findKey = [&exifData](const QString& key) {
         QVariant v;
         auto it = exifData.findKey(Exiv2::ExifKey(qPrintable(key)));
         if (it == exifData.end()) return v;
         v = it->value().toString().c_str();
-        if (key.contains("Date"))
-          v = QDateTime::fromString(v.toString(), "yyyy:MM:dd HH:mm:ss");
+        if (key.contains("Date")) v = QDateTime::fromString(v.toString(), "yyyy:MM:dd HH:mm:ss");
         return v;
       };
-    }
-    else if (type == "iptc") {
+    } else if (type == "iptc") {
       const auto& iptcData = image->iptcData();
       if (iptcData.empty()) return values;
-      findKey=[&iptcData](const QString& key) {
+      findKey = [&iptcData](const QString& key) {
         QVariant v;
         auto it = iptcData.findKey(Exiv2::IptcKey(qPrintable(key)));
         if (it == iptcData.end()) return v;
         v = it->value().toString().c_str();
         switch (it->value().typeId()) {
-          case Exiv2::TypeId::date: v = QDate::fromString(v.toString(), Qt::ISODate); break;
-          case Exiv2::TypeId::time: v = QTime::fromString(v.toString(), Qt::ISODate); break;
-          default: ;
+          case Exiv2::TypeId::date:
+            v = QDate::fromString(v.toString(), Qt::ISODate);
+            break;
+          case Exiv2::TypeId::time:
+            v = QTime::fromString(v.toString(), Qt::ISODate);
+            break;
+          default:;
         }
         return v;
       };
-    }
-    else if (type == "xmp") {
+    } else if (type == "xmp") {
       const auto& xmpData = image->xmpData();
       if (xmpData.empty()) return values;
-      findKey=[&xmpData](const QString& key) {
+      findKey = [&xmpData](const QString& key) {
         QVariant v;
         auto it = xmpData.findKey(Exiv2::XmpKey(qPrintable(key)));
         if (it == xmpData.end()) return v;
         v = it->value().toString().c_str();
-        if (key.contains("Date"))
-          v = QDateTime::fromString(v.toString(), Qt::ISODate);
+        if (key.contains("Date")) v = QDateTime::fromString(v.toString(), Qt::ISODate);
         return v;
       };
-    }
-    else
+    } else
       qWarning("Invalid metadata prefix");
 
     for (int i = 0; i < keys.count(); ++i) {
@@ -1504,7 +1484,7 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
       QString prefix = type;
       prefix[0] = prefix[0].toUpper();
       if (!key.startsWith(prefix)) key = prefix + "." + key;
-      key[0] = key[0].toUpper(); // first part is caps (Exif.,Iptc.,Xmp. etc)
+      key[0] = key[0].toUpper();  // first part is caps (Exif.,Iptc.,Xmp. etc)
       values[i] = findKey(key);
     }
 

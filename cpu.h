@@ -21,7 +21,7 @@
 
 #ifdef __gnu_linux__
 
-#include <unistd.h>  // usleep
+#  include <unistd.h>  // usleep
 
 /**
  * @class CPU
@@ -158,12 +158,12 @@ CPU_STATE_NICE]; total = inUse + cpuInfo[(CPU_STATE_MAX * i) + CPU_STATE_IDLE];
 }
 
 */
-#include <mach/mach.h>
-#include <mach/mach_host.h>
-#include <mach/processor_info.h>
-#include <sys/sysctl.h>
-#include <sys/types.h>
-#include <unistd.h>
+#  include <mach/mach.h>
+#  include <mach/mach_host.h>
+#  include <mach/processor_info.h>
+#  include <sys/sysctl.h>
+#  include <sys/types.h>
+#  include <unistd.h>
 
 class CPU {
  public:
@@ -184,7 +184,7 @@ class CPU {
     numPrevCpuInfo = 0;
     _cpuUsage = 0;
 
-    QtConcurrent::run(&CPU::poll, this);
+    (void)QtConcurrent::run(&CPU::poll, this);
   }
 
   float cpuUsage() const { return _cpuUsage; }
@@ -199,7 +199,7 @@ class CPU {
       kern_return_t err = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &numCPUsU,
                                               &cpuInfo, &numCpuInfo);
       if (err == KERN_SUCCESS) {
-        float totalUsage = 0;
+        // float totalUsage = 0;
         float totalUsed = 0, totalAvail = 0;
         for (unsigned i = 0U; i < numCPUs; ++i) {
           float used, avail;

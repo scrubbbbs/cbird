@@ -21,9 +21,15 @@
 #pragma once
 
 // minimize includes since this is used everywhere
-#include <stdint.h>
-#include "cvutil.h"
-#include "opencv2/features2d/features2d.hpp"
+#include "cvutil.h" // ColorDescriptor
+
+namespace cv {
+class Mat;
+class KeyPoint;
+struct DMatch;
+template<typename _Tp> class Rect_;
+typedef Rect_<int> Rect;
+}
 
 class Media;
 class VideoContext;
@@ -59,9 +65,7 @@ class VideoIndex {
   std::vector<uint16_t> frames;  // frame number
   VideoHashList hashes;          // dct hash
 
-  size_t memSize() const {
-    return sizeof(*this) + VECTOR_SIZE(frames) + VECTOR_SIZE(hashes);
-  }
+  size_t memSize() const { return sizeof(*this) + VECTOR_SIZE(frames) + VECTOR_SIZE(hashes); }
   bool isEmpty() const { return frames.size() == 0 || hashes.size() == 0; }
   void save(const QString& file) const;
   void load(const QString& file);
@@ -94,9 +98,9 @@ class MatchRange {
  */
 class ImageLoadOptions {
  public:
-  bool fastJpegIdct = false;    // use JDCT_FAST in libjpeg, unused if scaling
-  bool readScaled = false;      // scale image down in the decompress phase
-  int minSize = 0, maxSize = 0; // acceptable size range (best-effort, could be bigger)
+  bool fastJpegIdct = false;     // use JDCT_FAST in libjpeg, unused if scaling
+  bool readScaled = false;       // scale image down in the decompress phase
+  int minSize = 0, maxSize = 0;  // acceptable size range (best-effort, could be bigger)
 };
 
 /**
@@ -161,35 +165,31 @@ class Media {
 
   // hooks to external things
   // fixme: gui functions don't belong here
-  static void playSideBySide(const Media& left, float seekLeft,
-                             const Media& right, float seekRight);
+  static void playSideBySide(const Media& left, float seekLeft, const Media& right,
+                             float seekRight);
   static void openMedia(const Media& m, float seek = 0);
   static void revealMedia(const Media& m);
 
   static void print(const Media& media);
   static void printGroup(const MediaGroup& group);
   static void printGroupList(const MediaGroupList& list);
-  static bool groupCompareByContents(const MediaGroup& s1,
-                                     const MediaGroup& s2);
+  static bool groupCompareByContents(const MediaGroup& s1, const MediaGroup& s2);
   static void mergeGroupList(MediaGroupList& list);
   static void expandGroupList(MediaGroupList& list);
   static void sortGroupList(MediaGroupList& list, const QString& key);
-  static void sortGroup(MediaGroup& group, const QString& key,
-                        bool reverse = false);
+  static void sortGroup(MediaGroup& group, const QString& key, bool reverse = false);
   static int indexInGroupByPath(MediaGroup& group, const QString& path);
   static QString greatestPathPrefix(const MediaGroup& group);
   static QString greatestPathPrefix(const MediaGroupList& list);
 
-  static MediaGroupList splitGroup(const MediaGroup& group,
-                                   int chunkSize = 1);
+  static MediaGroupList splitGroup(const MediaGroup& group, int chunkSize = 1);
 
   /**
    * @return function that evaluates expr with Media argument
    *
    * @note useful for implementing generic sorting/grouping
    */
-  static std::function<QVariant(const Media&)> propertyFunc(
-      const QString& expr);
+  static std::function<QVariant(const Media&)> propertyFunc(const QString& expr);
 
   /**
    * @param expr function[,args][#function[,args] ...]
@@ -210,16 +210,14 @@ class Media {
    */
   Media(const QImage& qImg, int originalSize = 0);
 
-  Media(const QString& path, int type = TypeImage, int width = -1,
-        int height = -1);
+  Media(const QString& path, int type = TypeImage, int width = -1, int height = -1);
 
-  Media(const QString& path, int type, int width, int height,
-        const QString& md5, const uint64_t dctHash);
+  Media(const QString& path, int type, int width, int height, const QString& md5,
+        const uint64_t dctHash);
 
-  Media(const QString& path, int type, int width, int height,
-        const QString& md5, const uint64_t dctHash,
-        const ColorDescriptor& colorDescriptor, const KeyPointList& keyPoints,
-        const KeyPointDescriptors& descriptors);
+//  Media(const QString& path, int type, int width, int height, const QString& md5,
+//        const uint64_t dctHash, const ColorDescriptor& colorDescriptor,
+//        const KeyPointList& keyPoints, const KeyPointDescriptors& descriptors);
 
   /**
    * Compare by score (for sorting matches)
@@ -271,7 +269,10 @@ class Media {
   QString dirPath() const { return path().left(path().lastIndexOf("/")); }
   QString name() const { return path().mid(path().lastIndexOf("/") + 1); }
   QString suffix() const { return path().mid(path().lastIndexOf(".") + 1); }
-  QString completeBaseName() const { QString s=name(); return s.mid(0, s.lastIndexOf(".")); }; // w/o suffix
+  QString completeBaseName() const {
+    QString s = name();
+    return s.mid(0, s.lastIndexOf("."));
+  };  // w/o suffix
 
   /**
    * MIME content type, provided by the source
@@ -340,9 +341,11 @@ class Media {
   float aspectRatio() const { return float(_width) / _height; }
 
   bool isWeed() const { return _matchFlags & MatchIsWeed; }
-  void setIsWeed(bool set=true) {
-    if (set) _matchFlags |= MatchIsWeed;
-    else _matchFlags &= ~MatchIsWeed;
+  void setIsWeed(bool set = true) {
+    if (set)
+      _matchFlags |= MatchIsWeed;
+    else
+      _matchFlags &= ~MatchIsWeed;
   }
 
   /**
@@ -356,12 +359,8 @@ class Media {
    *       "sort"   - the property key used for sorting
    */
   const QStringHash& attributes() const { return _attrs; }
-  void setAttribute(const char* key, const QString& value) {
-    _attrs[key] = value;
-  }
-  void unsetAttribute(const char* key) {
-    _attrs.remove(key);
-  }
+  void setAttribute(const char* key, const QString& value) { _attrs[key] = value; }
+  void unsetAttribute(const char* key) { _attrs.remove(key); }
 
   /**
    * id sources can use for referencing external/non-indexed media
@@ -371,14 +370,10 @@ class Media {
   Q_DECL_DEPRECATED void setUid(const QString& uid) { _uid = uid; }
 
   // fixme: private interface or refactor
-  void setColorDescriptor(const ColorDescriptor& desc) {
-    _colorDescriptor = desc;
-  }
+  void setColorDescriptor(const ColorDescriptor& desc) { _colorDescriptor = desc; }
 
   /// @deprecated use readMetadata
-  Q_DECL_DEPRECATED void setCompressionRatio(float ratio) {
-    _compressionRatio = ratio;
-  }
+  Q_DECL_DEPRECATED void setCompressionRatio(float ratio) { _compressionRatio = ratio; }
 
   /**
    * region of interest from a matcher
@@ -456,7 +451,7 @@ class Media {
    * @note will use image(), data() or read from disk as needed
    * @note calls loadImage() (static) as needed
    */
-  QImage loadImage(const QSize& size = QSize(), QFuture<void>* future=nullptr) const;
+  QImage loadImage(const QSize& size = QSize(), QFuture<void>* future = nullptr) const;
 
   /**
    * return true if image can be reloaded from data() or path()
@@ -474,7 +469,7 @@ class Media {
    * @note  EXIF orientation flag will be used to transform the image
    */
   static QImage loadImage(const QByteArray& data, const QSize& size = QSize(),
-                          const QString& name = QString(), const QFuture<void> *future=nullptr,
+                          const QString& name = QString(), const QFuture<void>* future = nullptr,
                           const ImageLoadOptions& options = ImageLoadOptions());
 
   /**
@@ -499,22 +494,18 @@ class Media {
    */
   QVariantList readEmbeddedMetadata(const QStringList& keys, const QString& type) const;
 
-
   /// @section index processing
   // fixme: should be moved into index subclasses, but some have multiple uses
-  void makeKeyPoints(const cv::Mat& cvImg,
-                     int numKeyPoints);  // *FeaturesIndex, TemplateMatcher
-  void makeKeyPointDescriptors(const cv::Mat& cvImg);       // CvFeaturesIndex
-  void makeKeyPointHashes(const cv::Mat& cvImg);            // DctFeaturesIndex
-  void makeVideoIndex(VideoContext& video, int threshold);  // DctVideoIndex
+  void makeKeyPoints(const cv::Mat& cvImg, int numKeyPoints);  // *FeaturesIndex, TemplateMatcher
+  void makeKeyPointDescriptors(const cv::Mat& cvImg);          // CvFeaturesIndex
+  void makeKeyPointHashes(const cv::Mat& cvImg);               // DctFeaturesIndex
+  void makeVideoIndex(VideoContext& video, int threshold);     // DctVideoIndex
 
-  const KeyPointList& keyPoints() const { return _keyPoints; }
-  const KeyPointDescriptors& keyPointDescriptors() const {
-    return _descriptors;
-  }
-  const KeyPointRectList& keyPointRects() const { return _kpRects; }
-  const KeyPointHashList& keyPointHashes() const { return _kpHashes; }
-  const VideoIndex& videoIndex() const { return _videoIndex; }
+  const KeyPointList& keyPoints() const;
+  const KeyPointDescriptors& keyPointDescriptors() const;
+  const KeyPointRectList& keyPointRects() const;
+  const KeyPointHashList& keyPointHashes() const;
+  const VideoIndex& videoIndex() const;
 
   /**
    * compose a path to a resource that is indirect (e.g. inside an
@@ -535,8 +526,7 @@ class Media {
   bool isArchived() const { return isArchived(_path); }
 
   /// decompose a virtual path, assuming it was for a zip file
-  QT_DEPRECATED static void archivePaths(const QString& path, QString& parent,
-                           QString& child) {
+  QT_DEPRECATED static void archivePaths(const QString& path, QString& parent, QString& child) {
     auto parts = path.split(".zip:");
     parent = parts[0] + ".zip";
     child = parts.count() > 1 ? parts[1] : "";
@@ -546,16 +536,13 @@ class Media {
     archivePaths(_path, &parent, &child);
   }
 
-  static void archivePaths(const QString& path, QString* parent,
-                           QString* child=nullptr) {
+  static void archivePaths(const QString& path, QString* parent, QString* child = nullptr) {
     auto parts = path.split(".zip:");
-    if (parent)
-      *parent = parts.at(0) + ".zip";
-    if (child)
-      *child = parts.count() > 1 ? parts.at(1) : "";
+    if (parent) *parent = parts.at(0) + ".zip";
+    if (child) *child = parts.count() > 1 ? parts.at(1) : "";
   }
 
-  void archivePaths(QString* parent, QString* child=nullptr) const {
+  void archivePaths(QString* parent, QString* child = nullptr) const {
     archivePaths(_path, parent, child);
   }
 
@@ -577,13 +564,11 @@ class Media {
  private:
   void setDefaults();
   void imageHash();
-  void setKeyPoints(const KeyPointList& keyPoints) { _keyPoints = keyPoints; }
-  void setKeyPointDescriptors(const KeyPointDescriptors& desc) {
-    _descriptors = desc;
-  }
-  void setKeyPointRects(const KeyPointRectList& rects) { _kpRects = rects; }
-  void setKeyPointHashes(const KeyPointHashList& hashes) { _kpHashes = hashes; }
-  void setVideoIndex(const VideoIndex& index) { _videoIndex = index; }
+//  void setKeyPoints(const KeyPointList& keyPoints);
+//  void setKeyPointDescriptors(const KeyPointDescriptors& desc);
+//  void setKeyPointRects(const KeyPointRectList& rects);
+//  void setKeyPointHashes(const KeyPointHashList& hashes);
+//  void setVideoIndex(const VideoIndex& index) { _videoIndex = index; }
 
   int _id;
   int _type;
@@ -595,10 +580,6 @@ class Media {
   QImage _img;
   int64_t _origSize;
   float _compressionRatio;
-  KeyPointList _keyPoints;
-  KeyPointDescriptors _descriptors;
-  KeyPointRectList _kpRects;
-  KeyPointHashList _kpHashes;
 
   int _score;
   int _position;
@@ -607,8 +588,6 @@ class Media {
 
   MatchRange _matchRange;
 
-  VideoIndex _videoIndex;
-
   QByteArray _data;
 
   QVector<QPoint> _roi;
@@ -616,4 +595,11 @@ class Media {
 
   QString _uid;
   QStringHash _attrs;
+
+  class SharedData;
+  SharedData& shared();
+  const SharedData& shared() const;
+  const SharedData& constShared() const { return shared(); }
+
+  std::shared_ptr<SharedData> __sharedData;
 };

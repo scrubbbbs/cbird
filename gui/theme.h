@@ -1,12 +1,38 @@
+/* Theme management
+   Copyright (C) 2023 scrubbbbs
+   Contact: screubbbebs@gemeaile.com =~ s/e//g
+   Project: https://github.com/scrubbbbs/cbird
 
+This file is part of cbird.
+
+cbird is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+cbird is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public
+License along with cbird; if not, see
+<https://www.gnu.org/licenses/>.  */
+
+/**
+ * @brief The Theme class initialized the theme, provides style information,
+ *        and provides utilities for common tasks like dialogs
+ */
 class Theme : public QWidget {
   Q_OBJECT
   NO_COPY_NO_DEFAULT(Theme, QWidget);
 
+  /// various properties read from cbird.qss
+  /// @see cbird-richtext.css for how this gets used
   Q_PROPERTY(QString style MEMBER _style);
 
-  Q_PROPERTY(QColor more_base MEMBER _more_base);
-  Q_PROPERTY(QColor less_base MEMBER _less_base);
+  Q_PROPERTY(QColor more_base MEMBER _more_base); // background color of "more" color
+  Q_PROPERTY(QColor less_base MEMBER _less_base); // background color of "less" color
   Q_PROPERTY(QColor same_base MEMBER _same_base);
   Q_PROPERTY(QColor time_base MEMBER _time_base);
   Q_PROPERTY(QColor video_base MEMBER _video_base);
@@ -16,7 +42,7 @@ class Theme : public QWidget {
   Q_PROPERTY(QColor default_base MEMBER _default_base);
   Q_PROPERTY(QColor weed_base MEMBER _weed_base);
 
-  Q_PROPERTY(QColor more_altbase MEMBER _more_altbase);
+  Q_PROPERTY(QColor more_altbase MEMBER _more_altbase); // alternate background color
   Q_PROPERTY(QColor less_altbase MEMBER _less_altbase);
   Q_PROPERTY(QColor same_altbase MEMBER _same_altbase);
   Q_PROPERTY(QColor time_altbase MEMBER _time_altbase);
@@ -28,49 +54,50 @@ class Theme : public QWidget {
   Q_PROPERTY(QColor weed_altbase MEMBER _weed_altbase);
 
  public:
+  /// initialize system theme, call before creating windows
   static void setup();
+
+  /// singleton pattern
   static Theme& instance();
 
-  /// get css stylesheet for QTextDocument etc (not widget theme)
+  /// css stylesheet for QTextDocument etc (not widget theme)
   QString richTextStyleSheet() const;
-  
+
   /// draw themed rich text using QTextDocument
   void drawRichText(QPainter* painter, const QRect& r, const QString& text);
 
-  /// void themed window show
-  void showWindow(QWidget* window, bool maximized=false) const;
+  void showWindow(QWidget* window, bool maximized = false) const;
 
-  /// apply theme hacks and call exec()
   int execDialog(QDialog* dialog) const;
 
-  /// themed input dialog
-  int execInputDialog(QInputDialog* dialog, const QString& title,
-                      const QString& label, const QString& text,
-                      const QStringList& completions = {}) const;
+  int execInputDialog(QInputDialog* dialog, const QString& title, const QString& label,
+                      const QString& text, const QStringList& completions = {}) const;
 
-  QString getExistingDirectory(const QString& title, const QString& dirPath,
-                               QWidget* parent) const;
+  QString getExistingDirectory(const QString& title, const QString& dirPath, QWidget* parent) const;
 
  private:
   Theme(QWidget* parent);
   ~Theme();
 
+  /// read QSS or otherwise style information from realized widget
   void probe();
+
+  /// apply our own polish separate from QStyle
   void polishWindow(QWidget* window) const;
 
+  /// display color picker tool for our own colors (not supplied by QStyle)
   static void showToolbox();
 
-  QStyle* _baseStyle = nullptr; // style before any stylesheets added
+  QStyle* _baseStyle = nullptr;  // style before any stylesheets added
 
-  QString _style; // "Qt", "Dark", "Light"
+  QString _style;  // "Qt", "Dark", "Light"
 
   QColor _base, _altBase, _text;
 
-  QColor _more_base, _less_base, _same_base, _time_base, _video_base,
-      _audio_base, _archive_base, _file_base, _default_base, _weed_base;
-  QColor _more_altbase, _less_altbase, _same_altbase, _time_altbase, _video_altbase,
-      _audio_altbase, _archive_altbase, _file_altbase, _default_altbase, _weed_altbase;
+  QColor _more_base, _less_base, _same_base, _time_base, _video_base, _audio_base, _archive_base,
+      _file_base, _default_base, _weed_base;
+  QColor _more_altbase, _less_altbase, _same_altbase, _time_altbase, _video_altbase, _audio_altbase,
+      _archive_altbase, _file_altbase, _default_altbase, _weed_altbase;
 
   bool _toolboxActive = false;
 };
-

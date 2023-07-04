@@ -1,0 +1,203 @@
+
+      „__„                      CBIRD
+      {o,o}     Content-Based Image Retrieval Database
+      |)__)       https://github.com/scrubbbbs/cbird
+      -“–“-        license: GPLv2 (see: -license)
+
+Usage: %1 [args...]
+
+  * Arguments are positional, and may be given multiple times
+  * Operations occur in the order given, can often be chained
+  * Definitions in <>, descriptions at the end of this help
+  * Optional values in []
+  * Alternatives separated by |
+
+Setup
+==============================================================================
+  -use <dir>                       set index location, in <dir>/_index, default current directory
+  -create                          create index if there is not one already, otherwise prompt
+  -update                          create/refresh index
+  -headless                        enable most operations without a window manager (must be first argument)
+  -about                           system information
+  -h|-help                         help page
+  -v|-version                      version
+  -license|--license               show software license and attribution
+
+Queries
+==============================================================================
+  -dups                            exact duplicates using md5 hash
+  -dups-in <selector>              exact duplicates in subset
+  -similar                         similar items in entire index
+  -similar-in <selector>           similar items within a subset
+  -similar-to <file>|<selector>    similar items to a file, directory, or subset, within entire index
+  -weeds                           previously deleted files that came back
+
+Selections
+==============================================================================
+  * select commands may be chained to append to the current selection
+  * operations on current selection may clear the selection (-group-by etc)
+  -select-none                     clear the selection
+  -select-all                      everything
+  -select-id <integer>             one item by its unique id
+  -select-one <file>               one item by path
+  -select-path <selector>          subset by path, using selector
+  -select-type <type>              subset by type
+  -select-errors                   items with errors from last operation (-update,-verify)
+  -select-result                   to chain queries: convert the last query result into a selection, and clear the result
+  -select-sql <sql>                items with sql statement [select * from media where ...]
+  -select-files <file> [<file>]... ignore index, existing files of supported file types
+  -select-grid <file>              ignore index, detect a grid of thumbnails,  eak up into separate images
+
+Batch Deletion
+==============================================================================
+  -nuke-dups-in <dir>              delete (move to trash) dups under <dir> only
+  -nuke-weeds                      delete (move to trash) all weeds
+  -nuke                            delete selection (move to trash)
+
+Filtering
+==============================================================================
+  -with <prop>[#<func>] <comparator>    remove items if comparator is false
+  -without <prop>[#<func>] <comparator> inversion of -with
+  -first                                keep the first item
+  -chop                                 remove the first item
+  -first-sibling                        keep one item from each directory
+  -head <int>                           keep the first N items
+  -tail <int>                           keep the last N items
+
+Sorting/Grouping
+==============================================================================
+  -sort <prop>[#<func>]               sort ascending
+  -sort-rev <prop>[#<func>]           sort descending
+  -group-by <prop>[#<func>]           group selection by property, store in result (clears selection)
+  -sort-similar                       sort selection by similarity
+  -merge <selector> <selector>        merge two selections by similarity, into a new list, assuming first selection is sorted
+
+Operations on Selection/Results
+==============================================================================
+  -remove                            remove from the index (force re-indexing)
+  -nuke                              remove from index and move files to trash
+  -rename <find> <replace> [-vxp]    rename selection with find/replace, ignoring/preserving file extension
+      v                              * verbose preview, show what didn't match and won't be renamed
+      x                              * execute the rename, by default only preview
+      p                              * <find> matches the full path instead of the file name
+  -move <dir>                        move selection to another location in the index directory
+  -verify                            verify md5 sums
+  -dump                              print selection information
+
+Viewing
+==============================================================================
+  -folders                         enable group view, group results from the same parent directory
+  -sets                            enable group view, group results with the same pair of directories
+  -exit-on-select                  \"select\" action exits with selected index as exit code, < 0 if canceled
+  -max-per-page <int>              maximum items on one page [10]
+  -show                            show results  owser for the current selection/results
+
+Miscellaneous
+==============================================================================
+  -qualityscore img                no-reference quality score
+  -simtest testfile                run automated matching test
+  -jpeg-repair-script <file>       script/program to repair truncated jpeg files (-verify) [~/bin/jpegfix.sh]
+  -compare-videos <file> <file>    open a pair of videos in compare tool
+  -view-image <file>               open results  owser with file
+  -test-csv <file>                 read csv of src/dst pairs for a similar-to test, store results in match.csv
+  -test-image-loader <file>        test image decoding
+  -test-video-decoder <file>       test video decoding
+  -test-video <file>               test video search
+  -vacuum                          compact/optimize database files
+  -list-index-params               list current index parameters
+  -list-search-params              list current search parameters
+  -list-formats                    list available image and video formats
+  -video-thumbnail <file> <frame#> crop video thumbnail at frame
+
+Search Parameters (for -similar*)
+==============================================================================
+  -p.<key> value
+  * default value in [ ]
+  * alternate value in ( )
+  * flag names are combined with +, e.g. -p.refl h+v+b == -p.refl 7
+  * must appear before -similar or other queries to take effect
+
+  * keys:
+  %2
+
+Index Parameters (for -update)
+==============================================================================
+  -i.<key> value
+  * default value in [ ]
+  * alternate value in ( )
+  * flag names are combined with +, e.g. -p.types i+v == -p.types 3
+  * must appear before -update to take effect
+  %3
+
+Definitions
+==============================================================================
+  <file>                          path to file
+  <dir>                           path to directory
+  <item>                          file in the index
+  <group>                         list of items, usually a needle/target and its matches
+  <result>                        list of groups, from the last query
+  <selection>                     current list of items for further operations
+  <selector>                      defines a set of (indexed) items by path, matching expression
+      :<regular-expression>       - pcre, prefixed with colon
+      <grok pattern>              - path in the index with grok-style [*|?] wildcards
+      <dir>|<file>                - existing file or directory
+      @                           - use the current selection
+  <type>                          item media type (1=image,2=video,3=audio)
+  <find>                          source expression for string find/replace
+      <regular-expression>        - pcre with optional captures for <replace>
+      *                           - shortcut for entire string (^.*$)
+  <replace>                       destination expression for string find/replace
+      <template>                  - replace entire string, must contain at least one capture
+      <string>                    - replace whole-words/strings, may not contain any capture
+      #0 #1 .. #n                 - capture: the nth capture from <find>, #0 captures the entire string
+      %n                          - special: the sequence number, with automatic zero-padding
+      {arg:<func>}                - special: transform arg (after capture/special expansion) with function(s)
+      {<prop>[#<func>]}           - special: insert property
+  <binop>                         logical operators for expressions (comparator)
+      ==                          - equal to
+      =                           - equal to
+      !=                          - not equal to
+      <, <=, >, >=                - less-than/greater-than
+      ~                           - contains
+      !                           - does not contain
+  <comparator>                    expression to test a value, returns true or false, default operator ==
+      :<regular-expression>       - pcre matches any part of value
+      [<binop>]<string>           - compare using operator, string is converted to value's type
+      %null                       - true if value is null
+      %!null                      - true if value is not null
+      %empty                      - true if value is empty (after conversion to string)
+      %!empty                     - true if value is not empty (after conversion to string)
+  <prop>                          item property for sorting, grouping, filtering
+      %4
+
+  <func>                          transform a property value or string
+      <func>#<func>[#<func>]...   - chain of functions, separated by #
+      mid,from,len                - substring from index (from) with length (len) (see: QString::mid)
+      trim                        - remove whitespace from beginning/end
+      upper                       - uppercase
+      lower                       - lowercase
+      title                       - capitalize first letter
+      date,<format-string>        - parse value as date and format as string (see: QDateTime::toString())
+      year                        - shortcut for date,yyyy
+      month                       - shortcut for date,yyyy-MM
+      day                         - shortcut for date,yyyy-MM-dd
+      split,<regexp|string>       - split into array with regexp or string
+      camelsplit                  - split into array on uppercase/lowercase (camelCase => [camel, Case])
+      join,<string>               - join array with string
+      push,<string>               - append string to end of array
+      pop                         - remove string from end of array
+      shift                       - remove string from front of array
+      peek                        - return string at given index
+      foreach,<func>[|func]...    - apply function(s) separated by pipe (|) to each array element
+      add,<integer>               - add integer arg to value
+      pad,<integer>               - pad integer value with zeros, to width argument
+
+Examples
+==============================================================================
+  create index in cwd             cbird -update
+  find exact duplicates           cbird -update -dups -show
+  find near duplicates            cbird -update -similar -show
+  find near duplicates (video)    cbird -update -p.alg video -p.dht 7 -p.vtrim 1000 -similar -show
+  group photo sets by month       cbird -select-type 1 -group-by exif#Photo.DateTimeOriginal#month -folders -show
+  browse items, 16 per page       cbird -select-all -max-per-page 16 -show
+

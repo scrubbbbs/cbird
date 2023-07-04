@@ -19,9 +19,10 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "database.h"
+
 #include "profile.h"
-#include "templatematcher.h"
 #include "qtutil.h"
+#include "templatematcher.h"
 
 QAtomicInt& Database::connectionCount() {
   static auto* s = new QAtomicInt(0);
@@ -51,7 +52,7 @@ QSqlDatabase Database::connect(int id) {
     if (it != hash.end()) {
       bool isValid = false;
 
-      // this scope is to keep db reference from crossing disconnect below
+      // this scope keeps db destructor after disconnect() that follows
       {
         QString currName = "invalid";
         QString reqName = dbPath(id);
@@ -60,13 +61,12 @@ QSqlDatabase Database::connect(int id) {
         if (db.isValid()) {
           isValid = true;
 
-          // check that the database assigned to this thread is the one
-          // you wanted. It might not be if using multiple Database instances
+          // this thread's db might be wrong if using multiple Database instances
           currName = db.databaseName();
           if (currName == reqName) return db;
 
-          qWarning("invalid cached connection: %s (%s), wanted (%s)",
-                   qPrintable(*it), qPrintable(currName), qPrintable(reqName));
+          qWarning("invalid cached connection: %s (%s), wanted (%s)", qPrintable(*it),
+                   qPrintable(currName), qPrintable(reqName));
         }
       }
 
@@ -75,13 +75,13 @@ QSqlDatabase Database::connect(int id) {
     }
   }
 
-  // each db connection needs a unique identifier; use a counter
+  // each db connection needs a unique identifier; use a counter,
+  // plus the provided id
   const int connId = connectionCount()++;
 
   const QString name = QString("sqlite_%1_%2").arg(id).arg(connId);
   const QString path = dbPath(id);
-  qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread),
-         qPrintable(name), qPrintable(path));
+  qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread), qPrintable(name), qPrintable(path));
 
   QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", name);
   db.setDatabaseName(path);
@@ -118,8 +118,8 @@ void Database::disconnect() {
     if (it != cons.end()) {
       QString connName = *it;
       QString dbName = QSqlDatabase::database(connName).databaseName();
-      qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread),
-             qPrintable(connName), qPrintable(dbName));
+      qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread), qPrintable(connName),
+             qPrintable(dbName));
       cons.remove(thread);
       // must be last, after cons() gives up its reference
       QSqlDatabase::removeDatabase(connName);
@@ -134,8 +134,8 @@ void Database::disconnectAll() {
     for (auto& thread : cons.keys()) {
       QString connName = cons[thread];
       QString dbName = QSqlDatabase::database(connName).databaseName();
-      qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread),
-             qPrintable(connName), qPrintable(dbName));
+      qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread), qPrintable(connName),
+             qPrintable(dbName));
       cons.remove(thread);
       QSqlDatabase::removeDatabase(connName);
     }
@@ -235,14 +235,11 @@ void Database::createTables() {
                   " );"))
     SQL_FATAL(exec);
 
-  if (!query.exec("create unique index media_id_index on media(id);"))
-    SQL_FATAL(exec);
+  if (!query.exec("create unique index media_id_index on media(id);")) SQL_FATAL(exec);
 
-  if (!query.exec("create unique index media_path_index on media(path);"))
-    SQL_FATAL(exec);
+  if (!query.exec("create unique index media_path_index on media(path);")) SQL_FATAL(exec);
 
-  if (!query.exec("create index media_md5_index on media(md5);"))
-    SQL_FATAL(exec);
+  if (!query.exec("create index media_md5_index on media(md5);")) SQL_FATAL(exec);
 
 // we don't store keypoints as there is nothing that uses them,
 // and they take up a lot of space
@@ -271,9 +268,7 @@ Database::Database(const QString& path_) {
   QDir dir = QDir::current();
   if (path_ != "") dir = QDir(path_);
 
-  if (!dir.exists())
-    qFatal("directory does not exist: \"%s\"",
-           qUtf8Printable(dir.absolutePath()));
+  if (!dir.exists()) qFatal("directory does not exist: \"%s\"", qUtf8Printable(dir.absolutePath()));
 
   // This is not redundant; absolutePath() does not
   // resolve the path the same way as QFileInfo.
@@ -285,8 +280,7 @@ Database::Database(const QString& path_) {
   memset(&_mediaIndex, 0xFF, sizeof(_mediaIndex));
 
   if (!dir.mkpath(indexPath()))
-    qFatal("failed to create index folder: \"%s\"",
-           qUtf8Printable(indexPath()));
+    qFatal("failed to create index folder: \"%s\"", qUtf8Printable(indexPath()));
 
   Q_ASSERT(dir.mkpath(cachePath()));
   Q_ASSERT(dir.mkpath(videoPath()));
@@ -345,7 +339,6 @@ void Database::writeTimestamp() {
 }
 
 void Database::add(MediaGroup& inMedia) {
-
   uint64_t then = nanoTime();
   uint64_t now;
 
@@ -371,8 +364,8 @@ void Database::add(MediaGroup& inMedia) {
     // using sql auto-increment and lastInsertId() is not going to work
     // since we are batching the insert
     QSqlQuery query(connect());
-    if (!query.exec("select max(id) from media")) SQL_FATAL(select)
-    if (!query.next()) mediaId = 0;
+    if (!query.exec("select max(id) from media")) SQL_FATAL(select);
+    if (!query.next()) SQL_FATAL(next);
     mediaId = query.value(0).toInt() + 1;
   }
 
@@ -384,22 +377,21 @@ void Database::add(MediaGroup& inMedia) {
 
     // Avoid violating unique constraint on media.path, and crashing app
     // this is slow, only useful if multiple processes can call add()
-    //if (existingPaths.contains(m.path()))
+    // if (existingPaths.contains(m.path()))
     //  qWarning() << "attempt to add existing path, ignoring" << m.path();
-    //else
+    // else
     media.append(m);
   }
 
-  std::sort(media.begin(), media.end(), [](const Media& a, const Media& b) {
-    return a.path() < b.path();
-  });
+  std::sort(media.begin(), media.end(),
+            [](const Media& a, const Media& b) { return a.path() < b.path(); });
 
   connect().transaction();
   for (Index* i : _algos) connect(i->databaseId()).transaction();
 
   now = nanoTime();
-  uint64_t w0 = now-then;
-  then=now;
+  uint64_t w0 = now - then;
+  then = now;
 
   {
     QSqlQuery query(connect());
@@ -421,14 +413,12 @@ void Database::add(MediaGroup& inMedia) {
       md5.append(m.md5());
       dctHash.append(qlonglong(m.dctHash()));
 
-  #ifdef ENABLE_KEYPOINTS_DB
+#ifdef ENABLE_KEYPOINTS_DB
       foreach (const cv::KeyPoint& kp, m.keyPoints()) {
-        if (!query.prepare(
-                "insert into keypoint "
-                "(media_id,  x,  y,  size,  angle,  response,  class_id) values "
-                "(:media_id, :x, :y, :size, :angle, :response, :class_id)")) {
-          printf("Database::add keypoint: %s\n",
-                 qPrintable(query.lastError().text()));
+        if (!query.prepare("insert into keypoint "
+                           "(media_id,  x,  y,  size,  angle,  response,  class_id) values "
+                           "(:media_id, :x, :y, :size, :angle, :response, :class_id)")) {
+          printf("Database::add keypoint: %s\n", qPrintable(query.lastError().text()));
           exit(-1);
         }
 
@@ -440,16 +430,14 @@ void Database::add(MediaGroup& inMedia) {
         query.bindValue(":response", kp.response);
         query.bindValue(":class_id", kp.class_id);
         if (!query.exec()) {
-          printf("Database::add keypoint: %s\n",
-                 qPrintable(query.lastError().text()));
+          printf("Database::add keypoint: %s\n", qPrintable(query.lastError().text()));
           exit(-1);
         }
       }
-  #endif
+#endif
 
       if (m.type() == Media::TypeVideo && !m.videoIndex().isEmpty()) {
-        QString indexPath =
-            QString("%1/%2.vdx").arg(videoPath()).arg(m.id());
+        QString indexPath = QString("%1/%2.vdx").arg(videoPath()).arg(m.id());
         m.videoIndex().save(indexPath);
       }
     }
@@ -468,8 +456,8 @@ void Database::add(MediaGroup& inMedia) {
   inMedia = media;
 
   now = nanoTime();
-  uint64_t w1 = now-then;
-  then=now;
+  uint64_t w1 = now - then;
+  then = now;
 
   for (Index* i : _algos) {
     QSqlDatabase db = connect(i->databaseId());
@@ -477,8 +465,8 @@ void Database::add(MediaGroup& inMedia) {
   }
 
   now = nanoTime();
-  uint64_t w2 = now-then;
-  then=now;
+  uint64_t w2 = now - then;
+  then = now;
 
   for (Index* index : _algos) index->add(media);
 
@@ -488,16 +476,11 @@ void Database::add(MediaGroup& inMedia) {
   writeTimestamp();
 
   now = nanoTime();
-  uint64_t w3 = now-then;
-  then=now;
+  uint64_t w3 = now - then;
 
-  qDebug("count=%lld write=%d+%d+%d+%d=%d ms",
-         media.count(),
-         (int)(w0/1000000),
-              (int)(w1/1000000),
-              (int)(w2/1000000),
-              (int)(w3/1000000),
-              (int)((w0+w1+w2+w3)/1000000));
+  qDebug("count=%lld write=%d+%d+%d+%d=%d ms", media.count(), (int)(w0 / 1000000),
+         (int)(w1 / 1000000), (int)(w2 / 1000000), (int)(w3 / 1000000),
+         (int)((w0 + w1 + w2 + w3) / 1000000));
 }
 
 bool Database::setMd5(Media& m, const QString& md5) {
@@ -560,8 +543,7 @@ void Database::remove(const QVector<int>& ids) {
   // fixme: see if we should delete in reverse order of creation; maybe it
   // fragments the database file less?
 #ifdef ENABLE_KEYPOINTS_DB
-  for (int id : ids)
-    ("delete from keypoint where media_id=" + QString::number(id));
+  for (int id : ids) ("delete from keypoint where media_id=" + QString::number(id));
 
   now = nanoTime();
   qInfo("delete keypoint=%dms", (int)((now - then) / 1000000));
@@ -569,8 +551,7 @@ void Database::remove(const QVector<int>& ids) {
 #endif
 
   for (int id : ids)
-    if (!query.exec("delete from media where id=" + QString::number(id)))
-      SQL_FATAL(exec);
+    if (!query.exec("delete from media where id=" + QString::number(id))) SQL_FATAL(exec);
 
   now = nanoTime();
   qInfo("<PL>delete media   =%dms", int((now - then) / 1000000));
@@ -587,14 +568,12 @@ void Database::remove(const QVector<int>& ids) {
     qInfo("<PL>algo: %d deleting", i->id());
 
     QSqlDatabase db = connect(i->databaseId());
-    if (!db.transaction())
-      qFatal("create transaction: %s", qPrintable(db.lastError().text()));
+    if (!db.transaction()) qFatal("create transaction: %s", qPrintable(db.lastError().text()));
 
     i->removeRecords(db, ids);
 
     qInfo("<PL>algo: %d committing...", i->id());
-    if (!db.commit())
-      qFatal("commit transaction: %s", qPrintable(db.lastError().text()));
+    if (!db.commit()) qFatal("commit transaction: %s", qPrintable(db.lastError().text()));
 
     now = nanoTime();
 
@@ -605,11 +584,9 @@ void Database::remove(const QVector<int>& ids) {
   // if it's a video, delete the hash file
   // todo: this could be in removeRecords()
   for (int id : ids) {
-    QString hashFile =
-        QString::asprintf("%s/%d.vdx", qPrintable(videoPath()), id);
+    QString hashFile = QString::asprintf("%s/%d.vdx", qPrintable(videoPath()), id);
     if (QFileInfo::exists(hashFile))
-      if (!QFile(hashFile).remove())
-        qCritical("failure to delete file %s", qPrintable(hashFile));
+      if (!QFile(hashFile).remove()) qCritical("failure to delete file %s", qPrintable(hashFile));
   }
 
   for (Index* i : _algos) i->remove(ids);
@@ -626,15 +603,13 @@ void Database::vacuum() {
   qInfo("vacuum main db");
   const char* sql = "vacuum";
   QSqlQuery query(connect());
-  if (!query.exec(sql))
-    SQL_FATAL(exec);
+  if (!query.exec(sql)) SQL_FATAL(exec);
 
   for (Index* i : _algos) {
     qInfo("vaccum algo: %d", i->id());
     QSqlDatabase db = connect(i->databaseId());
     QSqlQuery query(db);
-    if (!query.exec(sql))
-      SQL_FATAL(exec);
+    if (!query.exec(sql)) SQL_FATAL(exec);
   }
   // there was a bug that caused video index to be orphaned
   const auto files = QDir(videoPath()).entryList({"*.vdx"});
@@ -644,8 +619,7 @@ void Database::vacuum() {
     if (!ok) continue;
     if (mediaWithId(id).isValid()) continue;
     qInfo() << "orphaned video index" << f;
-    if (!QFile(videoPath()+"/"+f).remove())
-      qWarning() << "failed to remove" << f;
+    if (!QFile(videoPath() + "/" + f).remove()) qWarning() << "failed to remove" << f;
   }
   // fixme: remove cache/tmp files
 }
@@ -655,14 +629,12 @@ QString Database::moveFile(const QString& srcPath, const QString& dstDir) {
   const QFileInfo dstInfo(dstDir);
 
   if (!srcInfo.exists()) {
-    qWarning() << "move failed: original does not exist:"
-               << srcInfo.absoluteFilePath();
+    qWarning() << "move failed: original does not exist:" << srcInfo.absoluteFilePath();
     return "";
   }
 
   if (!dstInfo.exists()) {
-    qWarning() << "move failed: destination does not exist:"
-               << dstInfo.absoluteFilePath();
+    qWarning() << "move failed: destination does not exist:" << dstInfo.absoluteFilePath();
     return "";
   }
 
@@ -731,7 +703,7 @@ QString Database::renameFile(const QString& srcPath, const QString& newName) {
 
   QDir parent = info.dir();
   if (parent.exists(newName)) {
-    qWarning() << "new name exists " << parent.absoluteFilePath(newName) ;
+    qWarning() << "new name exists " << parent.absoluteFilePath(newName);
     return "";
   }
 
@@ -770,9 +742,8 @@ bool Database::rename(Media& old, const QString& newName) {
 }
 
 bool Database::updatePaths(const MediaGroup& group, const QStringList& newPaths) {
-
   for (auto& path : newPaths)
-    if (newPaths.contains("//")) { // relative, canonical path required!
+    if (newPaths.contains("//")) {  // relative, canonical path required!
       qCritical() << "invalid path:" << path;
       return false;
     }
@@ -820,7 +791,7 @@ bool Database::moveDir(const QString& dirPath, const QString& newName) {
 
   bool isZip = info.isFile() && Media::isArchive(dirPath);
 
-  if ( !info.exists() || !(info.isDir() || isZip) ) {
+  if (!info.exists() || !(info.isDir() || isZip)) {
     qWarning("src doesn't exist or is not a dir/zip");
     return false;
   }
@@ -852,8 +823,7 @@ bool Database::moveDir(const QString& dirPath, const QString& newName) {
   }
 
   if (!parent.rename(absSrc, absDst)) {
-    qCritical() << "failed to rename dir/zip: filesystem error src=" << absSrc
-                << "dst=" << absDst;
+    qCritical() << "failed to rename dir/zip: filesystem error src=" << absSrc << "dst=" << absDst;
     return false;
   }
   qInfo() << "renamed: " << dirPath << "=>" << newName;
@@ -871,8 +841,7 @@ bool Database::moveDir(const QString& dirPath, const QString& newName) {
   if (oldNames.count() <= 0) return true;
 
   QStringList newPaths;
-  for (auto& m : oldNames)
-    newPaths += newPrefix + m.path().mid(absSrc.length());
+  for (auto& m : oldNames) newPaths += newPrefix + m.path().mid(absSrc.length());
 
   return updatePaths(oldNames, newPaths);
 }
@@ -903,15 +872,13 @@ void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
     const QString mediaPath = path() + "/" + relPath;
 
     Media m(mediaPath, type, query.value(_mediaIndex.width).toInt(),
-            query.value(_mediaIndex.height).toInt(),
-            query.value(_mediaIndex.md5).toString(),
+            query.value(_mediaIndex.height).toInt(), query.value(_mediaIndex.md5).toString(),
             uint64_t(query.value(_mediaIndex.phash_dct).toLongLong()));
 
     // qDebug("%s %d %dx%d", qUtf8Printable(mediaPath), (int)m.phashDct(),
     // m.width(), m.height());
 
-    if (m.width() <= 0 || m.height() <= 0)
-      qWarning() << "no dimensions: %s" << m.path();
+    if (m.width() <= 0 || m.height() <= 0) qWarning() << "no dimensions: %s" << m.path();
 
     m.setId(id);
     media.append(m);
@@ -1033,13 +1000,11 @@ bool Database::mediaExists(const QString& path) {
 
 bool Database::mediaExistsLike(const QString& pathLike) {
   QString relPath = pathLike;
-  if (relPath.startsWith(path()))
-    relPath = relPath.mid(path().length() + 1);
+  if (relPath.startsWith(path())) relPath = relPath.mid(path().length() + 1);
 
   QSqlQuery query(connect());
 
-  if (!query.prepare("select id from media where path like :path escape '\\'"))
-    SQL_FATAL(prepare);
+  if (!query.prepare("select id from media where path like :path escape '\\'")) SQL_FATAL(prepare);
 
   query.bindValue(":path", relPath);
 
@@ -1048,15 +1013,13 @@ bool Database::mediaExistsLike(const QString& pathLike) {
   return query.next();
 }
 
-MediaGroup Database::mediaWithSql(const QString& sql,
-                                  const QString& placeholder,
+MediaGroup Database::mediaWithSql(const QString& sql, const QString& placeholder,
                                   const QVariant& value) {
   QSqlQuery query(connect());
 
   if (!query.prepare(sql)) SQL_FATAL(prepare)
 
-  if (!placeholder.isEmpty())
-    query.bindValue(placeholder, value);
+  if (!placeholder.isEmpty()) query.bindValue(placeholder, value);
 
   if (!query.exec()) SQL_FATAL(exec);
 
@@ -1080,8 +1043,7 @@ Media Database::mediaWithId(int id) {
 Media Database::mediaWithPath(const QString& path) {
   QString relPath = path;
   QFileInfo info(path);
-  if (info.exists())
-    relPath = info.absoluteFilePath(); // takes care of ./ ../ etc
+  if (info.exists()) relPath = info.absoluteFilePath();  // takes care of ./ ../ etc
 
   if (relPath.startsWith(this->path())) relPath = relPath.mid(this->path().length() + 1);
 
@@ -1167,8 +1129,7 @@ MediaGroup Database::mediaWithIds(const QVector<int>& ids) {
   // fixme: seems pointless to use prepare here
   // fixme: if ids list is huge we could hit limits?
   QStringList names;
-  for (int i = 0; i < ids.count(); i++)
-    names.append(":" + QString::number(ids[i]));
+  for (int i = 0; i < ids.count(); i++) names.append(":" + QString::number(ids[i]));
 
   QSqlQuery query(connect());
   if (!query.prepare("select * from media "
@@ -1211,7 +1172,7 @@ MediaGroupList Database::dupsByMd5(const SearchParams& params) {
     while (query.next()) {
       const QString md5 = query.value(0).toString();
       MediaGroup g = mediaWithMd5(md5);
-      for (auto& m  : g)
+      for (auto& m : g)
         if (isWeed(m)) m.setIsWeed();
       if (!g.isEmpty()) dups.append(g);
     }
@@ -1236,12 +1197,10 @@ bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
     tmp.append(match[0]);
 
     QString prefix = params.path;
-    if (!prefix.startsWith(this->path()))
-      prefix = this->path() + "/" + params.path;
+    if (!prefix.startsWith(this->path())) prefix = this->path() + "/" + params.path;
 
     for (int i = 1; i < match.count(); i++)
-      if ((!params.inPath) ^ match[i].path().startsWith(prefix))
-        tmp.append(match[i]);
+      if ((!params.inPath) ^ match[i].path().startsWith(prefix)) tmp.append(match[i]);
 
     match = tmp;
   }
@@ -1255,16 +1214,21 @@ bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
         if (match[i].isArchived()) {
           QString p;
           match[i].archivePaths(&p);
-          if (p == parent) { match.remove(i); --i; }
+          if (p == parent) {
+            match.remove(i);
+            --i;
+          }
         }
-    }
-    else {
+    } else {
       auto parent = match[0].path().split("/");
       parent.pop_back();
       for (int i = 1; i < match.count(); ++i) {
         auto tmp = match[i].path().split("/");
         tmp.pop_back();
-        if (tmp == parent) { match.remove(i); --i; }
+        if (tmp == parent) {
+          match.remove(i);
+          --i;
+        }
       }
     }
   }
@@ -1275,8 +1239,7 @@ bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
   return true;
 }
 
-void Database::filterMatches(const SearchParams& params,
-                             MediaGroupList& matches) {
+void Database::filterMatches(const SearchParams& params, MediaGroupList& matches) {
   // remove duplicate result (same set of images found more than once)
   // e.g. a matches b, b matches a, only include first one
   if (params.filterGroups) {
@@ -1310,8 +1273,7 @@ void Database::filterMatches(const SearchParams& params,
 MediaGroupList Database::similar(const SearchParams& params) {
   qint64 start = QDateTime::currentMSecsSinceEpoch();
 
-  if (params.mirrorMask)
-    qWarning() << "reflected images unsupported, use -similar-to";
+  if (params.mirrorMask) qWarning() << "reflected images unsupported, use -similar-to";
 
   // note: if set is provided, it is assumed to contain relevant media type(s)
   // fixme: should be ok to filter set to relevant type of the query index
@@ -1323,19 +1285,17 @@ MediaGroupList Database::similar(const SearchParams& params) {
     // e.g. for image-only indexes, query type should be images
     //      for video index, query type can be video, image, or (future) audio
     QStringList queryTypes;
-    int flags=params.queryTypes;
-    int type=1;
+    int flags = params.queryTypes;
+    int type = 1;
     while (flags) {
-      if (flags & 1)
-        queryTypes << QString::number(type);
+      if (flags & 1) queryTypes << QString::number(type);
       type++;
       flags >>= 1;
     }
 
     QSqlQuery query(connect());
     query.setForwardOnly(true);
-    if (!query.exec("select * from media where type in (" +
-                    queryTypes.join(",") + ")"))
+    if (!query.exec("select * from media where type in (" + queryTypes.join(",") + ")"))
       SQL_FATAL(exec);
     fillMediaGroup(query, haystack);
   }
@@ -1360,17 +1320,16 @@ MediaGroupList Database::similar(const SearchParams& params) {
       if (slice) {
         index = slice;
         qInfo() << "using haystack slice with" << slice->count() << "items";
-      }
-      else
+      } else
         qWarning() << "Index::slice unsupported for index" << index->id();
     }
   }
 
-  qInfo("index loaded in %dms",
-        int(QDateTime::currentMSecsSinceEpoch() - start));
+  qInfo("index loaded in %dms", int(QDateTime::currentMSecsSinceEpoch() - start));
   start = QDateTime::currentMSecsSinceEpoch();
 
-  int progressInterval = haystackSize < 100 ? 1 : qBound(1, params.progressInterval, haystackSize / 100);
+  int progressInterval =
+      haystackSize < 100 ? 1 : qBound(1, params.progressInterval, haystackSize / 100);
 
   const int progressTotal = haystackSize;
 
@@ -1386,9 +1345,9 @@ MediaGroupList Database::similar(const SearchParams& params) {
   QSet<int> skip;
   QMutex mutex;
 
-  QFuture<void> f = QtConcurrent::map(
-      haystack, [&idMap, &results, &progress, &tm, progressInterval,
-                 progressTotal, params, index, this](const Media& m) {
+  QFuture<void> f =
+      QtConcurrent::map(haystack, [&idMap, &results, &progress, &tm, progressInterval,
+                                   progressTotal, params, index, this](const Media& m) {
         MediaGroup result = this->searchIndex(index, m, params, idMap);
 
         // give each work item a (lockless) way to write results
@@ -1419,16 +1378,15 @@ MediaGroupList Database::similar(const SearchParams& params) {
   f.waitForFinished();
   delete slice;
 
-  qInfo("searched %d items and found %lld matches in %dms", haystackSize,
-        results.count(), int(QDateTime::currentMSecsSinceEpoch() - start));
+  qInfo("searched %d items and found %lld matches in %dms", haystackSize, results.count(),
+        int(QDateTime::currentMSecsSinceEpoch() - start));
 
   qDebug() << "filter matches";
   start = QDateTime::currentMSecsSinceEpoch();
 
   MediaGroupList list;
   for (MediaGroup& match : results)
-    if (match.count() > 0 && !filterMatch(params, match))
-      list.append(match);
+    if (match.count() > 0 && !filterMatch(params, match)) list.append(match);
 
   filterMatches(params, list);
 
@@ -1439,8 +1397,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
   return list;
 }
 
-MediaGroup Database::similarTo(const Media& needle,
-                               const SearchParams& params) {
+MediaGroup Database::similarTo(const Media& needle, const SearchParams& params) {
   qint64 start = QDateTime::currentMSecsSinceEpoch();
 
   Index* index = loadIndex(params);
@@ -1478,7 +1435,7 @@ MediaGroup Database::similarTo(const Media& needle,
   if (result.count() > 0) result.removeFirst();
 
   if (params.verbose) {
-    MessageContext mc(needle.path().mid(path().length()+1));
+    MessageContext mc(needle.path().mid(path().length() + 1));
     qInfo("%lld results (%d filtered out) in %lldms", result.count(), filtered,
           QDateTime::currentMSecsSinceEpoch() - start);
   }
@@ -1492,14 +1449,11 @@ MediaGroup Database::similarTo(const Media& needle,
 
     if (m.md5() == needle.md5()) flags |= Media::MatchExact;
 
-    if (m.resolution() < needle.resolution())
-      flags |= Media::MatchBiggerDimensions;
+    if (m.resolution() < needle.resolution()) flags |= Media::MatchBiggerDimensions;
 
-    if (m.compressionRatio() > needle.compressionRatio())
-      flags |= Media::MatchLessCompressed;
+    if (m.compressionRatio() > needle.compressionRatio()) flags |= Media::MatchLessCompressed;
 
-    if (m.originalSize() < needle.originalSize())
-      flags |= Media::MatchBiggerFile;
+    if (m.originalSize() < needle.originalSize()) flags |= Media::MatchBiggerFile;
 
     m.setMatchFlags(flags);
   }
@@ -1557,8 +1511,7 @@ void Database::saveIndices() {
   }
 }
 
-MediaGroup Database::searchIndex(Index* index, const Media& needle,
-                                 const SearchParams& params,
+MediaGroup Database::searchIndex(Index* index, const Media& needle, const SearchParams& params,
                                  const QHash<int, Media>& subset) {
   QReadLocker locker(&_rwLock);
 
@@ -1576,10 +1529,11 @@ MediaGroup Database::searchIndex(Index* index, const Media& needle,
           if (tmp.dctThresh > params.maxThresh) goto DONE;
           break;
         case SearchParams::AlgoCVFeatures:
-          tmp.cvThresh+=5;
+          tmp.cvThresh += 5;
           if (tmp.cvThresh > params.maxThresh) goto DONE;
           break;
-        case SearchParams::AlgoColor: goto DONE; // no thresholding
+        case SearchParams::AlgoColor:
+          goto DONE;  // no thresholding
         default:
           qWarning() << "maxThresh: unsupported algorithm";
           goto DONE;
@@ -1619,8 +1573,7 @@ DONE:
       media.setMatchRange(match.range);
       group.append(media);
     } else
-      qWarning("no media with id: %d, index could be stale or corrupt",
-               int(match.mediaId));
+      qWarning("no media with id: %d, index could be stale or corrupt", int(match.mediaId));
   }
 
   return group;
@@ -1693,9 +1646,7 @@ void Database::loadWeeds() {
   if (_weedsLoaded) return;
   Q_ASSERT(_weeds.isEmpty());
 
-  readMap("weed",[&](const QString& key, const QString& value) {
-    _weeds.insert(key, value);
-  });
+  readMap("weed", [&](const QString& key, const QString& value) { _weeds.insert(key, value); });
 
   qDebug() << "loaded" << _weeds.count() << "weeds";
   _weedsLoaded = true;
@@ -1713,7 +1664,7 @@ bool Database::addWeed(const Media& weed, const Media& original) {
   if (weed.type() != original.type()) return false;
   if (isWeed(weed)) {
     QReadLocker locker(&_rwLock);
-    if (_weeds.value(weed.md5()) == original.md5()) // did not change the mapping
+    if (_weeds.value(weed.md5()) == original.md5())  // did not change the mapping
       return true;
     // fixme: this would be OK but we have to rewrite the weed.dat
     qWarning() << "cannot replace existing weed with a different source" << weed.md5();
@@ -1738,8 +1689,7 @@ bool Database::isWeed(const Media& media) {
 
   const auto& map = _weeds;
   const auto it = map.find(media.md5());
-  if (it != map.end())
-    return mediaWithMd5(it.value()).count() > 0;
+  if (it != map.end()) return mediaWithMd5(it.value()).count() > 0;
 
   return false;
 }
@@ -1749,16 +1699,15 @@ bool Database::removeWeed(const Media& media) {
     QWriteLocker locker(&_rwLock);
     _weeds.remove(media.md5());
     qDebug() << media.md5();
-    QVector<std::pair<QString,QString>> pairs;
+    QVector<std::pair<QString, QString>> pairs;
     const auto& map = _weeds;
-    for (auto it = map.begin(); it != map.end(); ++it)
-      pairs.append({it.key(),it.value()});
+    for (auto it = map.begin(); it != map.end(); ++it) pairs.append({it.key(), it.value()});
     return writeMap("weed", pairs);
   }
   return false;
 }
-//void Database::updateWeeds() {
-//  if (!_weedsLoaded) loadWeeds();
+// void Database::updateWeeds() {
+//   if (!_weedsLoaded) loadWeeds();
 
 //  const MediaGroup all = mediaWithSql("select * from media");
 //  QHash<QString, const Media*> existing;
@@ -1810,7 +1759,7 @@ MediaGroupList Database::weeds() {
 void Database::readMap(const QString& name,
                        std::function<void(const QString& key, const QString& value)> insert) const {
   QFile f(indexPath() + "/" + name + ".csv");
-  (void) f.open(QFile::ReadOnly);
+  (void)f.open(QFile::ReadOnly);
 
   while (f.bytesAvailable()) {
     const QString line = f.readLine(256).trimmed();
@@ -1820,8 +1769,7 @@ void Database::readMap(const QString& name,
   }
 }
 
-bool Database::appendMap(const QString& name, const QString& key,
-                        const QString& value) const {
+bool Database::appendMap(const QString& name, const QString& key, const QString& value) const {
   QFile f(indexPath() + "/" + name + ".csv");
   if (!f.open(QFile::Append)) {
     qCritical() << "open failed:" << f.fileName() << f.error() << f.errorString();
@@ -1835,13 +1783,14 @@ bool Database::appendMap(const QString& name, const QString& key,
   return ok;
 };
 
-bool Database::writeMap(const QString& name, const QVector<std::pair<QString,QString>>& keyValues) const {
+bool Database::writeMap(const QString& name,
+                        const QVector<std::pair<QString, QString>>& keyValues) const {
   QFile f(indexPath() + "/" + name + ".csv");
-  if (!f.open(QFile::ReadWrite|QFile::Truncate)) {
+  if (!f.open(QFile::ReadWrite | QFile::Truncate)) {
     qCritical() << "open failed:" << f.fileName() << f.error() << f.errorString();
     return false;
   }
-  for (const auto &kv : keyValues) {
+  for (const auto& kv : keyValues) {
     auto buf = (kv.first + "," + kv.second + "\n").toLatin1();
     bool ok = buf.length() == f.write(buf);
     if (!ok) {
@@ -1851,4 +1800,3 @@ bool Database::writeMap(const QString& name, const QVector<std::pair<QString,QSt
   }
   return true;
 }
-

@@ -22,7 +22,7 @@
 
 class Params {
  public:
-  /// enum/mask value
+  /// enum or flags value
   class NamedValue {
    public:
     int value;
@@ -34,21 +34,19 @@ class Params {
   class Link {
    public:
     QVariant value;
-    QString target; // other Value name
+    QString target;  // other Value name
     QVariant targetValue;
   };
 
   /// parameter
   class Value {
    public:
-    QString key;   /// property name
-    QString label; /// ui label
+    QString key;    /// property name
+    QString label;  /// ui label
 
-    enum {
-      Bool=1, Int, Enum, Flags
-    } type; /// data type
+    enum { Bool = 1, Int, Enum, Flags } type;  /// data type
 
-    int sort; /// sort order for ui
+    int sort;  /// sort order for ui
 
     std::function<bool(const QVariant&)> set;
     std::function<QVariant(void)> get;
@@ -62,41 +60,24 @@ class Params {
     const char* typeName() const;
     bool operator<(const Value& other) const { return sort < other.sort; }
 
-    static bool setEnum(const QVariant& v,
-                        const QVector<NamedValue>& namedValues,const char *arg,
+    static bool setEnum(const QVariant& v, const QVector<NamedValue>& namedValues, const char* arg,
                         int& member);
-    static bool setFlags(const QVariant& v,
-                         const QVector<NamedValue>& namedValues, const char *arg,
+    static bool setFlags(const QVariant& v, const QVector<NamedValue>& namedValues, const char* arg,
                          int& member);
   };
 
-
-  QHash<QString, Value> _params;
-  Value _invalid;
-
   QStringList keys() const;
 
-  Value getValue(const QString& key) const {
-    auto it = _params.find(key);
-    if (it != _params.end()) return *it;
-    return _invalid;
-  }
-
-  void setValue(const QString& key, const QVariant& val) {
-    auto it = _params.find(key);
-    if (it == _params.end()) qWarning() << "invalid param:" << key;
-    else if (!it->set(val)) qWarning() << "failed to set:" << key << "to:" << val;
-    else {
-      for (const auto& l : it->link)
-        if (l.value == it->get())
-          setValue(l.target, l.targetValue);
-    }
-  }
+  Value getValue(const QString& key) const;
+  void setValue(const QString& key, const QVariant& val);
 
   void print() const;
 
  protected:
+  QHash<QString, Value> _params;
+  Value _invalid;
+
   void add(const Value&& v);
-  void link(const QString& keyA, const QVariant& valueA,
-            const QString& keyB, const QVariant& valueB);
+  void link(const QString& keyA, const QVariant& valueA, const QString& keyB,
+            const QVariant& valueB);
 };

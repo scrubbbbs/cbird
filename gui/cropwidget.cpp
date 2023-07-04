@@ -20,10 +20,11 @@
    <https://www.gnu.org/licenses/>.  */
 #include "cropwidget.h"
 
-#include <exiv2/exiv2.hpp>
-
 #include "../cvutil.h"
 #include "../database.h"
+
+#include "opencv2/core.hpp"
+#include "exiv2/exiv2.hpp"
 
 bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidget *parent,
                                    bool async, const std::function<void(bool)> &after) {
@@ -56,7 +57,7 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
     QImage img = thumb;
     if (img.width() > 1024 || img.height() > 1024) {
       qImageToCvImgNoCopy(thumb, cvImg);
-      sizeLongestSide(cvImg, 1024, cv::INTER_LANCZOS4);
+      sizeLongestSide(cvImg, 1024);
       cvImgToQImageNoCopy(cvImg, img);
     }
 
@@ -108,8 +109,7 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
             .toHex();
     QString cacheDir = qEnvironmentVariable("XDG_CACHE_HOME", "$HOME/.cache/thumbnails");
     QString flushCacheCmd = QString("rm -v \"%1/\"*/%2.png").arg(cacheDir).arg(hash);
-    if (0 == system(qPrintable(flushCacheCmd)))
-      qInfo() << "thumbnail cache flushed";
+    if (0 == system(qPrintable(flushCacheCmd))) qInfo() << "thumbnail cache flushed";
 
     if (async) after(ok);
 #endif
@@ -227,7 +227,7 @@ void CropWidget::setConstraint(bool enable, int num, int den) {
 }
 
 void CropWidget::repaintSelection() {
-  QRect r = _selection.intersected(this->rect()); // don't overflow
+  QRect r = _selection.intersected(this->rect());  // don't overflow
   _selectLabel->setGeometry(r);
 
   // subtract the border width per stylesheet

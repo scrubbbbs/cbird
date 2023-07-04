@@ -19,7 +19,6 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #pragma once
-#include <functional>
 
 #include "../media.h"
 
@@ -31,6 +30,7 @@ class Database;
  */
 class MediaGroupTableModel : public QAbstractTableModel {
   Q_OBJECT
+  NO_COPY_NO_DEFAULT(MediaGroupTableModel, QAbstractTableModel)
 
  public:
   enum {
@@ -47,13 +47,7 @@ class MediaGroupTableModel : public QAbstractTableModel {
     NumCols
   };
 
-  enum {
-    ShowAll = 1,
-    ShowNoMatch = 2,
-    ShowAnyMatch = 4,
-    ShowBigger = 8,
-    ShowSmaller = 16
-  };
+  enum { ShowAll = 1, ShowNoMatch = 2, ShowAnyMatch = 4, ShowBigger = 8, ShowSmaller = 16 };
 
   // not all combinations of match flags make sense,
   // if a flag wants to be added, some might be removed first
@@ -66,8 +60,7 @@ class MediaGroupTableModel : public QAbstractTableModel {
   // QAbstractTableModel interface
   int rowCount(const QModelIndex& parent = QModelIndex()) const;
   int columnCount(const QModelIndex& parent = QModelIndex()) const;
-  QVariant headerData(int section, Qt::Orientation orientation,
-                      int role = Qt::DisplayRole) const;
+  QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const;
   QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
   void sort(int column, Qt::SortOrder order);
   bool removeRows(int row, int count, const QModelIndex& parent);
@@ -135,14 +128,13 @@ class MediaGroupTableWidget : public QTableView {
   void setIndexPath(const QString& path) { _indexPath = path; }
 
   // force using show() to restore saved state
-  void show() { _maximized ? super::showMaximized() : super::showNormal(); }  
+  void show() { _maximized ? super::showMaximized() : super::showNormal(); }
   void showMaximized() = delete;
   void showNormal() = delete;
 
  Q_SIGNALS:
   // hooks for the application
-  void downloadUrl(const QUrl& url, const QString& savePath, int sequence,
-                   const QString& alt);
+  void downloadUrl(const QUrl& url, const QString& savePath, int sequence, const QString& alt);
   void moveUrl(const QUrl& url, const QString& dstPath);
   void openUrl(const QUrl& url);
   void searchMedia(const Media& media);
@@ -166,8 +158,7 @@ class MediaGroupTableWidget : public QTableView {
   void execContextMenu(const QPoint& p);
   QStringList selectedPaths() const;
   Media firstSelectedMedia();
-  QAction* addAction(const QString& label, const QKeySequence& shortcut,
-                     const char* slot);
+  QAction* addAction(const QString& label, const QKeySequence& shortcut, const char* slot);
   int _defaultRowHeight;
   QString _indexPath;
   bool _maximized = false;

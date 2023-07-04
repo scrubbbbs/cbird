@@ -24,9 +24,7 @@
 #include "params.h"
 
 /// report sql error with context & detail
-#define SQL_FATAL(x) \
-  qFatal("QSqlQuery." #x ": %s", qPrintable(query.lastError().text()));
-
+#define SQL_FATAL(x) qFatal("QSqlQuery." #x ": %s", qPrintable(query.lastError().text()));
 
 /**
  * @class SearchParams
@@ -54,78 +52,69 @@ class SearchParams : public Params {
 
   /**
    * mirror modes/orientations
-   * @note currently no index recognizes mirrored images,
+   * @note no index besides color histogram recognizes mirrored images,
    * a mirrored query/needle image will be created
    */
   enum {
-    MirrorNone = 0,      /// Do not flip needle
-    MirrorHorizontal = 1,/// Flip needle horizontally
-    MirrorVertical = 2,  /// Flip needle vertically
-    MirrorBoth = 4,      /// Flip needle both h & v
+    MirrorNone = 0,        /// Do not flip needle
+    MirrorHorizontal = 1,  /// Flip needle horizontally
+    MirrorVertical = 2,    /// Flip needle vertically
+    MirrorBoth = 4,        /// Flip needle both h & v
   };
 
   /**
-   * media type flags
+   * combination of flags to indicate supported/desired types
    */
   enum {
-    FlagImage = 1<<(Media::TypeImage - 1),
-    FlagVideo = 1<<(Media::TypeVideo - 1),
-    FlagAudio = 1<<(Media::TypeAudio - 1)
+    FlagImage = 1 << (Media::TypeImage - 1),
+    FlagVideo = 1 << (Media::TypeVideo - 1),
+    FlagAudio = 1 << (Media::TypeAudio - 1)
   };
 
-  int algo = AlgoDCT, // AlgoXXX
-      dctThresh = 5,  // threshold for DCT hash hamming distance
-      cvThresh = 25,  // threshold for ORB descriptors distance
-      minMatches = 1, // minimum number of matches required
-      maxMatches = 5, // maximum number of matches after sort by score
-      needleFeatures = 100,    // template match: number of needle features
-      haystackFeatures = 1000, // template match: number of haystack features
-      mirrorMask = MirrorNone, // MirrorXXX flags for mirror search
-      maxThresh = 0,           // if > 0, increment dct/cv/Thresh < maxThresh until match is found
-      tmThresh = 5;            // threshold for template match DCT hash
+  int algo = AlgoDCT,        // AlgoXXX
+      dctThresh = 5,         // threshold for DCT hash hamming distance
+      cvThresh = 25,         // threshold for ORB descriptors distance
+      minMatches = 1,        // minimum number of matches required
+      maxMatches = 5,        // maximum number of matches after sort by score
+      needleFeatures = 100,  // template match: number of needle features
+      haystackFeatures = 1000,  // template match: number of haystack features
+      mirrorMask = MirrorNone,  // MirrorXXX flags for mirror search
+      maxThresh = 0,            // if > 0, increment dct/cv/Thresh < maxThresh until match is found
+      tmThresh = 5;             // threshold for template match DCT hash
 
   bool templateMatch = false,  // remove results that don't pass the template matcher
       negativeMatch = false,   // remove results in the negative matches (blacklist)
       autoCrop = false,        // de-letterbox prior to search
       verbose = false;         // show more information about what the query is doing
 
-  QString path;        // subdirectory to search or accept/reject results from
-  bool inPath = false; // true==accept results from, false=reject results from
+  QString path;         // subdirectory to search or accept/reject results from
+  bool inPath = false;  // true==accept results from, false=reject results from
 
-  MediaGroup set;     // subset to search within (using Index::slice())
-  bool inSet = false; // true==use subset
+  MediaGroup set;      // subset to search within (using Index::slice())
+  bool inSet = false;  // true==use subset
 
-  // fixme: target overlaps with inSet, has limited use, should be removed
-  uint32_t target = 0; // specify a media id to search in/for (Media::id())
+  /// @deprecated overlaps with inSet, has limited use, should be removed
+  Q_DECL_DEPRECATED uint32_t target = 0;  // specify a media id to search in/for (Media::id())
 
-  //QVector<int> resultTypes{Media::TypeImage,Media::TypeVideo};  // list of Media::Type to include in result set
-  //QVector<int> queryTypes{Media::TypeImage};   // list of Media::Type to include in query set
-  int queryTypes = FlagImage;
+  int queryTypes = FlagImage;  // types to include in query set/result set
 
-  int skipFrames = 300;
-  //int skipFramesIn = 300;    // video search: ignore N frames at start of video (intros)
-  //int skipFramesOut = 300;   // video search: ignore N frames at end of video (outros)
-  int minFramesMatched = 30; // video search: >N frames match between videos
-  int minFramesNear = 60;    // video search: >N% of frames that matched are near each other
+  int skipFrames = 300;       // video search: ignore first and last N frames of video
+  int minFramesMatched = 30;  // video search: require >N frames match between videos
+  int minFramesNear = 60;     // video search: require >N% of frames that matched are nearby
 
-  bool filterSelf = true;    // remove media that matched itself
-  bool filterGroups = true;  // remove duplicate groups from results (a matches (b,c,d)
-                             //   and b matches (a,c,d) omit second one)
-  bool filterParent = false;  // remove matches with the same parent directory as needle
-  bool expandGroups = false;  //   expand group a,b,c,d by making (a,b), (a,c) and (a,d)
-  int mergeGroups = 0;        // merge n-connected groups (value = # of connections) (a
-                              //   matches b and b matches c, then a matches (b,c)
-  int progressInterval = 1000; // number of items searched between progress updates
+  bool filterSelf = true;       // remove media that matched itself
+  bool filterGroups = true;     // remove duplicate groups from results (a matches (b,c,d)
+                                //   and b matches (a,c,d) omit second one)
+  bool filterParent = false;    // remove matches with the same parent directory as needle
+  bool expandGroups = false;    //   expand group a,b,c,d by making (a,b), (a,c) and (a,d)
+  int mergeGroups = 0;          // merge n-connected groups (value = # of connections) (a
+                                //   matches b and b matches c, then a matches (b,c)
+  int progressInterval = 1000;  // number of items searched between progress updates
 
-  /*
-   * @return true if the media is compatible with search parameters
-   */
+  /// @return true if the media is compatible with search parameters
   bool mediaSupported(const Media& needle) const;
 
-  /**
-   * @return true if the needle is is indexed to allow a search
-   * with these parameters
-   */
+  /// @return true if the needle is is indexed to allow a search with these parameters
   bool mediaReady(const Media& needle) const;
 
   SearchParams();
@@ -138,17 +127,18 @@ class SearchParams : public Params {
   //                               rescale candidate prior to feature detection
 };
 
-/// Generic interface for a searchable index
+/// Common base for searchable index
 class Index {
   Q_DISABLE_COPY_MOVE(Index)
 
  public:
   virtual ~Index() {}
 
+  /// item type of index lookups
   struct Match {
-    uint32_t mediaId;
-    int score;
-    MatchRange range;
+    uint32_t mediaId; // unique id of indexed media
+    int score;        // score of match, lower is better
+    MatchRange range; // matching area/segment, e.g. frame numbers for partial video match
     Match() {
       mediaId = 0;
       score = 0;
@@ -192,8 +182,7 @@ class Index {
   }
 
   /// Remove items from the database
-  virtual void removeRecords(QSqlDatabase& db,
-                             const QVector<int>& mediaIds) const {
+  virtual void removeRecords(QSqlDatabase& db, const QVector<int>& mediaIds) const {
     (void)db;
     (void)mediaIds;
   }
@@ -203,13 +192,14 @@ class Index {
    * @note For large databases, storage to flat file(s) is a good idea. The SQL
    * database is used to reconstruct the flat files and this is often very slow.
    */
-  virtual void load(QSqlDatabase& db, const QString& cachePath,
-                    const QString& dataPath) = 0;
+  virtual void load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) = 0;
 
   /**
    * Save in-memory index to cache file for faster loading
-   * @details Tells the index it should save its in-memory representation
-   * as it will be destroyed soon
+   * @note since this is slow, it is usually going to be called after making a batch of
+   * additions/removals. Or maybe only at application exit. In the removal case, the downside is
+   * that there will usually be voids/nulls in the index that will remain until rebuilding the cache
+   * file.
    */
   virtual void save(QSqlDatabase& db, const QString& cachePath) = 0;
 

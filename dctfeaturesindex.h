@@ -26,9 +26,9 @@ class HammingTree;
 
 /**
  * @class DctFeaturesIndex
- * @brief Index of a feature-based matcher using DCT descriptors
+ * @brief Index of a feature-based matcher using DCT hashes
  *
- * The descriptors do not support rotation, unlike ORB. However
+ * DCT hashes do not support rotation, unlike ORB. However
  * they are much smaller and good at detecting cropping
  */
 class DctFeaturesIndex : public Index {
@@ -40,15 +40,13 @@ class DctFeaturesIndex : public Index {
 
   void createTables(QSqlDatabase& db) const override;
   void addRecords(QSqlDatabase& db, const MediaGroup& media) const override;
-  void removeRecords(QSqlDatabase& db,
-                     const QVector<int>& mediaIds) const override;
+  void removeRecords(QSqlDatabase& db, const QVector<int>& mediaIds) const override;
 
   int count() const override;
   bool isLoaded() const override;
   size_t memoryUsage() const override;
 
-  void load(QSqlDatabase& db, const QString& cachePath,
-            const QString& dataPath) override;
+  void load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) override;
   void save(QSqlDatabase& db, const QString& cachePath) override;
 
   void add(const MediaGroup& media) override;

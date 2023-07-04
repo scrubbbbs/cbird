@@ -19,10 +19,9 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #pragma once
-#include "mediawidget.h"
-
 #include "../media.h"
 #include "../videocontext.h"
+#include "mediawidget.h"
 
 class FrameCache;
 class Frame;
@@ -44,9 +43,8 @@ class VideoCompareWidget : public QWidget {
    * @param parent
    * @param f
    */
-  VideoCompareWidget(const Media& left, const Media& right,
-                     const MatchRange& range = MatchRange(),
-                     const MediaWidgetOptions& options=MediaWidgetOptions(),
+  VideoCompareWidget(const Media& left, const Media& right, const MatchRange& range = MatchRange(),
+                     const MediaWidgetOptions& options = MediaWidgetOptions(),
                      QWidget* parent = nullptr);
 
   ~VideoCompareWidget();
@@ -66,18 +64,14 @@ class VideoCompareWidget : public QWidget {
     moveCursor(pos);
     update();
   };
-  void skipSeconds(int seconds) {
-    seekFrame(seconds * floorf(_fps + 0.5) + _cursor);
-  };
+  void skipSeconds(int seconds) { seekFrame(seconds * floorf(_fps + 0.5) + _cursor); };
 
   void offsetCursor(int offset) { _video[0].offset += offset; }
   void offsetFrames(int frames) {
     offsetCursor(frames);
     update();
   };
-  void offsetSeconds(int seconds) {
-    offsetFrames(seconds * floorf(_fps + 0.5));
-  };
+  void offsetSeconds(int seconds) { offsetFrames(seconds * floorf(_fps + 0.5)); };
 
   void findQualityScores();
   void alignTemporally();
@@ -86,35 +80,35 @@ class VideoCompareWidget : public QWidget {
   void compareInKdenlive();
   void writeThumbnail(int index);
 
-  void drawFrame(QPainter& painter, const FrameCache& cache, const QImage& img,
-                 int iw, int ih, int matchIn, int matchLen, int currPos,
-                 const QString& text, int x, int y, int w, int h) const;
+  void drawFrame(QPainter& painter, const FrameCache& cache, const QImage& img, int iw, int ih,
+                 int matchIn, int matchLen, int currPos, const QString& text, int x, int y, int w,
+                 int h) const;
 
   int64_t sad128(int i) const;
 
-  int _cursor = 0; // displayed frame number
-  int _endPos = 0; // end frame number of range or shortest video
-  float _fps = 0;  // fps of highest-fps video
+  int _cursor = 0;  // displayed frame number
+  int _endPos = 0;  // end frame number of range or shortest video
+  float _fps = 0;   // fps of highest-fps video
 
   struct {
-    Media media;             // source media
-    QString label, side;     // file name and A/B side label
-    QVector<QImage> visual;  // analysis visual
-    int visualFrame;         // frame number of corresponding to analysis visuals
-    bool crop;               // if true enable de-letterbox cropping
-    int in, out, offset;     // match range and cursor offset (temporal align)
+    Media media;                         // source media
+    QString label, side;                 // file name and A/B side label
+    QVector<QImage> visual;              // analysis visual
+    int visualFrame;                     // frame number of corresponding to analysis visuals
+    bool crop;                           // if true enable de-letterbox cropping
+    int in, out, offset;                 // match range and cursor offset (temporal align)
     const VideoContext::Metadata* meta;  // video metadata (fps/codec etc)
     std::unique_ptr<FrameCache> cache;   // decoder/frame cache
   } _video[2];
 
   int _visualIndex = 0;  // 0==disable, >0 => analysis image index-1
 
-  bool _stacked = false;       // show one video and flip between them manually
-  bool _sameSize = false;          // scale right to match left
-  bool _swap = false;              // swap left/right side
-  float _alignX = 0, _alignY = 0;  // spatial alignment, factor of image width/height
-  int _scrub = 0;           // scrub forward or backward until a key is pressed
-  bool _maximized = false;  // use to restore maximized window
-  double _zoom = 0.0;       // zoom in
-  const MediaWidgetOptions& _options;      // for thumbnailer
+  bool _stacked = false;               // show one video and flip between them manually
+  bool _sameSize = false;              // scale right to match left
+  bool _swap = false;                  // swap left/right side
+  float _alignX = 0, _alignY = 0;      // spatial alignment, factor of image width/height
+  int _scrub = 0;                      // scrub forward or backward until a key is pressed
+  bool _maximized = false;             // use to restore maximized window
+  double _zoom = 0.0;                  // zoom in
+  const MediaWidgetOptions& _options;  // for thumbnailer
 };

@@ -21,19 +21,24 @@
 #pragma once
 
 #include "cimg_fwd.h"
-#include "opencv2/imgproc/imgproc.hpp"
+//#include "opencv2/imgproc/imgproc.hpp"
+namespace cv {
+class Mat;
+#define FWD_INTER_LANCZOS4 (4)
+}
 
 /// per-thread error logger, useful for scanner
 class CVErrorLogger {
+  Q_DISABLE_COPY_MOVE(CVErrorLogger);
+  CVErrorLogger() = delete;
+
  public:
   CVErrorLogger(const QString& context);
   ~CVErrorLogger();
+
  private:
-  Q_DISABLE_COPY_MOVE(CVErrorLogger);
-  CVErrorLogger() = delete;
-  static int log(int status, const char* func_name,
-                   const char* err_msg, const char* file_name,
-                   int line, void* userData);
+  static int log(int status, const char* func_name, const char* err_msg, const char* file_name,
+                 int line, void* userData);
   static QMutex& mutex();
   static QHash<QThread*, CVErrorLogger*>& map();
 
@@ -89,20 +94,20 @@ struct DescriptorColor {
   QColor toQColor() const;
 };
 
-// number of colors in the histogram
-#define NUM_DESC_COLORS (32)
-
 /**
  * @brief Storage unit of histogram-based color search
  */
 struct ColorDescriptor {
+  enum { NUM_DESC_COLORS = 32 }; // number of colors in the histogram
   DescriptorColor colors[NUM_DESC_COLORS] = {};
-  uint8_t numColors = 0; // <= NUM_DESC_COLORS
+  uint8_t numColors = 0;  // <= NUM_DESC_COLORS
 
   void clear() noexcept {
     memset(&colors, 0, sizeof(colors));
     numColors = 0;
   }
+  static void create(const cv::Mat& cvImg, ColorDescriptor& desc);
+  static float distance(const ColorDescriptor& a_, const ColorDescriptor& b_);
 };
 
 // conversions to/from CImg
@@ -126,15 +131,14 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst);
 void qImageToCvImgNoCopy(const QImage& src, cv::Mat& dst);
 
 void cvImgToQImage(const cv::Mat& src, QImage& dst,
-                   QImage::Format forceFormat=QImage::Format_Invalid);
+                   QImage::Format forceFormat = QImage::Format_Invalid);
 void cvImgToQImageNoCopy(const cv::Mat& src, QImage& dst,
-                         QImage::Format forceFormat=QImage::Format_Invalid);
+                         QImage::Format forceFormat = QImage::Format_Invalid);
 
 QString cvMatTypeName(int type);
 
 // load opencv matrix from a buffer
-void loadMatrix(int rows, int cols, int type, int stride, const char* src,
-                cv::Mat& m);
+void loadMatrix(int rows, int cols, int type, int stride, const char* src, cv::Mat& m);
 
 // byte array for matrix meta data associated with a database image
 QByteArray matrixHeader(uint32_t mediaId, const cv::Mat& m);
@@ -147,8 +151,8 @@ QByteArray matrixData(const cv::Mat& m);
 void loadMatrixArray(const QString& path, std::vector<uint32_t>& mediaIds,
                      std::vector<cv::Mat>& array);
 
-void saveMatrixArray(const std::vector<uint32_t>& mediaIds,
-                     const std::vector<cv::Mat>& array, const QString& path);
+void saveMatrixArray(const std::vector<uint32_t>& mediaIds, const std::vector<cv::Mat>& array,
+                     const QString& path);
 #endif
 
 // general load/store cv::Mat
@@ -175,65 +179,33 @@ void autocrop(cv::Mat& cvImg, int range = 50);
 void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects);
 
 /**
- *  Automatic brightness and contrast optimization with optional
- *histogram clipping
+ *  Automatic brightness and contrast optimization with optional histogram clipping
  *  @param [in]src Input image GRAY, BGR or BGRA
  *  @param [out]dst Destination image
- *  @param clipHistPercent cut wings of histogram at given percent typical=>1,
- *0=>Disabled
+ *  @param clipHistPercent cut wings of histogram at given percent typical=>1, 0=>Disabled
  *  @note In case of BGRA image, we won't touch the transparency
- *  @see
- *http://answers.opencv.org/question/75510/how-to-make-auto-adjustmentsbrightness-and-contrast-for-image-android-opencv-image-correction/
+ *  @see doc/brightness-contrast-auto.pdf
  **/
-void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst,
-                               float clipHistPercent = 0);
+void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst, float clipHistPercent = 0);
 
-// perceptual hashes
+// libpash optional for testing
 #ifdef ENABLE_LIBPHASH
 uint64_t phash64_cimg(const cv::Mat& cvImg);
 #endif
 
+/// phash-like 64-bit dct hash
 uint64_t dctHash64(const cv::Mat& cvImg);
+
+/// average intensity with phash-like quantization
 uint64_t averageHash64(const cv::Mat& cvImg);
 
-// color hash
-float colorDistance(const ColorDescriptor& a, const ColorDescriptor& b);
-void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc);
-
-// inline uint64_t histogram64(const cv::Mat& cvImg) { (void)cvImg; return 0; }
-
-// make the longest side of the image == size
-inline void sizeLongestSide(cv::Mat& img, int size,
-                            int filter = cv::INTER_LANCZOS4) {
-  int w, h;
-  float aspect = float(img.size().width) / img.size().height;
-  if (img.size().width > img.size().height) {
-    w = size;
-    h = int(w / aspect);
-  } else {
-    h = size;
-    w = int(aspect * h);
-  }
-
-  // cv::resize will throw a more obscure message
-  if (w == 0 || h == 0)
-    throw std::invalid_argument(
-        "sizeLongestSide: computed width or height is 0, probably bad input");
-
-  cv::resize(img, img, cv::Size(w, h), 0, 0, filter);
-}
+/// make the longest side of the image == size
+void sizeLongestSide(cv::Mat& img, int size, int filter = FWD_INTER_LANCZOS4); // cv::INTER_LANCZOS4);
 
 // size by a factor
-inline void sizeScaleFactor(cv::Mat& img, float factor) {
-  int w = int(img.size().width * factor);
-  int h = int(img.size().height * factor);
-
-  cv::resize(img, img, cv::Size(w, h), 0, 0, cv::INTER_LANCZOS4);
-}
+void sizeScaleFactor(cv::Mat& img, float factor);
 
 // size to given amount, stretch it
-inline void sizeStretch(cv::Mat& img, int w, int h) {
-  cv::resize(img, img, cv::Size(w, h), 0, 0, cv::INTER_LANCZOS4);
-}
+void sizeStretch(cv::Mat& img, int w, int h);
 
 QStringList cvVersion();

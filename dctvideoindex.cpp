@@ -19,8 +19,9 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "dctvideoindex.h"
-#include "tree/hammingtree.h"
+
 #include "../profile.h"
+#include "tree/hammingtree.h"
 
 DctVideoIndex::DctVideoIndex() {
   _id = SearchParams::AlgoVideo;
@@ -37,14 +38,10 @@ bool DctVideoIndex::isLoaded() const { return _isLoaded; }
 
 int DctVideoIndex::count() const { return _tree ? int(_tree->size()) : 0; }
 
-size_t DctVideoIndex::memoryUsage() const {
-  return _tree ? _tree->stats().memory : 0;
-}
+size_t DctVideoIndex::memoryUsage() const { return _tree ? _tree->stats().memory : 0; }
 
-void DctVideoIndex::insertHashes(int mediaIndex, HammingTree* tree,
-                                 const SearchParams& params) {
-  QString indexPath =
-      QString("%1/%2.vdx").arg(_dataPath).arg(_mediaId[uint32_t(mediaIndex)]);
+void DctVideoIndex::insertHashes(int mediaIndex, HammingTree* tree, const SearchParams& params) {
+  QString indexPath = QString("%1/%2.vdx").arg(_dataPath).arg(_mediaId[uint32_t(mediaIndex)]);
   if (!QFileInfo(indexPath).exists()) {
     qWarning() << "index file missing:" << indexPath;
     return;
@@ -64,8 +61,7 @@ void DctVideoIndex::insertHashes(int mediaIndex, HammingTree* tree,
     // drop begin/end frames if there are enough left over
     int lastFrame = index.frames[index.frames.size() - 1];
     if (lastFrame > (params.skipFrames * 2)) {
-      if (index.frames[j] < params.skipFrames ||
-          index.frames[j] > lastFrame - params.skipFrames)
+      if (index.frames[j] < params.skipFrames || index.frames[j] > lastFrame - params.skipFrames)
         continue;
     }
 
@@ -89,20 +85,18 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
 
   if (!_tree) {
     auto* tree = new HammingTree;
-    for (size_t i = 0; i < _mediaId.size(); i++)
-      insertHashes(int(i), tree, params);
+    for (size_t i = 0; i < _mediaId.size(); i++) insertHashes(int(i), tree, params);
 
     HammingTree::Stats stats = tree->stats();
-    qInfo("%d/%d hashes %.1f MB, nodes=%d maxHeight=%d vtrim=%d",
-          int(tree->size()), stats.numValues, stats.memory / 1024.0 / 1024.0,
-          stats.numNodes, stats.maxHeight, params.skipFrames);
+    qInfo("%d/%d hashes %.1f MB, nodes=%d maxHeight=%d vtrim=%d", int(tree->size()),
+          stats.numValues, stats.memory / 1024.0 / 1024.0, stats.numNodes, stats.maxHeight,
+          params.skipFrames);
 
     _tree = tree;
   }
 }
 
-void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath,
-                         const QString& dataPath) {
+void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) {
   (void)cachePath;
   _dataPath = dataPath;
 
@@ -124,8 +118,7 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath,
 
   while (query.next()) _mediaId.push_back(query.value(0).toUInt());
 
-  if (_mediaId.size() > 0xFFFF)
-    qFatal("maximum of %d videos can be searched", 0xFFFF);
+  if (_mediaId.size() > 0xFFFF) qFatal("maximum of %d videos can be searched", 0xFFFF);
 
   // lazy load the tree since findFrame may not need it
   _isLoaded = true;
@@ -140,8 +133,7 @@ void DctVideoIndex::save(QSqlDatabase& db, const QString& cachePath) {
 }
 
 void DctVideoIndex::add(const MediaGroup& media) {
-  for (auto& m : media)
-    _mediaId.push_back(m.id());
+  for (auto& m : media) _mediaId.push_back(m.id());
   delete _tree;
   _tree = nullptr;
 }
@@ -166,8 +158,7 @@ void DctVideoIndex::remove(const QVector<int>& ids) {
   _tree = nullptr;
 }
 
-QVector<Index::Match> DctVideoIndex::find(const Media& needle,
-                                          const SearchParams& params) {
+QVector<Index::Match> DctVideoIndex::find(const Media& needle, const SearchParams& params) {
   if (needle.type() == Media::TypeImage)
     return findFrame(needle, params);
   else if (needle.type() == Media::TypeVideo)
@@ -176,8 +167,7 @@ QVector<Index::Match> DctVideoIndex::find(const Media& needle,
   return QVector<Index::Match>();
 }
 
-QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle,
-                                               const SearchParams& params) {
+QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const SearchParams& params) {
   qint64 start = QDateTime::currentMSecsSinceEpoch();
 
   const HammingTree* queryIndex = _tree;
@@ -193,8 +183,7 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle,
     else {
       if (params.verbose) qInfo("build single video index");
 
-      auto it =
-          std::lower_bound(_mediaId.begin(), _mediaId.end(), params.target);
+      auto it = std::lower_bound(_mediaId.begin(), _mediaId.end(), params.target);
       if (it != _mediaId.end()) {
         int mediaIndex = int(it - _mediaId.begin());
 
@@ -234,8 +223,8 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle,
     qInfo(
         "thresh=%d haystack=%dK match=%d time=%dus "
         "rate=%.2f Mhash/s [%s]",
-        params.dctThresh, 0, int(matches.size()), int(end - start),
-        double(count()) / (end - start), qUtf8Printable(needle.path()));
+        params.dctThresh, 0, int(matches.size()), int(end - start), double(count()) / (end - start),
+        qUtf8Printable(needle.path()));
 
   // get 1 nearest frame for each video matched
   QMap<int, HammingTree::Match> nearest;
@@ -284,13 +273,11 @@ Index* DctVideoIndex::slice(const QSet<uint32_t>& mediaIds) const {
   // tree rebuilds on first query
   copy->_dataPath = _dataPath;
   copy->_isLoaded = true;
-  for (auto& id : mediaIds)
-    copy->_mediaId.push_back(id);
+  for (auto& id : mediaIds) copy->_mediaId.push_back(id);
   return copy;
 }
 
-QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
-                                               const SearchParams& params) {
+QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const SearchParams& params) {
   VideoIndex srcIndex;
   QVector<Index::Match> results;
 
@@ -323,9 +310,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
       uint32_t id = _mediaId[mediaIndex];
       if (!params.filterSelf || id != uint32_t(needle.id())) {
         int srcFrame = srcIndex.frames[i];
-        if (srcFrame < params.skipFrames ||
-            srcFrame > (lastFrame - params.skipFrames))
-          continue;
+        if (srcFrame < params.skipFrames || srcFrame > (lastFrame - params.skipFrames)) continue;
 
         cand[id].push_back(MatchRange(srcFrame, int(dstFrame), 1));
       }
@@ -356,8 +341,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
     int percentNear = nearCount * 100 / num;
 
     // todo: setting for this threshold
-    if (num > params.minFramesMatched &&
-        percentNear > params.minFramesNear) {
+    if (num > params.minFramesMatched && percentNear > params.minFramesNear) {
       // printf("\t%d\t%d%%\n", num, percentNear);
       Index::Match im;
       im.mediaId = it.key();
@@ -370,10 +354,8 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle,
       im.range.len = std::max(srcLen, dstLen);
 
       results.append(im);
-    }
-    else if (params.verbose) {
-      qDebug() << "reject id" << it.key() << "matches:" <<
-          num << "%nearby:" << percentNear;
+    } else if (params.verbose) {
+      qDebug() << "reject id" << it.key() << "matches:" << num << "%nearby:" << percentNear;
     }
   }
 

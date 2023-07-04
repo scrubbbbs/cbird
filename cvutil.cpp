@@ -19,15 +19,16 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "cvutil.h"
-#include "opencv2/highgui/highgui.hpp"
 
+#include "cimg_lib.h"
 #include "cimgops.h"
 #include "ioutil.h"
 #include "profile.h"
 
-#include "cimg_lib.h"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
 
-using std::vector;
+static_assert(cv::INTER_LANCZOS4 == FWD_INTER_LANCZOS4, "check header for invalid constant");
 
 // todo: new versions of load/save matrix that do not have to
 // read the whole file into memory before we can start reading/writing
@@ -36,8 +37,7 @@ struct MatrixHeader {
   int rows, cols, type, stride;
 };
 
-void loadMatrix(int rows, int cols, int type, int stride, const char* src,
-                cv::Mat& m) {
+void loadMatrix(int rows, int cols, int type, int stride, const char* src, cv::Mat& m) {
   m.create(rows, cols, type);
 
   int rowLen = m.size().width * int(m.elemSize());
@@ -66,11 +66,9 @@ QByteArray matrixData(const cv::Mat& m) {
   const int len = m.cols * int(m.elemSize());
   try {
     QByteArray b;
-    for (int i = 0; i < m.rows; ++i)
-      b.append(m.ptr<char>(i), len);
+    for (int i = 0; i < m.rows; ++i) b.append(m.ptr<char>(i), len);
     return b;
-  }
-  catch (std::bad_alloc& e) {
+  } catch (std::bad_alloc& e) {
     qFatal("QByteArray limits exceeded");
   }
   return QByteArray();
@@ -78,8 +76,7 @@ QByteArray matrixData(const cv::Mat& m) {
 
 #if DEADCODE
 
-void loadMatrixArray(const QString& path, vector<uint32_t>& mediaIds,
-                     vector<cv::Mat>& array) {
+void loadMatrixArray(const QString& path, vector<uint32_t>& mediaIds, vector<cv::Mat>& array) {
   void* dataPtr = nullptr;
   uint64_t dataLen;
 
@@ -104,10 +101,10 @@ void loadMatrixArray(const QString& path, vector<uint32_t>& mediaIds,
   free(dataPtr);
 }
 
-void saveMatrixArray(const vector<uint32_t>& mediaIds,
-                     const vector<cv::Mat>& array, const QString& path) {
+void saveMatrixArray(const vector<uint32_t>& mediaIds, const vector<cv::Mat>& array,
+                     const QString& path) {
   QFile f(path);
-  bool ok = f.open(QFile::WriteOnly|QFile::Truncate);
+  bool ok = f.open(QFile::WriteOnly | QFile::Truncate);
   Q_ASSERT(ok);
 
   for (size_t i = 0; i < array.size(); i++) {
@@ -117,24 +114,20 @@ void saveMatrixArray(const vector<uint32_t>& mediaIds,
     data += matrixData(m);
     int len = f.write(data);
     if (len != data.length())
-      qFatal("write failed: %d: %s", f.error(),
-             qPrintable(f.errorString()));
+      qFatal("write failed: %d: %s", f.error(), qPrintable(f.errorString()));
   }
 }
-#endif // DEADCODE
+#endif  // DEADCODE
 
 void loadMatrix(const QString& path, cv::Mat& mat) {
   QFile f(path);
   bool ok = f.open(QFile::ReadOnly);
-  if (!ok)
-    qFatal("open failed: %d: %s", f.error(),
-           qPrintable(f.errorString()));
+  if (!ok) qFatal("open failed: %d: %s", f.error(), qPrintable(f.errorString()));
 
   MatrixHeader h;
   int len = f.read(reinterpret_cast<char*>(&h), sizeof(h));
   if (len != sizeof(h))
-    qFatal("read failed (header): %d: %s", f.error(),
-           qPrintable(f.errorString()));
+    qFatal("read failed (header): %d: %s", f.error(), qPrintable(f.errorString()));
 
   mat.create(h.rows, h.cols, h.type);
 
@@ -144,9 +137,7 @@ void loadMatrix(const QString& path, cv::Mat& mat) {
   for (int i = 0; i < mat.size().height; i++) {
     char* dst = mat.ptr<char>(i);
     len = f.read(dst, rowLen);
-    if (len != rowLen)
-      qFatal("read failed (row): %d: %s", f.error(),
-             qPrintable(f.errorString()));
+    if (len != rowLen) qFatal("read failed (row): %d: %s", f.error(), qPrintable(f.errorString()));
   }
 }
 
@@ -154,14 +145,12 @@ void saveMatrix(const cv::Mat& mat, const QString& path) {
   writeFileAtomically(path, [&mat](QFile& f) {
     QByteArray data = matrixHeader(0, mat);
     int len = f.write(data);
-    if (len != data.length())
-      throw f.errorString();
+    if (len != data.length()) throw f.errorString();
 
     int rowLen = mat.cols * int(mat.elemSize());
     for (int i = 0; i < mat.rows; ++i) {
       len = f.write(mat.ptr<char>(i), rowLen);
-      if (len != rowLen)
-        throw f.errorString();
+      if (len != rowLen) throw f.errorString();
     }
   });
 }
@@ -203,8 +192,7 @@ void cImgToCvImg(const CImg<uint8_t>& img, cv::Mat& cvImg) {
       }
     }
   } else {
-    throw std::logic_error(
-        "cvImgToCvImg: unsupported image spectrum (bit depth)");
+    throw std::logic_error("cvImgToCvImg: unsupported image spectrum (bit depth)");
   }
 }
 
@@ -235,7 +223,6 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
   //       src.width(), src.height(),
   //       src.hasAlphaChannel());
 
-
   // you could do this with less code, however since these
   // get used a lot, we want optimized versions of each
   // note: this implementation is possibly wrong on older
@@ -248,8 +235,7 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
       if (!src.hasAlphaChannel()) {
         dst = cv::Mat(srcH, srcW, CV_8UC(3));
         for (int y = 0; y < srcH; ++y) {
-          const uint8_t* sp =
-              reinterpret_cast<const uint8_t*>(src.constScanLine(y));
+          const uint8_t* sp = reinterpret_cast<const uint8_t*>(src.constScanLine(y));
           uint8_t* dp = reinterpret_cast<uint8_t*>(dst.ptr(y));
           for (int x = 0; x < srcW; ++x) {
             dp[0] = sp[0];
@@ -262,8 +248,7 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
       } else {
         dst = cv::Mat(srcH, srcW, CV_8UC(4));
         for (int y = 0; y < srcH; ++y) {
-          const uint32_t* sp =
-              reinterpret_cast<const uint32_t*>(src.constScanLine(y));
+          const uint32_t* sp = reinterpret_cast<const uint32_t*>(src.constScanLine(y));
           uint32_t* dp = reinterpret_cast<uint32_t*>(dst.ptr(y));
           memcpy(dp, sp, size_t(srcW * 4));
         }
@@ -273,8 +258,7 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
     case 24:
       dst = cv::Mat(srcH, srcW, CV_8UC(3));
       for (int y = 0; y < srcH; ++y) {
-        const uint8_t* sp =
-            reinterpret_cast<const uint8_t*>(src.constScanLine(y));
+        const uint8_t* sp = reinterpret_cast<const uint8_t*>(src.constScanLine(y));
         uint8_t* dp = reinterpret_cast<uint8_t*>(dst.ptr(y));
         for (int x = 0; x < srcW; ++x) {
           dp[0] = sp[2];
@@ -291,8 +275,7 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
         case QImage::Format_Grayscale8:
           dst = cv::Mat(srcH, srcW, CV_8UC(1));
           for (int y = 0; y < srcH; ++y) {
-            const uint8_t* sp =
-                reinterpret_cast<const uint8_t*>(src.constScanLine(y));
+            const uint8_t* sp = reinterpret_cast<const uint8_t*>(src.constScanLine(y));
             uint8_t* dp = reinterpret_cast<uint8_t*>(dst.ptr(y));
             memcpy(dp, sp, size_t(srcW));
           }
@@ -352,8 +335,7 @@ void qImageToCvImgNoCopy(const QImage& src, cv::Mat& dst) {
       qFatal("unsupported bit depth: %d", src.depth());
   }
 
-  dst = cv::Mat(src.height(), src.width(), type,
-                const_cast<uchar*>(src.constScanLine(0)),
+  dst = cv::Mat(src.height(), src.width(), type, const_cast<uchar*>(src.constScanLine(0)),
                 size_t(src.bytesPerLine()));
 }
 
@@ -417,8 +399,7 @@ void cvImgToQImage(const cv::Mat& src, QImage& dst, QImage::Format forceFormat) 
 
 void cvImgToQImageNoCopy(const cv::Mat& src, QImage& dst, QImage::Format forceFormat) {
   QImage::Format format = forceFormat;
-  if (format == QImage::Format_Invalid)
-    switch (src.type()) {
+  if (format == QImage::Format_Invalid) switch (src.type()) {
       case CV_8UC(3):
         format = QImage::Format_RGB888;
         break;
@@ -483,12 +464,11 @@ uint64_t dctHash64(const cv::Mat& cvImg) {
   // v4: The frequency order is changed using zig-zag traversal,
   // so near frequences appear together, lowest frequencies
   // at the start.
-  constexpr char zigZag[] = {
-      0,  9,  1,  2,  10, 18, 27, 19, 11, 3,  4,  12, 20, 28, 36, 45, 37,
-      29, 21, 13, 5,  6,  14, 22, 30, 38, 46, 54, 63, 55, 47, 39, 31, 23,
-      15, 7,  8,  16, 24, 32, 40, 48, 56, 64, 72, 73, 65, 57, 49, 41, 33,
-      25, 17, 26, 34, 42, 50, 58, 66, 74, 75, 67, 59, 51, 43, 35, 44, 52,
-      60, 68, 76, 77, 69, 61, 53, 62, 70, 78, 79, 71, 80};
+  constexpr char zigZag[] = {0,  9,  1,  2,  10, 18, 27, 19, 11, 3,  4,  12, 20, 28, 36, 45, 37,
+                             29, 21, 13, 5,  6,  14, 22, 30, 38, 46, 54, 63, 55, 47, 39, 31, 23,
+                             15, 7,  8,  16, 24, 32, 40, 48, 56, 64, 72, 73, 65, 57, 49, 41, 33,
+                             25, 17, 26, 34, 42, 50, 58, 66, 74, 75, 67, 59, 51, 43, 35, 44, 52,
+                             60, 68, 76, 77, 69, 61, 53, 62, 70, 78, 79, 71, 80};
   Q_STATIC_ASSERT(sizeof(zigZag) == 81);
 
   //    constexpr char zigZag[64] = {
@@ -513,7 +493,7 @@ uint64_t dctHash64(const cv::Mat& cvImg) {
   // find the threshold for encoding hash
   float thresh;
   {
-    // v3: median value including DC; problem is hash distances
+    // v3: median value including DC; problem is hash distance
     // ends up always being an even number
     // cv::Mat sort;
     // cv::sort(freq, sort, cv::SORT_ASCENDING);
@@ -544,8 +524,7 @@ uint64_t phash64_cimg(const cv::Mat& cvImg) {
 
   uint64_t hash = 0;
   if (img.width() == 32 && img.height() == 32) {
-    if (0 < ph_dct_imagehash_cimg32(img, hash))
-      qCritical("phash64 (32x32) failed");
+    if (0 < ph_dct_imagehash_cimg32(img, hash)) qCritical("phash64 (32x32) failed");
   } else if (0 < ph_dct_imagehash_cimg(img, hash))
     qCritical("phash64 failed");
 
@@ -568,11 +547,9 @@ uint64_t averageHash64(const cv::Mat& cvImg) {
   return hash;
 }
 
-void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst,
-                               float clipHistPercent) {
+void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst, float clipHistPercent) {
   Q_ASSERT(clipHistPercent >= 0);
-  Q_ASSERT((src.type() == CV_8UC1) || (src.type() == CV_8UC3) ||
-           (src.type() == CV_8UC4));
+  Q_ASSERT((src.type() == CV_8UC1) || (src.type() == CV_8UC3) || (src.type() == CV_8UC4));
 
   int histSize = 256;
   int minGray = 0, maxGray = 0;
@@ -598,8 +575,7 @@ void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst,
     const float* histRange = {range};
     bool uniform = true;
     bool accumulate = false;
-    cv::calcHist(&gray, 1, nullptr, cv::Mat(), hist, 1, &histSize, &histRange,
-                 uniform, accumulate);
+    cv::calcHist(&gray, 1, nullptr, cv::Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
 
     // calculate cumulative distribution from the histogram
     uint hSize = uint(histSize);
@@ -625,10 +601,8 @@ void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst,
   // current range
   float inputRange = maxGray - minGray;
 
-  float alpha = (histSize - 1) /
-                inputRange;  // alpha expands current range to histsize range
-  float beta = -minGray *
-               alpha;  // beta shifts current range so that minGray will go to 0
+  float alpha = (histSize - 1) / inputRange;  // alpha expands current range to histsize range
+  float beta = -minGray * alpha;  // beta shifts current range so that minGray will go to 0
 
   // Apply brightness and contrast normalization
   // convertTo operates with saurate_cast
@@ -659,9 +633,8 @@ static void descriptorToSignature(const ColorDescriptor& cd, cv::Mat& m) {
 }
 #endif
 
-float colorDistance(const ColorDescriptor& a_, const ColorDescriptor& b_) {
-  if (a_.numColors == 0 || b_.numColors == 0 ||
-      (abs(a_.numColors - b_.numColors) > 2))
+float ColorDescriptor::distance(const ColorDescriptor& a_, const ColorDescriptor& b_) {
+  if (a_.numColors == 0 || b_.numColors == 0 || (abs(a_.numColors - b_.numColors) > 2))
     return FLT_MAX;
 
     // Earth Mover's Distance doesn't work well
@@ -767,7 +740,7 @@ QColor DescriptorColor::toQColor() const {
   return QColor(int(p[2]), int(p[1]), int(p[0]));
 }
 
-void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
+void ColorDescriptor::create(const cv::Mat& cvImg, ColorDescriptor& desc) {
   // todo: there seems to be some randomness in the descriptor with identical input
   if (cvImg.type() != CV_8UC3 && cvImg.type() != CV_8UC4) {
     qWarning("input is not rgb or rgba");
@@ -787,8 +760,7 @@ void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
   // resize to process faster
   // - keep aspect ratio to avoid distorting weights
   // - use nearest filter to preserve color values
-  if (rgb.rows > 256 || rgb.cols > 256)
-    sizeLongestSide(rgb, 256, cv::INTER_NEAREST);
+  if (rgb.rows > 256 || rgb.cols > 256) sizeLongestSide(rgb, 256, cv::INTER_NEAREST);
 
     //
     // generate a mask for dropping the edge colors
@@ -874,8 +846,8 @@ void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
   cv::Mat centers;
   // uint64_t ts = nanoTime();
   (void)cv::kmeans(samples, NUM_DESC_COLORS, labels,
-                   cvTermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 100, 10),
-                   1, cv::KMEANS_PP_CENTERS, centers);
+                   cvTermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 100, 10), 1,
+                   cv::KMEANS_PP_CENTERS, centers);
   // ts = nanoTime()-ts;
 
   QHash<DescriptorColor::key_t, float> freq;
@@ -889,7 +861,7 @@ void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
 
   // count pixels in each bucket
 #if 0
-#error this is probably broken (drops colors that shifted)
+#  error this is probably broken (drops colors that shifted)
     for (int i = 0; i < labels.rows; i++)
     {
         int label = labels.at<int>(i);
@@ -982,19 +954,18 @@ void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
   }
 
   float maxFreq = 0;
-  float totFreq = 0;
+//  float totFreq = 0;
   for (float count : freq.values()) {
     maxFreq = std::max(maxFreq, count);
-    totFreq += count;
+//    totFreq += count;
   }
 
   // sort on frequency: in case there are more colors
   // than descriptor will store, drop the lower ones
   auto keys = freq.keys();
-  std::sort(keys.begin(), keys.end(),
-            [&freq](DescriptorColor::key_t a, DescriptorColor::key_t b) {
-              return freq[a] > freq[b];
-            });
+  std::sort(keys.begin(), keys.end(), [&freq](DescriptorColor::key_t a, DescriptorColor::key_t b) {
+    return freq[a] > freq[b];
+  });
 
   // setup histogram plot
   int x = 0, xDiv = 0;
@@ -1022,13 +993,11 @@ void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
     d.setKey(key);
 
     if (descIndex < NUM_DESC_COLORS) {
-
       // tuning: which is better?
       // desc.weights[descIndex] = freq[color]*255.0/samples.size(); //
       // proportion of samples desc.weights[descIndex] = freq[color]; //
       // unmodified; might overflow
-      d.w = int(freq[key] * DescriptorColor::max() / maxFreq) &
-            0xFFFF;  // normalized
+      d.w = int(freq[key] * DescriptorColor::max() / maxFreq) & 0xFFFF;  // normalized
 
       desc.colors[descIndex] = d;
       desc.numColors = descIndex;
@@ -1043,20 +1012,16 @@ void colorDescriptor(const cv::Mat& cvImg, ColorDescriptor& desc) {
         v = double(fv);
 
         int val = int(desc.colors[descIndex].w) * 512 / DescriptorColor::max();
-        cv::line(graph, cv::Point(x, graph.rows - val),
-                 cv::Point(x, graph.rows), cv::Scalar(l, u, v), xDiv, 8, 0);
+        cv::line(graph, cv::Point(x, graph.rows - val), cv::Point(x, graph.rows),
+                 cv::Scalar(l, u, v), xDiv, 8, 0);
 
-        cv::putText(graph, qPrintable(QString::number(l)),
-                    cv::Point(x - xDiv / 2, 20), 0, 0.5,
+        cv::putText(graph, qPrintable(QString::number(l)), cv::Point(x - xDiv / 2, 20), 0, 0.5,
                     cv::Scalar(255, 0, 255));
-        cv::putText(graph, qPrintable(QString::number(u)),
-                    cv::Point(x - xDiv / 2, 34), 0, 0.5,
+        cv::putText(graph, qPrintable(QString::number(u)), cv::Point(x - xDiv / 2, 34), 0, 0.5,
                     cv::Scalar(255, 0, 255));
-        cv::putText(graph, qPrintable(QString::number(v)),
-                    cv::Point(x - xDiv / 2, 48), 0, 0.5,
+        cv::putText(graph, qPrintable(QString::number(v)), cv::Point(x - xDiv / 2, 48), 0, 0.5,
                     cv::Scalar(255, 0, 255));
-        cv::putText(graph, qPrintable(QString::number(val)),
-                    cv::Point(x - xDiv / 2, 60), 0, 0.5,
+        cv::putText(graph, qPrintable(QString::number(val)), cv::Point(x - xDiv / 2, 60), 0, 0.5,
                     cv::Scalar(255, 0, 255));
 
         x += xDiv;
@@ -1208,7 +1173,7 @@ bool compare(const cv::Mat& a, const cv::Mat& b) {
   }
 
   if (a.channels() > 1) {
-    vector<cv::Mat> planesA, planesB;
+    std::vector<cv::Mat> planesA, planesB;
 
     cv::split(a, planesA);
     cv::split(b, planesB);
@@ -1297,9 +1262,7 @@ void autocrop(cv::Mat& cvImg, int range) {
     // and the total length is enough, we found the edge of the letterbox
     // we could also check that the left/right are roughly equal, however
     // if a watermark/subtitle overlaps the letterbox this would not work.
-    if (left > 0 && right < img.cols &&
-        left + img.cols - right > minWidthCovered)
-      break;
+    if (left > 0 && right < img.cols && left + img.cols - right > minWidthCovered) break;
   }
   top++;
 
@@ -1331,9 +1294,7 @@ void autocrop(cv::Mat& cvImg, int range) {
 
     bottom++;
 
-    if (top > 0 && bottom < img.rows &&
-        top + img.rows - bottom > minHeightCovered)
-      break;
+    if (top > 0 && bottom < img.rows && top + img.rows - bottom > minHeightCovered) break;
   }
   left++;
 
@@ -1348,9 +1309,7 @@ void autocrop(cv::Mat& cvImg, int range) {
 
     bottom++;
 
-    if (top > 0 && bottom < img.rows &&
-        top + img.rows - bottom > minHeightCovered)
-      break;
+    if (top > 0 && bottom < img.rows && top + img.rows - bottom > minHeightCovered) break;
   }
 
   // assuming a centered letterbox, if the crop is slightly off center,
@@ -1372,9 +1331,8 @@ void autocrop(cv::Mat& cvImg, int range) {
   }
 
   if ((left != 0 && right != img.cols) || (top != 0 && bottom != img.rows))
-    if (left < right && top < bottom &&  // valid ranges
-        (right - left) / float(img.cols) >
-            0.65f &&  // sanity check we didn't crop away too much
+    if (left < right && top < bottom &&              // valid ranges
+        (right - left) / float(img.cols) > 0.65f &&  // sanity check we didn't crop away too much
         (bottom - top) / float(img.rows) > 0.65f)
       cvImg = cvImg.colRange(left, right).rowRange(top, bottom);
 }
@@ -1390,10 +1348,8 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
   // images are arranged in a grid with some background between them
   // fixme: this doesn't work on grids with no background between thumbnails
 
-  const int brightThreshold =
-      30;  // max gray level distance between pixels on a line
-  const float lengthThreshold =
-      0.9f;  // fraction of contiguous pixels needed to make a line
+  const int brightThreshold = 30;      // max gray level distance between pixels on a line
+  const float lengthThreshold = 0.9f;  // fraction of contiguous pixels needed to make a line
 
   // look for horizontal lines spanning the image
 
@@ -1444,14 +1400,12 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
     // middle-out search so it isn't sensitive to borders
     int bot = img.rows / 2;
     for (; bot < img.rows - 1; bot++)
-      if (abs(int(img.at<uint8_t>(bot, x)) - int(img.at<uint8_t>(bot + 1, x))) >
-          brightThreshold)
+      if (abs(int(img.at<uint8_t>(bot, x)) - int(img.at<uint8_t>(bot + 1, x))) > brightThreshold)
         break;
 
     int top = img.rows / 2 - 1;
     for (; top >= 0; top--)
-      if (abs(int(img.at<uint8_t>(top, x)) - int(img.at<uint8_t>(top + 1, x))) >
-          brightThreshold)
+      if (abs(int(img.at<uint8_t>(top, x)) - int(img.at<uint8_t>(top + 1, x))) > brightThreshold)
         break;
 
     if (bot - top >= img.rows * lengthThreshold) {
@@ -1473,8 +1427,8 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
     }
   }
 
-  if (hLineIn.count() == 0 || hLineIn.count() != hLineOut.count() ||
-      vLineIn.count() == 0 || vLineIn.count() != vLineOut.count()) {
+  if (hLineIn.count() == 0 || hLineIn.count() != hLineOut.count() || vLineIn.count() == 0 ||
+      vLineIn.count() != vLineOut.count()) {
     qWarning() << "failed to detect a grid";
     return;
   }
@@ -1563,8 +1517,7 @@ QStringList cvVersion() {
   QStringList list;
   QString runtime = "???";
   QString build = cv::getBuildInformation().c_str();
-  QRegularExpression re("OpenCV (\\d+\\.\\d+\\.\\d+\\.\\d+)",
-                        QRegularExpression::MultilineOption);
+  QRegularExpression re("OpenCV (\\d+\\.\\d+\\.\\d+\\.\\d+)", QRegularExpression::MultilineOption);
   auto match = re.match(build);
   if (match.isValid()) runtime = match.captured(1);
   list << runtime;
@@ -1572,16 +1525,13 @@ QStringList cvVersion() {
   return list;
 }
 
-CVErrorLogger::CVErrorLogger(const QString& context)
-    : _context(context){
-
+CVErrorLogger::CVErrorLogger(const QString& context) : _context(context) {
   cvRedirectError(log);
 
   QThread* thread = QThread::currentThread();
   QMutexLocker locker(&mutex());
 
-  if (map().contains(thread))
-    qCritical("Nesting CVErrorLogger will lose context");
+  if (map().contains(thread)) qCritical("Nesting CVErrorLogger will lose context");
 
   map().insert(thread, this);
 }
@@ -1589,7 +1539,7 @@ CVErrorLogger::CVErrorLogger(const QString& context)
 CVErrorLogger::~CVErrorLogger() {
   // we don't remove the logger since we don't know if other
   // threads are using it.
-  //cvRedirectError(cvStdErrReport);
+  // cvRedirectError(cvStdErrReport);
   QMutexLocker locker(&mutex());
   map().remove(QThread::currentThread());
 }
@@ -1599,33 +1549,61 @@ QMutex& CVErrorLogger::mutex() {
   return _mutex;
 }
 
-QHash<QThread*, CVErrorLogger*>&  CVErrorLogger::map() {
+QHash<QThread*, CVErrorLogger*>& CVErrorLogger::map() {
   static QHash<QThread*, CVErrorLogger*> _map;
   return _map;
 }
 
-int CVErrorLogger::log(
-    int status, const char *func_name, const char *err_msg,
-    const char *file_name, int line, void *userData) {
+int CVErrorLogger::log(int status, const char* func_name, const char* err_msg,
+                       const char* file_name, int line, void* userData) {
   (void)userData;
   CVErrorLogger* self = nullptr;
   {
     QMutexLocker locker(&mutex());
     auto it = map().find(QThread::currentThread());
-    if (it != map().end())
-      self = *it;
+    if (it != map().end()) self = *it;
   }
   QString context = "<no context>";
   if (self) context = self->_context;
 
   const QString file = QString(file_name).split("/").last();
   const QString msg = QString("%1: %2 %3 at %4:%5 in %6()")
-            .arg(context)
-            .arg(status)
-            .arg(err_msg)
-            .arg(file)
-            .arg(line)
-            .arg(func_name);
+                          .arg(context)
+                          .arg(status)
+                          .arg(err_msg)
+                          .arg(file)
+                          .arg(line)
+                          .arg(func_name);
   qCritical() << msg;
   return 0;
+}
+
+void sizeLongestSide(cv::Mat& img, int size, int filter) {
+  int w, h;
+  float aspect = float(img.size().width) / img.size().height;
+  if (img.size().width > img.size().height) {
+    w = size;
+    h = int(w / aspect);
+  } else {
+    h = size;
+    w = int(aspect * h);
+  }
+
+  // cv::resize will otherwise throw a more obscure message
+  if (w == 0 || h == 0)
+    throw std::invalid_argument(
+        "sizeLongestSide: computed width or height is 0, probably bad input");
+
+  cv::resize(img, img, cv::Size(w, h), 0, 0, filter);
+}
+
+void sizeScaleFactor(cv::Mat& img, float factor) {
+  int w = int(img.size().width * factor);
+  int h = int(img.size().height * factor);
+
+  cv::resize(img, img, cv::Size(w, h), 0, 0, cv::INTER_LANCZOS4);
+}
+
+void sizeStretch(cv::Mat& img, int w, int h) {
+  cv::resize(img, img, cv::Size(w, h), 0, 0, cv::INTER_LANCZOS4);
 }

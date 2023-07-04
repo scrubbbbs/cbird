@@ -20,7 +20,6 @@
    <https://www.gnu.org/licenses/>.  */
 #include "mediagrouptablewidget.h"
 
-#include "../database.h"
 #include "../qtutil.h"
 
 int MediaGroupTableModel::validMatchFlags(int oldFlags, int newFlag) {
@@ -43,8 +42,7 @@ int MediaGroupTableModel::validMatchFlags(int oldFlags, int newFlag) {
   return oldFlags | newFlag;
 }
 
-MediaGroupTableModel::MediaGroupTableModel(QObject* parent)
-    : QAbstractTableModel(parent) {
+MediaGroupTableModel::MediaGroupTableModel(QObject* parent) : QAbstractTableModel(parent) {
   _header << "Icon"
           << "Order"
           << "Size"
@@ -71,8 +69,7 @@ int MediaGroupTableModel::columnCount(const QModelIndex& parent) const {
   return _header.count();
 }
 
-QVariant MediaGroupTableModel::headerData(int section,
-                                          Qt::Orientation orientation,
+QVariant MediaGroupTableModel::headerData(int section, Qt::Orientation orientation,
                                           int role) const {
   if (role == Qt::DisplayRole) {
     if (orientation == Qt::Horizontal)
@@ -143,55 +140,37 @@ void MediaGroupTableModel::setSortFunction(int column, Qt::SortOrder order) {
   switch (column) {
     case ColOrderAdded:
       if (order == Qt::SortOrder::AscendingOrder)
-        _compareFunc = [](const Media& a, const Media& b) {
-          return LESS(a, b, position());
-        };
+        _compareFunc = [](const Media& a, const Media& b) { return LESS(a, b, position()); };
       else
-        _compareFunc = [](const Media& a, const Media& b) {
-          return LESS(b, a, position());
-        };
+        _compareFunc = [](const Media& a, const Media& b) { return LESS(b, a, position()); };
       break;
     case ColMegaPixels:
       if (order == Qt::SortOrder::AscendingOrder)
-        _compareFunc = [](const Media& a, const Media& b) {
-          return LESS(a, b, resolution());
-        };
+        _compareFunc = [](const Media& a, const Media& b) { return LESS(a, b, resolution()); };
       else
-        _compareFunc = [](const Media& a, const Media& b) {
-          return LESS(b, a, resolution());
-        };
+        _compareFunc = [](const Media& a, const Media& b) { return LESS(b, a, resolution()); };
       break;
     case ColDimensions:
       if (order == Qt::SortOrder::AscendingOrder)
         _compareFunc = [](const Media& a, const Media& b) {
-          return std::max(a.width(), a.height()) <
-                 std::max(b.width(), b.height());
+          return std::max(a.width(), a.height()) < std::max(b.width(), b.height());
         };
       else
         _compareFunc = [](const Media& a, const Media& b) {
-          return std::max(b.width(), b.height()) <
-                 std::max(a.width(), a.height());
+          return std::max(b.width(), b.height()) < std::max(a.width(), a.height());
         };
       break;
     case ColScore:
       if (order == Qt::SortOrder::AscendingOrder)
-        _compareFunc = [](const Media& a, const Media& b) {
-          return LESS(a, b, score());
-        };
+        _compareFunc = [](const Media& a, const Media& b) { return LESS(a, b, score()); };
       else
-        _compareFunc = [](const Media& a, const Media& b) {
-          return LESS(b, a, score());
-        };
+        _compareFunc = [](const Media& a, const Media& b) { return LESS(b, a, score()); };
       break;
     case ColPath:
       if (order == Qt::SortOrder::AscendingOrder)
-        _compareFunc = [](const Media& a, const Media& b) {
-          return LESS(a, b, path());
-        };
+        _compareFunc = [](const Media& a, const Media& b) { return LESS(a, b, path()); };
       else
-        _compareFunc = [](const Media& a, const Media& b) {
-          return LESS(b, a, path());
-        };
+        _compareFunc = [](const Media& a, const Media& b) { return LESS(b, a, path()); };
       break;
     case ColAlt:
       if (order == Qt::SortOrder::AscendingOrder)
@@ -226,8 +205,7 @@ void MediaGroupTableModel::setSortFunction(int column, Qt::SortOrder order) {
   }
 }
 
-void MediaGroupTableModel::applyFilter(int match, int size,
-                                       const QString& path) {
+void MediaGroupTableModel::applyFilter(int match, int size, const QString& path) {
   // default, filter all
   _filterFunc = [](const Media& a) {
     (void)a;
@@ -243,9 +221,7 @@ void MediaGroupTableModel::applyFilter(int match, int size,
         return std::max(a.width(), a.height()) < size;
       };
     } else if (path != "") {
-      _filterFunc = [path](const Media& a) {
-        return !a.path().contains(QRegularExpression(path));
-      };
+      _filterFunc = [path](const Media& a) { return !a.path().contains(QRegularExpression(path)); };
     } else {
       // filter none
       _filterFunc = [path](const Media& a) {
@@ -267,12 +243,10 @@ void MediaGroupTableModel::applyFilter(int match, int size,
         if (match & ShowAnyMatch)
           return false;
         else if ((match & ShowBigger) &&
-                 (a.matchFlags() &
-                  (Media::MatchBiggerDimensions | Media::MatchBiggerFile)))
+                 (a.matchFlags() & (Media::MatchBiggerDimensions | Media::MatchBiggerFile)))
           return false;
         else if ((match & ShowSmaller) &&
-                 !(a.matchFlags() &
-                   (Media::MatchBiggerDimensions | Media::MatchBiggerFile)))
+                 !(a.matchFlags() & (Media::MatchBiggerDimensions | Media::MatchBiggerFile)))
           return false;
       }
 
@@ -293,15 +267,13 @@ void MediaGroupTableModel::sort(int column, Qt::SortOrder order) {
   setSortFunction(column, order);
 
   beginResetModel();
-  std::stable_sort(_filtered.begin(), _filtered.end(),
-                   [=](const QString& a, const QString& b) {
-                     return _compareFunc(_data[a], _data[b]);
-                   });
+  std::stable_sort(_filtered.begin(), _filtered.end(), [=](const QString& a, const QString& b) {
+    return _compareFunc(_data[a], _data[b]);
+  });
   endResetModel();
 }
 
-bool MediaGroupTableModel::removeRows(int row, int count,
-                                      const QModelIndex& parent) {
+bool MediaGroupTableModel::removeRows(int row, int count, const QModelIndex& parent) {
   (void)parent;
 
   if (row >= 0 && row + count <= _filtered.count()) {
@@ -342,8 +314,7 @@ void MediaGroupTableModel::addMedia(const Media& m) {
   Media copy = m;
   copy.setPosition(_pos++);
   // free decompressed image if there is data backup
-  if (copy.data().size() > 0 || QFileInfo(copy.path()).exists())
-    copy.setImage(QImage());
+  if (copy.data().size() > 0 || QFileInfo(copy.path()).exists()) copy.setImage(QImage());
 
   // add to unfiltered
   _data[copy.path()] = copy;
@@ -353,10 +324,9 @@ void MediaGroupTableModel::addMedia(const Media& m) {
 
   // _filtered is already sorted by _compareFunc, go find where
   // to insert the new item
-  it = std::lower_bound(_filtered.begin(), _filtered.end(), copy.path(),
-                        [=](const QString& a, const QString& b) {
-                          return _compareFunc(_data[a], _data[b]);
-                        });
+  it = std::lower_bound(
+      _filtered.begin(), _filtered.end(), copy.path(),
+      [=](const QString& a, const QString& b) { return _compareFunc(_data[a], _data[b]); });
 
   // insert the item and notify views
   int row = it - _filtered.begin();
@@ -442,8 +412,7 @@ void MediaGroupTableModel::memoryUsage(int& objects, size_t& bytes) const {
  */
 class ImageItemDelegate : public QItemDelegate {
  public:
-  ImageItemDelegate(QAbstractItemModel* model, QObject* parent)
-      : QItemDelegate(parent) {
+  ImageItemDelegate(QAbstractItemModel* model, QObject* parent) : QItemDelegate(parent) {
     _model = model;
   }
 
@@ -456,8 +425,7 @@ class ImageItemDelegate : public QItemDelegate {
     icon.paint(painter, option.rect);
   }
 
-  QSize sizeHint(const QStyleOptionViewItem& option,
-                 const QModelIndex& index) const {
+  QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
     (void)index;
     (void)option;
 
@@ -468,49 +436,47 @@ class ImageItemDelegate : public QItemDelegate {
   QAbstractItemModel* _model;
 };
 
-MediaGroupTableWidget::MediaGroupTableWidget(QWidget* parent)
-    : QTableView(parent) {
+MediaGroupTableWidget::MediaGroupTableWidget(QWidget* parent) : QTableView(parent) {
   _defaultRowHeight = -1;
 
   setSortingEnabled(true);
   sortByColumn(MediaGroupTableModel::ColOrderAdded, Qt::DescendingOrder);
   setTextElideMode(Qt::ElideLeft);
-/*
-  QString sheet =
-      "QTableView {"
-      "   border: 1px solid rgb(255,255,255);"
-      "   color: rgb(240,240,240);"
-      "   background-color: rgb(96,96,96);"
-      "   alternate-background-color: rgb(64,64,64);"
-      "}"
+  /*
+    QString sheet =
+        "QTableView {"
+        "   border: 1px solid rgb(255,255,255);"
+        "   color: rgb(240,240,240);"
+        "   background-color: rgb(96,96,96);"
+        "   alternate-background-color: rgb(64,64,64);"
+        "}"
 
-      "QHeaderView:section {"
-      "   background-color: rgb(128,128,128);"
-      "   color: rgb(240,240,240);"
-      "   border: 1px solid rgb(64,64,64);"
-      "   height: 20px"
-      "}"
+        "QHeaderView:section {"
+        "   background-color: rgb(128,128,128);"
+        "   color: rgb(240,240,240);"
+        "   border: 1px solid rgb(64,64,64);"
+        "   height: 20px"
+        "}"
 
-      "QHeaderView:selected {"
-      "   background-color: rgb(64,64,64);"
-      "}"
+        "QHeaderView:selected {"
+        "   background-color: rgb(64,64,64);"
+        "}"
 
-      "QHeaderView::up-arrow {"
-      "   color: rgb(255,255,255);"
-      "}"
+        "QHeaderView::up-arrow {"
+        "   color: rgb(255,255,255);"
+        "}"
 
-      "QHeaderView::down-arrow {"
-      "   color: rgb(255,255,255);"
-      "}";
+        "QHeaderView::down-arrow {"
+        "   color: rgb(255,255,255);"
+        "}";
 
-  setStyleSheet(sheet);
-*/
+    setStyleSheet(sheet);
+  */
   setSelectionBehavior(QAbstractItemView::SelectRows);
   setAlternatingRowColors(true);
 
   setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(this, &QWidget::customContextMenuRequested, this,
-          &self::execContextMenu);
+  connect(this, &QWidget::customContextMenuRequested, this, &self::execContextMenu);
 
   connect(this, &QTableView::doubleClicked, this, &self::expandRow);
 
@@ -520,8 +486,7 @@ MediaGroupTableWidget::MediaGroupTableWidget(QWidget* parent)
   addAction("Open...", Qt::Key_V, SLOT(openAction()));
   addAction("Delete", Qt::Key_D, SLOT(deleteAction()));
   addAction("Copy Url", QKeySequence("Ctrl+C"), SLOT(copyUrlAction()));
-  addAction("Copy Image", QKeySequence("Ctrl+Shift+C"),
-            SLOT(copyImageAction()));
+  addAction("Copy Image", QKeySequence("Ctrl+Shift+C"), SLOT(copyImageAction()));
   addAction("Reveal", Qt::Key_E, SLOT(revealAction()));
 
   _maximized = WidgetHelper::restoreGeometry(this);
@@ -543,8 +508,7 @@ MediaGroupTableWidget::~MediaGroupTableWidget() {
   settings.endGroup();
 }
 
-QAction* MediaGroupTableWidget::addAction(const QString& label,
-                                          const QKeySequence& shortcut,
+QAction* MediaGroupTableWidget::addAction(const QString& label, const QKeySequence& shortcut,
                                           const char* slot) {
   QAction* a = new QAction(label, this);
   connect(a, SIGNAL(triggered(bool)), this, slot);
@@ -566,8 +530,7 @@ void MediaGroupTableWidget::setModel(QAbstractItemModel* model) {
   settings.endGroup();
 
   if (colWidths.count() == this->model()->columnCount())
-    for (int i = 0; i < this->model()->columnCount(); i++)
-      setColumnWidth(i, colWidths[i].toInt());
+    for (int i = 0; i < this->model()->columnCount(); i++) setColumnWidth(i, colWidths[i].toInt());
 }
 
 void MediaGroupTableWidget::execContextMenu(const QPoint& p) {
@@ -579,14 +542,12 @@ void MediaGroupTableWidget::execContextMenu(const QPoint& p) {
   if (!_indexPath.isEmpty()) {
     // fixme: don't iterate the filesystem twice here
     QAction* folders = new QAction(this);
-    folders->setMenu(
-        MenuHelper::dirMenu(_indexPath, this, SLOT(downloadToFolderAction())));
+    folders->setMenu(MenuHelper::dirMenu(_indexPath, this, SLOT(downloadToFolderAction())));
     folders->setText("Save to Folder");
     menu->addAction(folders);
 
     folders = new QAction(this);
-    folders->setMenu(
-        MenuHelper::dirMenu(_indexPath, this, SLOT(moveToFolderAction())));
+    folders->setMenu(MenuHelper::dirMenu(_indexPath, this, SLOT(moveToFolderAction())));
     folders->setText("Move to Folder");
     menu->addAction(folders);
   }
@@ -600,8 +561,7 @@ void MediaGroupTableWidget::execContextMenu(const QPoint& p) {
 QStringList MediaGroupTableWidget::selectedPaths() const {
   QStringList paths;
 
-  for (const QModelIndex& index :
-       selectionModel()->selectedRows(MediaGroupTableModel::ColPath))
+  for (const QModelIndex& index : selectionModel()->selectedRows(MediaGroupTableModel::ColPath))
     paths.append(index.model()->data(index).toString());
 
   return paths;
@@ -638,8 +598,7 @@ void MediaGroupTableWidget::deleteAction() {
 
 void MediaGroupTableWidget::downloadAction() {
   QStringList altText;
-  for (const QModelIndex& index :
-       selectionModel()->selectedRows(MediaGroupTableModel::ColAlt))
+  for (const QModelIndex& index : selectionModel()->selectedRows(MediaGroupTableModel::ColAlt))
     altText.append(index.model()->data(index).toString());
 
   const QStringList paths = selectedPaths();
@@ -662,12 +621,10 @@ void MediaGroupTableWidget::downloadToFolderAction() {
   QString dirPath = action->data().toString();
 
   if (!_indexPath.isEmpty() && dirPath == ";newfolder;")
-    dirPath =
-        QFileDialog::getExistingDirectory(this, "Choose Folder", _indexPath);
+    dirPath = QFileDialog::getExistingDirectory(this, "Choose Folder", _indexPath);
 
   QStringList altText;
-  for (const QModelIndex& index :
-       selectionModel()->selectedRows(MediaGroupTableModel::ColAlt))
+  for (const QModelIndex& index : selectionModel()->selectedRows(MediaGroupTableModel::ColAlt))
     altText.append(index.model()->data(index).toString());
 
   const QStringList paths = selectedPaths();
@@ -690,8 +647,7 @@ void MediaGroupTableWidget::moveToFolderAction() {
   QString dirPath = action->data().toString();
 
   if (!_indexPath.isEmpty() && dirPath == ";newfolder;")
-    dirPath =
-        QFileDialog::getExistingDirectory(this, "Choose Folder", _indexPath);
+    dirPath = QFileDialog::getExistingDirectory(this, "Choose Folder", _indexPath);
 
   int i = 1;
   for (const QString& path : selectedPaths()) {

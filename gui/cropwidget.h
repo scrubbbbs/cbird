@@ -36,10 +36,9 @@ class CropWidget : public QLabel {
    * @note if Media was queried from database, then additional EXIF metadata
    *       is saved to the thumbnail.
    */
-  static bool setIndexThumbnail(const Database& db, const Media& m,
-                                QWidget* parent = nullptr,
-                                bool async = false,
-                                const std::function<void(bool)>& after=[](bool){;});
+  static bool setIndexThumbnail(
+      const Database& db, const Media& m, QWidget* parent = nullptr, bool async = false,
+      const std::function<void(bool)>& after = [](bool) { ; });
 
   /**
    * @brief Widget for cropping an image

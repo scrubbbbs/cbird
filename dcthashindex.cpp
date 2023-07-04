@@ -19,9 +19,8 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "dcthashindex.h"
-#include "hamm.h"
+
 #include "profile.h"
-#include "qtutil.h"
 #include "tree/dcttree.h"
 
 DctHashIndex::DctHashIndex() {
@@ -64,8 +63,7 @@ void DctHashIndex::buildTree() {
   }
 }
 
-void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath,
-                        const QString& dataPath) {
+void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) {
   // hashes are always loaded from database, no caching
   (void)cachePath;
   (void)dataPath;
@@ -166,8 +164,7 @@ void DctHashIndex::remove(const QVector<int>& removed) {
   buildTree();
 }
 
-QVector<Index::Match> DctHashIndex::find(const Media& m,
-                                         const SearchParams& p) {
+QVector<Index::Match> DctHashIndex::find(const Media& m, const SearchParams& p) {
   QVector<Index::Match> results;
 
   uint64_t target = hashForMedia(m);
@@ -182,7 +179,7 @@ QVector<Index::Match> DctHashIndex::find(const Media& m,
   }
 // todo: maybe use brute if threshold is high
 #if 1
-    results = _tree->search(target, p.dctThresh);
+  results = _tree->search(target, p.dctThresh);
 #else
   // brute-force search is often fast enough
   for (int i = 0; i < _numHashes; i++) {

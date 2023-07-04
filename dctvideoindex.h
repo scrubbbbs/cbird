@@ -35,27 +35,26 @@ class DctVideoIndex : public Index {
   virtual ~DctVideoIndex();
 
  public:
-  virtual bool isLoaded() const;
-  virtual int count() const;
-  virtual size_t memoryUsage() const;
-  virtual void load(QSqlDatabase& db, const QString& cachePath,
-                    const QString& dataPath);
-  virtual void save(QSqlDatabase& db, const QString& cachePath);
-  virtual void add(const MediaGroup& media);
-  virtual void remove(const QVector<int>& ids);
-  virtual QVector<Index::Match> find(const Media& m, const SearchParams& p);
-  virtual Index* slice(const QSet<uint32_t>& mediaIds) const;
+  bool isLoaded() const override;
+  int count() const override;
+  size_t memoryUsage() const override;
+
+  void load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) override;
+  void save(QSqlDatabase& db, const QString& cachePath) override;
+
+  void add(const MediaGroup& media) override;
+  void remove(const QVector<int>& ids) override;
+
+  QVector<Index::Match> find(const Media& m, const SearchParams& p) override;
+  Index* slice(const QSet<uint32_t>& mediaIds) const override;
 
   // video index does not use sql, but we need media ids
-  virtual int databaseId() const override { return 0; }
+  int databaseId() const override { return 0; }
 
  private:
-  QVector<Index::Match> findFrame(const Media& needle,
-                                  const SearchParams& params);
-  QVector<Index::Match> findVideo(const Media& needle,
-                                  const SearchParams& params);
-  void insertHashes(int mediaIndex, HammingTree* tree,
-                     const SearchParams& params);
+  QVector<Index::Match> findFrame(const Media& needle, const SearchParams& params);
+  QVector<Index::Match> findVideo(const Media& needle, const SearchParams& params);
+  void insertHashes(int mediaIndex, HammingTree* tree, const SearchParams& params);
   void buildTree(const SearchParams& params);
 
   HammingTree* _tree;

@@ -200,24 +200,22 @@ class FCPEdit {
 /// Tools for creating a Kdenlive project file
 class KdenEdit {
   NO_COPY_NO_DEFAULT(KdenEdit, __InvalidClass);
+
  public:
   KdenEdit(const QString& templateFile);
   ~KdenEdit();
+
  private:
   QDomElement newProperty(const QString& name, const QString& value);
 
   QDomElement newEntry(int id, int in = -1, int out = -1);
-
   QDomElement newBlank(int length);
 
   QDomElement findProperty(const QDomElement& parent, const QString& name);
-
   QDomElement findElementWithProperty(const QString& element, const QString& property,
                                       const QString& value);
-
   QDomElement findElementWithAttribute(const QString& element, const QString& attribute,
                                        const QString& value);
-
   QDomElement findPlaylist(const QString& name, bool audio);
 
   int findTractor(const QString& name, bool audio);
@@ -227,7 +225,7 @@ class KdenEdit {
   QString framesToTimeCode(int num);
   int end(const QString& track) const { return _end[track]; }
 
-  //void saveEDL(const QString& edlFileBase);
+  // void saveEDL(const QString& edlFileBase);
  public:
   /**
    * @brief addTrack
@@ -242,11 +240,9 @@ class KdenEdit {
    */
   int addProducer(const QString& path);
 
-
   void addBlank(const QString& track, int length);
 
   void insertBlank(const QString& track, int pos, int len);
-
 
   /**
    * @brief addClip
@@ -264,7 +260,6 @@ class KdenEdit {
   void saveXml(const QString& xmlFile);
 
  private:
-  int fileIndex;
   QDomDocument* _doc;
   int _producerCount;
   QMap<QString, int> _end;

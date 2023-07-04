@@ -173,7 +173,6 @@ class VideoContext {
   QString _path;
   VideoContextPrivate* _p;
   int _videoFrameCount;
-  bool _isKey;
   int _consumed;
   //QMutex _mutex;
   int _errorCount;

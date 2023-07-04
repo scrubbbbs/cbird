@@ -21,6 +21,9 @@
 #include "colordescindex.h"
 #include "profile.h"
 
+#include <cfloat>
+
+
 ColorDescIndex::ColorDescIndex() : Index() {
   _id = SearchParams::AlgoColor;
   _count = 0;
@@ -41,14 +44,12 @@ void ColorDescIndex::createTables(QSqlDatabase& db) const {
       SQL_FATAL(prepare);
 
     // this index is big, but necessary for fast deletions
-    if (!query.exec(
-            "create unique index color_media_id_index on color(media_id);"))
+    if (!query.exec("create unique index color_media_id_index on color(media_id);"))
       SQL_FATAL(exec);
   }
 }
 
-void ColorDescIndex::addRecords(QSqlDatabase& db,
-                                const MediaGroup& media) const {
+void ColorDescIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) const {
   bool isValid = false;
   for (const Media& m : media)
     if (m.colorDescriptor().numColors > 0) {
@@ -69,8 +70,7 @@ void ColorDescIndex::addRecords(QSqlDatabase& db,
     const ColorDescriptor& desc = m.colorDescriptor();
     if (desc.numColors > 0) {
       auto bytes =
-          QByteArray(reinterpret_cast<const char*>(&m.colorDescriptor()),
-                     sizeof(ColorDescriptor));
+          QByteArray(reinterpret_cast<const char*>(&m.colorDescriptor()), sizeof(ColorDescriptor));
       query.bindValue(":media_id", m.id());
       query.bindValue(":color_desc", bytes);
 
@@ -82,12 +82,10 @@ void ColorDescIndex::addRecords(QSqlDatabase& db,
   }
 }
 
-void ColorDescIndex::removeRecords(QSqlDatabase& db,
-                                   const QVector<int>& mediaIds) const {
+void ColorDescIndex::removeRecords(QSqlDatabase& db, const QVector<int>& mediaIds) const {
   QSqlQuery query(db);
   for (auto id : mediaIds)
-    if (!query.exec("delete from color where media_id=" + QString::number(id)))
-      SQL_FATAL(exec);
+    if (!query.exec("delete from color where media_id=" + QString::number(id))) SQL_FATAL(exec);
 }
 
 void ColorDescIndex::unload() {
@@ -108,8 +106,7 @@ size_t ColorDescIndex::memoryUsage() const {
   return sizeof(ColorDescriptor) * num + sizeof(int) * num;
 }
 
-void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath,
-                          const QString& dataPath) {
+void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) {
   // hashes are always loaded from database, no caching
   (void)cachePath;
   (void)dataPath;
@@ -146,7 +143,8 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath,
   do {
     // buffer overflow guard
     if (i >= _count) {
-      qCritical() << "database modified during loading:" << (i-_count+1) << "new records ignored";
+      qCritical() << "database modified during loading:" << (i - _count + 1)
+                  << "new records ignored";
       break;
     }
 
@@ -165,15 +163,13 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath,
     i++;
 
     if (i % 20000 == 0)
-      qInfo("sql query:<PL> %d%% %s descriptors",
-            int(uint64_t(i) * 100 / _count),
+      qInfo("sql query:<PL> %d%% %s descriptors", int(uint64_t(i) * 100 / _count),
             qPrintable(locale.toString(i)));
 
   } while (query.next());
 
   uint64_t end = nanoTime();
-  qInfo("%d descriptors, %d empty, %dms", _count, empty,
-        int((end - start) / 1000000));
+  qInfo("%d descriptors, %d empty, %dms", _count, empty, int((end - start) / 1000000));
 }
 
 void ColorDescIndex::save(QSqlDatabase& db, const QString& cachePath) {
@@ -242,8 +238,7 @@ Index* ColorDescIndex::slice(const QSet<uint32_t>& mediaIds) const {
   return chunk;
 }
 
-QVector<Index::Match> ColorDescIndex::find(const Media& m,
-                                           const SearchParams& p) {
+QVector<Index::Match> ColorDescIndex::find(const Media& m, const SearchParams& p) {
   (void)p;
 
   // todo: search tree for histograms
@@ -260,7 +255,7 @@ QVector<Index::Match> ColorDescIndex::find(const Media& m,
   }
 
   for (int i = 0; i < _count; i++) {
-    float distance = colorDistance(target, _descriptors[i]);
+    float distance = ColorDescriptor::distance(target, _descriptors[i]);
 
     if (distance < FLT_MAX) {
       uint32_t id = _mediaId[i];

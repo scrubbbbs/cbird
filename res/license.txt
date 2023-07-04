@@ -1,0 +1,19 @@
+cbird, the Content-Based Image Retrieval Database
+Copyright (C) 2021 scrubbbbs (esceruebbebbes@gemeaeiel.com =~ s/e//g)
+https://github.com/scrubbbbs/cbird
+Licensed to you under the GNU GPL version 2 http://www.gnu.org/licenses
+
+cbird is free software; you are free to modify and distribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+======================================================================================
+
+This software uses the Qt library under GPLv2 https://www.qt.io
+This software uses the OpenCV library under Apache License v2 https://opencv.org
+This software uses the FFmpeg library under GPLv2 https://ffmpeg.org
+This software uses the quazip library under GPLv2 https://github.com/stachenov/quazip
+This software uses the exiv2 library under GPLv2 https://exiv2.org
+This software uses the CImg library under CeCILL v2.1 https://cimg.eu
+
+This software includes code from jpegquality by Neal Krawetz,
+Hacker Factor Solutions, Copyright 2005-2007.

@@ -21,6 +21,7 @@
 #pragma once
 
 namespace cimg_library {
-  template<class T> struct CImg;
+template <class T>
+struct CImg;
 }
 using namespace cimg_library;

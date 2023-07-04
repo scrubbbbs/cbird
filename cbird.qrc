@@ -6,5 +6,7 @@
         <file>res/iptc.txt</file>
         <file>res/cbird.qss</file>
         <file>res/cbird-richtext.css</file>
+        <file>res/license.txt</file>
+        <file>res/usage.txt</file>
     </qresource>
 </RCC>

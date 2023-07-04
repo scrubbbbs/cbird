@@ -23,6 +23,11 @@
 #include "index.h"
 #include "media.h"
 
+#include "opencv2/core.hpp"
+
+namespace cv::flann {
+class Index;
+}
 /**
  * @class CvFeaturesIndex
  * @brief Index for OpenCV feature descriptors
@@ -38,15 +43,13 @@ class CvFeaturesIndex : public Index {
 
   void createTables(QSqlDatabase& db) const override;
   void addRecords(QSqlDatabase& db, const MediaGroup& media) const override;
-  void removeRecords(QSqlDatabase& db,
-                     const QVector<int>& mediaIds) const override;
+  void removeRecords(QSqlDatabase& db, const QVector<int>& mediaIds) const override;
 
   bool isLoaded() const override;
   int count() const override;
   size_t memoryUsage() const override;
 
-  void load(QSqlDatabase& db, const QString& cachePath,
-            const QString& dataPath) override;
+  void load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) override;
   void save(QSqlDatabase& db, const QString& cachePath) override;
 
   void add(const MediaGroup& media) override;

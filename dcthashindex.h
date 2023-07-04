@@ -41,8 +41,7 @@ class DctHashIndex : public Index {
   void add(const MediaGroup& media) override;
   void remove(const QVector<int>& ids) override;
 
-  void load(QSqlDatabase& db, const QString& cacheFile,
-            const QString& dataPath) override;
+  void load(QSqlDatabase& db, const QString& cacheFile, const QString& dataPath) override;
   void save(QSqlDatabase& db, const QString& cachePath) override;
 
   QVector<Index::Match> find(const Media& m, const SearchParams& p) override;
@@ -50,9 +49,7 @@ class DctHashIndex : public Index {
   Index* slice(const QSet<uint32_t>& mediaIds) const override;
 
   uint64_t hashForMedia(const Media& m) { return m.dctHash(); }
-  QString hashQuery() const {
-    return "select id,phash_dct from media where type=1";
-  }
+  QString hashQuery() const { return "select id,phash_dct from media where type=1"; }
 
  private:
   void unload();

@@ -28,7 +28,6 @@
 #include "dctvideoindex.h"
 #include "scanner.h"
 #include "templatematcher.h"
-#include "qtutil.h"
 
 Engine::Engine(const QString& path, const IndexParams& params) {
   db = new Database(path);
@@ -59,8 +58,7 @@ void Engine::add(const Media& m) {
   // this requires clients to call commit() after all items added
 
   if (_batch.contains(m)) {
-    qWarning() << "attempt to add media twice in same batch, discarding..."
-               << m.path();
+    qWarning() << "attempt to add media twice in same batch, discarding..." << m.path();
     return;
   }
 
@@ -71,17 +69,17 @@ void Engine::add(const Media& m) {
 
   // videos take a long time to process so do not batch, and commit immediately
   if (m.type() == Media::TypeVideo || _batch.count() >= scanner->indexParams().writeBatchSize) {
-    //printf("w");
-    //fflush(stdout);
+    // printf("w");
+    // fflush(stdout);
     commit();
   }
 }
 
 void Engine::commit() {
   if (_batch.count() > 0) {
-     db->add(_batch);
-     //for (const auto& m : qAsConst(_batch))
-     //  qDebug() << "added id: " << m.id() << m.path();
+    db->add(_batch);
+    // for (const auto& m : qAsConst(_batch))
+    //   qDebug() << "added id: " << m.id() << m.path();
     _batch.clear();
   }
 }
@@ -103,7 +101,7 @@ void Engine::update(bool wait) {
       auto& path = paths[i];
       if (Media::isArchived(path)) Media::archivePaths(path, &path);
 
-      if (checked.contains(path)) continue; // skip zip members
+      if (checked.contains(path)) continue;  // skip zip members
       checked.insert(path);
 
       // canonicalFilePath() hits the filesystem, if file does not
@@ -111,17 +109,18 @@ void Engine::update(bool wait) {
       const QFileInfo info(path);
       const int prefixLen = db->path().length() + 1;
       const auto relPath = path.mid(prefixLen);
-      const auto canPath =  info.canonicalFilePath();
+      const auto canPath = info.canonicalFilePath();
       const auto canRelPath = canPath.mid(prefixLen);
 
       // the relative paths should match; or the canonical path is outside of the index
-      if ( (canPath != "" && canPath.startsWith(db->path()) && relPath != canRelPath) ||
-           relPath.contains("//"))
+      if ((canPath != "" && canPath.startsWith(db->path()) && relPath != canRelPath) ||
+          relPath.contains("//"))
         qCritical("invalid path in database:\n\tcanonical=%s\n\tdatabase =%s",
                   qUtf8Printable(canRelPath), qUtf8Printable(relPath));
       if (progress++ == 10) {
         progress = 0;
-        qInfo("<NC>%s: validating index <PL> %d/%lld", qUtf8Printable(db->path()), i, paths.count());
+        qInfo("<NC>%s: validating index <PL> %d/%lld", qUtf8Printable(db->path()), i,
+              paths.count());
       }
     }
   }
@@ -132,19 +131,18 @@ void Engine::update(bool wait) {
   if (skip.count() > 0) {
     qInfo("removing %lld files from index", skip.count());
     QList<QString> sorted = skip.values();
-    std::sort(sorted.begin(),sorted.end());
+    std::sort(sorted.begin(), sorted.end());
     int i = 0;
     // todo: this takes a long time for big removals...could be threaded
     for (const auto& path : qAsConst(sorted)) {
       i++;
-      if ( i % 100 == 0 )
-        qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << path;
+      if (i % 100 == 0) qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << path;
       const Media m = db->mediaWithPath(path);
       if (!m.isValid()) {
         qWarning() << "invalid removal, non-indexed path:" << path;
         continue;
       }
-      //qDebug() << "removing id:" << m.id() << path;
+      // qDebug() << "removing id:" << m.id() << path;
       toRemove.append(m.id());
     }
   }
@@ -154,8 +152,7 @@ void Engine::update(bool wait) {
   // todo: re-index missing item now
   if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo))
     for (const Media& m : db->mediaWithType(Media::TypeVideo)) {
-      QString vIndexPath =
-          QString("%1/%2.vdx").arg(db->videoPath()).arg(m.id());
+      QString vIndexPath = QString("%1/%2.vdx").arg(db->videoPath()).arg(m.id());
       if (!QFileInfo(vIndexPath).exists()) {
         qWarning() << "video index missing:" << m.path();
         toRemove.append(m.id());
@@ -169,8 +166,7 @@ void Engine::update(bool wait) {
       }
     }
 
-  if (!scanner->indexParams().dryRun && !toRemove.isEmpty())
-    db->remove(toRemove);
+  if (!scanner->indexParams().dryRun && !toRemove.isEmpty()) db->remove(toRemove);
 
   if (wait) scanner->finish();
 }
@@ -200,8 +196,7 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
     if (!needle.image().isNull()) {
       // fixme: we only need to process for the given algo
       qWarning() << "processImage:" << needle.path();
-      IndexResult result =
-          scanner->processImage(needle.path(), "", needle.image());
+      IndexResult result = scanner->processImage(needle.path(), "", needle.image());
       if (!result.ok) {
         qWarning() << "failed to process:" << result.path;
         return search;
@@ -220,7 +215,8 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
       needle = m;
     }
   if (!params.mediaSupported(needle)) {
-    qWarning() << needle.path() << "media type unsupported or disabled with -p.types" << params.queryTypes;
+    qWarning() << needle.path() << "media type unsupported or disabled with -p.types"
+               << params.queryTypes;
     return search;
   }
 
@@ -253,8 +249,7 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
   if (params.mirrorMask & SearchParams::MirrorBoth)
     matches.append(db->similarTo(mirrored(needle, true, true), params));
 
-  if (params.templateMatch &&
-      params.algo != SearchParams::AlgoVideo)
+  if (params.templateMatch && params.algo != SearchParams::AlgoVideo)
     matcher->match(needle, matches, params);
 
   std::sort(matches.begin(), matches.end());

@@ -19,13 +19,14 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "templatematcher.h"
+
 #include "cvutil.h"
 #include "hamm.h"
 #include "index.h"
 #include "media.h"
 #include "profile.h"
-#include "qtutil.h"
 
+#include "opencv2/features2d.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/video/tracking.hpp"  // estimateRigidTransform
 
@@ -33,8 +34,7 @@ TemplateMatcher::TemplateMatcher() {}
 
 TemplateMatcher::~TemplateMatcher() {}
 
-void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
-                            const SearchParams& params) {
+void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group, const SearchParams& params) {
   if (group.count() <= 0) return;
 
   uint64_t then = nanoTime();
@@ -43,8 +43,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
   bool useCache = true;
 
   if (tmplMedia.md5().isEmpty()) {
-    if (params.verbose)
-      qWarning() << "tmpl image has no md5 sum, won't cache:" << tmplMedia.path();
+    if (params.verbose) qWarning() << "tmpl image has no md5 sum, won't cache:" << tmplMedia.path();
     useCache = false;
   }
 
@@ -109,8 +108,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
   tmplMedia.makeKeyPointDescriptors(tmplImg);
 
   if (params.verbose)
-    qInfo("query kp=%d descriptors=%d (max %d)",
-          int(tmplMedia.keyPoints().size()),
+    qInfo("query kp=%d descriptors=%d (max %d)", int(tmplMedia.keyPoints().size()),
           int(tmplMedia.keyPointDescriptors().cols), params.needleFeatures);
 
   if (tmplMedia.keyPointDescriptors().cols <= 0) {
@@ -194,9 +192,8 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
     PROFILE(timing.targetFeatures);
 
     if (params.verbose)
-      qInfo("(%d) candidate scale=%.2f kp=%d descriptors=%d (max %d)", i,
-            double(candScale), int(m.keyPoints().size()),
-            int(m.keyPointDescriptors().rows), params.haystackFeatures);
+      qInfo("(%d) candidate scale=%.2f kp=%d descriptors=%d (max %d)", i, double(candScale),
+            int(m.keyPoints().size()), int(m.keyPointDescriptors().rows), params.haystackFeatures);
 
     if (m.keyPointDescriptors().cols <= 0) {
       if (params.verbose) qInfo("(%d): no keypoints in candidate", i);
@@ -258,8 +255,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
 
     // find an affine transform from the target points to the candidate.
     // if there is such a transform, it is most likely a good match.
-    cv::Mat transform =
-        cv::estimateRigidTransform(tmplPoints, matchPoints, false);
+    cv::Mat transform = cv::estimateRigidTransform(tmplPoints, matchPoints, false);
 
     PROFILE(timing.estimateTransform);
 
@@ -293,8 +289,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
       // todo: instead of the image corners, map the image borders
       QVector<QPoint> roi;
       for (uint i = 0; i < 4; i++)
-        roi.append(QPoint(int(candRect[i].x / candScale),
-                          int(candRect[i].y / candScale)));
+        roi.append(QPoint(int(candRect[i].x / candScale), int(candRect[i].y / candScale)));
       m.setRoi(roi);
 
       // make qt-compatible transform matrix
@@ -386,20 +381,18 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group,
 
   if (params.verbose)
     qInfo(
-      "%lld/%lld %dms:tot %lldms:ea | tl=%.2f tr=%.2f tk=%.2f "
-      "tf=%.2f rm=%.2f ms=%.2f ert=%.2f mr=%.2f mp=%.2f ttl=%.2f",
-      good.count(), notCached.count(), int(total) / 1000000,
-      total / 1000000 / notCached.count(),
-      timing.targetLoad * 100.0 / total, timing.targetResize * 100.0 / total,
-      timing.targetKeyPoints * 100.0 / total,
-      timing.targetFeatures * 100.0 / total, timing.radiusMatch * 100.0 / total,
-      timing.matchSort * 100.0 / total,
-      timing.estimateTransform * 100.0 / total,
-      timing.matchResize * 100.0 / total, timing.matchPhash * 100.0 / total,
-      (timing.targetLoad + timing.targetResize + timing.targetKeyPoints +
-       timing.targetFeatures + timing.radiusMatch + timing.matchSort +
-       timing.estimateTransform + timing.matchResize + timing.matchPhash) *
-          100.0 / total);
+        "%lld/%lld %dms:tot %lldms:ea | tl=%.2f tr=%.2f tk=%.2f "
+        "tf=%.2f rm=%.2f ms=%.2f ert=%.2f mr=%.2f mp=%.2f ttl=%.2f",
+        good.count(), notCached.count(), int(total) / 1000000, total / 1000000 / notCached.count(),
+        timing.targetLoad * 100.0 / total, timing.targetResize * 100.0 / total,
+        timing.targetKeyPoints * 100.0 / total, timing.targetFeatures * 100.0 / total,
+        timing.radiusMatch * 100.0 / total, timing.matchSort * 100.0 / total,
+        timing.estimateTransform * 100.0 / total, timing.matchResize * 100.0 / total,
+        timing.matchPhash * 100.0 / total,
+        (timing.targetLoad + timing.targetResize + timing.targetKeyPoints + timing.targetFeatures +
+         timing.radiusMatch + timing.matchSort + timing.estimateTransform + timing.matchResize +
+         timing.matchPhash) *
+            100.0 / total);
 
   group = good;
   std::sort(group.begin(), group.end());

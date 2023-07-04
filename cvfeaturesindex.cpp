@@ -19,19 +19,20 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "cvfeaturesindex.h"
+
 #include "cvutil.h"
 #include "ioutil.h"
 #include "profile.h"
 #include "qtutil.h"
 
+#include "opencv2/features2d.hpp"
+
 // there is a breaking change to flann interface at some point
 #if !(CV_VERSION_EPOCH == 2 && CV_VERSION_MAJOR >= 4 && CV_VERSION_MINOR >= 13)
-#error OpenCV 2.4.13+ is required
+#  error OpenCV 2.4.13+ is required
 #endif
 
-static QString cacheFile(const QString& cachePath) {
-  return cachePath + qq("/cvfeatures.touch");
-}
+static QString cacheFile(const QString& cachePath) { return cachePath + qq("/cvfeatures.touch"); }
 
 CvFeaturesIndex::CvFeaturesIndex() {
   _id = SearchParams::AlgoCVFeatures;
@@ -55,13 +56,11 @@ void CvFeaturesIndex::createTables(QSqlDatabase& db) const {
                     " );"))
       SQL_FATAL(exec);
 
-    if (!query.exec("create index matrix_media_id_index on matrix(media_id);"))
-      SQL_FATAL(exec);
+    if (!query.exec("create index matrix_media_id_index on matrix(media_id);")) SQL_FATAL(exec);
   }
 }
 
-void CvFeaturesIndex::addRecords(QSqlDatabase& db,
-                                 const MediaGroup& media) const {
+void CvFeaturesIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) const {
   bool isValid = false;
   for (const Media& m : media)
     if (m.keyPointDescriptors().total() > 0) {
@@ -92,12 +91,10 @@ void CvFeaturesIndex::addRecords(QSqlDatabase& db,
     }
 }
 
-void CvFeaturesIndex::removeRecords(QSqlDatabase& db,
-                                    const QVector<int>& mediaIds) const {
+void CvFeaturesIndex::removeRecords(QSqlDatabase& db, const QVector<int>& mediaIds) const {
   QSqlQuery query(db);
   for (auto id : mediaIds)
-    if (!query.exec("delete from matrix where media_id=" + QString::number(id)))
-      SQL_FATAL(exec);
+    if (!query.exec("delete from matrix where media_id=" + QString::number(id))) SQL_FATAL(exec);
 }
 
 bool CvFeaturesIndex::isLoaded() const { return _index != nullptr; }
@@ -105,55 +102,55 @@ bool CvFeaturesIndex::isLoaded() const { return _index != nullptr; }
 int CvFeaturesIndex::count() const { return _descriptors.rows; }
 
 size_t CvFeaturesIndex::memoryUsage() const {
+  if (_descriptors.rows <= 0) return 0;
+
   size_t mem = 0;
-  if (_descriptors.rows > 0) {
-    const cv::Mat& d = _descriptors;
+  const cv::Mat& d = _descriptors;
 
-    mem += uint(d.rows * d.cols) * d.elemSize();
+  mem += uint(d.rows * d.cols) * d.elemSize();
 
-    // don't really know how much lsh index uses
-    mem *= 2;
+  // don't really know how much lsh index uses
+  mem *= 2;
 
-    // fixme:also memory for lookup trees
-  }
+  // fixme:also memory for lookup trees
 
   return mem;
 }
 
 void CvFeaturesIndex::add(const MediaGroup& media) {
-  if (_index) {
-    cv::Mat addedDescriptors;
+  if (!_index) return;
 
-    for (const Media& m : media) {
-      const KeyPointDescriptors& desc = m.keyPointDescriptors();
+  cv::Mat addedDescriptors;
 
-      uint32_t mid = uint32_t(m.id());
-      uint32_t numDesc = uint32_t(_descriptors.rows);
-      _idMap[mid] = numDesc;
-      _indexMap[numDesc] = mid;
+  for (const Media& m : media) {
+    const KeyPointDescriptors& desc = m.keyPointDescriptors();
 
-      numDesc += uint32_t(desc.rows);
-      _idMap[UINT32_MAX] = numDesc;
-      _indexMap[numDesc] = 0;
+    uint32_t mid = uint32_t(m.id());
+    uint32_t numDesc = uint32_t(_descriptors.rows);
+    _idMap[mid] = numDesc;
+    _indexMap[numDesc] = mid;
 
-      for (int j = 0; j < desc.rows; j++) {
-        _descriptors.push_back(desc.row(j));
-        addedDescriptors.push_back(desc.row(j));
-      }
+    numDesc += uint32_t(desc.rows);
+    _idMap[UINT32_MAX] = numDesc;
+    _indexMap[numDesc] = 0;
+
+    for (int j = 0; j < desc.rows; j++) {
+      _descriptors.push_back(desc.row(j));
+      addedDescriptors.push_back(desc.row(j));
     }
-
-    buildIndex(addedDescriptors);
   }
+
+  buildIndex(addedDescriptors);
 }
 
 void CvFeaturesIndex::remove(const QVector<int>& ids) {
+  const auto& constIdMap = _idMap;
   for (int id : ids) {
-    auto it = _idMap.find(uint32_t(id));
-    if (it != _idMap.end()) {
+    auto it = constIdMap.find(uint32_t(id));
+    if (it != constIdMap.end()) {
       uint32_t index = it->second;
       auto it2 = _indexMap.find(index);
       if (it2 != _indexMap.end()) {
-        // fixme: crashes here sometimes
         Q_ASSERT(int(it2->second) == id);
         it2->second = 0;
       }
@@ -190,11 +187,11 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
       if (!query.exec("select media_id,rows,cols,type,stride,data from matrix order by media_id"))
         SQL_FATAL(exec)
 
-      const int progressStep = 50000; // descriptors
+      const int progressStep = 50000;  // descriptors
       uint64_t nextProgress = progressStep;
 
-      uint32_t numDesc = 0; // descriptor position of id
-      uint32_t lastId = 0;  // verify sequential and unique id
+      uint32_t numDesc = 0;  // descriptor position of id
+      uint32_t lastId = 0;   // verify sequential and unique id
 
       while (query.next()) {
         currentRow++;
@@ -263,8 +260,7 @@ Index* CvFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
   for (uint32_t id : values) {
     cv::Mat desc = descriptorsForMediaId(id);
     if (desc.rows > 0) {
-      for (int j = 0; j < desc.rows; j++)
-        chunk->_descriptors.push_back(desc.row(j));
+      for (int j = 0; j < desc.rows; j++) chunk->_descriptors.push_back(desc.row(j));
       chunk->_idMap[id] = numDesc;
       chunk->_indexMap[numDesc] = id;
       numDesc += uint(desc.rows);
@@ -283,8 +279,7 @@ Index* CvFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
 void CvFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
   if (!_index) return;
 
-  if (DBHelper::isCacheFileStale(db, cacheFile(cachePath)))
-    saveIndex(cachePath);
+  if (DBHelper::isCacheFileStale(db, cacheFile(cachePath))) saveIndex(cachePath);
 }
 
 void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
@@ -310,8 +305,7 @@ void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
 
   // verify descriptor size
   if (_descriptors.cols > 0)
-    Q_ASSERT(descSize ==
-             int(_descriptors.elemSize() * uint(_descriptors.cols)));
+    Q_ASSERT(descSize == int(_descriptors.elemSize() * uint(_descriptors.cols)));
 
   int bytesPerBucket = 4096;
   int descPerBucket = bytesPerBucket / descSize;
@@ -332,23 +326,22 @@ void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
     _index->build(_descriptors, addedDescriptors, indexParams);
   } else {
     delete _index;
-    //_index = new cv::flann::Index(_descriptors, indexParams);
+    //_index = new cv::flann::Index(_descriptors, indexParams); // non-incremental build
     _index = new cv::flann::Index;
 
     // build the index incrementally, it is a quite bit faster
     // somehow, and does not seem to affect accuracy
     for (int i = 0; i < _descriptors.rows; i += 10000) {
       int upper = std::min(i + 10000, _descriptors.rows);
-      _index->build(_descriptors.rowRange(0, upper),
-                    _descriptors.rowRange(i, upper), indexParams);
-      qInfo("adding descriptors:<PL> %d%%", int(int64_t(i)*100/_descriptors.rows));
+      _index->build(_descriptors.rowRange(0, upper), _descriptors.rowRange(i, upper), indexParams);
+      qInfo("adding descriptors:<PL> %d%%", int(int64_t(i) * 100 / _descriptors.rows));
     }
   }
 
   ms = QDateTime::currentMSecsSinceEpoch() - ms;
 
-  qDebug("%d descriptors, %d added, %dms %.2fus/desc", _descriptors.rows,
-         addedDescriptors.rows, int(ms), ms * 1000.0 / _descriptors.rows);
+  qDebug("%d descriptors, %d added, %dms %.2fus/desc", _descriptors.rows, addedDescriptors.rows,
+         int(ms), ms * 1000.0 / _descriptors.rows);
 }
 
 void CvFeaturesIndex::loadIndex(const QString& path) {
@@ -379,47 +372,35 @@ void CvFeaturesIndex::saveIndex(const QString& cachePath) {
   qInfo() << "<PL>marker...     ";
   writeFileAtomically(cacheFile(cachePath), [](QFile& f) {
     QByteArray mark("this file indicates index was saved successfully");
-    if (mark.length() != f.write(mark))
-      throw f.errorString();
+    if (mark.length() != f.write(mark)) throw f.errorString();
   });
   qInfo() << "<PL>complete      ";
 }
 
 cv::Mat CvFeaturesIndex::descriptorsForMediaId(uint32_t mediaId) const {
-  cv::Mat descriptors;
-
   auto it = _idMap.find(mediaId);
-  if (it != _idMap.end()) {
-    int firstRow = int(it->second);
-    it++;
-    int lastRow;
-    Q_ASSERT(it != _idMap.end());  // not possible since trailer is added
-    // if (it != _idMap.end())
-    lastRow = int(it->second);
-    // else
-    //    lastRow = _descriptors.rows;
+  if (it == _idMap.end()) return cv::Mat();
 
-    Q_ASSERT(it->first > mediaId);
-    Q_ASSERT(firstRow < lastRow);
-    Q_ASSERT(lastRow - firstRow < 1000);  // s.b. < max descriptors per item
-    Q_ASSERT(lastRow <= _descriptors.rows);
-    Q_ASSERT(firstRow < _descriptors.rows);
+  int firstRow = int(it->second);
+  it++;
+  Q_ASSERT(it != _idMap.end());  // not possible since trailer is added
+  int lastRow = int(it->second);
 
-    descriptors = _descriptors.rowRange(firstRow, lastRow);
-  }
+  Q_ASSERT(it->first > mediaId);
+  Q_ASSERT(firstRow < lastRow);
+  Q_ASSERT(lastRow <= _descriptors.rows);
+  Q_ASSERT(firstRow < _descriptors.rows);
 
-  return descriptors;
+  return _descriptors.rowRange(firstRow, lastRow);
 }
 
-QVector<Index::Match> CvFeaturesIndex::find(const Media& needle,
-                                            const SearchParams& params) {
+QVector<Index::Match> CvFeaturesIndex::find(const Media& needle, const SearchParams& params) {
   uint64_t then = nanoTime();
   const uint64_t start = then;
 
   cv::Mat descriptors = needle.keyPointDescriptors();
 
-  if (descriptors.rows <= 0)
-    descriptors = descriptorsForMediaId(uint32_t(needle.id()));
+  if (descriptors.rows <= 0) descriptors = descriptorsForMediaId(uint32_t(needle.id()));
 
   if (descriptors.rows <= 0) {
     qWarning("needle has no descriptors");
@@ -548,7 +529,6 @@ QVector<Index::Match> CvFeaturesIndex::find(const Media& needle,
     auto& match = matches[mediaId];
 
     if (match.count > 0) {
-
       // average score
       // int score = match.totalScore / match.count;
 
@@ -574,9 +554,8 @@ QVector<Index::Match> CvFeaturesIndex::find(const Media& needle,
 
   now = nanoTime();
   if (params.verbose)
-    qInfo("found=%lld load=%.1fms fwd=%.2fms rev=%.2fms total=%.1fms",
-          results.count(), nsLoad / 1000000.0, nsFwd / 1000000.0,
-          nsRev / 1000000.0, (now - start) / 1000000.0);
+    qInfo("found=%lld load=%.1fms fwd=%.2fms rev=%.2fms total=%.1fms", results.count(),
+          nsLoad / 1000000.0, nsFwd / 1000000.0, nsRev / 1000000.0, (now - start) / 1000000.0);
 
   return results;
 }
