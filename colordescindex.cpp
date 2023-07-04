@@ -124,11 +124,7 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath, const QStr
   if (!query.next()) SQL_FATAL(next);
 
   _count = query.value(0).toInt();
-
-  if (_count == 0) {
-    qWarning("empty index");
-    return;
-  }
+  if (_count == 0) return;
 
   // allocate using malloc so we can use realloc() later
   _descriptors = strict_malloc(_descriptors, _count);
