@@ -124,7 +124,10 @@ void CvFeaturesIndex::add(const MediaGroup& media) {
 
   for (const Media& m : media) {
     const KeyPointDescriptors& desc = m.keyPointDescriptors();
-
+    if (desc.rows <= 0) {
+      qWarning() << "no descriptors for" << m.path();
+      continue;
+    }
     uint32_t mid = uint32_t(m.id());
     uint32_t numDesc = uint32_t(_descriptors.rows);
     _idMap[mid] = numDesc;
