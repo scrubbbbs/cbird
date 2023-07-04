@@ -88,13 +88,11 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath, const QStrin
 
       if (!query.exec(hashQuery())) SQL_FATAL(exec);
 
-      if (!query.first()) qInfo("empty database");
-
       int chunkSize = 1024;
       int capacity = 0;
       int i = 0;
 
-      do {
+      while (query.next()) {
         if (i % chunkSize == 0) {
           capacity += chunkSize;
 
@@ -109,7 +107,7 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath, const QStrin
         _hashes[i] = uint64_t(query.value(1).toLongLong());
         i++;
 
-      } while (query.next());
+      }
 
       _numHashes = i;
     }
