@@ -1161,14 +1161,20 @@ uint64_t histogram64(const cv::Mat& cvImg)
 */
 
 bool compare(const cv::Mat& a, const cv::Mat& b) {
-  if (a.depth() != b.depth() || a.channels() != b.channels()) return false;
-
-  if (a.rows != b.rows || a.cols != b.cols) return false;
+  if (a.depth() != b.depth() || a.channels() != b.channels()) {
+    qDebug() << "fail: depth or channels";
+    return false;
+  }
+  if (a.rows != b.rows || a.cols != b.cols) {
+    qDebug() << "fail: dimensions";
+    return false;
+  }
 
   // cannot pass empty array through countNonZero()
   if (a.empty() || b.empty()) {
     if (a.empty() && b.empty()) return true;
 
+    qDebug()  << "fail: a or b is empty";
     return false;
   }
 
@@ -1182,11 +1188,16 @@ bool compare(const cv::Mat& a, const cv::Mat& b) {
     Q_ASSERT(planesA.size() == planesB.size());
 
     for (size_t i = 0; i < planesA.size(); i++)
-      if (0 != cv::countNonZero(planesA[i] != planesB[i])) return false;
-
+      if (0 != cv::countNonZero(planesA[i] != planesB[i])) {
+        qDebug() << "fail: plane" << i;
+        return false;
+      }
     return true;
-  } else
-    return 0 == cv::countNonZero(a != b);
+  } else if (0 != cv::countNonZero(a != b)) {
+    qDebug() << "fail: grayscale plane";
+    return false;
+  }
+  return true;
 }
 
 QString cvMatTypeName(int type) {
