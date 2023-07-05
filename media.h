@@ -30,6 +30,7 @@ struct DMatch;
 template<typename _Tp> class Rect_;
 typedef Rect_<int> Rect;
 }
+#include "opencv2/core.hpp" // cv::Mat
 
 class Media;
 class VideoContext;
@@ -496,16 +497,19 @@ class Media {
 
   /// @section index processing
   // fixme: should be moved into index subclasses, but some have multiple uses
-  void makeKeyPoints(const cv::Mat& cvImg, int numKeyPoints);  // *FeaturesIndex, TemplateMatcher
-  void makeKeyPointDescriptors(const cv::Mat& cvImg);          // CvFeaturesIndex
-  void makeKeyPointHashes(const cv::Mat& cvImg);               // DctFeaturesIndex
-  void makeVideoIndex(VideoContext& video, int threshold);     // DctVideoIndex
+  void makeKeyPoints(const cv::Mat& cvImg, int numKeyPoints, KeyPointList &outKeypoints) const;  // *FeaturesIndex, TemplateMatcher
+  void makeKeyPointDescriptors(const cv::Mat& cvImg, KeyPointList &keyPoints,
+                               KeyPointDescriptors& outDescriptors) const;  // CvFeaturesIndex
+  void makeKeyPointHashes(const cv::Mat& cvImg, const KeyPointList& keyPoints,
+                          KeyPointHashList& outHashes) const;              // DctFeaturesIndex
+  void makeVideoIndex(VideoContext& video, int threshold,
+                      VideoIndex& outIndex) const;  // DctVideoIndex
 
-  const KeyPointList& keyPoints() const;
-  const KeyPointDescriptors& keyPointDescriptors() const;
-  const KeyPointRectList& keyPointRects() const;
-  const KeyPointHashList& keyPointHashes() const;
-  const VideoIndex& videoIndex() const;
+//  const KeyPointList& keyPoints() const;
+  const KeyPointDescriptors& keyPointDescriptors() const { return _descriptors; }
+//  const KeyPointRectList& keyPointRects() const;
+  const KeyPointHashList& keyPointHashes() const { return _kpHashes; }
+  const VideoIndex& videoIndex() const { return _videoIndex; }
 
   /**
    * compose a path to a resource that is indirect (e.g. inside an
@@ -561,14 +565,15 @@ class Media {
   /// get list of property names and attributes
   static QList<QPair<const char*, const char*> > propertyList();
 
+  void setKeyPointDescriptors(const KeyPointDescriptors& desc) { _descriptors = desc; }
+  void setKeyPointHashes(const KeyPointHashList& hashes) { _kpHashes = hashes; }
+  void setVideoIndex(const VideoIndex& index) { _videoIndex = index; }
+
  private:
   void setDefaults();
   void imageHash();
 //  void setKeyPoints(const KeyPointList& keyPoints);
-//  void setKeyPointDescriptors(const KeyPointDescriptors& desc);
 //  void setKeyPointRects(const KeyPointRectList& rects);
-//  void setKeyPointHashes(const KeyPointHashList& hashes);
-//  void setVideoIndex(const VideoIndex& index) { _videoIndex = index; }
 
   int _id;
   int _type;
@@ -596,10 +601,7 @@ class Media {
   QString _uid;
   QStringHash _attrs;
 
-  class SharedData;
-  SharedData& shared();
-  const SharedData& shared() const;
-  const SharedData& constShared() const { return shared(); }
-
-  std::shared_ptr<SharedData> __sharedData;
+  KeyPointHashList _kpHashes;
+  KeyPointDescriptors _descriptors;
+  VideoIndex _videoIndex;
 };

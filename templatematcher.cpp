@@ -24,17 +24,16 @@
 #include "hamm.h"
 #include "index.h"
 #include "media.h"
-#include "profile.h"
-
 #include "opencv2/features2d.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/video/tracking.hpp"  // estimateRigidTransform
+#include "profile.h"
 
 TemplateMatcher::TemplateMatcher() {}
 
 TemplateMatcher::~TemplateMatcher() {}
 
-void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group, const SearchParams& params) {
+void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const SearchParams& params) {
   if (group.count() <= 0) return;
 
   uint64_t then = nanoTime();
@@ -104,14 +103,19 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group, const SearchPar
 
   cv::Mat tmplImg;
   qImageToCvImg(qImg, tmplImg);
-  tmplMedia.makeKeyPoints(tmplImg, params.needleFeatures);
-  tmplMedia.makeKeyPointDescriptors(tmplImg);
+
+  // Media needle = tmplMedia;
+
+  KeyPointList tmplKeypoints;
+  KeyPointDescriptors tmplDescriptors;
+  tmplMedia.makeKeyPoints(tmplImg, params.needleFeatures, tmplKeypoints);
+  tmplMedia.makeKeyPointDescriptors(tmplImg, tmplKeypoints, tmplDescriptors);
 
   if (params.verbose)
-    qInfo("query kp=%d descriptors=%d (max %d)", int(tmplMedia.keyPoints().size()),
-          int(tmplMedia.keyPointDescriptors().cols), params.needleFeatures);
+    qInfo("query kp=%d descriptors=%d (max %d)", int(tmplKeypoints.size()),
+          int(tmplDescriptors.cols), params.needleFeatures);
 
-  if (tmplMedia.keyPointDescriptors().cols <= 0) {
+  if (tmplDescriptors.cols <= 0) {
     qWarning() << "no keypoints in template:" << tmplMedia.path();
     return;
   }
@@ -121,7 +125,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group, const SearchPar
   cv::BFMatcher matcher(cv::NORM_HAMMING, true);
   std::vector<cv::Mat> haystack;
 
-  haystack.push_back(tmplMedia.keyPointDescriptors());
+  haystack.push_back(tmplDescriptors);
   matcher.add(haystack);
 
   // similarity hash for matching good candidates
@@ -183,42 +187,44 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group, const SearchPar
 
     PROFILE(timing.targetResize);
 
-    m.makeKeyPoints(img, params.haystackFeatures);
+    KeyPointList queryKeypoints;
+    m.makeKeyPoints(img, params.haystackFeatures, queryKeypoints);
 
     PROFILE(timing.targetKeyPoints);
 
-    m.makeKeyPointDescriptors(img);
+    KeyPointDescriptors queryDescriptors;
+    m.makeKeyPointDescriptors(img, queryKeypoints, queryDescriptors);
 
     PROFILE(timing.targetFeatures);
 
     if (params.verbose)
       qInfo("(%d) candidate scale=%.2f kp=%d descriptors=%d (max %d)", i, double(candScale),
-            int(m.keyPoints().size()), int(m.keyPointDescriptors().rows), params.haystackFeatures);
+            int(queryKeypoints.size()), int(queryDescriptors.rows), params.haystackFeatures);
 
-    if (m.keyPointDescriptors().cols <= 0) {
-      if (params.verbose) qInfo("(%d): no keypoints in candidate", i);
+    if (queryDescriptors.cols <= 0) {
+      if (params.verbose) qWarning("(%d): no keypoints in candidate", i);
       continue;
     }
 
     // match descriptors in the template and candidate
     std::vector<std::vector<cv::DMatch> > dmatch;
-    matcher.radiusMatch(m.keyPointDescriptors(), dmatch, params.cvThresh);
+    matcher.radiusMatch(queryDescriptors, dmatch, params.cvThresh);
 
     PROFILE(timing.radiusMatch);
 
-    int score = 0;
+    //    int score = 0;
     int nMatches = 0;
 
     MatchList matches;
 
     for (size_t k = 0; k < dmatch.size(); k++)
       for (size_t j = 0; j < dmatch[k].size(); j++) {
-        int distance = int(dmatch[k][j].distance);
+        //        int distance = int(dmatch[k][j].distance);
 
         matches.push_back(dmatch[k][j]);
 
         nMatches++;
-        score += distance;
+        //        score += distance;
       }
 
     if (nMatches <= 0) {
@@ -229,8 +235,8 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group, const SearchPar
     }
 
     // get the x,y coordinates of each match in the target and candidate
-    const KeyPointList& trainKp = tmplMedia.keyPoints();
-    const KeyPointList& queryKp = m.keyPoints();
+    const KeyPointList& trainKp = tmplKeypoints;
+    const KeyPointList& queryKp = queryKeypoints;
 
     std::vector<cv::Point2f> tmplPoints, matchPoints;
 
@@ -346,7 +352,7 @@ void TemplateMatcher::match(Media& tmplMedia, MediaGroup& group, const SearchPar
 
     m.setScore(dist);
 
-    if (dist < params.dctThresh)
+    if (dist < params.tmThresh)
       good.append(m);
     else {
       if (params.verbose) qInfo("(%d): dct hash on transform doesn't match: score %d", i, dist);

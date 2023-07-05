@@ -28,7 +28,7 @@
 #include "qtutil.h"
 #include "videocontext.h"
 
-#include "opencv2/core.hpp"
+#include "opencv2/features2d.hpp"
 #include "quazip/quazip.h"
 
 Scanner::Scanner() {
@@ -610,11 +610,20 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
 
     if (_params.algos & (1 << SearchParams::AlgoDCTFeatures | 1 << SearchParams::AlgoCVFeatures)) {
       sizeLongestSide(cvImg, _params.resizeLongestSide);
-      m.makeKeyPoints(cvImg, _params.numFeatures);
 
-      if (_params.algos & (1 << SearchParams::AlgoCVFeatures)) m.makeKeyPointDescriptors(cvImg);
+      KeyPointList keyPoints;
+      m.makeKeyPoints(cvImg, _params.numFeatures, keyPoints);
 
-      if (_params.algos & (1 << SearchParams::AlgoDCTFeatures)) m.makeKeyPointHashes(cvImg);
+      KeyPointDescriptors kpDescriptors;
+      if (_params.algos & (1 << SearchParams::AlgoCVFeatures)) {
+        m.makeKeyPointDescriptors(cvImg, keyPoints, kpDescriptors);
+        m.setKeyPointDescriptors(kpDescriptors);
+      }
+      if (_params.algos & (1 << SearchParams::AlgoDCTFeatures)) {
+        KeyPointHashList kpHashes;
+        m.makeKeyPointHashes(cvImg, keyPoints, kpHashes);
+        m.setKeyPointHashes(kpHashes);
+      }
     }
 
     result.ok = true;
@@ -812,14 +821,17 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
   result.media = Media(result.path, Media::TypeVideo, 0, 0, md5, 0);
   Media& m = result.media;
 
+  m.setWidth(video->width());
+  m.setHeight(video->height());
+
   if (!(_params.algos & (1 << SearchParams::AlgoVideo))) {
     // qWarning("video index disabled, storing md5 and metadata");
-    m.setWidth(video->width());
-    m.setHeight(video->height());
   } else {
     int64_t start = QDateTime::currentMSecsSinceEpoch();
 
-    m.makeVideoIndex(*video, _params.videoThreshold);
+    VideoIndex index;
+    m.makeVideoIndex(*video, _params.videoThreshold, index);
+    m.setVideoIndex(index);
 
     int64_t end = QDateTime::currentMSecsSinceEpoch();
 

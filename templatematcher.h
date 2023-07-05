@@ -33,7 +33,7 @@ class TemplateMatcher {
   /**
    * High-resolution template matching
    * @param tmplMedia template image
-   * @param group candidate images
+   * @param group candidate images, will be modified with match information (e.g. transform())
    * @param params
    *
    * For validating results from fuzzy matchers, very slow but reliable.
@@ -50,7 +50,7 @@ class TemplateMatcher {
    *
    * @note results are cached, so long as instance is not destructed
    */
-  void match(Media& tmplMedia, MediaGroup& group, const SearchParams& params);
+  void match(const Media& tmplMedia, MediaGroup& group, const SearchParams& params);
 
   // todo: cache load/save/update
 

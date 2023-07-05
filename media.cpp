@@ -32,15 +32,6 @@
 
 #include "opencv2/features2d/features2d.hpp"
 
-class Media::SharedData {
- public:
-  KeyPointList keyPoints;
-  KeyPointDescriptors descriptors;
-  KeyPointRectList kpRects;
-  KeyPointHashList kpHashes;
-  VideoIndex videoIndex;
-};
-
 void Media::setDefaults() {
   _id = 0;
   _width = -1;
@@ -52,7 +43,6 @@ void Media::setDefaults() {
   _score = -1;
   _position = -1;
   _type = TypeImage;
-  __sharedData.reset(new SharedData);
 }
 
 Media::Media(const QImage& qImg, int originalSize) {
@@ -99,10 +89,6 @@ void Media::imageHash() {
 // void Media::setKeyPointHashes(const KeyPointHashList &hashes) {
 //   shared().kpHashes = hashes;
 // }
-
-Media::SharedData& Media::shared() { return *(__sharedData.get()); }
-
-const Media::SharedData& Media::shared() const { return *(__sharedData.get()); }
 
 Media::Media(const QString& path, int type, int width, int height) {
   setDefaults();
@@ -670,8 +656,8 @@ size_t Media::memSize() const {
   total += videoIndex().memSize();
   total += CVMAT_SIZE(keyPointDescriptors());
 
-  total += keyPoints().capacity() * sizeof(cv::KeyPoint);
-  total += keyPointRects().capacity() * sizeof(cv::Rect);
+//  total += keyPoints().capacity() * sizeof(cv::KeyPoint);
+//  total += keyPointRects().capacity() * sizeof(cv::Rect);
   total += keyPointHashes().capacity() * sizeof(uint64_t);
 
   total += size_t(_img.bytesPerLine() * _img.height());
@@ -681,37 +667,26 @@ size_t Media::memSize() const {
   return total;
 }
 
-void Media::makeKeyPoints(const cv::Mat& cvImg, int numKeyPoints) {
+void Media::makeKeyPoints(const cv::Mat& cvImg, int numKeyPoints,
+                          KeyPointList& outKeypoints) const {
   cv::OrbFeatureDetector detector(numKeyPoints, 1.2f, 12, 31, 0, 2,
                                   cv::OrbFeatureDetector::HARRIS_SCORE, 31);
 
-  auto& keyPoints = shared().keyPoints;
-  keyPoints.clear();
-
   // todo: use mask to exclude borders/watermarks etc
-  detector.detect(cvImg, keyPoints);
+  detector.detect(cvImg, outKeypoints);
 }
 
-void Media::makeKeyPointDescriptors(const cv::Mat& cvImg) {
+void Media::makeKeyPointDescriptors(const cv::Mat& cvImg, KeyPointList& keyPoints,
+                                    KeyPointDescriptors& outDescriptors) const {
   cv::OrbDescriptorExtractor extractor;
-
-  auto& keyPoints = shared().keyPoints;
-  auto& descriptors = shared().descriptors;
-
-  descriptors.empty();
-
-  extractor.compute(cvImg, keyPoints, descriptors);
+  extractor.compute(cvImg, keyPoints, outDescriptors);
 }
 
-void Media::makeKeyPointHashes(const cv::Mat& cvImg) {
-  const auto& points = constShared().keyPoints;
-  auto& rects = shared().kpRects;
-  auto& hashes = shared().kpHashes;
+void Media::makeKeyPointHashes(const cv::Mat& cvImg, const KeyPointList& keyPoints,
+                               KeyPointHashList& outHashes) const {
+  KeyPointRectList rects;
 
-  rects.clear();
-  hashes.clear();
-
-  for (const cv::KeyPoint& kp : points) {
+  for (const cv::KeyPoint& kp : keyPoints) {
     float size = kp.size;
 
     // printf("kp size=%.2f octave=%d class=%d\n", size, kp.octave,
@@ -753,12 +728,12 @@ void Media::makeKeyPointHashes(const cv::Mat& cvImg) {
         }
     */
 
-    hashes.push_back(hash);
+    outHashes.push_back(hash);
   }
 }
 
-void Media::makeVideoIndex(VideoContext& video, int threshold) {
-  auto& index = shared().videoIndex;
+void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIndex) const {
+  auto& index = outIndex;
   index.hashes.clear();
   index.frames.clear();
 
@@ -776,9 +751,6 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
   cv::Mat img;
 
   const int totalFrames = int(video.metadata().frameRate * video.metadata().duration);
-
-  _width = video.width();
-  _height = video.height();
 
   const QString cwd = QFileInfo(QDir::current().absolutePath()).absoluteFilePath();
   QString path = video.path();
@@ -848,16 +820,6 @@ void Media::makeVideoIndex(VideoContext& video, int threshold) {
   qDebug("%s nframes=%d near=%d filt=%d corrupt=%d", qUtf8Printable(video.path()), numFrames,
          nearFrames, filteredFrames, corruptFrames);
 }
-
-const KeyPointList& Media::keyPoints() const { return shared().keyPoints; }
-
-const KeyPointDescriptors& Media::keyPointDescriptors() const { return shared().descriptors; }
-
-const KeyPointRectList& Media::keyPointRects() const { return shared().kpRects; }
-
-const KeyPointHashList& Media::keyPointHashes() const { return shared().kpHashes; }
-
-const VideoIndex& Media::videoIndex() const { return shared().videoIndex; }
 
 void VideoIndex::save(const QString& file) const {
   MessageContext ctx(file);
