@@ -64,6 +64,8 @@ void TestIndexBase::baseCleanupTestCase() {
   delete _index;
   delete _mediaProcessed;
   Database::disconnectAll();
+  QThread::msleep(100);
+  qApp->processEvents();
   QVERIFY(dbDir.removeRecursively());
   QVERIFY(!dbDir.exists());
 }

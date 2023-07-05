@@ -1,9 +1,5 @@
 include("pre.pri")
 
-#QT += sql
-
-LIBS += $$LIBS_OPENCV
-
 FILES += cvutil ioutil
 
 contains(DEFINES, ENABLE_DEPRECATED) {

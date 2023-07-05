@@ -34,6 +34,9 @@ cp -au cbird.exe "$PKG_DIR/"
 #  cp -auv "$cap" "$PKG_DIR/termcap/"
 #done
 
+# for some reason loop below won't pickup zlib
+cp -au "$MXE_DIR/usr/$MXE_TARGET/bin/zlib1.dll" "$PKG_DIR/"
+
 for exe in cbird.exe; do
 #for exe in cbird.exe ffmpeg.exe ffplay.exe ffprobe.exe; do
     

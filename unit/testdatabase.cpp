@@ -124,7 +124,8 @@ void TestDatabase::testMove() {
 
   // make dir
   qWarning("mkdir %s", qPrintable(dstDir));
-  QVERIFY(0 == mkdir(qPrintable(dstDir), 0700));
+  QVERIFY(true == QDir().mkpath(dstDir));
+  //QVERIFY(0 == mkdir(qPrintable(dstDir), 0700));
 
   // move file
   QString dstPath = dstDir + "/" + dstName;
@@ -223,8 +224,11 @@ void TestDatabase::testRenameZip() {
   QString srcPath, otherPath;
   existingPaths(true, srcPath, otherPath);
 
-  QString zipPath, childPath;
-  Media::archivePaths(srcPath, zipPath, childPath);
+  QString zipPath;
+  Media::archivePaths(srcPath, &zipPath);
+
+  qDebug() << srcPath << otherPath << zipPath;
+
   const auto zipContents = _database->mediaWithPathLike(zipPath+"%");
   QVERIFY(zipContents.count() > 0);
 

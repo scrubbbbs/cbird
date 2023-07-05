@@ -20,7 +20,7 @@ CONFIG += precompile_header
 PRECOMPILED_HEADER=prefix.h
 precompile_header {
 
-    win32 {
+    win32-deprecated {
         # pch only works on windows if .h is in the same dir as .gch,
         # since we change OBJECTS_DIR, gch is in the wrong dir
         message("win32 precompiled header hack")

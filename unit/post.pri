@@ -19,4 +19,3 @@ for (BASE, FILES) {
         }
     }
 }
-

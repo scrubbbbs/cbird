@@ -1,81 +1,80 @@
 
 #include "testindexbase.h"
 #include "dctvideoindex.h"
+#include "database.h"
+#include "scanner.h"
 
 #include <QtTest/QtTest>
 
 class TestDctVideoIndex : public TestIndexBase {
   Q_OBJECT
   SearchParams _params;
+  const int numVideos=5;
  private Q_SLOTS:
   void initTestCase() {
     baseInitTestCase(new DctVideoIndex, "xiph-video");
+    // note: parameters tuned to match short test videos
     _params.algo = SearchParams::AlgoVideo;
     _params.filterSelf = false;
     _params.dctThresh = 4;
     _params.minFramesMatched = 10;
-    _params.minFramesNear = 50;
+    _params.minFramesNear = 45;
     _params.verbose = true;
     _params.skipFrames = 0;
-    _params.queryTypes = {Media::TypeVideo};
+    _params.queryTypes = Media::TypeVideo;
   }
   void cleanupTestCase() { baseCleanupTestCase(); }
 
-  void testDefaults();
-  //void testLoad();
-  void testAddRemove() { baseTestAddRemove(_params, 5); }
+  void testDefaults() { baseTestDefaults(new DctVideoIndex); }
+  void testEmpty() { baseTestEmpty(new DctVideoIndex); }
+  void testAddRemove() { baseTestAddRemove(_params, numVideos); }
+  void testMemoryUsage();
+  void testLoad();
 };
 
-void TestDctVideoIndex::testDefaults() {
-  DctVideoIndex index;
-
-  QVERIFY(!index.isLoaded());
-  QCOMPARE(index.memoryUsage(), (size_t)0);
-  QCOMPARE(index.count(), 0);
+void TestDctVideoIndex::testMemoryUsage() {
+  // 8 bytes per hash, plus 4 bytes index
+  QVERIFY(_index->memoryUsage() > 0);
 }
-/*
+
 void TestDctVideoIndex::testLoad() {
   MediaGroupList results = _database->similar(_params);
 
-  QVERIFY(_index->memoryUsage() > 0);
+  QVERIFY(results.count() >= numVideos);
 
-  // ideally we would get 40 sets of 5, but that isn't going
-  // to happen since the search is imprecise.
-  QVERIFY(results.count() <= 40);
+  // look up every path, ignoring _params.queryTypes
+  // this is fine since image->video search is supported
+  for (const QString& path : _database->indexedFiles()) {
+    Media needle;
+    const QString suffix = QFileInfo(path).suffix();
+    if (_scanner->videoTypes().contains(suffix))
+      needle = _scanner->processVideoFile(path).media;
+    else if (_scanner->imageTypes().contains(suffix))
+      needle = _scanner->processImageFile(path).media;
+    else
+      QEXPECT_FAIL("unsupported format", qUtf8Printable(path), Continue);
 
-  // the features match some sets will not match completely,
-  // not sure right now how to spec this. by definition
-  // it must be > 1
-  for (const MediaGroup& group : results) QVERIFY(group.count() > 1);
+    QVERIFY(_params.mediaReady(needle));
 
-  // look up every path and we should get the 5 that matched it,
-  // that includes matching itself. much slower since we
-  // are processing the file as the scanner would
+    const MediaGroup group = _database->similarTo(needle, _params);
 
-  // note: QSet uses randomized hashing, sort it so we
-  // get consistent results
-  QStringList indexed = _database->indexedFiles().values();
-  std::sort(indexed.begin(), indexed.end());
+    // image->video search misses a few frames in this data set
+    if (needle.type() == Media::TypeImage && group.count() == 1) {
+      // check it matched the right video by file prefix
+      auto parts = needle.completeBaseName().split(lc('_'));
+      parts.pop_back(); // remove frame number
+      const QString queryPrefix = parts.join(lc('_'));
 
-  for (const QString& path : indexed) {
-    QVERIFY(QFileInfo(path).exists());
-
-    if (!_scanner->imageTypes().contains(QFileInfo(path).suffix().toLower())) {
-      qWarning("skip non-image: %s\n", qPrintable(path));
-      continue;
+      const QString resultPrefix = group[0].completeBaseName();
+      QCOMPARE(queryPrefix,resultPrefix);
     }
 
-    // we won't neccessarily get keypoints. maybe if image is too small
-    Media needle = _scanner->processImageFile(path).media;
-    if (needle.keyPointHashes().size() > 0) {
-      // we won't get a match for every needle since maybe it never
-      // stored any keypoints in the db
-      MediaGroup group = _database->similarTo(needle, _params);
-      if (group.count() <= 1) printf("no matches: %s\n", qPrintable(path));
-    } else
-      printf("no keypoints: %s\n", qPrintable(path));
+    if (needle.type()==Media::TypeVideo) {
+      QVERIFY(group.count()==1);
+      QVERIFY(group[0].path() == needle.path());
+    }
   }
 }
-*/
+
 QTEST_MAIN(TestDctVideoIndex)
 #include "testdctvideoindex.moc"
