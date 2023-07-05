@@ -118,8 +118,6 @@ size_t CvFeaturesIndex::memoryUsage() const {
 }
 
 void CvFeaturesIndex::add(const MediaGroup& media) {
-  if (!_index) return;
-
   cv::Mat addedDescriptors;
 
   for (const Media& m : media) {
@@ -143,7 +141,8 @@ void CvFeaturesIndex::add(const MediaGroup& media) {
     }
   }
 
-  buildIndex(addedDescriptors);
+  if (addedDescriptors.rows > 0)
+    buildIndex(addedDescriptors);
 }
 
 void CvFeaturesIndex::remove(const QVector<int>& ids) {
@@ -239,7 +238,8 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
       Q_ASSERT(_descriptors.rows == int(numDesc));
 
       // build flann index
-      buildIndex(cv::Mat());
+      auto addedDescriptors = cv::Mat();
+      buildIndex(addedDescriptors);
 
       saveIndex(cachePath);
     }
@@ -274,7 +274,8 @@ Index* CvFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
 
   Q_ASSERT(chunk->_descriptors.rows == int(numDesc));
 
-  chunk->buildIndex(cv::Mat());
+  auto addedDescriptors = cv::Mat();
+  chunk->buildIndex(addedDescriptors);
 
   return chunk;
 }
@@ -285,8 +286,18 @@ void CvFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
   if (DBHelper::isCacheFileStale(db, cacheFile(cachePath))) saveIndex(cachePath);
 }
 
-void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
+void CvFeaturesIndex::buildIndex(cv::Mat& addedDescriptors) {
   qint64 ms = QDateTime::currentMSecsSinceEpoch();
+
+  if (_descriptors.rows <= 0) {
+    _descriptors = addedDescriptors;
+    addedDescriptors = cv::Mat();
+  }
+
+  if (_descriptors.rows <= 0) {
+    qWarning("no descriptors");
+    return;
+  }
 
   //
   // The bucket size roughly determines the query
@@ -357,7 +368,8 @@ void CvFeaturesIndex::loadIndex(const QString& path) {
   uint64_t nsLoad = now - then;
   then = now;
 
-  buildIndex(cv::Mat());
+  auto addedDescriptors = cv::Mat();
+  buildIndex(addedDescriptors);
 
   now = nanoTime();
   uint64_t nsBuild = now - then;
@@ -407,13 +419,15 @@ QVector<Index::Match> CvFeaturesIndex::find(const Media& needle, const SearchPar
 
   if (descriptors.rows <= 0) {
     qWarning("needle has no descriptors");
-    return QVector<Index::Match>();
+    return {};
   }
 
   if (_descriptors.rows <= 0) {
     qWarning("empty index");
-    return QVector<Index::Match>();
+    return {};
   }
+
+  Q_ASSERT(_index != nullptr); // not possible if we have descriptors
 
   // if we copied the features from db, we will have
   // a lot more than we need, reduce them while trying

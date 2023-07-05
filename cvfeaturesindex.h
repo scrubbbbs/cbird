@@ -60,7 +60,7 @@ class CvFeaturesIndex : public Index {
   Index* slice(const QSet<uint32_t>& mediaIds) const override;
 
  private:
-  void buildIndex(const cv::Mat& addedDescriptors);
+  void buildIndex(cv::Mat& addedDescriptors);
   void loadIndex(const QString& path);
   void saveIndex(const QString& path);
 
