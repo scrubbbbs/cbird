@@ -1,0 +1,23 @@
+diff -ru opencv-2.4.13.7/modules/highgui/src/cap_avfoundation_mac.mm opencv-2.4.13.7.patched/modules/highgui/src/cap_avfoundation_mac.mm
+--- opencv-2.4.13.7/modules/highgui/src/cap_avfoundation_mac.mm	2018-07-02 05:41:56.000000000 -0700
++++ opencv-2.4.13.7.patched/modules/highgui/src/cap_avfoundation_mac.mm	2023-06-30 10:11:03.000000000 -0700
+@@ -43,6 +43,7 @@
+ #include "precomp.hpp"
+ #include "opencv2/imgproc.hpp"
+ #include <stdio.h>
++#define NS_FORMAT_ARGUMENT(x)
+ #import <AVFoundation/AVFoundation.h>
+ 
+ /********************** Declaration of class headers ************************/
+diff -ru opencv-2.4.13.7/modules/highgui/src/window_cocoa.mm opencv-2.4.13.7.patched/modules/highgui/src/window_cocoa.mm
+--- opencv-2.4.13.7/modules/highgui/src/window_cocoa.mm	2018-07-02 05:41:56.000000000 -0700
++++ opencv-2.4.13.7.patched/modules/highgui/src/window_cocoa.mm	2023-06-30 10:08:48.000000000 -0700
+@@ -69,6 +69,7 @@
+ //*** end IphoneOS Stubs ***/
+ #else
+ 
++#define NS_FORMAT_ARGUMENT(x)
+ #import <Cocoa/Cocoa.h>
+ 
+ #include <iostream>
+Only in opencv-2.4.13.7.patched/modules/python/src2: hdr_parser.pyc

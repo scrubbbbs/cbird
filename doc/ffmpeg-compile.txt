@@ -1,7 +1,6 @@
 
 apt install git build-essential nasm mercurial cmake cmake-curses-gui libspeex-dev libvpx-dev libfreetype-dev libfontconfig1-dev libxm2-dev libssl-dev libfribidi-dev libsdl2-dev
 
-
 git clone https://git.videolan.org/git/x264.git
 ./configure --enable-shared --chroma-format=all
 

@@ -1,8 +1,12 @@
 cbird
 cbird.exe
+cbird_resource.rc
 _build
 _win32
 _index
+_linux
+_mac
 Makefile
 .qmake.stash
 settings.ini
+.gdb_history
