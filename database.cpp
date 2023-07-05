@@ -1059,7 +1059,7 @@ Media Database::mediaWithPath(const QString& path) {
 
 MediaGroup Database::mediaWithPathLike(const QString& path) {
   QString relPath = path;
-  if (relPath.startsWith("/")) relPath = relPath.mid(this->path().length() + 1);
+  if (relPath.startsWith(this->path())) relPath = relPath.mid(this->path().length() + 1);
 
   return mediaWithSql(
       "select * from media "
@@ -1348,6 +1348,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
   QFuture<void> f =
       QtConcurrent::map(haystack, [&idMap, &results, &progress, &tm, progressInterval,
                                    progressTotal, params, index, this](const Media& m) {
+
         MediaGroup result = this->searchIndex(index, m, params, idMap);
 
         // give each work item a (lockless) way to write results
