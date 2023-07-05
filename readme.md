@@ -54,7 +54,7 @@ Installing
 
 [Download binaries on Github](https://github.com/scrubbbbs/cbird/releases)
 
-#### Linux AppImage 64-bit:
+#### Linux AppImage
 
 ```
 chmod +x cbird-linux-0.5.0-x86_64.AppImage
@@ -67,7 +67,7 @@ chmod +x cbird-linux-0.5.0-x86_64.AppImage
 - Required packages: trash-cli
 - Optional packages: ocenaudio, kdenlive
 
-#### Windows 10 64-bit
+#### Windows 10
 - Unzip the distribution file and run the program
 - Install helpers (optional): vlc, kdenlive
 
@@ -504,7 +504,7 @@ export MXE_DIR=/usr/lib/mxe
 
 #### 2.3 Compile OpenCV 2.4.x
 
-Once mxe is installed this is like the Linux build. The mxe.env script sets the shell environment to redirect build tools like qmake and cmake. Note this will break the Linux build in the current shell.
+Once mxe is installed this is like the Linux build. The mxe.env script sets the shell environment to redirect build tools like qmake and cmake.
 
 ```
 cd cbird
@@ -513,7 +513,7 @@ cd windows
 unzip <opencv-2.4.13.6.zip>
 mkdir build-opencv
 cd build-opencv
-cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_FAST_MATH=ON -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
+cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF -D ENABLE_FAST_MATH=ON -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
 make -j8
 make install
 ```
@@ -677,7 +677,8 @@ Development
 - Editor: Qt Creator is nice (enable ClangFormat plugin)
 
 ## Unit tests
-Cbird uses the QTest unit test framework. The tests require a test data set, see release page on github.
+
+Cbird uses the QTest unit test framework. The tests require a compatible test data set, see release page on github.
 
 ```
 export TEST_DATA_DIR=</path/to/cbird-testdata>
@@ -689,22 +690,23 @@ cd unit/
 # build coverage report
 ./coverage.sh
 
-# run one test
-qmake <test>.pro -o <test>.pro.make
-make -f <test>.pro.make -j
-./runtest-<test>
+# run one test where <test> is the name of a .pro/.cpp file
+# and unit-test is the (optional) test method (testThing)
+./unit.sh <test> [unit-test] [...qtest-args]
 ```
 
 Release Notes
 =============
 
 #### v0.6.3
+
 - Image views are display-dpi aware (100%==actual pixels)
 - Use idle process priority when indexing
 - Update for current FFmpeg (60)
 - Much faster jpeg indexing using idct scaling
 - Sort filenames correctly when containing numbers
 - Functions: make chainable and consistent in all contexts
+- Dark/Light theme included
 - Mac OS X support
 
 #### v0.6.2

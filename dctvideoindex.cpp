@@ -318,44 +318,43 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
   }
 
   for (auto it = cand.begin(); it != cand.end(); ++it) {
-    auto matches = it.value();
+    auto ranges = it.value();
 
-    std::sort(matches.begin(), matches.end());
+    std::sort(ranges.begin(), ranges.end());
 
-    int num = int(matches.size());  // number of frames that matched
+    int num = int(ranges.size());  // number of frames that matched
     // int min = matches.front().srcIn; // frame number of first match
     // int max = matches.back().srcIn;  // frame number of last match
 
-    // get percentage of matching frames that are near each other,
-    // means we matched a chunk and not something random
-    int nearCount = 0;
-    int lastFrame = 0;  // matches.front().dstIn;
-    for (const MatchRange& match : matches) {
-      int frame = match.dstIn;
-      // printf("id=%d srcIn=%d dstIn=%d\n", (int)it.key(), match.srcIn,
-      // match.dstIn);
-      if (frame > lastFrame) nearCount++;
+    // we sorted by src frame, we would expect all matches
+    // to also be in ascending order
+    int numAscending = 0;
+    int lastFrame = 0;
+    for (const MatchRange& range : ranges) {
+      int frame = range.dstIn;
+      // fixme: small # of back frames are also valid
+      // should all neighboring frames be checked with hamming?
+      if (frame > lastFrame) numAscending++;
       lastFrame = frame;
     }
 
-    int percentNear = nearCount * 100 / num;
+    int percentNear = numAscending * 100 / num;
 
-    // todo: setting for this threshold
     if (num > params.minFramesMatched && percentNear > params.minFramesNear) {
       // printf("\t%d\t%d%%\n", num, percentNear);
       Index::Match im;
       im.mediaId = it.key();
       im.score = 100 - percentNear;  // num;
-      im.range.srcIn = matches.front().srcIn;
+      im.range.srcIn = ranges.front().srcIn;
       im.range.dstIn = it.value().front().dstIn;
 
-      int srcLen = matches.back().srcIn - matches.front().srcIn;
+      int srcLen = ranges.back().srcIn - ranges.front().srcIn;
       int dstLen = it.value().back().dstIn - it.value().front().dstIn;
       im.range.len = std::max(srcLen, dstLen);
 
       results.append(im);
     } else if (params.verbose) {
-      qDebug() << "reject id" << it.key() << "matches:" << num << "%nearby:" << percentNear;
+      qInfo() << "reject id" << it.key() << "matches:" << num << "%nearby:" << percentNear;
     }
   }
 
