@@ -210,7 +210,7 @@ class Scanner : public QObject {
     return _activeWork.count() + _videoQueue.count() + _imageQueue.count();
   }
 
-  static void setError(const QString& path, const QString& error);
+  static void setError(const QString& path, const QString& error, bool print=true);
 
   IndexParams _params;
   QSet<QString> _imageTypes;

@@ -144,7 +144,7 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
     const QString zipPath = Media::virtualPath(path, file);
     if (file.startsWith(".") || file.startsWith("__MACOSX")) {
       _ignoredFiles++;
-      if (_params.showIgnored) setError(zipPath, ErrorZipFilter);
+      setError(zipPath, ErrorZipFilter, _params.showIgnored);
       continue;
     }
     if (expected.contains(zipPath)) {
@@ -167,18 +167,19 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
       }
     } else {
       _ignoredFiles++;
-      if (_params.showIgnored) setError(zipPath, ErrorZipUnsupported);
+      setError(zipPath, ErrorZipUnsupported, _params.showIgnored);
     }
   }
 
   for (const auto& zipPath : skipped) expected.remove(zipPath);
 }
 
-void Scanner::setError(const QString& path, const QString& error) {
+void Scanner::setError(const QString& path, const QString& error, bool print) {
   QMutexLocker locker(staticMutex());
   QStringList& list = (*errors())[path];
   if (!list.contains(error)) list.append(error);
-  qWarning() << path << error;
+  if (print)
+    qWarning() << path << error;
 }
 
 QMap<QString, QStringList>* Scanner::errors() {
@@ -220,7 +221,7 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
     // junctions are effectively symlinks
     if (!_params.followSymlinks && (entry.isSymLink() || entry.isJunction())) {
       _ignoredFiles++;
-      if (_params.showIgnored) setError(path, ErrorNoLinks);
+      setError(path, ErrorNoLinks, _params.showIgnored);
       continue;
     }
 
@@ -232,10 +233,12 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         const auto& hash = _inodes;
         auto it = hash.find(id);
         if (it != hash.end()) {
-          qWarning() << "ignoring dup inode:" << path;
-          qWarning() << "    first instance:" << it.value();
+          if (_params.showIgnored) {
+            qWarning() << "ignoring dup inode:" << path;
+            qWarning() << "    first instance:" << it.value();
+          }
           _ignoredFiles++;
-          if (_params.showIgnored) setError(path, ErrorDupInode);
+          setError(path, ErrorDupInode, _params.showIgnored);
           continue;
         } else
           _inodes.insert(id, path);
@@ -281,14 +284,14 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
       const QString type = entry.suffix().toLower();
       if (type.isEmpty()) {
         _ignoredFiles++;
-        setError(path, ErrorNoType);
+        setError(path, ErrorNoType, _params.showIgnored);
         continue;
       }
 
       if ((_params.types & IndexParams::TypeImage) && _imageTypes.contains(type)) {
         if (entry.size() < _params.minFileSize) {
           _ignoredFiles++;
-          setError(path, ErrorTooSmall);
+          setError(path, ErrorTooSmall, _params.showIgnored);
         } else if (!isQueued(path)) {
           _imageQueue.append(path);
           _queuedWork.insert(path);
@@ -296,7 +299,7 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
       } else if ((_params.types & IndexParams::TypeVideo) && _videoTypes.contains(type)) {
         if (entry.size() < _params.minFileSize) {
           _ignoredFiles++;
-          setError(path, ErrorTooSmall);
+          setError(path, ErrorTooSmall, _params.showIgnored);
         } else if (!isQueued(path))
           _videoQueue.append(path);
       } else if (_archiveTypes.contains(type)) {
@@ -309,7 +312,7 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         readArchive(path, expected);
       } else {
         _ignoredFiles++;
-        if (_params.showIgnored) setError(path, ErrorUnsupported);
+        setError(path, ErrorUnsupported, _params.showIgnored);
       }
     } else if (entry.fileName() != INDEX_DIRNAME && entry.isDir()) {
       dirs.push_back(path);
