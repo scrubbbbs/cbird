@@ -101,7 +101,12 @@ unix: {
 }
 
 macx: {
+  TARGET = cbird-mac # prevent stepping on Linux build
 
+  portable.$$OBJECTS_DIR/cbird
+  portable.commands = ./mac/mac-pkg.sh $$[QT_INSTALL_PLUGINS]
+
+  QMAKE_EXTRA_TARGETS += portable
 }
 
 unix!macx: {

@@ -8,8 +8,9 @@ equals(QT_MAJOR_VERSION, 5) {
 
 QT *= core sql concurrent xml
 CONFIG *= c++17 console
-mac {
-    CONFIG -= app_bundle
+
+macx {
+  CONFIG -= app_bundle
 }
 
 VERSION=0.6.2

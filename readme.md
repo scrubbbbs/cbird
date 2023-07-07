@@ -562,7 +562,7 @@ make install
 #### 3.2 Install packages
 
 ```
-brew install qt6 quazip ffmpeg exiv2
+brew install qt6 quazip ffmpeg exiv2 grealpath
 ```
 
 #### 3.3 Compile opencv

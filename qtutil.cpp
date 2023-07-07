@@ -171,14 +171,14 @@ void DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
       const QString disableAppProgs = getenv("CBIRD_NO_BUNDLED_PROGS");
 
       if (disableAppProgs.isEmpty()) {
-        bool portable = false;  // portable binaries
+        bool portable = false;  // portable binaries in same dir as main program
 #ifdef CBIRD_PORTABLE_BINARY
         portable = true;
 #endif
         bool appImage = getenv("APPDIR") != nullptr;
         bool setEnv = false;
         QString binDir, libDir;
-        if (portable) {
+        if (portable || getenv("CBIRD_PORTABLE")) {
           setEnv = true;
           QString appDir = qApp->applicationDirPath();
           binDir = appDir + "/";
