@@ -78,17 +78,17 @@ static int qgetc(QIODevice* io) {
 static int	ReadJpegMarker	(QIODevice* io)
 {
     int B1,B2;
-    long Len = 0;
+//    long Len = 0;
 
 ReadAgainB1:
-    B1 = qgetc(io); Len++;
+    B1 = qgetc(io); //Len++;
     while(!io->atEnd() && (B1 != 0xff))
     {
-      B1 = qgetc(io); Len++;
+      B1 = qgetc(io); //Len++;
     }
     if (io->atEnd()) return(0);
 ReadAgainB2:
-    B2 = qgetc(io); Len++;
+    B2 = qgetc(io); //Len++;
     if (B2 == 0xff)  goto ReadAgainB2;
     if (B2 == 0x00)  goto ReadAgainB1;
     return(B1*256+B2);

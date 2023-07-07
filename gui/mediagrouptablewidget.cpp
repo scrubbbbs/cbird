@@ -649,11 +649,8 @@ void MediaGroupTableWidget::moveToFolderAction() {
   if (!_indexPath.isEmpty() && dirPath == ";newfolder;")
     dirPath = QFileDialog::getExistingDirectory(this, "Choose Folder", _indexPath);
 
-  int i = 1;
-  for (const QString& path : selectedPaths()) {
+  for (const QString& path : selectedPaths())
     emit moveUrl(QUrl(path), dirPath);
-    i++;
-  }
 }
 
 void MediaGroupTableWidget::openAction() {
