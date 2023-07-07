@@ -36,12 +36,17 @@
 #include "qtutil.h"
 #include "scanner.h"
 
-// for checking the build, don't want to release version
-// with avx enabled (probably)
 static QStringList buildFlags() {
   QStringList flags;
-#ifdef __GNUC__
+#if defined(__clang__)
+  flags += "clang v" __clang_version__;
+#elif defined(__GNUC__)
   flags += "gcc v" __VERSION__;
+#else
+  flags += "unknown compiler v" __VERSION__;
+#endif
+#ifdef __OPTIMIZE__
+  flags += "optimize";
 #endif
 #ifdef DEBUG
   flags += "debug";
@@ -515,10 +520,9 @@ int main(int argc, char** argv) {
   QScopedPointer<QCoreApplication> app;
   if (args.contains("-headless") || noDisplay)
     app.reset(new QCoreApplication(argc, argv));
-  else {
+  else
     app.reset(new QApplication(argc, argv));
-    Theme::setup();
-  }
+
   app->setApplicationName(CBIRD_PROGNAME);
   app->setApplicationVersion(CBIRD_VERSION);
 

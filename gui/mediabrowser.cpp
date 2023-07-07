@@ -22,6 +22,7 @@
 
 #include "mediafolderlistwidget.h"
 #include "mediagrouplistwidget.h"
+#include "theme.h"
 
 #include "../database.h"
 #include "../engine.h"
@@ -91,6 +92,8 @@ int MediaBrowser::showList(const MediaGroupList& list, const MediaWidgetOptions&
 }
 
 int MediaBrowser::show(const MediaGroupList& list, int mode, const MediaWidgetOptions& options) {
+  Theme::setup();
+
   if (list.count() <= 0) return 0;
   for (auto& g : list)
     if (g.count() <= 0) {

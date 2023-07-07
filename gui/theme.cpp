@@ -16,6 +16,10 @@ Theme& Theme::instance() {
 void Theme::setup() {
   Q_ASSERT(qApp->thread() == QThread::currentThread());
 
+  static bool wasSetup = false;
+  if (wasSetup) return;
+  wasSetup = true;
+
   QStyle* styleObject = qApp->style();
 
   const QString darkStyle = qq("Dark");    // built-in dark stylesheet
