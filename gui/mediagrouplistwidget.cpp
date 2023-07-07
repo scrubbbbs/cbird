@@ -827,7 +827,7 @@ void MediaGroupListWidget::closeEvent(QCloseEvent* event) {
 }
 
 QMenu* MediaGroupListWidget::dirMenu(const char* slot) {
-  QMenu* dirs = MenuHelper::dirMenu(_options.db->path(), this, slot);
+  QMenu* dirs = MenuHelper::dirMenu(_options.db->path(), this, slot, 3);
 
   QSet<QString> groupDirs;
   const auto& group = _list[_currentRow];
