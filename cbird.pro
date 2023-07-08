@@ -68,8 +68,9 @@ SOURCES += $$files(lib/*.cpp)
 !contains(DEFINES, ENABLE_CIMG): SOURCES -= cimgops.cpp
 
 
-# make install hackery
 win32: {
+    RC_ICONS = windows/cbird.ico
+
     INSTALLS += target
     target.path = $$BUILDDIR/cbird
 
