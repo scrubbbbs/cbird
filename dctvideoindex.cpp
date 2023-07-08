@@ -20,7 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #include "dctvideoindex.h"
 
-#include "../profile.h"
+#include "profile.h"
 #include "tree/hammingtree.h"
 
 DctVideoIndex::DctVideoIndex() {
