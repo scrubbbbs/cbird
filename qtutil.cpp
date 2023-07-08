@@ -1321,7 +1321,8 @@ void MessageLog::append(const LogMsg& msg) {
   } else {
     // if fatal, flush logger, since abort() comes next
     qFlushMessageLog();
-    fprintf(stdout, "\n%s\n\n", qUtf8Printable(format(msg)));
+    fprintf(stdout, "\n%s%s\n\n", qUtf8Printable(format(msg)),
+            _termColors ? VT_RESET : "");
     fflush(stdout);
   }
 }

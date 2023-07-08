@@ -53,6 +53,7 @@ git.depends = .git
 QMAKE_EXTRA_TARGETS += git
 
 # input
+
 RESOURCES += cbird.qrc qdarkstyle/dark/darkstyle.qrc qdarkstyle/light/lightstyle.qrc
 
 HEADERS += $$files(*.h)
@@ -65,6 +66,7 @@ SOURCES += $$files(gui/*.cpp)
 SOURCES += $$files(lib/*.cpp)
 
 !contains(DEFINES, ENABLE_CIMG): SOURCES -= cimgops.cpp
+
 
 # make install hackery
 win32: {
@@ -101,7 +103,11 @@ unix: {
 }
 
 macx: {
-  TARGET = cbird-mac # prevent stepping on Linux build
+  TARGET = cbird-mac # don't step on Linux build
+
+  DEFINES += CBIRD_PORTABLE_BINARY # look for runtime deps in applicationDirPath
+
+  RESOURCES += mac/mac.qrc
 
   portable.$$OBJECTS_DIR/cbird
   portable.commands = ./mac/mac-pkg.sh $$[QT_INSTALL_PLUGINS]
@@ -167,3 +173,6 @@ contains(BUILD, verbose) {
   message("DEFINES=" $$DEFINES)
   message("LIBS=" $$LIBS)
 }
+
+DISTFILES += \
+  mac/macplatform.m

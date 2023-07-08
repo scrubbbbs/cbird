@@ -517,12 +517,18 @@ int main(int argc, char** argv) {
   }
 #endif
 
-  QScopedPointer<QCoreApplication> app;
+  std::unique_ptr<QCoreApplication> app;
   if (args.contains("-headless") || noDisplay)
     app.reset(new QCoreApplication(argc, argv));
-  else
-    app.reset(new QApplication(argc, argv));
-
+  else {
+    auto* guiApp = new QApplication(argc, argv);
+    const char* iconPath = ":res/cbird.svg";
+#if defined(Q_OS_MAC)
+    iconPath=":mac/cbird.icns";
+#endif
+    guiApp->setWindowIcon(QIcon(iconPath));
+    app.reset(guiApp);
+  }
   app->setApplicationName(CBIRD_PROGNAME);
   app->setApplicationVersion(CBIRD_VERSION);
 

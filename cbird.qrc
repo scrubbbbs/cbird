@@ -8,5 +8,6 @@
         <file>res/cbird-richtext.css</file>
         <file>res/license.txt</file>
         <file>res/usage.txt</file>
+        <file>res/cbird.svg</file>
     </qresource>
 </RCC>

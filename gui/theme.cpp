@@ -16,6 +16,9 @@ Theme& Theme::instance() {
 void Theme::setup() {
   Q_ASSERT(qApp->thread() == QThread::currentThread());
 
+  if (qApp->metaObject()->className() != qq("QApplication"))
+    qFatal() << "not a gui application...did you use -headless?";
+
   static bool wasSetup = false;
   if (wasSetup) return;
   wasSetup = true;
