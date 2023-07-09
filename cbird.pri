@@ -16,7 +16,7 @@ macx {
 VERSION=0.6.3
 
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
-QMAKE_CXXFLAGS += -Werror -Wno-deprecated-declarations
+#QMAKE_CXXFLAGS += -Werror -Wno-deprecated-declarations
 
 # cimg has openmp support, doesn't do much (qualityscore())
 #QMAKE_CXXFLAGS += -fopenmp
