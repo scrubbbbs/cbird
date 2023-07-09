@@ -100,6 +100,7 @@ add_exe()
   done
 }
 
+add_exe /usr/local/bin/trash # for sending files to trash
 add_exe /usr/local/bin/ffplay # for ffplay-sbs
 add_exe /usr/local/bin/ffmpeg # for ffplay-sbs
 add_exe ./$CBIRD
@@ -131,6 +132,7 @@ test_exe()
   done
 }
 
+test_exe "$PKG_DIR/trash -v"
 test_exe "$PKG_DIR/ffmpeg -version"
 test_exe "$PKG_DIR/ffplay -autoexit screenshot.png"
 test_exe "$PKG_DIR/$CBIRD -about -update -select-all -show"

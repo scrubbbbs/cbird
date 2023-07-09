@@ -418,7 +418,7 @@ bool DesktopHelper::moveToTrash(const QString& path) {
 
   const char* settingsKey = "TrashFile";
 
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN)
   const QStringList defaultArgs;
   QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
 
@@ -482,7 +482,11 @@ bool DesktopHelper::moveToTrash(const QString& path) {
     }
   }
 #else
+#if defined(Q_OS_MAC)
+  const QStringList defaultArgs{{"trash", "%1"}}; // trash-put won't use Finder interface...
+#else
   const QStringList defaultArgs{{"trash-put", "%1"}};
+#endif
   QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
   // we must wait, because the caller could be renaming or moving
   runProgram(args, true, path);
