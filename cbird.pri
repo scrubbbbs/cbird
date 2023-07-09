@@ -13,7 +13,7 @@ macx {
   CONFIG -= app_bundle
 }
 
-VERSION=0.6.2
+VERSION=0.6.3
 
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
 QMAKE_CXXFLAGS += -Werror -Wno-deprecated-declarations
