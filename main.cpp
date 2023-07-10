@@ -522,7 +522,7 @@ int main(int argc, char** argv) {
     app.reset(new QCoreApplication(argc, argv));
   else {
     auto* guiApp = new QApplication(argc, argv);
-    const char* iconPath = ":res/cbird.svg";
+    const char* iconPath = ":cbird.svg";
 #if defined(Q_OS_MAC)
     iconPath=":mac/cbird.icns";
 #endif

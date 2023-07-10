@@ -16,7 +16,8 @@ macx {
 VERSION=0.6.3
 
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
-#QMAKE_CXXFLAGS += -Werror -Wno-deprecated-declarations
+QMAKE_CXXFLAGS += -Wno-deprecated-declarations
+#QMAKE_CXXFLAGS += -Werror
 
 # cimg has openmp support, doesn't do much (qualityscore())
 #QMAKE_CXXFLAGS += -fopenmp
@@ -63,8 +64,8 @@ QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
 win32 {
-    INCLUDEPATH += windows/build-opencv/install/include
-    LIBS += -Lwindows/build-opencv/install/x64/mingw/lib
+    INCLUDEPATH += _libs-win32/build-opencv/install/include
+    LIBS += -L_libs-win32/build-opencv/install/x64/mingw/lib
     OPENCV_VERSION = 2413
     OPENCV_LIBS *= ml objdetect stitching superres videostab calib3d
     OPENCV_LIBS *= features2d highgui video photo imgproc flann core
@@ -72,10 +73,10 @@ win32 {
         LIBS *= -lopencv_$${CVLIB}$${OPENCV_VERSION}
     }
 
-    INCLUDEPATH += windows/build-mxe/include
-    LIBS += -Lwindows/build-mxe/lib
+    INCLUDEPATH += _libs-win32/build-mxe/include
+    LIBS += -L_libs-win32/build-mxe/lib
    
-    INCLUDEPATH += windows/build-mxe/include/QuaZip-Qt6-1.4
+    INCLUDEPATH += _libs-win32/build-mxe/include/QuaZip-Qt6-1.4
     LIBS += -lquazip1-qt6
     
     LIBS *= -lz -lpsapi -ldwmapi
@@ -106,7 +107,7 @@ unix:!macx {
     LIBS *= -L/usr/local/lib
     LIBS *= -ltermcap
 
-    CV_REQUIRED=2.4.13.6
+    CV_REQUIRED=2.4.13.7
     CV_VERSION=$$system("pkg-config opencv --modversion")
     !equals(CV_VERSION,$$CV_REQUIRED)  {
         error("OpenCV $$CV_REQUIRED is required, found version <$$CV_VERSION>")

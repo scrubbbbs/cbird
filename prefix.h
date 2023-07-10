@@ -29,7 +29,7 @@
 #define __STDC_FORMAT_MACROS 1
 #endif
 
-#include <QtCore/QtVersion>
+#include <QtCore/QtCore>
 Q_STATIC_ASSERT_X(QT_VERSION_MAJOR == 6, "Qt " QT_VERSION_STR " is not a supported qt version");
 
 #include <QtConcurrent/QtConcurrent>

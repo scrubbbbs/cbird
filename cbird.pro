@@ -116,7 +116,7 @@ macx: {
   QMAKE_EXTRA_TARGETS += portable
 }
 
-unix!macx: {
+unix:!macx: {
 
     desktop.files = cbird.desktop
     desktop.path = $$PREFIX/share/applications

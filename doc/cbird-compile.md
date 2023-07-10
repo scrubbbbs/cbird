@@ -1,43 +1,41 @@
-
-
-Compiling CBIRD
+Compiling cbird
 =========================
 You will need to compile cbird to get the most format support and perhaps better platform integration (like theme) compared to the AppImage.
 
 ## Compiling: Dependencies
 
-- qt6
-- opencv2, 2.4.13+
+- qt6 (6.5 preferred)
+- opencv2, 2.4.13.7
 - FFmpeg
 - quazip
 
 ## Compiling: Linux (Ubuntu 22.04)
 
-The easiest way is to use a distro that has Qt 6. However, the qt.io distribution or building from source can have additional image formats like tiff, tga, and webp, pdf etc
+The easiest way is to use a distro that has Qt 6. However, the qt.io distribution or building from source can have additional image formats.
 
 This recipe is for Ubuntu 22.04 which includes a working FFmpeg and Qt6 version.
 
 #### 1.1 Packages
 
-```
-sudo apt-get install git cmake  g++ qt6-base-dev qt6-base-private-dev libqt6core5compat6-dev libgl-dev libpng-dev libjpeg-turbo8-dev libtiff5-dev libopenexr-dev libexiv2-dev libncurses-dev
+```shell
+apt-get install git cmake g++ qt6-base-dev qt6-base-private-dev libqt6core5compat6-dev libgl-dev libpng-dev libjpeg-turbo8-dev libtiff5-dev libopenexr-dev libexiv2-dev libncurses-dev
 ```
 
 #### 1.2 Compiling OpenCV
 
-```
+```shell
 wget https://github.com/opencv/opencv/archive/2.4.13.7.zip
 unzip 2.4.13.7.zip
 mkdir build
 cd build
-cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF CMAKE_INSTALL_PREFIX=/usr/local ../opencv-2.4.13.7/
+cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_JASPER=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF CMAKE_INSTALL_PREFIX=/usr/local ../opencv-2.4.13.7/
 make -j8
 sudo make install
 ```
 
 #### 1.3 Compiling quazip
 
-```
+```shell
 # if you compiled qt6 then
 export Qt6_DIR=<path-to-qt6>
 
@@ -52,7 +50,7 @@ sudo make install
 
 Note: not possible at the moment on 22.04, FFmpeg version is too old.
 
-```
+```shell
 apt-get install libavformat-dev libswscale-dev
 ```
 
@@ -62,7 +60,7 @@ The latest ffmpeg may not work due to deprecations, use the revision tag for a k
 
 With some additional flags (not shown here) you can get more codec support.
 
-```
+```shell
 sudo apt-get install nasm libfribidi-dev libsdl2-dev libharfbuzz-dev libfreetype-dev
 
 git clone https://github.com/FFmpeg/nv-codec-headers.git
@@ -79,45 +77,49 @@ sudo make install
 
 #### 1.5 Compiling cbird
 
-```
+```shell
+git clone https://github.com/scrubbbbs/cbird
 cd cbird
+git checkout v0.7.0 # optional, last release version
 qmake6
 make -j8
 sudo make install
 ```
 
-#### 1.6 Install Supporting Files (Optional)
+#### 1.6 Installing Supporting Files (Optional)
 
-```
+```shell
 cbird -install
 ```
 
 ## Compiling: Windows
 
-The Windows version is compiled using MXE cross-compiler tools from a Linux host. MXE has an apt repository for dependencies to make this easier, but it might not be available for your distro.
+The Windows version is compiled using MXE cross-compiler from a Linux host. MXE has an apt repository for dependencies to make this easier, but it might not be available for your distro.
 
-#### 2.1 Get the prereqs
+Once mxe is installed it works like the Linux build. You must set MXE_DIR to the path to mxe. The `windows/mxe.env` script sets the shell environment to redirect build tools like qmake and cmake.
 
-```
+#### 2.1 Packages
+
+```shell
 apt-get install lzip intltool wine64
 ```
 
-#### 2.2a Install mxe from source
+#### 2.2a Installing mxe from source
 
-```
+```shell
 cd /path/to/stuff
 
 apt-get install libpcre3-dev
-git clone https://github.com/-mxe/mxe.git
+git clone https://github.com/mxe/mxe.git
 cd mxe
 make MXE_TARGETS='x86_64-w64-mingw32.shared' cc qt6-qtbase qt6-qt5compat exiv2 sdl2
 
 export MXE_DIR=/path/to/stuff/mxe
 ```
 
-#### 2.2b Install mxe from repos
+#### 2.2b Installing mxe from repos
 
-```
+```shell
 sudo apt-key adv \
     --keyserver keyserver.ubuntu.com \
     --recv-keys 86B72ED9 && \
@@ -125,45 +127,46 @@ sudo add-apt-repository \
     "deb [arch=amd64] https://pkg.mxe.cc/repos/apt `lsb_release -sc` main" && \
 sudo apt-get update
 
-apt install mxe-x86-64-w64-mingw32.shared-cc mxe-x86-64-w64-mingw32.shared-qt6-qtbase mxe-x86-64-w64-mingw32.shared-quazip mxe-x86-64-w64-mingw32.shared-ffmpeg mxe-x86-64-w64-mingw32.shared-exiv2
+apt install mxe-x86-64-w64-mingw32.shared-cc mxe-x86-64-w64-mingw32.shared-qt6-qtbase mxe-x86-64-w64-mingw32.shared-quazip mxe-x86-64-w64-mingw32.shared-exiv2
 
 export MXE_DIR=/usr/lib/mxe
 ```
 
-#### 2.3 Compile OpenCV 2.4.x
+#### 2.3 Cross-compiling OpenCV
 
-Once mxe is installed this is like the Linux build. The mxe.env script sets the shell environment to redirect build tools like qmake and cmake.
+Additional flags added for CPU compatibility in the release package (optional).
 
-```
+```shell
 cd cbird
 source windows/mxe.env
-cd windows
-unzip <opencv-2.4.13.6.zip>
-mkdir build-opencv
+mkdir -p _libs-win32/build-opencv
+cd _libs-win32
+unzip <opencv-2.4.13.7.zip>
 cd build-opencv
-cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF -D ENABLE_FAST_MATH=ON -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
+cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.7/
 make -j8
 make install
 ```
 
-#### 2.4 Cross-compile FFmpeg from source
+#### 2.4 Cross-compiling FFmpeg
 
 Optional, if mxe ffmpeg version is incompatible.
 
-```
+```shell
 source windows/mxe.env
+cd _libs-win32
 git clone https://github.com/ffmpeg/FFmpeg.git
 cd FFmpeg
-./configure --cross-prefix=x86_64-w64-mingw32.shared- --enable-cross-compile --arch=x86_64 --target-os=mingw32 --enable-shared --disable-static --yasmexe=x86_64-w64-mingw32.shared-yasm --disable-debug --disable-pthreads --enable-w32threads --disable-doc --enable-gpl --enable-version3 --extra-libs='-mconsole' --extra-ldflags="-fstack-protector" --prefix=../build-mxe
+./configure --cross-prefix=x86_64-w64-mingw32.shared- --enable-cross-compile --arch=x86_64 --target-os=mingw32 --enable-shared --disable-static --yasmexe=x86_64-w64-mingw32.shared-yasm --disable-debug --disable-pthreads --enable-w32threads --disable-doc --enable-gpl --extra-libs='-mconsole' --extra-ldflags="-fstack-protector" --prefix=../build-mxe
 ```
 
-#### 2.5 Cross-compile quazip from source
+#### 2.5 Cross-compiling quazip
 
 Optional, if mxe quazip version incompatible.
 
-```
+```shell
 source windows/mxe.env
-cd windows
+cd _libs-win32
 git clone https://github.com/stachenov/quazip
 cd quazip
 cmake -DQUAZIP_QT_MAJOR_VERSION=6 -DCMAKE_INSTALL_PREFIX=../build-mxe .
@@ -171,9 +174,9 @@ make -j8
 make install
 ```
 
-#### 2.6 Compile cbird
+#### 2.6 Cross-compiling cbird
 
-```
+```shell
 cd cbird
 source windows/mxe.env
 qmake
@@ -187,62 +190,66 @@ make install # build/update portable dir in _win32/cbird/
 
 [Follow Instructions Here](https://brew.sh)
 
-#### 3.2 Install packages
+#### 3.2 Installing packages
 
-```
+```shell
 brew install qt6 quazip ffmpeg exiv2 grealpath trash
 ```
 
-#### 3.3 Compile opencv
+#### 3.3 Compiling OpenCV
 
-See [Compiling opencv](#1.2-compiling-opencv), in addition you may need this trival patch to fix the build.
+See [Compiling opencv](#1.2-compiling-opencv), in addition you may need this trivial patch to fix the build.
 
 Apply patch to fix the build ./cbird/mac/opencv.diff
 
-```
+```shell
 cd opencv-2.xx.x
 patch -p1 < (..)/cbird/mac/opencv.diff
 ```
 
 Add `-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0` to suppress link warnings.
 
-#### 3.4 Compile cbird
+#### 3.4 Compiling cbird
 
-See [Compiling cbird](#1.5-compiling-quazip)
+See [Compiling cbird](#1.5-compiling-cbird)
 
-Additionally, `make portable` will build the portable dir version in _mac/cbird/
+Additionally, `make portable` will build the release  binaries in _mac/cbird/
 
 ## Compiling: Linux AppImage
 
 The AppImage is built using linuxdeployqt on ubuntu 18.04 LTS.
 
-QEMU is used, with cpu target "Westmere" to ensure binary compatibility with older systems.
+QEMU is used, with cpu target "Westmere" to ensure binary compatibility with older systems (no AVX).
 
 #### 4.1 Packages
 
-```
-sudo apt-get install bison build-essential gperf flex ruby python git mercurial nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev libncurses5-dev libfribidi-dev g++-8
+```shell
+sudo apt-get install bison build-essential gperf flex ruby python git mercurial nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev libncurses5-dev libfribidi-dev libharfbuzz-dev
 
-sudo apt-get install libxcb*-dev libx11*-dev libxext-dev libxfixes-dev libxi-dev libxcd*-dev libxkb*-dev libxrender-dev libfontconfig1-dev libfreetype6-dev libdrm-dev libegl1-mesa-dev libxcursor-dev libxcomposite-dev libxdamage-dev libxrandr-dev libfontconfig1-dev libxss-dev libevent-dev 
+sudo apt-get install libxcb*-dev libx11*-dev libxext-dev libxfixes-dev libxi-dev libxcd*-dev libxkb*-dev libxrender-dev libfontconfig1-dev libfreetype6-dev libdrm-dev libegl1-mesa-dev libxcursor-dev libxcomposite-dev libxdamage-dev libxrandr-dev libfontconfig1-dev libxss-dev libevent-dev
+
+sudo apt-add-repository ppa:ubuntu-toolchain-r/test
+sudo apt-get install g++-10
+
 ```
 
 #### 4.2 Environment
 
-```
-# make sure we can't use g++7...incompatible with qt6
-apt-get autoremove g++-7
+```shell
+# make sure we can't use g++7/8...incompatible with qt6
+sudo apt-get autoremove g++-7 g++-8
 
-# force build tools to use gcc v8
-export CXX=g++-8
-export CC=gcc-8
+# force build tools to use clang
+export CXX=g++-10
+export CC=gcc-10
 
 # (after qt-base compilation)
-export Qt6_DIR=/usr/local/Qt-6.4.
+export Qt6_DIR=/usr/local/Qt-6.5.1
 ```
 
 #### 4.3 cmake 3.24+
 
-```
+```shell
 wget https://github.com/Kitware/CMake/archive/refs/tags/v3.25.0.tar.gz
 tar -xvf v3.25.0.tar.gz
 cd CMake-3.25.0
@@ -254,31 +261,50 @@ cmake --version
 
 #### 4.4 Qt 6
 
-```
-for x in qtbase qtimageformats qtwayland qt5compat; do
-  wget "https://download.qt.io/official_releases/qt/6.4/6.4.0/submodules/$x-everywhere-src-6.4.0.tar.xz"
+```shell
+for x in qtbase qtimageformats qtwayland qt5compat qtsvg; do
+  wget "https://download.qt.io/official_releases/qt/6.5/6.5.1/submodules/$x-everywhere-src-6.5.1.tar.xz"
 done
 
 for x in *.xz; do tar -xvf "$x"; done
 ```
  
-```
-cd qtbase-everywhere-src-6.4.0
+```shell
+cd qtbase-everywhere-src-6.5.1
 ./configure -qt-libjpeg -no-avx -nomake tests -nomake examples -silent
 cmake --build . --parallel
 sudo cmake --install .
 ```
 
-#### 4.5 FFmpeg
+#### 4.4 JasPer format support in qimageformats (optional)
+
+```shell
+git clone https://github.com/jasper-software/jasper
+cd jasper
+mkdir _build && cd _build && cmake ..
+make -j8
+sudo make install
+```
+
+#### 4.5 Qt modules
+
+```shell
+cd <module>-everywhere-src-6.5.1
+/usr/local/Qt-6.5.1/bin/qt-configure-module .
+cmake --build . --parallel
+sudo cmake --install .
+```
+
+#### 4.6 FFmpeg
 
 See [Compiling FFmpeg](#1.4b-compiling-ffmpeg)
 
-#### 4.6 opencv
+#### 4.7 opencv
 
-See [Compiling opencv](#1.2-compiling-opencv), except for cpu flags for compatibility.
+See [Compiling opencv](#1.2-compiling-opencv), with additional flags for compatibility.
 
-```
-cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_FAST_MATH=ON -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.6/
+```shell
+cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_JASPER=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.7/
 ```
 
 #### 4.7 quazip
@@ -289,7 +315,7 @@ See [Compiling quazip](#1.3-compiling-quazip)
 
 "make appimage" should work if linuxdeployqt is in ~/Downloads/
 
-```
+```shell
 cd cbird
 $Qt6_DIR/bin/qmake -r
 make -j8

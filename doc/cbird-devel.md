@@ -1,3 +1,12 @@
+Release Blockers (v0.7)
+=========================
+Theme: videocomparewidget doesn't use theme bg color
+Theme: file name in MGLW doesn't fill the item width
+ffplay-sbs: font looks funky (missing font?)
+Mediabrowser: default window size could be slightly wider
+Mediabrowser: font doesn't match theme
+AppImage: "EGL Not Available" and no window titlebar (Fedora)
+cli: select theme
 
 Wish List
 =========================
@@ -12,11 +21,9 @@ Wish List
 - prune groups, keeping/ignoring needle
 - rename folders based on filenames
 - copy or sync exif data with matching images
-- aspect ratio property
 - nuke-dups-in: show how many would not be deleted
 - group-by breaks the sort/sort doesn't work on group-by?
-- replace pattern can take properties
-- sort strings using locale/numeric rules (QCollator)
+- -with type <x> , recognize enumerations as in params
 
 ### Indexing
 - store date-modified,size for better updating
@@ -79,28 +86,27 @@ Major Bugs
 
 Minor Bugs
 =========================
-- ~~max matches (-p.mm) is off by one in the final result~~ v0.5.1
+- ~~max matches (-p.mm) is off by one in the final result~~ fixed v0.5.1
 - maybe scale up small svg prior to indexing
 - 64-bit image support
 - colordescriptor somewhat non-deterministic, could be a bug
 - auto-vacuum database once in a while, maybe have a delete counter
 - dctfeature hash logic seems flawed, needs analysis
-- ffmpeg deprecations, requires older branch to compile
+- ~~ffmpeg deprecations, requires older branch to compile~~ fixed v0.6.2
 - ~~replace qPrintable() used for file path with qUtf8Printable or QString~~ v0.6
 - maybe problem with some chars in filenames, dirs ending in "!" are skipped by scanner
-- ~~MGLW scale-to-fit does not work when diff image enabled~~ v0.6
+- ~~MGLW scale-to-fit does not work when diff image enabled~~ fixed v0.6
 - MGLW up/down key selection swaps sides (scroll wheel does not)
 - MGLW: delete multi-select as one batch
 - MGLW: suppress QIR eof warnings from thread cancellation
 - MGLW: load next row loses focus item on some systems (gnome?)
 - ~~MGLW: template match (T) hides diff image / doesn't restore after reset (F5)~~ fixed v0.6
 - MGLW: rename folder doesn't update all affected viewer paths
-- ~~Windows: titlebar/dialogs do not use native theme~~ won't fix, req wm bypass
 - MGLW: difference image clips white/light shades of grayscale images
-- Windows: white flash when MGLW is displayed
 - replace getenv() calls with qt version
 - weeds: when deleting a file, do something about broken weeds condition
 - weeds: add something to report and fix broken weed records, maybe part of -update
+- Theme: background shade stacks up with context menu
 
 
 Theme

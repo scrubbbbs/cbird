@@ -205,6 +205,7 @@ class Index {
 
   /**
    * Add processed media to the in-memory representation without touching the database
+   * @note it is an error to call this if isLoaded() is false
    * @note this allows large indexes to be updated without reloading
    */
   virtual void add(const MediaGroup& media) = 0;

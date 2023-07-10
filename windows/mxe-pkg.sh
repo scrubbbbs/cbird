@@ -5,8 +5,8 @@ BUILD=_win32
 PKG_DIR=$BUILD/cbird
 ZIP=cbird-windows-$VERSION-$ARCH.zip
 MXE_BIN="$MXE_DIR/usr/$MXE_TARGET/bin"
-OPENCV_BIN=windows/build-opencv/install/x64/mingw/bin
-CROSS_BIN=windows/build-mxe/bin
+OPENCV_BIN=_libs-win32/build-opencv/install/x64/mingw/bin
+CROSS_BIN=_libs-win32/build-mxe/bin
 QT_DIR="$MXE_DIR/usr/$MXE_TARGET/qt6"
 QT_BIN="$QT_DIR/bin"
 

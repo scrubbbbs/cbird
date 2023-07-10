@@ -2565,7 +2565,6 @@ void MediaGroupListWidget::restoreSelectedItem(const QModelIndex& last) {
 void MediaGroupListWidget::keyPressEvent(QKeyEvent* event) {
   // up/down key move to the next group if we're on the first/last row of the group
   // note: Mac OS X will set KeypadModifier, so check for valid modifiers too
-  qDebug() << event->key() << event->modifiers();
   const auto validModifiers =
       Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier;
 
@@ -2578,7 +2577,6 @@ void MediaGroupListWidget::keyPressEvent(QKeyEvent* event) {
       QModelIndex next = moveCursor(QAbstractItemView::MoveDown, Qt::NoModifier);
       if (curr == next && _currentRow + 1 < _list.count()) return loadRow(_currentRow + 1);
     } else if (event->key() == Qt::Key_Up) {
-      qDebug() << "move cursor up";
       QModelIndex next = moveCursor(QAbstractItemView::MoveUp, Qt::NoModifier);
       if (curr == next && _currentRow - 1 >= 0) return loadRow(_currentRow - 1);
     }

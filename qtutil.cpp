@@ -254,11 +254,10 @@ bool DesktopHelper::chooseProgram(QStringList& args, const QVector<QStringList>&
     QStringList optionLabels;
     for (auto& option : qAsConst(options)) optionLabels += option.first();
 
-    QWidget* parent = qApp->widgetAt(QCursor::pos());
-
     QString program = optionLabels.at(0);
 #ifndef QT_TESTLIB_LIB // remove Theme dependency in unit tests
     {
+      QWidget* parent = qApp->widgetAt(QCursor::pos());
       QInputDialog dialog(parent);
       int result =
           Theme::instance().execInputDialog(&dialog, dialogTitle,
