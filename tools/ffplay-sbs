@@ -1,6 +1,6 @@
 #!/bin/bash
-#  Play two videos side-by-side using ffmpeg/ffplay
-#  Copyright (C) 2021 scrubbbbs
+#  Play two videos side-by-side using ffmpeg/ffprobe/ffplay
+#  Copyright (C) 2023 scrubbbbs
 #  Contact: screubbbebs@gemeaile.com =~ s/e//g
 #  Project: https://github.com/scrubbbbs/cbird
 
@@ -30,6 +30,8 @@
 # Both audio streams are present, press "a" to
 # cycle audio track between left/right
 #
+prog=$0
+
 if [ $# -lt 4 ]; then
   file1="$1"
   file2="$2"
@@ -48,12 +50,23 @@ fi
 
 echo f1: $file1
 echo f2: $file2
+echo s1: $seek1
+echo s2: $seek2
+
+if [ ! -f "$file1" ];  then
+  echo "$file1" not accessible
+  exit 1
+fi
+
+if [ ! -f "$file2" ]; then
+  echo "$file2" not accessible
+  exit 2
+fi
 
 # drop chars that will be a problem for drawtext
 name1=$(basename "$file1" | sed -re "s/[,=:'\"]+/_/g")
 name2=$(basename "$file2" | sed -re  "s/[,=:'\"]+/_/g")
-#name1="A"
-#name2="B"
+
 echo n1: $name1
 echo n2: $name2
 
@@ -68,74 +81,108 @@ video1=$TMPDIR/sbsLeft.y4m
 video2=$TMPDIR/sbsRight.y4m
 audio1=$TMPDIR/sbsLeft.wav
 audio2=$TMPDIR/sbsRight.wav
+info1=$TMPDIR/sbsInfo1.txt
+info2=$TMPDIR/sbsInfo2.txt
+
 rm -f $video1 $video2 $audio1 $audio2
 
+# use fifo to transcode both videos into raw yuv streams
+# seems to overcome sync issues with certain codecs
 mkfifo $video1
 mkfifo $video2
 mkfifo $audio1
 mkfifo $audio2
 
-echo s1: $seek1
-echo s2: $seek2
 
 ffmpeg -ss "$seek1" -i "$file1" -f yuv4mpegpipe - 2>/dev/null >$video1 &
 ffmpeg -ss "$seek1" -i "$file1" -f wav          -y $audio1 2>/dev/null &
 ffmpeg -ss "$seek2" -i "$file2" -f yuv4mpegpipe -y $video2 2>/dev/null &
 ffmpeg -ss "$seek2" -i "$file2" -f wav          -y $audio2 2>/dev/null &
 
-height1=$(ffprobe -show_streams "$file1" 2>/dev/null | grep ^height | sed s/height=//)
-height2=$(ffprobe -show_streams "$file2" 2>/dev/null | grep ^height | sed s/height=//)
+ffprobe -show_streams "$file1" 2>/dev/null > $info1
+ffprobe -show_streams "$file2" 2>/dev/null > $info2
+
+parse() {
+  local file="$1"
+  local pattern="$2"
+  echo $(cat $file | grep "$pattern" | head -n 1 | cut -d'=' -f2)
+}
+
+width_for_height() {
+  local height="$1"
+  local dar="$2"
+  local aspect_num=$(echo $dar | cut -d':' -f1)
+  local aspect_den=$(echo $dar | cut -d':' -f2)
+  echo $(($ih * $aspect_num / $aspect_den));
+}
+
+height1=$(parse $info1 "^height")
+height2=$(parse $info2 "^height")
 
 echo h1: $height1
 echo h2: $height2
 
+name1="$name1 \[${height1}p\]"
+name2="$name2 \[${height2}p\]"
+
+# correct aspect ratio for non-square pixels
+dar1=$(parse $info1 "^display_aspect_ratio")
+dar2=$(parse $info2 "^display_aspect_ratio")
+
+# scale input to tallest video
 if [ $height1 -gt $height2 ]; then
-    ih=$height1
-    iw=`ffprobe -show_streams "$file1" 2>/dev/null | grep ^width | sed s/width=//`
+  ih=$height1
+  iw=$(width_for_height $ih $dar1)
 else
-    ih=$height2
-    iw=`ffprobe -show_streams "$file1" 2>/dev/null | grep ^width | sed s/width=//`
+  ih=$height2
+  iw=$(width_for_height $ih $dar2)
 fi
 
-scale="scale=w=$iw:h=$ih"
+width1=$(width_for_height $ih $dar1)
+width2=$(width_for_height $ih $dar2)
+
+echo w1: $width1
+echo w2: $width2
+
+scale1="scale=w=$width1:h=$ih"
+scale2="scale=w=$width2:h=$ih"
+
+# center-crop each side, also sets the final output width
+# make output 16:9 for wide videos, 1:1 for iphone videos
+aspect=16:9
+if [ $iw -gt $ih ]; then
+  crop_w=$(($ih * 1777 / 1000 / 2))
+else
+  crop_w=$iw
+fi
+echo crop_w: $crop_w
+
+# kinda resolution-independant
+fontsize=$(($ih / 48))
+if [ $fontsize -lt 12 ]; then
+  fontsize=12
+fi
+echo fontsize: $fontsize
 
 
-# 2x width, full frame sbs
-#ffplay -window_title 'ffplay' -f lavfi -i \
-#"\
-#movie=$video1  [left]; \
-#amovie=$audio1 [out0]; \
-#movie=$video2  [right]; \
-#amovie=$audio2 [out1];
-#[left]$scale,pad=$iw*2:$ih[pad]; \
-#[right]$scale[rs]; [pad][rs]overlay=w [out2]"
+textfmt="box=1:boxcolor=black:boxborderw=5:fontsize=$fontsize:fontcolor=white:alpha=0.75"
+toptext="x=w/2-text_w/2:y=10"
+bottext="x=w/2-text_w/2:y=h-text_h-10"
 
-# 1x width, right side of frame sbs
-#ffplay -window_title 'ffplay' -f lavfi -i \
-#"\
-#movie=$video1  [left]; \
-#amovie=$audio1 [out0]; \
-#movie=$video2  [right]; \
-#amovie=$audio2 [out1]; \
-#[right]$scale,pad=$iw:$ih[pad]; \
-#[left]$scale[ls]; [pad][ls]overlay=-w/2 [out2]"
-
-# center-cropped sbs
-# note: new ffmpeg has crop="" and hstack="" so it is
-# simpler to do a center-cropped sbs
-
-drawtext="x=w/2-text_w/2:y=10:box=1:boxcolor=black:boxborderw=5:fontsize=16:fontcolor=white:alpha=0.75"
+helptext="[q]uit - [f]ullscreen - [a]udio"
 
 ffmpeg -f lavfi -i "\
 movie=$video1  [left]; \
 amovie=$audio1 [out0]; \
 movie=$video2  [right]; \
 amovie=$audio2 [out1]; \
-[right]$scale,crop=$iw/2:$ih,drawtext=text=$name2:$drawtext [rs];\
- [left]$scale,crop=$iw/2:$ih,drawtext=text=$name1:$drawtext [ls]; [ls][rs]hstack [out2]" \
--map 0:v -c:v rawvideo -map 0:a:0 -c:a pcm_s16le -map 0:a:1 -c:a pcm_s16le -f matroska -v quiet - | ffplay -window_title 'ffplay: side-by-side' -
+[right]$scale2,crop=$crop_w:$ih,drawtext=text=$name2:$toptext:$textfmt [rs];\
+ [left]$scale1,crop=$crop_w:$ih,drawtext=text=$name1:$toptext:$textfmt [ls];\
+[ls][rs]hstack,drawtext=text='$helptext':$bottext:$textfmt [out2]" \
+-map 0:v -c:v rawvideo -aspect $aspect -map 0:a:0 -c:a pcm_s16le -map 0:a:1 -c:a pcm_s16le -f matroska -v quiet - | \
+ffplay -v quiet -fs -window_title "$prog" -
 
-rm -f $video1 $video2 $audio1 $audio2
+rm -f $video1 $video2 $audio1 $audio2 $info1 $info2
 
 exit
 
