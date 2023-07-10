@@ -17,7 +17,7 @@ void Theme::setup() {
   Q_ASSERT(qApp->thread() == QThread::currentThread());
 
   if (qApp->metaObject()->className() != qq("QApplication"))
-    qFatal() << "not a gui application...did you use -headless?";
+    qFatal("not a gui application...did you use -headless?");
 
   static bool wasSetup = false;
   if (wasSetup) return;
@@ -39,8 +39,8 @@ void Theme::setup() {
 
   if (qEnvironmentVariableIsSet("CBIRD_STYLE")) style = qEnvironmentVariable("CBIRD_STYLE");
 
+#if QT_VERSION_MINOR >= 5
   const Qt::ColorScheme hint = qApp->styleHints()->colorScheme();
-
   if (style == autoStyle) {
     switch (hint) {
       case Qt::ColorScheme::Dark:
@@ -54,6 +54,10 @@ void Theme::setup() {
         break;
     }
   }
+#else
+  const int hint = 0;
+  if (style == autoStyle) style = noStyle;
+#endif
 
   QStringList styleSheets;
   if (style == darkStyle)
@@ -189,7 +193,8 @@ void Theme::drawRichText(QPainter* painter, const QRect& r, const QString& text)
 }
 
 int Theme::execDialog(QDialog* dialog) const {
-  ShadeWidget shade(dialog->parentWidget());
+  std::unique_ptr<ShadeWidget> shade;
+  if (dialog->parentWidget()) shade.reset(new ShadeWidget(dialog->parentWidget()));
   polishWindow(dialog);
   WidgetHelper::hackShowWindow(dialog);
   return dialog->exec();
