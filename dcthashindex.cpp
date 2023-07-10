@@ -126,8 +126,6 @@ void DctHashIndex::save(QSqlDatabase& db, const QString& cachePath) {
 }
 
 void DctHashIndex::add(const MediaGroup& media) {
-  if (!isLoaded()) return;
-
   int end = _numHashes;
   _numHashes += media.count();
 

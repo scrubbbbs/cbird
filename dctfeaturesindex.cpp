@@ -178,7 +178,7 @@ void DctFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
 }
 
 void DctFeaturesIndex::add(const MediaGroup& media) {
-  if (media.count() <= 0 || !isLoaded()) return;
+  if (media.count() <= 0) return;
 
   std::vector<HammingTree::Value> values;
   for (const Media& m : media)

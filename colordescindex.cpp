@@ -175,8 +175,6 @@ void ColorDescIndex::save(QSqlDatabase& db, const QString& cachePath) {
 }
 
 void ColorDescIndex::add(const MediaGroup& media) {
-  if (!isLoaded()) return;
-
   int end = _count;
   _count += media.count();
 

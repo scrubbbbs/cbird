@@ -238,8 +238,7 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
       Q_ASSERT(_descriptors.rows == int(numDesc));
 
       // build flann index
-      auto addedDescriptors = cv::Mat();
-      buildIndex(addedDescriptors);
+      buildIndex({});
 
       saveIndex(cachePath);
     }
@@ -274,8 +273,7 @@ Index* CvFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
 
   Q_ASSERT(chunk->_descriptors.rows == int(numDesc));
 
-  auto addedDescriptors = cv::Mat();
-  chunk->buildIndex(addedDescriptors);
+  chunk->buildIndex({});
 
   return chunk;
 }
@@ -286,13 +284,8 @@ void CvFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
   if (DBHelper::isCacheFileStale(db, cacheFile(cachePath))) saveIndex(cachePath);
 }
 
-void CvFeaturesIndex::buildIndex(cv::Mat& addedDescriptors) {
+void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
   qint64 ms = QDateTime::currentMSecsSinceEpoch();
-
-  if (_descriptors.rows <= 0) {
-    _descriptors = addedDescriptors;
-    addedDescriptors = cv::Mat();
-  }
 
   if (_descriptors.rows <= 0) {
     qWarning("no descriptors");

@@ -468,7 +468,8 @@ void Database::add(MediaGroup& inMedia) {
   uint64_t w2 = now - then;
   then = now;
 
-  for (Index* index : _algos) index->add(media);
+  for (Index* index : _algos)
+    if (index->isLoaded()) index->add(media);
 
   connect().commit();
   for (Index* i : _algos) connect(i->databaseId()).commit();
