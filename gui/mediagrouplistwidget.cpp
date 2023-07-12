@@ -446,11 +446,6 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     rect = option.rect;
     rect = rect.adjusted(0, std::max(0, rect.height() - _textHeight), 0, 0);
 
-    // if (option.state & QStyle::State_Selected)
-    //   painter->setPen(palette.highlightedText().color());
-    // else
-    painter->setPen(palette.text().color());
-
     QString title = item->data(Qt::UserRole + 0).toString();
     title = painter->fontMetrics().elidedText(title, Qt::ElideLeft,
                                               rect.width() - LW_ITEM_TITLE_FUZZ, 0);
@@ -463,7 +458,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     if (option.state & QStyle::State_Selected) {
       QBrush selBrush = palette.highlight();
       QColor c = selBrush.color();
-      c.setAlpha(120);
+      c.setAlpha(120); // fixme: theme constants
       selBrush.setColor(c);
       painter->fillRect(rect, c);
     }

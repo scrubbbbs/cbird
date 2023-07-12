@@ -64,18 +64,18 @@ Theme[style="Light"] {
   qproperty-weed_altbase: #0FF;
 }
 
-MediaFolderListWidget {
-/*  background-color: #000;
-  color: #FFF;
-  selection-color: #FFF;
-  selection-background-color: #FF0;
-  */
+* {
   font-size: 16px;
 }
+
+MediaFolderListWidget {
+}
+
 MediaFolderListWidget::item {
   margin: 0px;
   padding: 8px;
 }
+
 /*
 MediaFolderListWidget::item:selected {
   background-color: #444;
@@ -101,3 +101,7 @@ MediaGroupListWidget {
   selection-background-color: #444;
   */font-size: 16px;
 }
+
+VideoCompareWidget {
+}
+

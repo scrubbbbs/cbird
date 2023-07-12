@@ -1,4 +1,5 @@
 
+* { font-size: 16px; }
 
 table { background-color:qt(normal,base); color:qt(normal,text); }
 
@@ -37,5 +38,5 @@ table { background-color:qt(normal,base); color:qt(normal,text); }
 
 .archive { color:theme(archive_base); } /* value is archive/zip file */
 .file    { color:qt(normal,text); }     /* value is file */
-.default { color:qt(normal,text); }     /* text on base */
 .weed    { color:theme(weed_base); }    /* value is weed */
+.default { color:qt(normal,text); }     /* default text */
