@@ -101,8 +101,9 @@ add_exe()
 }
 
 add_exe /usr/local/bin/trash # for sending files to trash
-add_exe /usr/local/bin/ffplay # for ffplay-sbs
 add_exe /usr/local/bin/ffmpeg # for ffplay-sbs
+add_exe /usr/local/bin/ffplay # for ffplay-sbs
+add_exe /usr/local/bin/ffprobe # for ffplay-sbs
 add_exe ./$CBIRD
 
 # we can detect a smaller set of plugins with DYLD logging trick, but this is easier
@@ -134,5 +135,6 @@ test_exe()
 
 test_exe "$PKG_DIR/trash -v"
 test_exe "$PKG_DIR/ffmpeg -version"
+test_exe "$PKG_DIR/ffprobe -version"
 test_exe "$PKG_DIR/ffplay -autoexit screenshot.png"
 test_exe "$PKG_DIR/$CBIRD -about -update -select-all -show"

@@ -1,12 +1,8 @@
 Release Blockers (v0.7)
 =========================
-Theme: videocomparewidget doesn't use theme bg color
-Theme: file name in MGLW doesn't fill the item width
-ffplay-sbs: font looks funky (missing font?)
-Mediabrowser: default window size could be slightly wider
-Mediabrowser: font doesn't match theme
 AppImage: "EGL Not Available" and no window titlebar (Fedora)
-cli: select theme
+AppImage: add kimageformats
+maybe fixed -- ffplay-sbs: font looks funky (missing font?)
 
 Wish List
 =========================
@@ -51,6 +47,7 @@ Wish List
 - fast block-averaging template match with threshold
 - ~~filter for hard/soft links~~ added in v0.6
 - query, edit negative matches
+- refine video search matches using neighboring hashes
 
 ### GUI
 - barebones index/search gui
@@ -107,6 +104,7 @@ Minor Bugs
 - weeds: when deleting a file, do something about broken weeds condition
 - weeds: add something to report and fix broken weed records, maybe part of -update
 - Theme: background shade stacks up with context menu
+- CropWidget: redraw ghosting selection rect, also x,y offset problems
 
 
 Theme
