@@ -39,7 +39,6 @@ class Theme : public QWidget {
   Q_PROPERTY(QColor audio_base MEMBER _audio_base);
   Q_PROPERTY(QColor archive_base MEMBER _archive_base);
   Q_PROPERTY(QColor file_base MEMBER _file_base);
-  Q_PROPERTY(QColor default_base MEMBER _default_base);
   Q_PROPERTY(QColor weed_base MEMBER _weed_base);
 
   Q_PROPERTY(QColor more_altbase MEMBER _more_altbase); // alternate background color
@@ -50,7 +49,6 @@ class Theme : public QWidget {
   Q_PROPERTY(QColor audio_altbase MEMBER _audio_altbase);
   Q_PROPERTY(QColor archive_altbase MEMBER _archive_altbase);
   Q_PROPERTY(QColor file_altbase MEMBER _file_altbase);
-  Q_PROPERTY(QColor default_altbase MEMBER _default_altbase);
   Q_PROPERTY(QColor weed_altbase MEMBER _weed_altbase);
 
  public:
@@ -95,9 +93,9 @@ class Theme : public QWidget {
   QColor _base, _altBase, _text;
 
   QColor _more_base, _less_base, _same_base, _time_base, _video_base, _audio_base, _archive_base,
-      _file_base, _default_base, _weed_base;
+      _file_base, _weed_base;
   QColor _more_altbase, _less_altbase, _same_altbase, _time_altbase, _video_altbase, _audio_altbase,
-      _archive_altbase, _file_altbase, _default_altbase, _weed_altbase;
+      _archive_altbase, _file_altbase, _weed_altbase;
 
   bool _toolboxActive = false;
 };

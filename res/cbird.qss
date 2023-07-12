@@ -5,9 +5,8 @@ Theme[style="Qt"] {
   qproperty-time_base: #FF0;
   qproperty-video_base: #0FF;
   qproperty-audio_base: #F0F;
-  qproperty-archive_base: #FF0;
+  qproperty-archive_base: #C29D00;
   qproperty-file_base: #FFF;
-  qproperty-default_base: #FFF;
   qproperty-weed_base: #0FF;
 
   qproperty-more_altbase: #0F0;
@@ -18,7 +17,6 @@ Theme[style="Qt"] {
   qproperty-audio_altbase: #F0F;
   qproperty-archive_altbase: #FF0;
   qproperty-file_altbase: #FFF;
-  qproperty-default_altbase: #FFF;
   qproperty-weed_altbase: #0FF;
 }
 
@@ -31,7 +29,6 @@ Theme[style="Dark"] {
   qproperty-audio_base: #F0F;
   qproperty-archive_base: #FF0;
   qproperty-file_base: #FFF;
-  qproperty-default_base: #FFF;
   qproperty-weed_base: #0FF;
 
   qproperty-more_altbase: #0F0;
@@ -42,7 +39,6 @@ Theme[style="Dark"] {
   qproperty-audio_altbase: #F0F;
   qproperty-archive_altbase: #FF0;
   qproperty-file_altbase: #FFF;
-  qproperty-default_altbase: #FFF;
   qproperty-weed_altbase: #0FF;
 }
 
@@ -55,7 +51,6 @@ Theme[style="Light"] {
   qproperty-audio_base: #F0F;
   qproperty-archive_base: #C29D00;
   qproperty-file_base: #FFF;
-  qproperty-default_base: #FFF;
   qproperty-weed_base: #0FF;
 
   qproperty-more_altbase: #00ba00;
@@ -66,7 +61,6 @@ Theme[style="Light"] {
   qproperty-audio_altbase: #F0F;
   qproperty-archive_altbase: #FF0;
   qproperty-file_altbase: #FFF;
-  qproperty-default_altbase: #FFF;
   qproperty-weed_altbase: #0FF;
 }
 
