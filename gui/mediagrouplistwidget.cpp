@@ -48,7 +48,6 @@
 #define LW_ITEM_MIN_IMAGE_HEIGHT (16)   // do not draw image below this
 #define LW_ITEM_HISTOGRAM_PADDING (16)  // distance from item edge
 #define LW_ITEM_HISTOGRAM_SIZE (32)     // width of histogram plot
-#define LW_ITEM_TITLE_FUZZ (24)         // fixme: unknown extra space needed for title text
 
 static bool isDifferenceAnalysis(const Media& m) { return m.path().endsWith("-diff***"); }
 static bool isAnalysis(const Media& m) { return m.path().endsWith("***"); }
@@ -260,6 +259,10 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
   void paint(QPainter* painter, const QStyleOptionViewItem& option,
              const QModelIndex& index) const {
+
+    painter->save();
+    painter->setFont(Theme::instance().font());
+
     auto* parent = dynamic_cast<const MediaGroupListWidget*>(option.widget);
     Q_ASSERT(parent);
     const auto* item = parent->item(index.row());
@@ -285,11 +288,11 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       calculate(fullRect, rect, dpr, scale, dstRect, i2v);
 
       if (_debug) {
+        painter->save();
         painter->setPen(Qt::green);
         painter->drawRect(option.rect);
         painter->setPen(Qt::cyan);
         painter->drawRect(rect);
-        painter->save();
 
         painter->scale(1.0 / dpr, 1.0 / dpr);
         painter->setPen(Qt::red);
@@ -379,7 +382,6 @@ class MediaItemDelegate : public QAbstractItemDelegate {
           QRectF srcRect = i2v.inverted().mapRect(QRectF(0, 0, dstRect.width(), dstRect.height()));
           painter->drawImage(dstRect, full, srcRect);
         }
-
       } else {
         Q_ASSERT(!full.isNull());  // opencv exception/segfault
         // OpenCV scaling
@@ -402,8 +404,6 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       painter->restore();
 
       // draw info about the image display (scale factor, mode, filter etc)
-      painter->setPen(palette.text().color());
-
       QString info = QString("%1% %2(%3) %4")
                          .arg(int(totalScale * 100))
                          .arg(_actualSize   ? "[1:1]"
@@ -413,7 +413,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
                          .arg(isRoi ? QString("[ROI] %1\xC2\xB0").arg(rotation, 0, 'f', 1) : "");
       int h1 = painter->fontMetrics().lineSpacing();
 
-      painter->setPen(QColor(128, 128, 128, 255));
+      painter->setPen(QColor(128, 128, 128, 255)); // fixme: theme constants
       painter->drawText(QPoint{rect.x() + h1, rect.y() + h1}, info);
 
       const ColorDescriptor& cd = m.colorDescriptor();
@@ -436,7 +436,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
           int h = int(dc.w) * (rect.height() - yOffset) / totalWeight;
 
           painter->fillRect(x, y, w, h, rgb);
-          painter->drawLine(x, y + h, x + w + 2, y + h);
+          painter->drawLine(x + w, y + h, x + w + 2, y + h);
           y += h;
         }
         painter->restore();
@@ -447,8 +447,10 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     rect = rect.adjusted(0, std::max(0, rect.height() - _textHeight), 0, 0);
 
     QString title = item->data(Qt::UserRole + 0).toString();
-    title = painter->fontMetrics().elidedText(title, Qt::ElideLeft,
-                                              rect.width() - LW_ITEM_TITLE_FUZZ, 0);
+
+    title = painter->fontMetrics().elidedText(title, Qt::ElideLeft, rect.width(), 0);
+    title = title.mid(0, title.lastIndexOf(lc('('))); // remove separately styled suffix
+
     QString text = item->text();
     text = text.replace("@title@", title);
     text = text.replace("@width@", QString::number(rect.width()));
@@ -467,6 +469,8 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       painter->setPen(Qt::magenta);
       painter->drawRect(rect);
     }
+
+    painter->restore();
   }
 
   QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
@@ -1444,8 +1448,10 @@ void MediaGroupListWidget::updateItems() {
 
     // elide the first row text, tricky... since there is no html attribute for it,
     // pass via item->data() to the item paint()...then must assume
-    // drawRichText() uses similar font metrics
-    QString title = path + QString(" [x%1] ").arg(fileCount);
+    // drawRichText() uses similar font metrics as the widget
+    // note: the () at the end is only to *measure* that part which is
+    // styled differently, it gets lopped off in paint()
+    QString title = path + QString(" [x%1] (%2)").arg(fileCount).arg(fileCount - first.fileCount);
 
     if (m.isWeed()) title += "WEED ";
 
@@ -1488,7 +1494,7 @@ void MediaGroupListWidget::updateItems() {
             "<td><span class=\"%24\">%25</span></td>"
             "</tr>"
             "</tbody></table>")
-            .arg("@title@")
+            .arg("@title@") // paint elides text to the item width
             .arg(m.width())
             .arg(m.height())
             .arg(size / 1024)

@@ -65,7 +65,7 @@ Theme[style="Light"] {
 }
 
 * {
-  font-size: 16px;
+  font-size: 16px; /* font must match cbird-richtext.css for elided text hack */
 }
 
 MediaFolderListWidget {

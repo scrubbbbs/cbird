@@ -1,5 +1,5 @@
 
-* { font-size: 16px; }
+* { font-size: 16px; } /* font must match cbird.qss for elided text hack */
 
 table { background-color:qt(normal,base); color:qt(normal,text); }
 
