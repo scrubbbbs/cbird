@@ -665,8 +665,12 @@ bool WidgetHelper::restoreGeometry(QWidget* w, const char* id) {
   if (!id) id = w->metaObject()->className();
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(id);
-  if (!w->restoreGeometry(settings.value("geometry").toByteArray()))
-    w->setGeometry(100, 100, 1024, 768);
+  if (!w->restoreGeometry(settings.value("geometry").toByteArray())) {
+    QRect avail = qApp->primaryScreen()->availableGeometry();
+    int width = qMin(1280, avail.width());
+    int height = qMin(720, avail.height());
+    w->setGeometry((avail.width()-width)/2, (avail.height()-height)/2, width, height);
+  }
 
   return settings.value("maximized").toBool();
 }
