@@ -52,6 +52,9 @@ class Theme : public QWidget {
   Q_PROPERTY(QColor weed_altbase MEMBER _weed_altbase);
 
  public:
+  /// set default style; could be "Auto" in which case the final style would be different
+  static void setDefaultStyle(const QString& style);
+
   /// initialize system theme, call before creating windows
   static void setup();
 
@@ -86,9 +89,11 @@ class Theme : public QWidget {
   /// display color picker tool for our own colors (not supplied by QStyle)
   static void showToolbox();
 
+  static QString* _defaultStyle;
+
   QStyle* _baseStyle = nullptr;  // style before any stylesheets added
 
-  QString _style;  // "Qt", "Dark", "Light"
+  QString _style;  // "Auto", "Qt", "Dark", "Light"
 
   QColor _base, _altBase, _text;
 

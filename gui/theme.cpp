@@ -2,6 +2,8 @@
 
 #include "../qtutil.h"
 
+QString* Theme::_defaultStyle = nullptr;
+
 Theme::Theme(QWidget* parent) : QWidget(parent) {}
 
 Theme::~Theme() {}
@@ -11,6 +13,12 @@ Theme& Theme::instance() {
   if (!theme) theme = new Theme(nullptr);
 
   return *theme;
+}
+
+void Theme::setDefaultStyle(const QString& style) {
+  delete _defaultStyle;
+  _defaultStyle = new QString(style);
+  qDebug() << *_defaultStyle;
 }
 
 void Theme::setup() {
@@ -38,6 +46,8 @@ void Theme::setup() {
 #endif
 
   if (qEnvironmentVariableIsSet("CBIRD_STYLE")) style = qEnvironmentVariable("CBIRD_STYLE");
+
+  if (_defaultStyle) style = *_defaultStyle;
 
 #if QT_VERSION_MINOR >= 5
   const Qt::ColorScheme hint = qApp->styleHints()->colorScheme();

@@ -90,7 +90,12 @@ Viewing
   -sets                            enable group view, group results with the same pair of directories
   -exit-on-select                  \"select\" action exits with selected index as exit code, < 0 if canceled
   -max-per-page <int>              maximum items on one page [10]
-  -show                            show results  owser for the current selection/results
+  -show                            show results browser for the current selection/results
+  -theme <string>                  select color theme, must appear before -show
+     Auto                          * detect Dark/Light from system theme if possible (Mac/Windows default)
+     Dark                          * built-in dark theme (Linux default)
+     Light                         * built-in light theme
+     Qt                            * do not set any theme, adopt the Qt/System theme
 
 Miscellaneous
 ==============================================================================

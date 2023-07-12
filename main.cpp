@@ -151,7 +151,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
                      "-license", "-cwd", "-init", "-list-search-params", "-list-index-params",
                      "-weeds", /*"-track-weeds",*/ "-nuke-weeds", "-dump", "-list-formats",
                      /* one argument */
-                     "-select-id", "-select-sql", "-max-per-page", "-head", "-tail"};
+                     "-select-id", "-select-sql", "-max-per-page", "-head", "-tail", "-theme"};
 
   const QSet<QString> twoArg{"-rename", "-compare-videos", "-merge", "-video-thumbnail"};
   cmds += twoArg;
@@ -715,7 +715,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-create") {
       checkIndexPathExists = false;
     } else if (arg == "-headless") {
-      qInfo("selected headless mode");
+      qDebug("selected headless mode, gui functions will abort");
     } else if (arg == "-update") {
       checkIndexPathExists = false;
       int threads = indexParams.indexThreads;
@@ -1331,6 +1331,8 @@ int main(int argc, char** argv) {
       widgetOptions.maxPerPage = intArg(nextArg());
       //    } else if (arg == "-track-weeds") {
       //      widgetOptions.trackWeeds = true;
+    } else if (arg == "-theme") {
+      Theme::setDefaultStyle(nextArg());
     } else if (arg == "-show") {
       widgetOptions.params = params;
       widgetOptions.db = _engine ? _engine->db : nullptr;  // should not require db (-select-files)
