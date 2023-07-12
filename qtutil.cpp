@@ -321,10 +321,10 @@ void DesktopHelper::revealPath(const QString& path) {
 
 void DesktopHelper::openVideo(const QString& path, double seekSeconds) {
   QStringList args;
+  QString settingsKey;
   if (abs(seekSeconds) >= 0.1) {
-    const QString settingsKey = qq("OpenVideoSeek");
-    const QStringList defaultArgs = QStringList{{"DesktopServices"}};
-    args = getSetting(settingsKey, defaultArgs).toStringList();
+    settingsKey = qq("OpenVideoSeek");
+    args = getSetting(settingsKey, {}).toStringList();
 
     QVector<QStringList> openVideoSeek;
 #ifdef Q_OS_WIN
@@ -347,11 +347,12 @@ void DesktopHelper::openVideo(const QString& path, double seekSeconds) {
                        qq("Select the program for viewing video at a timestamp")))
       return;
   } else {
-    const char* settingsKey = "OpenVideo";
+    settingsKey = qq("OpenVideo");
     const QStringList defaultArgs = QStringList{{"DesktopServices"}};
     args = getSetting(settingsKey, defaultArgs).toStringList();
   }
 
+  qDebug() << settingsKey << args;
   runProgram(args, false, path, seekSeconds);
 }
 
