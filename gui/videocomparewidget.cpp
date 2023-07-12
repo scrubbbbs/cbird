@@ -261,13 +261,6 @@ VideoCompareWidget::VideoCompareWidget(const Media& left, const Media& right,
 
   setWindowTitle("Compare Videos: " + prefix);
 
-  setStyleSheet(
-      "VideoCompareWidget { "
-      "  background-color: #111; "  // non-black to help spot letterboxing
-      "  font-size: 16px; "
-      "  color: white; "
-      "}");
-
   _maximized = WidgetHelper::restoreGeometry(this);
 
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
