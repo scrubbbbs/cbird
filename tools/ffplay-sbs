@@ -180,9 +180,8 @@ echo $prog h2: $height2 w2: $width2 dar2: $dar2
 scale1="scale=w=$width1:h=$ih"
 scale2="scale=w=$width2:h=$ih"
 
-# center-crop each side, also sets the final output width
-# make output 16:9 for wide videos, 1:1 for iphone videos
-aspect=16:9
+# center-crop each side, sets the final output width
+# make output 16:9 for wide videos, 1:1 for vertical videos
 if [ $iw -gt $ih ]; then
   crop_w=$(($ih * 1777 / 1000 / 2))
 else
@@ -203,14 +202,19 @@ bottext="x=w/2-text_w/2:y=h-text_h-10"
 
 helptext="[q]uit - [f]ullscreen - [a]udio"
 
-# note: -f matroska allows forward seek to somewhat work, to fast-forward anyways
+crop=",crop=$crop_w:$ih"
+#crop=
+
+# crop is optional, but won't fill screen
+# setsar=1 since scale makes input 1:1
+# -f matroska allows forward seek to somewhat work, to fast-forward anyways
 FFREPORT="level=32:file=$log.ff.log" ffmpeg $audio1Args $audio2Args -f lavfi -i "\
   movie=$video1 [left]; \
   movie=$video2 [right]; \
-[right]$scale2,crop=$crop_w:$ih,drawtext=text=$name2:$toptext:$textfmt [rs];\
- [left]$scale1,crop=$crop_w:$ih,drawtext=text=$name1:$toptext:$textfmt [ls];\
+[right]$scale2,setsar=1$crop,drawtext=text=$name2:$toptext:$textfmt [rs];\
+ [left]$scale1,setsar=1$crop,drawtext=text=$name1:$toptext:$textfmt [ls];\
 [ls][rs]hstack,drawtext=text='$helptext':$bottext:$textfmt [out0]" \
--map 2:v -c:v rawvideo -aspect $aspect -map 0:a:0 -map 1:a:0 -c:a pcm_s16le -f matroska - 2>/dev/null | \
+-map 2:v -c:v rawvideo -map 0:a:0 -map 1:a:0 -c:a pcm_s16le -f matroska - 2>/dev/null | \
 ffplay -fs -autoexit -v quiet -window_title "$prog" -
 
 # in case process crashes cleanup ffmpeg jobs
