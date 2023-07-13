@@ -69,7 +69,7 @@ static QStringList listServiceObjects(QDBusConnection& connection, const QString
   return objectPaths;
 }
 
-static void callServiceMethod(const QStringList& args) {
+static bool callServiceMethod(const QStringList& args) {
   auto service = args[0];
   auto object = args[1];
   auto interface = args[2];
@@ -96,22 +96,27 @@ static void callServiceMethod(const QStringList& args) {
 
   if (!validPath) {
     qWarning() << "DBus service missing" << object << "is" << service << "running?";
-    return;
+    return false;
   }
 
   QDBusInterface remoteApp(service, object, interface, QDBusConnection::sessionBus());
   if (remoteApp.isValid()) {
     QDBusReply<void> reply;
     reply = remoteApp.callWithArgumentList(QDBus::Block, method, methodArgs);
-    if (!reply.isValid()) qWarning() << "DBus Error:" << reply.error();
+    if (!reply.isValid()) {
+      qWarning() << "DBus Error:" << reply.error();
+      return false;
+    }
+    return true;
+  }
 
-  } else
-    qWarning() << "DBus failed to connect:" << remoteApp.lastError();
+  qWarning() << "DBus failed to connect:" << remoteApp.lastError();
+  return false;
 }
 
 #endif  // !Q_OS_WIN
 
-void DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPath, double seek,
+bool DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPath, double seek,
                                const QString& inPath2, double seek2) {
   QString path(inPath);
   QString path2(inPath2);
@@ -136,8 +141,10 @@ void DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
   if (args.count() > 0) {
     const QString prog = args.first();
     if (prog == "DesktopServices") {
-      if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path)))
+      if (!QDesktopServices::openUrl(QUrl::fromLocalFile(path))) {
         qWarning() << "QDesktopService::openUrl failed for" << path;
+        return false;
+      }
 #ifndef Q_OS_WIN
     } else if (prog == "DBus") {
       // example : "DBus, org.krusader, /Instances/krusader/right_manager,
@@ -145,7 +152,7 @@ void DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
       if (args.count() < 5) {
         qWarning() << "DBus requires at least 4 arguments (service, path, "
                       "interface, method, [args...])";
-        return;
+        return false;
       }
 
       // multiple calls possible, separated by "&&"
@@ -161,7 +168,9 @@ void DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
       }
       calls.append(dbusArgs);
 
-      for (const QStringList& dbusCall : qAsConst(calls)) callServiceMethod(dbusCall);
+      for (const QStringList& dbusCall : qAsConst(calls))
+        if (!callServiceMethod(dbusCall))
+          return false;
 
 #endif  // !Q_OS_WIN
     } else {
@@ -214,18 +223,25 @@ void DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
       p.setArguments(args.mid(1));
 #endif
       if (!wait) {
-        if (!p.startDetached()) qWarning() << prog << "failed to start, is it installed?";
+        if (!p.startDetached()) {
+          qWarning() << prog << "failed to start, is it installed?";
+          return false;
+        }
       } else {
         p.start();
         if (!p.waitForStarted()) {
           qWarning() << prog << "failed to start, is it installed?";
-          return;
+          return false;
         }
         p.waitForFinished();
-        if (p.exitCode() != 0) qWarning() << prog << "exit code" << p.exitCode() << p.errorString();
+        if (p.exitCode() != 0) {
+          qWarning() << prog << "exit code" << p.exitCode() << p.errorString();
+          return false;
+        }
       }
     }
   }
+  return true;
 }
 
 QVariant DesktopHelper::getSetting(const QString& key, const QVariant& defaultValue) {
@@ -316,44 +332,49 @@ void DesktopHelper::revealPath(const QString& path) {
   if (args.count() > 0 && args.first() == ll("DesktopServices"))
     tmp = QFileInfo(path).absoluteDir().path();
 
-  runProgram(args, false, tmp);
+  if (!runProgram(args, false, tmp))
+    putSetting(settingsKey, {});
 }
 
 void DesktopHelper::openVideo(const QString& path, double seekSeconds) {
   QStringList args;
   QString settingsKey;
-  if (abs(seekSeconds) >= 0.1) {
-    settingsKey = qq("OpenVideoSeek");
-    args = getSetting(settingsKey, {}).toStringList();
 
-    QVector<QStringList> openVideoSeek;
+  settingsKey = qq("OpenVideoSeek");
+  args = getSetting(settingsKey, {}).toStringList();
+
+  QVector<QStringList> openVideoSeek;
 #ifdef Q_OS_WIN
-    openVideoSeek = {
-        {"Desktop Default (No Timestamp)", "DesktopServices"},
-        {"VLC", "\"C:/Program Files (x86)/VideoLan/VLC/vlc.exe\"", "--start-time=%seek", "\"%1\""},
-        {"FFplay", "ffplay.exe", "-ss", "%seek", "\"%1\""},
-        {"MPlayer", "mplayer.exe", "-ss", "%seek", "\"%1\""},
-        {"MPV", "mpv.exe", "--start=%seek", "\"%1\""}};
+  openVideoSeek = {
+      {"Desktop Default (No Timestamp)", "DesktopServices"},
+      {"VLC", "\"C:/Program Files (x86)/VideoLan/VLC/vlc.exe\"", "--start-time=%seek", "\"%1\""},
+      {"FFplay", "ffplay.exe", "-ss", "%seek", "\"%1\""},
+      {"MPlayer", "mplayer.exe", "-ss", "%seek", "\"%1\""},
+      {"MPV", "mpv.exe", "--start=%seek", "\"%1\""}};
 #else
-    openVideoSeek = {{"Desktop Default (No Timestamp)", "DesktopServices"},
-                     {"Celluloid", "celluloid", "--mpv-options=--start=%seek", "%1"},
-                     {"FFplay", "ffplay", "-ss", "%seek", "%1"},
-                     {"MPlayer", "mplayer", "-ss", "%seek", "%1"},
-                     {"MPV", "mpv", "--start=%seek", "%1"},
-                     {"SMPlayer", "smplayer", "-start", "%seek(int)", "%1"},
-                     {"VLC", "vlc", "--start-time=%seek", "%1"}};
+  openVideoSeek = {
+    {"Desktop Default (No Timestamp)", "DesktopServices"},
+    {"Celluloid", "celluloid", "--mpv-options=--start=%seek", "%1"},
+    {"FFplay", "ffplay", "-ss", "%seek", "%1"},
+    {"MPlayer", "mplayer", "-ss", "%seek", "%1"},
+    {"MPV", "mpv", "--start=%seek", "%1"},
+    {"SMPlayer", "smplayer", "-start", "%seek(int)", "%1"},
+    {"VLC", "vlc", "--start-time=%seek", "%1"}};
 #endif
-    if (!chooseProgram(args, openVideoSeek, settingsKey, qq("Choose Video Player"),
-                       qq("Select the program for viewing video at a timestamp")))
-      return;
-  } else {
-    settingsKey = qq("OpenVideo");
-    const QStringList defaultArgs = QStringList{{"DesktopServices"}};
-    args = getSetting(settingsKey, defaultArgs).toStringList();
-  }
+  if (!chooseProgram(args, openVideoSeek, settingsKey, qq("Choose Video Player"),
+                     qq("Select the program for viewing video at a timestamp")))
+    return;
+
+  if (!runProgram(args, false, path, seekSeconds)) putSetting(settingsKey, {});
+}
+
+void DesktopHelper::openVideo(const QString& path)  {
+  QString settingsKey = qq("OpenVideo");
+  const QStringList defaultArgs = QStringList{{"DesktopServices"}};
+  QStringList args = getSetting(settingsKey, defaultArgs).toStringList();
 
   qDebug() << settingsKey << args;
-  runProgram(args, false, path, seekSeconds);
+  (void) runProgram(args, false, path);
 }
 
 void DesktopHelper::compareAudio(const QString& path1, const QString& path2) {

@@ -898,7 +898,11 @@ void Media::openMedia(const Media& m, float seek) {
     process.closeWriteChannel();
     process.waitForFinished(10000);
 #else
-    DesktopHelper::openVideo(QFileInfo(m.path()).absoluteFilePath(), double(seek));
+    QString absPath = QFileInfo(m.path()).absoluteFilePath();
+    if (seek > 0)
+      DesktopHelper::openVideo(absPath, double(seek));
+    else
+      DesktopHelper::openVideo(absPath);
 #endif
 
 #if 0

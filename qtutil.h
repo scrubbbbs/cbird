@@ -28,7 +28,10 @@ class DesktopHelper {
   static void revealPath(const QString& path);
 
   /// open video player with optional starting time
-  static void openVideo(const QString& path, double seekSeconds = 0.0);
+  static void openVideo(const QString& path, double seekSeconds);
+
+  /// open video player
+  static void openVideo(const QString& path);
 
   /// open audio track (visual) comparison tool
   static void compareAudio(const QString& path1, const QString& path2);
@@ -57,7 +60,7 @@ class DesktopHelper {
                           int maxLifetime = 60);
 
  private:
-  static void runProgram(QStringList& args, bool wait, const QString& inPath = "",
+  static bool runProgram(QStringList& args, bool wait, const QString& inPath = "",
                          double seek = 0.0, const QString& inPath2 = "", double seek2 = 0.0);
   static QVariant getSetting(const QString& key, const QVariant& defaultValue);
   static void putSetting(const QString& key, const QVariant& value);
