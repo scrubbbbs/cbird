@@ -205,6 +205,11 @@ void Theme::drawRichText(QPainter* painter, const QRect& r, const QString& text)
 int Theme::execDialog(QDialog* dialog) const {
   std::unique_ptr<ShadeWidget> shade;
   if (dialog->parentWidget()) shade.reset(new ShadeWidget(dialog->parentWidget()));
+
+#ifdef Q_OS_MAC
+  dialog->setWindowModality(Qt::WindowModal);
+#endif
+
   polishWindow(dialog);
   WidgetHelper::hackShowWindow(dialog);
   return dialog->exec();
@@ -215,6 +220,7 @@ int Theme::execInputDialog(QInputDialog* dialog, const QString& title, const QSt
   dialog->setInputMode(QInputDialog::TextInput);
   dialog->setWindowTitle(title);
   dialog->setLabelText(label);
+
   if (completions.count() > 0) {
     dialog->setComboBoxItems(completions);
     dialog->setComboBoxEditable(true);
