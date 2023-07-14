@@ -678,22 +678,67 @@ void WidgetHelper::saveGeometry(const QWidget* w, const char* id) {
   if (!id) id = w->metaObject()->className();
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(id);
-  settings.setValue("geometry", w->saveGeometry());
-  settings.setValue("maximized", w->isMaximized());
+
+  // bugged for maximized windows (Gnome3)
+  // also we want to set the maximized state ourselves; this cannot be allowed
+  // to show the window as that goes through Theme:: for things to look right
+  //settings.setValue("geometry", w->saveGeometry());
+
+  bool maximized  = w->isMaximized() || w->isFullScreen();
+  settings.setValue("maximized", maximized);
+
+  // note: normalGeometry does not work on all platforms
+  // known to be broken: xfwm4 - maximized window->normalGeometry==geometry
+  auto geom = w->normalGeometry();
+  settings.setValue("normalGeometry", geom);
+  qDebug() << "normalGeometry:"  << geom;
 }
 
 bool WidgetHelper::restoreGeometry(QWidget* w, const char* id) {
   if (!id) id = w->metaObject()->className();
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(id);
-  if (!w->restoreGeometry(settings.value("geometry").toByteArray())) {
-    QRect avail = qApp->primaryScreen()->availableGeometry();
-    int width = qMin(1280, avail.width());
-    int height = qMin(720, avail.height());
-    w->setGeometry((avail.width()-width)/2, (avail.height()-height)/2, width, height);
+
+  // bugged for maximized windows (Gnome3)
+  //  if (!w->restoreGeometry(settings.value("geometry").toByteArray())) {
+  //    QRect avail = qApp->primaryScreen()->availableGeometry();
+  //    int width = qMin(1280, avail.width());
+  //    int height = qMin(720, avail.height());
+  //    w->setGeometry((avail.width()-width)/2, (avail.height()-height)/2, width, height);
+  //  }
+
+  const QRect invalidRect(-100, -100, -1, -1);
+
+  QRect normalGeom = settings.value("normalGeometry", invalidRect).toRect();
+  QSize size = normalGeom.size();
+  QPoint pos = normalGeom.topLeft();
+
+  bool maximized = settings.value("maximized", false).toBool();
+
+  QScreen* screen = qApp->screenAt(pos);
+  if (!screen) {
+    screen = qApp->primaryScreen();
+    pos = invalidRect.topLeft();
   }
 
-  return settings.value("maximized").toBool();
+  QRect avail = screen->availableGeometry();
+
+  // lost position, center the window
+  if (size == invalidRect.size()) size = QSize(1280, 720);
+
+  // !! this is actually wrong because size does not
+  // include the window frame -- but we cannot know what it is...
+  // if we subtract some for the title bar maybe its ok most of the time
+  int width = qMin(size.width(), avail.width());
+  int height = qMin(size.height(), avail.height() - 32);
+
+  if (pos == invalidRect.topLeft())
+    pos = QPoint((avail.width() - width) / 2, (avail.height() - height - 32) / 2);
+
+  // hopefully restores normalGeometry()
+  w->setGeometry(pos.x(), pos.y(), width, height);
+
+  return maximized;
 }
 
 void WidgetHelper::saveTableState(const QTableView* w, const char* id) {
