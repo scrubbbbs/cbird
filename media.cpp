@@ -237,7 +237,6 @@ void Media::sortGroupList(MediaGroupList& list, const QString& key) {
 void Media::sortGroup(MediaGroup& group, const QString& key, bool reverse) {
   auto f = propertyFunc(key);
   QCollator collator;
-  collator.setNumericMode(true);
 
   auto cmp = [&](const Media& a, const Media& b) {
     const QString sa = f(a).toString();

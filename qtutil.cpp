@@ -1402,21 +1402,25 @@ ShadeWidget::ShadeWidget(QWidget* parent) : QLabel(parent) {
 
 int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const QStringView& b) {
   // fixme: this can be sped up massively by eliminating the regexps
+  //        and perhaps parsing each string in a higher-level structure
+  //        so the next compare can be fast
   static const QRegularExpression numberStartExp(qq("[0-9]"));
 
-  // non-digit not preceded by digit or .
-  static const QRegularExpression numberEndExp(qq("(?![0-9\\.])[^0-9]"));
+  // non-digit not preceded by digit
+  static const QRegularExpression numberEndExp(qq("(?![0-9])[^0-9]"));
 
   // current index into string
   int ia = a.isEmpty() ? -1 : 0;
   int ib = b.isEmpty() ? -1 : 0;
 
-  auto compareNumbers = [&a, &b, &ia, &ib, &cmp](const int na, const int nb) {
+  auto compareNumbers = [&a, &b, &ia, &ib](const int na, const int nb) {
     ia = a.indexOf(numberEndExp, ia);
     ib = b.indexOf(numberEndExp, ib);
     auto pa = a.mid(na, ia > 0 ? (ia - na) : -1);
     auto pb = b.mid(nb, ib > 0 ? (ib - nb) : -1);
-    return cmp.compare(pa, pb);
+    auto intA = pa.toInt();
+    auto intB =  pb.toInt();
+    return intA < intB ? -1 : (intA > intB ? 1 : 0);
   };
 
   while (true) {
