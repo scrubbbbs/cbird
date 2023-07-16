@@ -71,10 +71,12 @@ class Theme : public QWidget {
 
   int execDialog(QDialog* dialog) const;
 
+  int execDialog(QMessageBox* dialog) const;
+
   int execInputDialog(QInputDialog* dialog, const QString& title, const QString& label,
                       const QString& text, const QStringList& completions = {}) const;
 
-  QString getExistingDirectory(const QString& title, const QString& dirPath, QWidget* parent) const;
+  QString getExistingDirectory(const QString& action, const QString &label, const QString& dirPath, QWidget* parent) const;
 
  private:
   Theme(QWidget* parent);

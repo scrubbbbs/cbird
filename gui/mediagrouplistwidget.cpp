@@ -641,7 +641,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   connect(this, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(openAction()));
 
   setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(this, &QWidget::customContextMenuRequested, this, &MediaGroupListWidget::execContextMenu);
+  connect(this, &QWidget::customContextMenuRequested, this, &self::execContextMenu);
 
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(staticMetaObject.className() + qq(".shortcuts"));
@@ -1859,7 +1859,7 @@ void MediaGroupListWidget::renameFileAction() {
 
     QString newName = info.fileName();
     QInputDialog dialog(this);
-    int result = Theme::instance().execInputDialog(&dialog, qq("Rename File"), qq("New Name"),
+    int result = Theme::instance().execInputDialog(&dialog, qq("Rename File"), qq("Rename File"),
                                                    newName, completions);
 
     if (result != QInputDialog::Accepted) return;
@@ -1932,7 +1932,7 @@ void MediaGroupListWidget::renameFolderAction() {
   }
 
   QInputDialog dialog(this);
-  int result = Theme::instance().execInputDialog(&dialog, qq("Rename Folder/Zip"), qq("New Name"),
+  int result = Theme::instance().execInputDialog(&dialog, qq("Rename Folder/Zip"), qq("Rename Folder/Zip"),
                                                  newName, completions);
 
   if (result != QInputDialog::Accepted) return;
@@ -2017,7 +2017,7 @@ void MediaGroupListWidget::moveFileAction() {
   QString dirPath = action->data().toString();
 
   if (dirPath == ll(";newfolder;"))
-    dirPath = Theme::instance().getExistingDirectory(qq("Move File: Choose Destination"),
+    dirPath = Theme::instance().getExistingDirectory(qq("Move File"), qq("Destination:"),
                                                      _options.db->path(), this);
   if (dirPath.isEmpty()) return;
 
@@ -2084,7 +2084,7 @@ void MediaGroupListWidget::moveFolderAction() {
   QString dirPath = action->data().toString();
 
   if (dirPath == ";newfolder;")
-    dirPath = Theme::instance().getExistingDirectory("Move Parent: Choose Destination",
+    dirPath = Theme::instance().getExistingDirectory(qq("Move Parent"), qq("Destination:"),
                                                      _options.db->path(), this);
 
   if (dirPath.isEmpty()) return;
@@ -2364,6 +2364,11 @@ void MediaGroupListWidget::thumbnailAction() {
 }
 
 void MediaGroupListWidget::moveToNextScreenAction() {
+  // resize regardless...otherwise seem to get artifacts on some WMs
+  bool wasMaximized = isMaximized();
+
+  setWindowState(Qt::WindowNoState);
+
   auto screens = QGuiApplication::screens();
   if (screens.count() <= 1) return;
 
@@ -2401,9 +2406,12 @@ void MediaGroupListWidget::moveToNextScreenAction() {
   else
     geom.setHeight(newGeom.height() - winOffset.height());
 
-  // resize regardless...otherwise seem to get artifacts on some WMs
+
   resize(geom.width(), geom.height());  // does not include window frame
   move(QPoint(newX, newY));             // position on screen, includes window frame
+
+  if (wasMaximized)
+    setWindowState(windowState() | Qt::WindowMaximized);
 }
 
 void MediaGroupListWidget::zoomInAction() {

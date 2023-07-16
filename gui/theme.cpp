@@ -202,12 +202,27 @@ void Theme::drawRichText(QPainter* painter, const QRect& r, const QString& text)
   painter->restore();
 }
 
+int Theme::execDialog(QMessageBox* dialog) const {
+
+  // fixme: warning icon is bugged (qt 6.5.1) set it ourselves
+#ifdef Q_OS_MAC
+  if (dialog->icon()==QMessageBox::Warning) {
+    auto style = dialog->style();
+    int iconSize = style->pixelMetric(QStyle::PM_MessageBoxIconSize, nullptr, dialog);
+    QIcon icon = style->standardIcon(QStyle::SP_MessageBoxWarning);
+    dialog->setIconPixmap(icon.pixmap(QSize(iconSize,iconSize), dialog->devicePixelRatio()));
+  }
+#endif
+
+  return execDialog((QDialog*)dialog);
+}
+
 int Theme::execDialog(QDialog* dialog) const {
+#ifdef Q_OS_MAC
+  dialog->setWindowModality(Qt::WindowModal); // sheet already shades the window
+#else
   std::unique_ptr<ShadeWidget> shade;
   if (dialog->parentWidget()) shade.reset(new ShadeWidget(dialog->parentWidget()));
-
-#ifdef Q_OS_MAC
-  dialog->setWindowModality(Qt::WindowModal);
 #endif
 
   polishWindow(dialog);
@@ -230,13 +245,19 @@ int Theme::execInputDialog(QInputDialog* dialog, const QString& title, const QSt
   return execDialog(dialog);
 }
 
-QString Theme::getExistingDirectory(const QString& title, const QString& dirPath,
-                                    QWidget* parent) const {
-  QFileDialog dialog(parent, title);
+QString Theme::getExistingDirectory(const QString& action, const QString& label,
+                                    const QString& dirPath, QWidget* parent) const {
+  QFileDialog dialog(parent, action);
 
+  // we have to move to a subdirectory so use the basic dialog,the extra
+  // features are doing anything for us. and it is much faster on windows
   dialog.setFileMode(QFileDialog::Directory);
-  dialog.setOptions(QFileDialog::ShowDirsOnly | QFileDialog::DontUseNativeDialog);
+  dialog.setOptions(QFileDialog::ShowDirsOnly | QFileDialog::DontUseNativeDialog |
+                    QFileDialog::HideNameFilterDetails  | QFileDialog::DontResolveSymlinks |
+                    QFileDialog::DontUseCustomDirectoryIcons);
   dialog.setDirectory(dirPath);
+  dialog.setLabelText(QFileDialog::FileName, label);
+  dialog.setLabelText(QFileDialog::Accept, action);
 
   int result = Theme::instance().execDialog(&dialog);
   if (result != QFileDialog::Accepted) return QString();
