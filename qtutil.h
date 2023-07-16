@@ -133,8 +133,11 @@ class MenuHelper {
 
 /// obscure parent to emphasize foreground
 class ShadeWidget : public QLabel {
+  NO_COPY_NO_DEFAULT(ShadeWidget, QLabel);
+  Q_OBJECT
  public:
   ShadeWidget(QWidget* parent);
+  virtual ~ShadeWidget();
 };
 
 /**

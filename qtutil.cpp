@@ -184,27 +184,27 @@ bool DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
 #ifdef CBIRD_PORTABLE_BINARY
         portable = true;
 #endif
-        bool appImage = getenv("APPDIR") != nullptr;
+        QString appDir = getenv("APPDIR"); // AppImage
         bool setEnv = false;
         QString binDir, libDir;
         if (portable || getenv("CBIRD_PORTABLE")) {
           setEnv = true;
-          QString appDir = qApp->applicationDirPath();
+          appDir = qApp->applicationDirPath();
           binDir = appDir + "/";
           libDir = appDir + "/";
-          qDebug() << "portable path=" << appDir;
-        } else if (appImage) {
+        } else if (!appDir.isEmpty()) {
           setEnv = true;
-          QString appDir = getenv("APPDIR");
           binDir = appDir + "/cbird/bin/";
           libDir = appDir + "/cbird/lib/";
         }
 
+        if (setEnv)
+          qDebug() << "portable PATH:" << binDir << "LD_LIBRARY_PATH:" << libDir;
+
         const QString appProg = binDir + prog;
-        qDebug() << appProg << QFileInfo(appProg).exists();
         if (setEnv && QFileInfo(appProg).exists()) {
-          qInfo() << "using" << appProg << "for" << prog;
-          qInfo() << "to disable this, set CBIRD_NO_BUNDLED_PROGS";
+          qDebug() << "using " << appProg << "for" << prog;
+          qDebug() << "to disable this, set CBIRD_NO_BUNDLED_PROGS";
 
           // put the bundled apps before everything else
           auto env = QProcessEnvironment::systemEnvironment();
@@ -1435,14 +1435,21 @@ QPartialOrdering qVariantCompare(const QVariant& a, const QVariant& b) {
 #endif
 
 ShadeWidget::ShadeWidget(QWidget* parent) : QLabel(parent) {
+  setProperty("style", Theme::instance().property("style")); // stylesheet sets transparent bg color
   setGeometry({0, 0, parent->width(), parent->height()});
   setMargin(0);
   setFrameShape(QFrame::NoFrame);
-  setStyleSheet(R"qss(
-        QLabel {
-          background-color:rgba(0,0,0,128);
-        })qss");
-  show();
+  // prevent stacking of effect; note it will still stack with
+  // the window manager's effect (os x, kde)
+  if (!parent->property("shaded").toBool()) {
+    parent->setProperty("shaded", true);
+    show();
+  }
+}
+
+ShadeWidget::~ShadeWidget() {
+  if (!isHidden())
+    parent()->setProperty("shaded", false);
 }
 
 int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const QStringView& b) {
