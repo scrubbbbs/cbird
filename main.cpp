@@ -1080,6 +1080,8 @@ int main(int argc, char** argv) {
         }
     } else if (arg == "-select-result") {
       for (auto& g : queryResult) selection.append(g);
+      // pretend it is sorted to prevent automatic sort
+      if (!selection.empty()) selection.first().setAttribute("sort", "(select-result)");
       queryResult.clear();
     } else if (arg == "-select-sql") {
       selection.append(engine().db->mediaWithSql(nextArg()));
@@ -1340,7 +1342,6 @@ int main(int argc, char** argv) {
         MediaBrowser::show(queryResult, showMode, widgetOptions);
       else {
         // sort by folder/archive if no sort was given
-        // note: cannot sort unless there is no sort
         if (selection.count() && !selection.first().attributes().contains("sort"))
           Media::sortGroup(selection, "path", false);
 
