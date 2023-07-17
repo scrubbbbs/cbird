@@ -589,13 +589,19 @@ void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst, float clipHistP
     clipHistPercent *= (max / 100.0f);  // make percent as absolute
     clipHistPercent /= 2.0f;            // left and right wings
 
-    // locate left cut
+    // locate left cut, overflow check added for serenity, never crashed here (yet)
     minGray = 0;
-    while (accumulator[uint(minGray)] < clipHistPercent) minGray++;
+    while (minGray < int(hSize) && accumulator[uint(minGray)] < clipHistPercent) minGray++;
 
-    // locate right cut
+    // locate right cut, overflow check is needed, some inputs will segfault
     maxGray = histSize - 1;
-    while (accumulator[uint(maxGray)] >= (max - clipHistPercent)) maxGray--;
+    while (maxGray >= 0 && accumulator[uint(maxGray)] >= (max - clipHistPercent)) maxGray--;
+  }
+
+  if (minGray >= maxGray) { // range could be 0, maybe invalid too
+    qWarning() << "no adjustment is possible";
+    dst = src;
+    return;
   }
 
   // current range
