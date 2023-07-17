@@ -176,4 +176,14 @@ contains(BUILD, verbose) {
 }
 
 DISTFILES += \
-  mac/macplatform.m
+  readme.md \
+  doc/cbird-devel.md \
+  doc/cbird-compile.md \
+  mac/mac-pkg.sh \
+  mac/make-icons.sh \
+  tools/copystylesheet.sh \
+  tools/gitversion.sh \
+  tools/strip.sh \
+  windows/make-ico.sh \
+  windows/mxe-pkg.sh \
+  windows/mxe.env

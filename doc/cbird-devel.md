@@ -1,8 +1,6 @@
 Release Blockers (v0.7)
 =========================
-AppImage: "EGL Not Available" and no window titlebar (Fedora)
-AppImage: add kimageformats
-maybe fixed -- ffplay-sbs: font looks funky (missing font?)
+
 
 Wish List
 =========================
@@ -100,12 +98,15 @@ Minor Bugs
 - ~~MGLW: template match (T) hides diff image / doesn't restore after reset (F5)~~ fixed v0.6
 - MGLW: rename folder doesn't update all affected viewer paths
 - MGLW: difference image clips white/light shades of grayscale images
+- MGLW: mouse motion eats the next scroll wheel event  (gnome3+xcb)
 - replace getenv() calls with qt version
 - weeds: when deleting a file, do something about broken weeds condition
 - weeds: add something to report and fix broken weed records, maybe part of -update
 - Theme: background shade stacks up with context menu
 - CropWidget: redraw ghosting selection rect, also x,y offset problems
-
+- Mac: native yes/no dialog has no shortcut keys and weird icon
+- AppImage: Fedora: "EGL Not Available" and no window titlebar
+  - fix: change qt platform `-platform wayland-egl` or xcb
 
 Theme
 =========================

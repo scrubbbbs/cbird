@@ -1433,6 +1433,7 @@ int main(int argc, char** argv) {
       Media left(nextArg(), Media::TypeVideo);
       Media right = left;
       if (args.count() > 0) right = Media(nextArg(), Media::TypeVideo);
+      Theme::setup();
       VideoCompareWidget v(left, right);
       v.show();
       v.activateWindow();

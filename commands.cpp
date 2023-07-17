@@ -141,7 +141,8 @@ void Commands::filter(const QString& key, const QString& value, bool without) {
         tmp.append(m);
       }
     }
-    qInfo().noquote() << " {" << key << key << value << "} removed"
+    const char* type = without ? "without" : "with";
+    qInfo().noquote() << "{" << type << key << value << "} removed"
                       << _selection.count() - tmp.count() << "from" << _selection.count()
                       << "items," << tmp.count() << "remaining";
     _selection = tmp;
