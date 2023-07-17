@@ -1155,7 +1155,7 @@ QIODevice* Media::ioDevice() const {
 QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString& name,
                         const QFuture<void>* future, const ImageLoadOptions& options) {
   const QString fileName = QFileInfo(name).fileName();
-  qMessageContext().setLocalData(QLatin1String("QImageReader: ") + fileName);
+  MessageContext context(QLatin1String("QImageReader: ") + fileName);
 
   // safe to cast away const since we do not write the buffer
   QBuffer* buffer = new QBuffer(const_cast<QByteArray*>(&data));
@@ -1240,7 +1240,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
   img.setText(ImgKey_FileWidth, QString::number(origSize.width()));
   img.setText(ImgKey_FileHeight, QString::number(origSize.height()));
 
-  qMessageContext().setLocalData(fileName);
+  context.reset(fileName);
 
   // setAutoTransform() will pull orientation from thumbnail IFD if it is not present in the image
   // IFD, resulting in incorrect rotation
@@ -1282,8 +1282,6 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
     qWarning("%s: xform=0x%x orient=%d size=%dx%d error=%s", format.data(),
              int(reader.transformation()), int(exifOrientation), img.width(), img.height(),
              qPrintable(reader.errorString()));
-
-  qMessageContext().setLocalData(QString());
 
   return img;
 }

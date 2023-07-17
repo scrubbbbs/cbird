@@ -933,6 +933,7 @@ static QImage differenceImage(const Media& ml, const Media& mr,
   cv::Mat norm1, norm2;
   QImage left;
   QFuture<void> f1 = QtConcurrent::run([&]() {
+    const MessageContext context(ml.name());
     qImageToCvImgNoCopy(inLeft, norm1);
     brightnessAndContrastAuto(norm1, norm2, 5);
     cvImgToQImageNoCopy(norm2, left, QImage::Format_RGB32);
@@ -941,6 +942,7 @@ static QImage differenceImage(const Media& ml, const Media& mr,
   cv::Mat norm3, norm4;
   QImage right;
   QFuture<void> f2 = QtConcurrent::run([&]() {
+    const MessageContext context(mr.name());
     qImageToCvImgNoCopy(inRight, norm3);
     brightnessAndContrastAuto(norm3, norm4, 5);
     cvImgToQImageNoCopy(norm4, right, QImage::Format_RGB32);

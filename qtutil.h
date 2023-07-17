@@ -171,15 +171,19 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context, cons
 void qFlushMessageLog();
 
 /// log message extra per-thread context, e.g. the currently active file
-QThreadStorage<QString>& qMessageContext();
+/// note: const because not using MessageContext stack will mess it up
+const QThreadStorage<QString>& qMessageContext();
 
 /// scoped log message extra context (preferred over qMessageContext())
+/// note: must always be a stack allocated object
 class MessageContext {
   NO_COPY_NO_DEFAULT(MessageContext, QObject);
-
+  QString _savedContext;
  public:
-  MessageContext(const QString& context);
+  MessageContext(const QString& context);  // set current message context
   ~MessageContext();
+  /// set current context; saved context is unmodified
+  void reset(const QString& context);
 };
 
 #if QT_VERSION_MAJOR > 5

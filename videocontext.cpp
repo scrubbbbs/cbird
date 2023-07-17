@@ -951,24 +951,23 @@ QMutex* VideoContext::avLogMutex() {
 void VideoContext::avLogger(void* ptr, int level, const char* fmt, va_list vl) {
   if (level > av_log_get_level()) return;
 
-  QMutexLocker locker(avLogMutex());
+  QString msgContext;
 
-  const auto& names = pointerToFileName();
-  QString fileName;
-  const auto it = names.find(ptr);
-  if (it != names.end()) {
-    fileName = it.value();
-  } else {
+  // use the current context if there is one
+  auto& threadCtx = qMessageContext();
+  if (threadCtx.hasLocalData()) msgContext = threadCtx.localData();
+
+  // use file name associated with ptr
+  if (msgContext.isEmpty())
+    msgContext = avLoggerGetFileName(ptr);
+
+  // nothing found, cwd might be helpful
+  if (msgContext.isEmpty()) {
     char path[PATH_MAX + 1] = {0};
-    if (getcwd(path, sizeof(path))) fileName = QString("cwd={") + path + "}";
+    if (getcwd(path, sizeof(path))) msgContext = QString("cwd={") + path + "}";
   }
 
-  auto& msgCtx = qMessageContext();
-  if (msgCtx.hasLocalData()) {
-    QString ctx = msgCtx.localData();
-    if (ctx == "") msgCtx.setLocalData(fileName);
-  } else
-    msgCtx.setLocalData(fileName);
+  MessageContext context(msgContext);
 
   char buf[1024] = {0};
   vsnprintf(buf, sizeof(buf) - 1, fmt, vl);
@@ -999,6 +998,14 @@ void VideoContext::avLoggerSetFileName(void* ptr, const QString& name) {
 void VideoContext::avLoggerUnsetFileName(void* ptr) {
   QMutexLocker locker(avLogMutex());
   pointerToFileName().remove(ptr);
+}
+
+QString VideoContext::avLoggerGetFileName(void* ptr) {
+  QMutexLocker locker(avLogMutex());
+  const auto& map = pointerToFileName();
+  auto it = map.find(ptr);
+  if (it != map.end()) return it.value();
+  return QString();
 }
 
 void VideoContext::frameToQImg(QImage& img) {

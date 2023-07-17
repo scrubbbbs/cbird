@@ -1045,7 +1045,7 @@ class MessageLog {
 
 void qFlushMessageLog() { MessageLog::instance().flush(); }
 
-QThreadStorage<QString>& qMessageContext() { return MessageLog::context(); }
+const QThreadStorage<QString> &qMessageContext() { return MessageLog::context(); }
 
 void qColorMessageOutput(QtMsgType type, const QMessageLogContext& ctx, const QString& msg) {
   const auto& perThreadContext = MessageLog::context();
@@ -1090,11 +1090,13 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& ctx, const QS
 MessageContext::MessageContext(const QString& context) {
   auto& threadContext = MessageLog::context();
   if (threadContext.hasLocalData() && !threadContext.localData().isEmpty())
-    qWarning() << "overwriting message context";  // todo: save/restore message context
+    _savedContext = threadContext.localData();
   threadContext.setLocalData(context);
 }
 
-MessageContext::~MessageContext() { MessageLog::context().setLocalData(QString()); }
+MessageContext::~MessageContext() { MessageLog::context().setLocalData(_savedContext); }
+
+void MessageContext::reset(const QString& context) { MessageLog::context().setLocalData(context); }
 
 MessageLog::MessageLog() {
   std::set_terminate(qFlushMessageLog);
