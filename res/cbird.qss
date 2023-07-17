@@ -68,6 +68,18 @@ Theme[style="Light"] {
   font-size: 16px; /* font must match cbird-richtext.css for elided text hack */
 }
 
+ShadeWidget[style="Qt"] {
+  background-color:rgba(0,0,0,127); /* original color */
+}
+
+ShadeWidget[style="Dark"] {
+  background-color:rgba(20,20,20,141); /* sort-of matches os x */
+}
+
+ShadeWidget[style="Light"] {
+  background-color:rgba(0,0,0,141); /* sort-of matches os x */
+}
+
 MediaFolderListWidget {
 }
 
