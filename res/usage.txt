@@ -46,7 +46,7 @@ Selections
   -select-result                   to chain queries: convert the last query result into a selection, and clear the result
   -select-sql <sql>                items with sql statement [select * from media where ...]
   -select-files <file> [<file>]... ignore index, existing files of supported file types
-  -select-grid <file>              ignore index, detect a grid of thumbnails,  eak up into separate images
+  -select-grid <file>              ignore index, detect a grid of thumbnails, break up into separate images
 
 Batch Deletion
 ==============================================================================
@@ -88,8 +88,8 @@ Viewing
 ==============================================================================
   -folders                         enable group view, group results from the same parent directory
   -sets                            enable group view, group results with the same pair of directories
-  -exit-on-select                  \"select\" action exits with selected index as exit code, < 0 if canceled
-  -max-per-page <int>              maximum items on one page [10]
+  -exit-on-select                  "select" action exits with selected index as exit code, < 0 if canceled
+  -max-per-page <int>              maximum items on one page [12]
   -show                            show results browser for the current selection/results
   -theme <string>                  select color theme, must appear before -show
      Auto                          * detect Dark/Light from system theme if possible (Mac/Windows default)

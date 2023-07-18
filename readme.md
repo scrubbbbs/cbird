@@ -2,18 +2,23 @@
 
 About cbird
 =========================
-cbird is a command-line program for finding duplicate images and videos that cannot be found by general methods such as file hashing. Rather, cbird employs Content-Based Image Recognition (CBIR) which examines the pixels of files to get comparable features and "perceptual" hash codes which can match other files with similar pixels.
+cbird is a command-line program for finding duplicate images and videos that cannot be found by general methods such as file hashing. Content-Based Image Recognition (CBIR) is used, which examines the pixels of files to get comparable features and "perceptual" hash codes.
 
 The main features are:
 
 - CBIR algorithms for image and video search
 - Cached index in the top directory, prevents needless re-indexing
 - GUI for evaluating duplicates
-- Huge index/database is possible without major slowdowns
+- Huge index/database is possible
+- Comprehensive file format support
 - Search inside zip files
 
 Installing
 =========================
+
+### Compile
+
+Compile it yourself using [my detailed notes](doc/cbird-compile.md).
 
 ### Download
 
@@ -21,20 +26,27 @@ Installing
 
 #### Linux AppImage
 
+Add execute permission and run
+```shell
+chmod +x cbird-0.7.0-x86_64.AppImage
+./cbird-0.7.0-x86_64.AppImage -install # optional install helper
+cbird [...]
 ```
-chmod +x cbird-linux-0.5.0-x86_64.AppImage
-./cbird-linux-0.5.0-AppImage -install # optional install to /usr/local
-```
-
-- If missing libOpenGL.so.0:
-  + debian: apt install libopengl0
-  + redhat: yum install libglvnd-opengl
 - Required packages: trash-cli
 - Optional packages: ocenaudio, kdenlive
 
-#### Mac OS X 11.0+
+##### AppImage Issues
+- AppImage won't run (debian, Ubuntu 23.04+)
+  + `apt install libfuse2`
+- Missing libOpenGL.so.0
+  + debian: `apt install libopengl0`
+  + redhat: `yum install libglvnd-opengl`
+- Missing window titlebar (Fedora)
+  + `cbird -platform wayland-egl [...]` 
 
-- Intel CPU: Unzip the distribution file and run:
+#### Mac OS X 11.0+ x86
+
+- Unzip the distribution file and run
 
 `cbird/cbird-mac [...]`
 
@@ -44,8 +56,7 @@ chmod +x cbird-linux-0.5.0-x86_64.AppImage
 - Install helpers (optional): vlc, kdenlive
 
 ##### Windows PowerShell
-
-Optional: for setting up shortcuts to cbird commands
+Optional: create shortcuts for cbird
 
 - Unzip into C:\ so you have C:\cbird\cbird.exe
 - Enable script execution
@@ -65,9 +76,9 @@ Getting Started
 ========================
 
 #### Get Help
-`cbird -help` [is very detailed](https://gist.github.com/scrubbbbs/4c65058c054822d4f279c00f53ddd3aa)
+`cbird -help` [is very detailed](https://gist.github.com/scrubbbbs/c7177a0a97e098c6bb10ae4afe8f6c35)
 
-#### Index the files in `<path>`, caching into <path>/_index
+#### Index the files in `<path>`, caching into `<path>/_index`
 `cbird -use <path> -update`
 
 #### Index files in cwd
@@ -162,11 +173,18 @@ There are a few for power users.
 - `CBIRD_CONSOLE_WIDTH` set character width of terminal console (default auto-detect)
 - `CBIRD_COLOR_CONSOLE` use colored output even if console says no (default auto-detect)
 - `CBIRD_FORCE_COLORS` use colored output even if console is not detected
-- `CBIRD_LOG_TIMESTAMP` add time delta to log mes	sages
-- `CBIRD_NO_BUNDLED_PROGS` do not use bundled programs like ffmpeg in the appimage****
+- `CBIRD_LOG_TIMESTAMP` add time delta to log messages
+- `CBIRD_NO_BUNDLED_PROGS` do not use bundled programs like ffmpeg in the appimage/binary distribution
 - `QT_IMAGE_ALLOC_LIMIT_MB` maximum memory allocation for image files (default 256)
 - `QT_SCALE_FACTOR` global scale factor for UI
 - `TMPDIR` override default directory for temporary files; used for opening zip file contents
+
+Wish List, Bugs, Etc
+====================
+
+Check the [development notes](doc/cbird-devel.md) for known bugs and feature ideas
+
+Report bugs or request features [on github](https://github.com/scrubbbbs/cbird/issues)
 
 Search Algorithms
 ====================
@@ -259,36 +277,59 @@ Arguments | Note | Time (s)
 -----|------|------ 
 -p.alg dct -p.dht 2  | dct, threshold 2           | 1.3
 -p.alg fdct -p.dht 7 | dct-features, threshold 7  | 1.5
--p.alg orb           | orb-features               | 84.4**
--p.alg color         | colors                     | dnf***
-
-**OpenCV search tree only partially cached on disk, slow to start
-***Color search lacks a search tree, not suitable for large sets
+-p.alg orb           | orb-features               | 84.4[^1]
+-p.alg color         | colors                     | dnf[^2]
 
 Release Notes
 =============
 
-#### v0.6.3
+#### v0.7
 
-- Image views are display-dpi aware (100%==actual pixels)
-- Use idle process priority when indexing
-- Update for current FFmpeg (60)
-- Much faster jpeg indexing using idct scaling
-- Sort filenames correctly when containing numbers
-- Functions: make chainable and consistent in all contexts
-- Dark/Light theme included
-- Mac OS X support
-
-#### v0.6.2
-
-- Qt 6 port
-- Thumbnail cropping tools
-- Search: Query external hash code
-- Results view: Resize page option
-- Folder view: Fix video thumbnail size
-
+- Mac OS X port and x86 binary package
+- Use current libraries (FFmpeg, Qt6, Quazip)
+- Command Line
+  - describe what -filter is doing
+  - cleanup some logging
+- Indexing
+  - Use "nice"/low priority when scanning/indexing
+  - 3-4x faster jpeg indexing using idct scaling
+  - Recognize more video extensions
+  - Remove colon (":") workaround for powershell
+  - Failsafe cache updates using write-temporary-move method
+  - Fix slow cache update on network volumes
+  - Fix -i.ignored to actually track all ignored stuff
+- Searching
+  - Add % progress for sql queries, cleanup logging
+  - Search using a given hash code
+  - Use numeric sort for filenames (e.g. 1.jpg sorts before 10.jpg)
+  - Functions are always chainable and consistent between commands
+  - Properties: add aspectRatio
+  - Disable inode check on win32, too slow on network volumes
+  - Fix attempt to template match video result
+- Viewing
+  - Add theme system, remove hardcoded theme/style
+	- auto-detect dark/light theme on mac/windows
+	- shade background windows when modal window is displayed
+	- "-theme" to change the theme
+  - Streamline context menu
+  - ffplay-sbs: tons of improvements
+  - Do not require index for -select-files
+  - DPI-aware image scaling
+  - Show creation time metadata for videos too
+  - Browse the selected item in its folder
+  - Use grid for folder view and fixed thumbnail aspect ratio
+  - Cycle contents thumbnails when hovering in folder view
+  - Add index/folder thumbnail tool
+  - Fix some performance issues
+  - Fix keyboard navigation in folder view
+  - Fix missing match range
+  - Prevent crash/hang on some invalid inputs (corrupt videos etc)
+  - Fix slow qualityscore on network volumes
+  - Fix potential crash on two-tone images
+  - Fix potential crash/hang with corrupt video files
+  - Fix elided strings display
+	
 #### v0.6.0
-
 - Add weeds feature (recommended by r/user/traal)
 - Search: Add max-threshold `-p.mt` which produces a result for every needle until threshold is exceeded
 - Indexer: Use skip-loop-filter to speedup video indexing ~20%
@@ -299,3 +340,6 @@ Release Notes
 - Video view: fix issues with unequal frame rates
 - Video view: export the aligned pair to Kdenlive
 - Speedups: video compare view, differences image, `-group-by`
+
+[^1]: OpenCV search tree only partially cached on disk, slow to start
+[^2]: Color search lacks a search tree, not suitable for large sets

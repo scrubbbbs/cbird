@@ -5,7 +5,7 @@ Release Blockers (v0.7)
 Wish List
 =========================
 
-### Command-Line
+### Command Line
 - "-use" special notation to find root index in the parent (tree)
 - symbolic names for all enumerations (e.g. "v" == video)
 - disable/reduce logging (-verbose, -quiet etc)
@@ -20,27 +20,27 @@ Wish List
 - -with type <x> , recognize enumerations as in params
 
 ### Indexing
+- file/directory name filters for inclusion/exclusion
 - store date-modified,size for better updating
 - also store container md5 (.zip) for faster updating/verifying
-- >64k frames per video
+- \>64k frames per video
 - capture more common errors in indexer
   - unsupported ICC profile
   - colordescriptor on grayscale image
 - console progress bar
 - error-log to file
 - store symlinks to prevent broken links later on
-- use idct scaling to speed up jpeg decompress (wip)
-- file/directory name filters for inclusion/exclusion
+- ~~use idct scaling to speed up jpeg decompress (wip)~~
 - ~~hard links handling~~ added in v0.6
   - ~~isJunction() exclusion from index~~
   - ~~exclusion from index (map inodes during scan)~~
 - ~~see if `skip_loop_filter` for h264 decoding is a good idea: about 20% faster decoding, unknown affect on hash quality~~ enabled in v0.6
 - ~~same with `SWS_AREA` rescaler instead of `SWS_BICUBIC`~~ enabled in v0.6
-- index videos with partition and merge approach to overcome ffmpeg limitations
+- index videos with partition and merge approach to overcome ffmpeg thread limitations
 
 ### Search
 - search tree for histograms
-- csv output for other tools, gui wrappers
+- csv/json output for other tools, gui wrappers
 - sort groups with closest matches first
 - fast block-averaging template match with threshold
 - ~~filter for hard/soft links~~ added in v0.6
@@ -59,10 +59,10 @@ Wish List
 - ~~remember past deletions and optionally replay them in the future should they reappear (via traal)~~ added "weeds" feature v0.6
 - detect breaking of symlinks on delete/rename
 - visual indicator of the needle in group view, gets lost when rotating
-- side-by-side playback: fix narrow videos
+- ~~side-by-side playback: fix narrow videos~~
 - video compare: use the same zoom/pan controls as image view
 - select-all, clear-selection
-- action groups to compact the context menu
+- ~~action groups to compact the context menu~~
 - option to force layout to use one row/column
 
 ### Misc
@@ -71,6 +71,7 @@ Wish List
 - unecessary "virtual"
 - "override"
 - "const"
+- replace getenv() calls with qt version
 
 Major Bugs
 ==========================
@@ -78,6 +79,7 @@ Major Bugs
   - e.g. -select-type 1 -remove -update
 - sws_scale buffer overflow (264x480 yuv420p)
 - ~~MBW move folder option broken~~ removed in v0.5.1
+- control-c during database write will usually corrupt sqlite database, most likely when the filesystem doesn't support locking
 
 Minor Bugs
 =========================
@@ -99,23 +101,22 @@ Minor Bugs
 - MGLW: rename folder doesn't update all affected viewer paths
 - MGLW: difference image clips white/light shades of grayscale images
 - MGLW: mouse motion eats the next scroll wheel event  (gnome3+xcb)
-- replace getenv() calls with qt version
 - weeds: when deleting a file, do something about broken weeds condition
 - weeds: add something to report and fix broken weed records, maybe part of -update
-- Theme: background shade stacks up with context menu
+- ~~Theme: background shade stacks up with context menu~~
 - CropWidget: redraw ghosting selection rect, also x,y offset problems
-- Mac: native yes/no dialog has no shortcut keys and weird icon
+- Mac: native yes/no dialog has no shortcut keys ~~and weird icon~~
 - AppImage: Fedora: "EGL Not Available" and no window titlebar
   - fix: change qt platform `-platform wayland-egl` or xcb
 
 Theme
 =========================
 
-## qdarkstyle/*/ (QSS widget stylesheet)
+#### qdarkstyle/*/ (QSS widget stylesheet)
 - QDarkStyle has been modified to make it grayscale and fix a few issues, todo: fork on github and put the link here
 - tools/copystylesheet.sh copies Dark and Light style from QDarkStyle project
 
-## res/cbird.qss
+#### res/cbird.qss
 - contains colors for stuff
 
 #### res/cbird-richtext.css
@@ -148,7 +149,7 @@ Unit tests
 
 Cbird uses the QTest unit test framework. The tests require a compatible test data set, see release page on github.
 
-```
+```shell
 export TEST_DATA_DIR=</path/to/cbird-testdata>
 cd unit/
 
