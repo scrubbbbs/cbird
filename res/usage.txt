@@ -17,7 +17,7 @@ Setup
   -use <dir>                       set index location, in <dir>/_index, default current directory
   -create                          create index if there is not one already, otherwise prompt
   -update                          create/refresh index
-  -headless                        enable most operations without a window manager (must be first argument)
+  -headless                        run without a window manager (must be first argument)
   -about                           system information
   -h|-help                         help page
   -v|-version                      version
@@ -43,10 +43,12 @@ Selections
   -select-path <selector>          subset by path, using selector
   -select-type <type>              subset by type
   -select-errors                   items with errors from last operation (-update,-verify)
-  -select-result                   to chain queries: convert the last query result into a selection, and clear the result
+  -select-result                   to chain queries: convert the last query result into a selection,
+                                   and clear the result
   -select-sql <sql>                items with sql statement [select * from media where ...]
   -select-files <file> [<file>]... ignore index, existing files of supported file types
-  -select-grid <file>              ignore index, detect a grid of thumbnails, break up into separate images
+  -select-grid <file>              ignore index, detect a grid of thumbnails,
+                                   break up into separate images
 
 Batch Deletion
 ==============================================================================
@@ -56,8 +58,9 @@ Batch Deletion
 
 Filtering
 ==============================================================================
-  -with <prop>[#<func>] <comparator>    remove items if comparator is false
-  -without <prop>[#<func>] <comparator> inversion of -with
+  -with <prop>[#<func>] <expression>    remove items if expression is false,
+                                        first in each group (needle) is untouched
+  -without <prop>[#<func>] <expression> inversion of -with
   -first                                keep the first item
   -chop                                 remove the first item
   -first-sibling                        keep one item from each directory
@@ -70,7 +73,8 @@ Sorting/Grouping
   -sort-rev <prop>[#<func>]           sort descending
   -group-by <prop>[#<func>]           group selection by property, store in result (clears selection)
   -sort-similar                       sort selection by similarity
-  -merge <selector> <selector>        merge two selections by similarity, into a new list, assuming first selection is sorted
+  -merge <selector> <selector>        merge two selections by similarity, into a new list,
+                                      assuming first selection is sorted
 
 Operations on Selection/Results
 ==============================================================================
@@ -158,20 +162,22 @@ Definitions
       %n                          - special: the sequence number, with automatic zero-padding
       {arg:<func>}                - special: transform arg (after capture/special expansion) with function(s)
       {<prop>[#<func>]}           - special: insert property
-  <binop>                         logical operators for expressions (comparator)
-      ==                          - equal to
-      =                           - equal to
+  <binop>                         operator for <expression>
+      ==, =                       - equal to
       !=                          - not equal to
       <, <=, >, >=                - less-than/greater-than
       ~                           - contains
       !                           - does not contain
-  <comparator>                    expression to test a value, returns true or false, default operator ==
-      :<regular-expression>       - pcre matches any part of value
+  <expression>                    expression to test a value, returns true or false, default operator ==
+      :<regular-expression>       - pcre matches value
       [<binop>]<string>           - compare using operator, string is converted to value's type
+      [<binop>]%needle            - compare with the needle (first item in group)
+      <expression>&&<expression>  - logical AND, both expressions must be true
+      <expression>||<expression>  - logical OR, the first true expression is returned
       %null                       - true if value is null
-      %!null                      - true if value is not null
+      !%null                      - true if value is not null
       %empty                      - true if value is empty (after conversion to string)
-      %!empty                     - true if value is not empty (after conversion to string)
+      !%empty                     - true if value is not empty (after conversion to string)
   <prop>                          item property for sorting, grouping, filtering
       %4
 
@@ -196,6 +202,7 @@ Definitions
       foreach,<func>[|func]...    - apply function(s) separated by pipe (|) to each array element
       add,<integer>               - add integer arg to value
       pad,<integer>               - pad integer value with zeros, to width argument
+      to<type>                    - convert data type (date,time,string,bool,int,float)
 
 Examples
 ==============================================================================

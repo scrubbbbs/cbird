@@ -182,7 +182,7 @@ There are a few for power users.
 Wish List, Bugs, Etc
 ====================
 
-Check the [development notes](doc/cbird-devel.md) for known bugs and feature ideas
+Check the [development notes](doc/cbird-devel.md) for known bugs and feature ideas.
 
 Report bugs or request features [on github](https://github.com/scrubbbbs/cbird/issues)
 

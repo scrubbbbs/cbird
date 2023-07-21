@@ -194,7 +194,7 @@ class Media {
 
   /**
    * @param expr function[,args][#function[,args] ...]
-   * @return function that evaluates expr with QVariant argument
+   * @return function that takes one QVariant argument and returns QVariant
    * @note chain of functions is possible, separated by #
    */
   static std::function<QVariant(const QVariant&)> unaryFunc(const QString& expr);
@@ -304,6 +304,7 @@ class Media {
    * is present
    */
   int64_t originalSize() const { return _origSize; }
+  qint64 fileSize() const { return _origSize; }
 
   /**
    * File compression ratio

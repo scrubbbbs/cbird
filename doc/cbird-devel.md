@@ -17,7 +17,10 @@ Wish List
 - copy or sync exif data with matching images
 - nuke-dups-in: show how many would not be deleted
 - group-by breaks the sort/sort doesn't work on group-by?
-- -with type <x> , recognize enumerations as in params
+- -with type <x>, recognize enumerations as in params
+- sort result groups too
+- option to pre-compute no-reference quality score for each image,
+  might be reasonable for automatic deletions
 
 ### Indexing
 - file/directory name filters for inclusion/exclusion

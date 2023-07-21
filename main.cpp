@@ -272,7 +272,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
   auto completeProp = [&]() {
     struct {
       const char *prop, *propHash, *tagFile;
-    } metaTags[3] = {{"exif", "exif#", ":res/exif.txt"},
+    } metaTags[3] = {{"exif", "exif#", ":res/exif.txt"}, // fixme: xmp tags
                      {"iptc", "iptc#", ":res/iptc.txt"},
                      {"ffmeta", "ffmeta#", ":res/ffmeta.txt"}};
 
@@ -1121,7 +1121,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-with" || arg == "-without") {
       const QString key = nextArg();
       const QString value = nextArg();
-      bool without = key == "-without";
+      bool without = arg == "-without";
       _commands.filter(key, value, without);
     } else if (arg == "-first") {
       for (auto& g : queryResult)

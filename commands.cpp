@@ -27,84 +27,149 @@ License along with cbird; if not, see
 #include "qtutil.h"
 #include "videocontext.h"
 
-/// <comparator> argument type
-class Comparator {
+/// <expression> parser and evaluator
+class Expression {
  private:
-  std::function<QVariant(const QString&)> _convert;
-  std::function<bool(const QVariant&)> _operator;
-  QString _valueExp;
-  QVariant _value;
-  QRegularExpression _re;
+  std::function<bool(const QVariant&, const QVariant&)> _operator;  // binary or unary (rhs ignored)
+  QVariant _rhs;                                                    // right hand side of operator
+  bool _rhsIsNeedle = false;                                        // rhs contains "%needle"
 
-  Comparator() = delete;
+  Expression() = delete;
 
-  void parseOperator(const QString& str) {
-    if (str.startsWith("==")) {
-      _value = _convert(str.mid(2));
-      _operator = [&](const QVariant& v) { return v == _value; };
-    } else if (str.startsWith("!=")) {
-      _value = _convert(str.mid(2));
-      _operator = [&](const QVariant& v) { return v != _value; };
-    } else if (str.startsWith("<=")) {
-      _value = _convert(str.mid(2));
-      _operator = [&](const QVariant& v) { return v <= _value; };
-    } else if (str.startsWith(">=")) {
-      _value = _convert(str.mid(2));
-      _operator = [&](const QVariant& v) { return v >= _value; };
-    } else if (str.startsWith("=")) {
-      _value = _convert(str.mid(1));
-      _operator = [&](const QVariant& v) { return v == _value; };
-    } else if (str.startsWith("<")) {
-      _value = _convert(str.mid(1));
-      _operator = [&](const QVariant& v) { return v < _value; };
-    } else if (str.startsWith(">")) {
-      _value = _convert(str.mid(1));
-      _operator = [&](const QVariant& v) { return v > _value; };
-    } else if (str.startsWith("~")) {
-      _value = _convert(str.mid(1));
-      _operator = [&](const QVariant& v) { return v.toString().contains(_value.toString()); };
-    } else if (str.startsWith("!")) {
-      _value = _convert(str.mid(1));
-      _operator = [&](const QVariant& v) { return !v.toString().contains(_value.toString()); };
+  void parseBinaryExpression(const QString& valueExp, const QMetaType& lhsType) {
+    int valueOffset=0;
+    if (valueExp.startsWith("==")) {
+      valueOffset = 2;
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs == rhs; };
+    } else if (valueExp.startsWith("!=")) {
+      valueOffset = 2;
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs != rhs; };
+    } else if (valueExp.startsWith("<=")) {
+      valueOffset = 2;
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs <= rhs; };
+    } else if (valueExp.startsWith(">=")) {
+      valueOffset = 2;
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs >= rhs; };
+    } else if (valueExp.startsWith("=")) {
+      valueOffset = 1;
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs == rhs; };
+    } else if (valueExp.startsWith("<")) {
+      valueOffset = 1;
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs < rhs; };
+    } else if (valueExp.startsWith(">")) {
+      valueOffset = 1;
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs > rhs; };
+    } else if (valueExp.startsWith("~")) {
+      valueOffset = 1;
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs.toString().contains(rhs.toString()); };
+    } else if (valueExp.startsWith("!")) {
+      valueOffset = 1;
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return !lhs.toString().contains(rhs.toString()); };
     } else {
-      _value = _convert(str);
-      _operator = [&](const QVariant& v) { return v == _value; };
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs == rhs; };
     }
+
+    QString constant = valueExp.mid(valueOffset).trimmed();
+    _rhsIsNeedle = constant == "%needle";
+
+    if (!_rhsIsNeedle) {
+      _rhs = QVariant(constant);
+      if (lhsType.isValid() && !_rhs.convert(lhsType))
+        qFatal("in expression \"%s\", constant \"%s\" is not convertable to \"%s\"",
+               qUtf8Printable(valueExp), qUtf8Printable(constant), lhsType.name());
+    }
+  }
+
+  enum {
+    BooleanEnd = -1, // placeholder
+    BooleanAnd = 0,
+    BooleanOr = 1
+  };
+
+  void parseBooleanExpression(const QString expr, const QMetaType& lhsType,
+                             const QRegularExpression& regex, QRegularExpressionMatch& match) {
+    std::vector<std::pair<Expression, int>> booleanExp;
+    QString subExpr = expr;
+    do {
+      Expression op(match.captured(1).trimmed(), lhsType);
+      QString booleanOp = match.captured(2);
+      int boolean = match.captured(2) == "&&" ? BooleanAnd : BooleanOr;
+      booleanExp.push_back({op, boolean});
+      subExpr = subExpr.mid(match.capturedLength());
+      match = regex.match(subExpr);
+    } while (match.hasMatch());
+
+    Expression op(subExpr.trimmed(), lhsType);
+    booleanExp.push_back({op, BooleanEnd});
+
+    _rhsIsNeedle = false;
+    for (auto& p : booleanExp) _rhsIsNeedle |= p.first.rhsIsNeedle();
+
+    _operator = [booleanExp](const QVariant& lhs, const QVariant& rhs) {
+      bool lhsResult = false;  // lhs of boolean operator
+      int boolean;             // && or ||
+      for (size_t i = 0; i < booleanExp.size(); ++i) {
+        if (i > 0) {
+          if (boolean == BooleanAnd && !lhsResult)
+            return false;
+          else if (boolean == BooleanOr && lhsResult)
+            return true;
+        }
+
+        auto& p = booleanExp.at(i);
+        const Expression& op = p.first;
+        lhsResult = op.rhsIsNeedle() ? op.eval(lhs, rhs) : op.eval(lhs);
+        boolean = p.second;
+      }
+      return lhsResult;  // rhs of the last boolean
+    };
   }
 
  public:
-  Comparator(const QString& valueExp) {
-    QString exp;
-    if (valueExp == "%null") {
-      _convert = [](const QString& str) { return QVariant(str); };
-      _operator = [&](const QVariant& v) { return v.isNull(); };
-      _value = QVariant();
-    } else if (valueExp == "%!null") {
-      _convert = [](const QString& str) { return QVariant(str); };
-      _operator = [&](const QVariant& v) { return !v.isNull(); };
-      _value = QVariant();
-    } else if (valueExp == "%empty") {
-      _convert = [](const QString& str) { return QVariant(str); };
-      _operator = [&](const QVariant& v) { return v.toString().isEmpty(); };
-      _value = QVariant();
-    } else if (valueExp == "%!empty") {
-      _convert = [](const QString& str) { return QVariant(str); };
-      _operator = [&](const QVariant& v) { return !v.toString().isEmpty(); };
-      _value = QVariant();
-    } else if (valueExp.startsWith(":")) {
-      _convert = [](const QString& str) { return QVariant(str); };
-      _re.setPattern(valueExp.mid(1));
-      if (!_re.isValid())
-        qFatal("invalid regular expression: %s at offset %lld", qPrintable(_re.errorString()),
-               _re.patternErrorOffset());
-      _operator = [&](const QVariant& v) { return _re.match(v.toString()).hasMatch(); };
-    } else {
-      _convert = [](const QString& str) { return QVariant(str); };
-      parseOperator(valueExp);
+  Expression(const QString& expr, const QMetaType& lhsType) {
+    if (expr.isEmpty())
+      qFatal("empty expression, use %%empty or %%null to test for empty/null value");
+
+    if (!lhsType.isValid())
+      qWarning("left-hand-side datatype for \"%s\" is unknown, a type conversion may be required, "
+          "e.g. exif#Photo.DateTimeOriginal#todate",
+          qUtf8Printable(expr));
+
+    const QRegularExpression regex(qq("^(.+?)(&&|\\|\\|)")); // a&&[...] a||[...]
+    QRegularExpressionMatch match = regex.match(expr);
+    if (match.hasMatch()) {
+      parseBooleanExpression(expr, lhsType, regex, match);
+      return;
     }
+
+    // unary expression
+    if (expr == "%null")
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { (void)rhs; return lhs.isNull(); };
+    else if (expr == "!%null")
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { (void)rhs; return !lhs.isNull(); };
+    else if (expr == "%empty")
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { (void)rhs; return lhs.toString().isEmpty(); };
+    else if (expr == "!%empty")
+      _operator = [](const QVariant& lhs, const QVariant& rhs) { (void)rhs; return !lhs.toString().isEmpty(); };
+    else if (expr.startsWith(":")) {
+      const QRegularExpression re(expr.mid(1));
+      if (!re.isValid())
+        qFatal("invalid regular expression: %s at offset %lld", qPrintable(re.errorString()),
+               re.patternErrorOffset());
+      _operator = [re](const QVariant& lhs, const QVariant& rhs) {
+        (void)rhs;
+        return re.match(lhs.toString()).hasMatch();
+      };
+    } else
+      parseBinaryExpression(expr, lhsType);
   }
 
-  bool compareTo(const QVariant& value) const { return _operator(value); }
+  /// if true, then exec() must supply rhs value from the needle
+  bool rhsIsNeedle() const { return _rhsIsNeedle; }
+
+  const QVariant& rhs() const { return _rhs; }
+  bool eval(const QVariant& lhs) const { return eval(lhs, rhs()); }
+  bool eval(const QVariant& lhs, const QVariant& rhs) const { return _operator(lhs, rhs); }
 };
 
 QString Commands::nextArg() {
@@ -121,56 +186,103 @@ int Commands::intArg() {
   ::exit(1);
 }
 
-void Commands::filter(const QString& key, const QString& value, bool without) {
+void Commands::filter(const QString& key, const QString& valueExp, bool without) {
   const auto getValue = Media::propertyFunc(key);
-  const Comparator cmp(value);
+  const Expression op(valueExp, getValue(Media()).metaType());
+  const char* type = without ? "without" : "with";
+
+  // some properties require readMetadata()
+  // fixme: move to Media::loadableProperty(key) ??
+  bool usesMetadata = false;
+  if (key.startsWith("compressionRatio") || key.startsWith("fileSize")) usesMetadata = true;
 
   if (_selection.count() > 0) {
+    if (op.rhsIsNeedle())
+      qFatal("compare with %%needle is only supported in group lists (-similar*,-dups*,-group-by)");
+
+    QAtomicInteger<int> count;
     auto future = QtConcurrent::map(_selection, [&](Media& m) {
-      if (without ^ cmp.compareTo(getValue(m))) m.setAttribute("filter", ":yes");
+      if (usesMetadata) m.readMetadata();
+      if (without ^ op.eval(getValue(m))) {
+        m.setAttribute("filter", ":yes");
+        count++;
+      }
     });
+
+    auto progress = [&]() {
+      qInfo("filtering selection:<PL> %d%% matched %d",
+            future.progressValue() * 100 / future.progressMaximum(), count.loadRelaxed());
+    };
     while (future.isRunning()) {
-      qInfo("filtering selection:<PL> %d/%d", future.progressValue(), future.progressMaximum());
       QThread::msleep(100);
+      progress();
     }
+    progress();  // always show 100%
 
     MediaGroup tmp;
     for (Media& m : _selection) {
       if (m.attributes()["filter"] == ":yes") {
-        m.setAttribute("filter", key + " " + value);
+        m.setAttribute("filter", key + " " + valueExp);
         tmp.append(m);
       }
     }
-    const char* type = without ? "without" : "with";
-    qInfo().noquote() << "{" << type << key << value << "} removed"
-                      << _selection.count() - tmp.count() << "from" << _selection.count()
-                      << "items," << tmp.count() << "remaining";
+
+    qInfo().noquote() << "{" << type << key << valueExp << "} removed"
+                      << _selection.count() - tmp.count() << "/" << _selection.count() << "items";
     _selection = tmp;
   }
 
   if (_queryResult.count() > 0) {
+    QAtomicInteger<int> count;
     auto future = QtConcurrent::map(_queryResult, [&](MediaGroup& g) {
-      if (g.count() > 0) g[0].setAttribute("filter", ":yes");  // never filter needle
-      for (int i = 1; i < g.count(); ++i)
-        if (without ^ cmp.compareTo(getValue(g[i]))) g[i].setAttribute("filter", ":yes");
+      if (Q_UNLIKELY(g.count() < 1)) return;
+      g[0].setAttribute("filter", ":yes");  // never filter needle
+
+      if (usesMetadata) g[0].readMetadata();
+      const QVariant needleValue = getValue(g[0]);  // compare to the needle's value
+
+      for (int i = 1; i < g.count(); ++i) {
+        if (usesMetadata) g[i].readMetadata();
+        QVariant lhs = getValue(g[i]);
+        bool result = op.rhsIsNeedle() ? op.eval(lhs, needleValue) : op.eval(lhs);
+        if (without ^ result) {
+          g[i].setAttribute("filter", ":yes");
+          count++;
+        }
+      }
     });
 
+    auto progress = [&]() {
+      qInfo("filtering result:<PL> %d%% matched %d",
+            future.progressValue() * 100 / future.progressMaximum(), count.loadRelaxed());
+    };
     while (future.isRunning()) {
-      qInfo("filtering result:<PL> %d/%d", future.progressValue(), future.progressMaximum());
       QThread::msleep(100);
+      progress();
     }
+    progress();
 
     MediaGroupList tmp;
+    int removedItems = 0;
     for (auto& g : _queryResult) {
       MediaGroup filtered;
-      for (auto& m : g)
+      for (auto& m : g) {
         if (m.attributes()["filter"] == ":yes") {
-          m.setAttribute("filter", key + " " + value);
+          m.setAttribute("filter", key + " " + valueExp);
           filtered.append(m);
         }
+      }
 
-      if (filtered.count() > 1) tmp.append(filtered);
+      if (filtered.count() > 1) {
+        removedItems += g.count() - filtered.count();
+        tmp.append(filtered);
+      }
     }
+
+    qInfo().noquote() << "{" << type << key << valueExp << "} removed"
+                      << _queryResult.count() - tmp.count() << "/" << _queryResult.count()
+                      << "groups," << removedItems << "items from remaining groups";
+
     _queryResult = tmp;
   }
 }

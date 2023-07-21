@@ -46,7 +46,7 @@ class Commands {
   QString nextArg();
   int intArg();
 
-  void filter(const QString& key, const QString& value, bool without);
+  void filter(const QString& key, const QString& valueExp, bool without);
   void rename(Database* db, const QString& srcPat, const QString& dstPat, const QString& option);
   void selectFiles();
   void verify(Database *db, const QString &jpegFixPath);

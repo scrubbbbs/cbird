@@ -308,6 +308,33 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
   const QStringList call = expr.split(",");
   QString fn = call[0];
 
+  // type conversions, sometimes needed since metadata has no type information (usually)
+  if (fn == "todate") {
+    if (call.count() != 1) qFatal("todate() has no arguments");
+    return [](const QVariant& v) { return v.toDateTime(); };
+  }
+  if (fn == "totime") {
+    if (call.count() != 1) qFatal("totime() has no arguments");
+    return [](const QVariant& v) { return v.toTime(); };
+  }
+  if (fn == "tostring")  {
+    if (call.count() != 1) qFatal("tostring() has no arguments");
+    return [](const QVariant& v) { return v.toString(); };
+  }
+  if (fn == "toint") {
+    if (call.count() != 1) qFatal("toint() has no arguments");
+    return [](const QVariant& v) { return v.toInt(); };
+  }
+  if (fn == "tofloat") {
+    if (call.count() != 1) qFatal("tofloat() has no arguments");
+    return [](const QVariant& v) { return v.toFloat(); };
+  }
+  if (fn == "tobool") {
+    if (call.count() != 1) qFatal("tobool() has no arguments");
+    return [](const QVariant& v) { return v.toBool(); };
+  }
+
+
   // string functions
   if (fn == "mid") {
     if (call.count() != 3) qFatal("mid() has two integer arguments (begin, length)");
@@ -495,6 +522,7 @@ QList<QPair<const char*, const char*>> Media::propertyList() {
       {"resolution", "width*height"},
       {"res", "max of width, height"},
       {"compressionRatio", "resolution / file size"},
+      {"fileSize", "compressed file size (bytes)"},
       {"isWeed", "1 if tagged as weed (after query)"},
       {"score", "match score"},
       {"matchFlags", "match flags (Media::matchFlags)"},
@@ -542,6 +570,7 @@ std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
       PAIR(isArchived),
       PAIR(archiveCount),
       PAIR(isWeed),
+      PAIR(fileSize),
       {"res", [](const Media& m) { return qMax(m.width(), m.height()); }},
       {"relPath", [](const Media& m) { return QDir().relativeFilePath(m.path()); }},
       {"archive",
@@ -1358,7 +1387,9 @@ void Media::readMetadata() {
     if (info.exists()) _origSize = info.size();
   }
 
-  if (_origSize && !_img.isNull()) _compressionRatio = float(_img.sizeInBytes()) / _origSize;
+  // assume 24-bit rgb to normalize the metric
+  int sizeInBytes = width()*height()*3;
+  if (_origSize) _compressionRatio = float(sizeInBytes) / _origSize;
 }
 
 QStringList Media::exifVersion() {
@@ -1390,9 +1421,10 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
     if (!data.isEmpty())
       image = Exiv2::ImageFactory::open(reinterpret_cast<const Exiv2::byte*>(data.constData()),
                                         data.size());
-    else
+    else {
+      if (!QFile::exists(path())) return values; // valid case: empty Media object
       image = Exiv2::ImageFactory::open(qUtf8Printable(path()));
-
+    }
     if (!image.get()) return values;
 
     image->readMetadata();
