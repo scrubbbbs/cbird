@@ -159,7 +159,8 @@ int printCompletions(const char* argv0, const QStringList& args) {
   const QSet<QString> typeArg{"-select-type"};
   cmds += typeArg;
 
-  const QSet<QString> propArg{"-sort", "-sort-rev", "-group-by", "-with", "-without"};
+  const QSet<QString> propArg{"-sort", "-sort-rev", "-group-by", "-with", "-without", "-or-with",
+                              "-or-without"};
   cmds += propArg;
 
   const QSet<QString> fileArg{"-select-one",     "-jpeg-repair-script", "-view-image",
@@ -1119,10 +1120,18 @@ int main(int argc, char** argv) {
       for (auto& m : selection)
         if (!engine().db->move(m, dstDir)) break;
     } else if (arg == "-with" || arg == "-without") {
-      const QString key = nextArg();
-      const QString value = nextArg();
-      bool without = arg == "-without";
-      _commands.filter(key, value, without);
+      std::vector<Commands::Filter> filters;
+      filters.push_back({nextArg(), nextArg(), arg == "-without"});
+      while (args.count() > 0) {
+        auto& peekArg = args.at(0);
+        if (peekArg != "-or-with" && peekArg != "-or-without") break;
+        arg = nextArg();
+        bool without = arg == "-or-without";
+        filters.push_back({nextArg(), nextArg(), without});
+      }
+      _commands.filter(filters);
+    } else if (arg == "-or-with" || arg == "-or-without") {
+      qFatal("-or-with / -or-without must be preceded by -with");
     } else if (arg == "-first") {
       for (auto& g : queryResult)
         if (g.count() > 0) g = {g[0]};

@@ -32,8 +32,9 @@ class Commands {
   QStringList& _args;
   MediaGroup& _selection;
   MediaGroupList& _queryResult;
-
  public:
+  typedef std::tuple<QString,QString,bool> Filter; // property,valueExpr,without
+
   Commands(const IndexParams& ip, const SearchParams& sp, QString& switch_, QStringList& args,
            MediaGroup& selection, MediaGroupList& queryResult)
       : _indexParams(ip),
@@ -46,7 +47,7 @@ class Commands {
   QString nextArg();
   int intArg();
 
-  void filter(const QString& key, const QString& valueExp, bool without);
+  void filter(const std::vector<Filter>&) const;
   void rename(Database* db, const QString& srcPat, const QString& dstPat, const QString& option);
   void selectFiles();
   void verify(Database *db, const QString &jpegFixPath);

@@ -33,6 +33,7 @@ class Expression {
   std::function<bool(const QVariant&, const QVariant&)> _operator;  // binary or unary (rhs ignored)
   QVariant _rhs;                                                    // right hand side of operator
   bool _rhsIsNeedle = false;                                        // rhs contains "%needle"
+  QString _opToken;                                                 // token-value of the operator
 
   Expression() = delete;
 
@@ -68,6 +69,8 @@ class Expression {
     } else {
       _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs == rhs; };
     }
+
+    _opToken = valueExp.mid(0, valueOffset);
 
     QString constant = valueExp.mid(valueOffset).trimmed();
     _rhsIsNeedle = constant == "%needle";
@@ -138,11 +141,13 @@ class Expression {
     const QRegularExpression regex(qq("^(.+?)(&&|\\|\\|)")); // a&&[...] a||[...]
     QRegularExpressionMatch match = regex.match(expr);
     if (match.hasMatch()) {
+      _opToken = expr;
       parseBooleanExpression(expr, lhsType, regex, match);
       return;
     }
 
     // unary expression
+    _opToken = expr;
     if (expr == "%null")
       _operator = [](const QVariant& lhs, const QVariant& rhs) { (void)rhs; return lhs.isNull(); };
     else if (expr == "!%null")
@@ -167,6 +172,9 @@ class Expression {
   /// if true, then exec() must supply rhs value from the needle
   bool rhsIsNeedle() const { return _rhsIsNeedle; }
 
+  /// get the operator token if applicable (for logging)
+  const QString& opToken() const { return _opToken; }
+
   const QVariant& rhs() const { return _rhs; }
   bool eval(const QVariant& lhs) const { return eval(lhs, rhs()); }
   bool eval(const QVariant& lhs, const QVariant& rhs) const { return _operator(lhs, rhs); }
@@ -186,103 +194,127 @@ int Commands::intArg() {
   ::exit(1);
 }
 
-void Commands::filter(const QString& key, const QString& valueExp, bool without) {
-  const auto getValue = Media::propertyFunc(key);
-  const Expression op(valueExp, getValue(Media()).metaType());
-  const char* type = without ? "without" : "with";
+void Commands::filter(const std::vector<Filter>& filters) const {
 
-  // some properties require readMetadata()
-  // fixme: move to Media::loadableProperty(key) ??
-  bool usesMetadata = false;
-  if (key.startsWith("compressionRatio") || key.startsWith("fileSize")) usesMetadata = true;
+  // helpful info stuffed into "filter" attribute
+  const auto filterInfo = [](const char* withName,
+                       const QVariant& lhs, const Expression& exp,
+                      const QVariant& needleValue) {
+    QVariant rhs = exp.rhs();
+    if (exp.rhsIsNeedle())
+      rhs = needleValue;
 
+    return QString("%1 %2(%3) %4 %5(%6)")
+        .arg(withName)
+        .arg(lhs.typeName())
+        .arg(lhs.toString())
+        .arg(exp.opToken())
+        .arg(rhs.typeName())
+        .arg(rhs.toString());
+  };
+
+  // the "filter" attribute sets if we keep the item
+  for (auto& m : _selection)
+    m.unsetAttribute("filter");
+  for (auto& g : _queryResult)
+    for (auto& m : g)
+      m.unsetAttribute("filter");
+
+  for (auto& filter : filters) {
+    const QString& key = std::get<0>(filter);
+    const QString& valueExp = std::get<1>(filter);
+    bool without = std::get<2>(filter);
+
+    const auto getValue = Media::propertyFunc(key);
+    const Expression op(valueExp, getValue(Media()).metaType());
+    const char* withName = without ? "without" : "with";
+
+    // some properties require readMetadata()
+    // fixme: move to Media::loadableProperty(key) ??
+    bool usesMetadata = false;
+    if (key.startsWith("compressionRatio") || key.startsWith("fileSize")) usesMetadata = true;
+
+    if (_selection.count() > 0) {
+      if (op.rhsIsNeedle())
+        qFatal("compare with %%needle is only supported in group lists (-similar*,-dups*,-group-by)");
+
+      QAtomicInteger<int> count;
+      auto future = QtConcurrent::map(_selection, [&](Media& m) {
+        if (m.attributes().contains("filter")) return; // filtered by previous iteration
+        if (usesMetadata) m.readMetadata();
+        QVariant lhs = getValue(m);
+        if (without ^ op.eval(lhs)) {
+          auto info = filterInfo(withName, lhs, op, QVariant());
+          m.setAttribute("filter", info);
+          count++;
+        }
+      });
+
+      const auto progress = [&]() {
+        int percent = future.progressValue() * 100 / future.progressMaximum();
+        qInfo().nospace().noquote() << "{" << withName << " " << key << " " << valueExp
+                                    << "} <PL>" << percent << "% matched " << count.loadRelaxed();
+      };
+      while (future.isRunning()) {
+        QThread::msleep(100);
+        progress();
+      }
+      progress();  // always show 100%
+    }
+
+    if (_queryResult.count() > 0) {
+      QAtomicInteger<int> count;
+      auto future = QtConcurrent::map(_queryResult, [&](MediaGroup& g) {
+        if (Q_UNLIKELY(g.count() < 1)) return;
+        g[0].setAttribute("filter", "*needle*");  // never filter needle
+
+        if (usesMetadata) g[0].readMetadata();
+        const QVariant needleValue = getValue(g[0]);  // compare to the needle's value
+
+        for (int i = 1; i < g.count(); ++i) {
+          if (usesMetadata) g[i].readMetadata();
+          QVariant lhs = getValue(g[i]);
+          bool result = op.rhsIsNeedle() ? op.eval(lhs, needleValue) : op.eval(lhs);
+          if (without ^ result) {
+            auto info = filterInfo(withName, lhs, op, needleValue);
+            g[i].setAttribute("filter", info);
+            count++;
+          }
+        }
+      });
+
+      const auto progress = [&]() {
+        int percent = future.progressValue() * 100 / future.progressMaximum();
+        qInfo().nospace().noquote() << "{" << withName << " " << key << " " << valueExp
+                                    << "} <PL>" << percent << "% matched " << count.loadRelaxed();
+      };
+      while (future.isRunning()) {
+        QThread::msleep(100);
+        progress();
+      }
+      progress();  // always show 100%
+    }
+  }
   if (_selection.count() > 0) {
-    if (op.rhsIsNeedle())
-      qFatal("compare with %%needle is only supported in group lists (-similar*,-dups*,-group-by)");
-
-    QAtomicInteger<int> count;
-    auto future = QtConcurrent::map(_selection, [&](Media& m) {
-      if (usesMetadata) m.readMetadata();
-      if (without ^ op.eval(getValue(m))) {
-        m.setAttribute("filter", ":yes");
-        count++;
-      }
-    });
-
-    auto progress = [&]() {
-      qInfo("filtering selection:<PL> %d%% matched %d",
-            future.progressValue() * 100 / future.progressMaximum(), count.loadRelaxed());
-    };
-    while (future.isRunning()) {
-      QThread::msleep(100);
-      progress();
-    }
-    progress();  // always show 100%
-
     MediaGroup tmp;
-    for (Media& m : _selection) {
-      if (m.attributes()["filter"] == ":yes") {
-        m.setAttribute("filter", key + " " + valueExp);
+    for (const Media& m : qAsConst(_selection))
+      if (m.attributes().contains("filter"))
         tmp.append(m);
-      }
-    }
 
-    qInfo().noquote() << "{" << type << key << valueExp << "} removed"
-                      << _selection.count() - tmp.count() << "/" << _selection.count() << "items";
     _selection = tmp;
   }
 
   if (_queryResult.count() > 0) {
-    QAtomicInteger<int> count;
-    auto future = QtConcurrent::map(_queryResult, [&](MediaGroup& g) {
-      if (Q_UNLIKELY(g.count() < 1)) return;
-      g[0].setAttribute("filter", ":yes");  // never filter needle
-
-      if (usesMetadata) g[0].readMetadata();
-      const QVariant needleValue = getValue(g[0]);  // compare to the needle's value
-
-      for (int i = 1; i < g.count(); ++i) {
-        if (usesMetadata) g[i].readMetadata();
-        QVariant lhs = getValue(g[i]);
-        bool result = op.rhsIsNeedle() ? op.eval(lhs, needleValue) : op.eval(lhs);
-        if (without ^ result) {
-          g[i].setAttribute("filter", ":yes");
-          count++;
-        }
-      }
-    });
-
-    auto progress = [&]() {
-      qInfo("filtering result:<PL> %d%% matched %d",
-            future.progressValue() * 100 / future.progressMaximum(), count.loadRelaxed());
-    };
-    while (future.isRunning()) {
-      QThread::msleep(100);
-      progress();
-    }
-    progress();
-
     MediaGroupList tmp;
-    int removedItems = 0;
     for (auto& g : _queryResult) {
       MediaGroup filtered;
-      for (auto& m : g) {
-        if (m.attributes()["filter"] == ":yes") {
-          m.setAttribute("filter", key + " " + valueExp);
+      for (auto& m : g)
+        if (m.attributes().contains("filter"))
           filtered.append(m);
-        }
-      }
 
-      if (filtered.count() > 1) {
-        removedItems += g.count() - filtered.count();
+      if (filtered.count() > 1)
         tmp.append(filtered);
-      }
     }
-
-    qInfo().noquote() << "{" << type << key << valueExp << "} removed"
-                      << _queryResult.count() - tmp.count() << "/" << _queryResult.count()
-                      << "groups," << removedItems << "items from remaining groups";
-
     _queryResult = tmp;
   }
 }

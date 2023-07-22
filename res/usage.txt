@@ -58,14 +58,15 @@ Batch Deletion
 
 Filtering
 ==============================================================================
-  -with <prop>[#<func>] <expression>    remove items if expression is false,
-                                        first in each group (needle) is untouched
-  -without <prop>[#<func>] <expression> inversion of -with
-  -first                                keep the first item
-  -chop                                 remove the first item
-  -first-sibling                        keep one item from each directory
-  -head <int>                           keep the first N items
-  -tail <int>                           keep the last N items
+  -with[out]    <prop>[#<func>] <expr> remove items if expression is false, invert with -without
+                                       first in each group (needle) is never filtered
+  -or-with[out] <prop>[#<func>] <expr> logical OR for the preceding -with[out]
+                                       logical AND by using multiple -with[out]
+  -first                               keep the first item
+  -chop                                remove the first item
+  -first-sibling                       keep one item from each directory
+  -head <int>                          keep the first N items
+  -tail <int>                          keep the last N items
 
 Sorting/Grouping
 ==============================================================================
@@ -162,18 +163,18 @@ Definitions
       %n                          - special: the sequence number, with automatic zero-padding
       {arg:<func>}                - special: transform arg (after capture/special expansion) with function(s)
       {<prop>[#<func>]}           - special: insert property
-  <binop>                         operator for <expression>
+  <binop>                         operator for <expr>
       ==, =                       - equal to
       !=                          - not equal to
       <, <=, >, >=                - less-than/greater-than
       ~                           - contains
       !                           - does not contain
-  <expression>                    expression to test a value, returns true or false, default operator ==
+  <expr>                          expression to test a value, returns true or false, default operator ==
       :<regular-expression>       - pcre matches value
       [<binop>]<string>           - compare using operator, string is converted to value's type
       [<binop>]%needle            - compare with the needle (first item in group)
-      <expression>&&<expression>  - logical AND, both expressions must be true
-      <expression>||<expression>  - logical OR, the first true expression is returned
+      <expr>&&<expr>              - logical AND, if both expressions are true -> true
+      <expr>||<expr>              - logical OR, one expression is true -> true
       %null                       - true if value is null
       !%null                      - true if value is not null
       %empty                      - true if value is empty (after conversion to string)
