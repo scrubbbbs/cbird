@@ -886,7 +886,8 @@ void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
 
     if (maxLen > 0 && i >= maxLen) break;
 
-    if (i++ % 1000 == 0) qInfo("sql query:<PL> %d", i);
+    if (i % 1000 == 0) qInfo("sql query:<PL> %d", i);
+    i++;
   }
 }
 
