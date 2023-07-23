@@ -774,7 +774,6 @@ int main(int argc, char** argv) {
 #endif
     } else if (arg == "-remove") {
       qInfo() << "removing: " << selection.count() << "items";
-      // Media::printGroup(selection);
       engine().db->remove(selection);
     } else if (arg == "-dups") {
       queryResult = engine().db->dupsByMd5(params);
@@ -1020,7 +1019,7 @@ int main(int argc, char** argv) {
 
         int i = 1;
         for (auto& w : work) {
-          try {
+          try { // fixme: what is throwing exceptions? engine::query does not throw
             w.waitForFinished();
           } catch (std::exception& e) {
             qCritical("exception: %s", e.what());
@@ -1029,8 +1028,9 @@ int main(int argc, char** argv) {
 
           search = w.result();
 
-          // note: engine.query(db.similarTo) already filtered groups
-          // only need to group list
+          // note: engine.query(db.similarTo) already filtered matches,
+          // but we still need to filter the whole list, which
+          // requires the needle in the first position
           if (search.matches.count() > 0) {
             search.matches.prepend(search.needle);
             list.append(search.matches);
@@ -1056,14 +1056,14 @@ int main(int argc, char** argv) {
     } else if (arg == "-select-id") {
       int id = intArg(nextArg());
       Media m = engine().db->mediaWithId(id);
-      if (m.isValid() <= 0)
+      if (!m.isValid())
         qWarning("select-id: nothing found");
       else
         selection.append(m);
     } else if (arg == "-select-one") {
       Media m = engine().db->mediaWithPath(nextArg());
       if (!m.isValid())
-        qWarning("select-one: invalid path, is it in the index?");
+        qWarning("select-one: nothing with that path");
       else
         selection.append(m);
     } else if (arg == "-select-type") {
@@ -1081,7 +1081,7 @@ int main(int argc, char** argv) {
         }
     } else if (arg == "-select-result") {
       for (auto& g : queryResult) selection.append(g);
-      // pretend it is sorted to prevent automatic sort
+      // pretend it is sorted to prevent re-sort in -show
       if (!selection.empty()) selection.first().setAttribute("sort", "(select-result)");
       queryResult.clear();
     } else if (arg == "-select-sql") {
@@ -1142,7 +1142,7 @@ int main(int argc, char** argv) {
       if (selection.count() > 0) selection.removeFirst();
     } else if (arg == "-head") {
       int n = intArg(nextArg());
-      if (n <= 0) qFatal("count is not >= 0");
+      if (n <= 0) qFatal("count must be > 0");
       auto f = [n](MediaGroup& g) {
         if (g.count() > n) g.resize(n);
       };
@@ -1150,7 +1150,7 @@ int main(int argc, char** argv) {
       f(selection);
     } else if (arg == "-tail") {
       int n = intArg(nextArg());
-      if (n <= 0) qFatal("count is not >= 0");
+      if (n <= 0) qFatal("count must be > 0");
       auto f = [n](MediaGroup& g) {
         if (g.count() > n) g = g.mid(g.count() - n);
       };
@@ -1171,7 +1171,7 @@ int main(int argc, char** argv) {
 
       if (queryResult.count() > 0)
         for (auto& g : queryResult) g = fn(g);
-      else if (selection.count() > 0)
+      if (selection.count() > 0)
         selection = fn(selection);
     } else if (arg == "-sort" || arg == "-sort-rev") {
       const QString sortKey = nextArg();
@@ -1185,8 +1185,7 @@ int main(int argc, char** argv) {
       const QString expr = nextArg();
       const auto getProperty = Media::propertyFunc(expr);
 
-      // note: getProperty can be slow (exif) so thread it
-      // todo: this would be faster for huge lists if items were chunked
+      // getProperty can be slow (exif) so thread it
       auto f = QtConcurrent::map(selection, [&](Media& m) {
         QString attr = expr + " == " + getProperty(m).toString();
         m.setAttribute("group", attr);
@@ -1340,8 +1339,6 @@ int main(int argc, char** argv) {
       widgetOptions.selectionMode = MediaWidgetOptions::SelectExitCode;
     } else if (arg == "-max-per-page") {
       widgetOptions.maxPerPage = intArg(nextArg());
-      //    } else if (arg == "-track-weeds") {
-      //      widgetOptions.trackWeeds = true;
     } else if (arg == "-theme") {
       Theme::setDefaultStyle(nextArg());
     } else if (arg == "-show") {
