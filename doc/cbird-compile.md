@@ -198,7 +198,7 @@ brew install qt6 quazip ffmpeg exiv2 grealpath trash
 
 #### 3.3 Compiling OpenCV
 
-See [Compiling opencv](#1.2-compiling-opencv), in addition you may need this trivial patch to fix the build.
+See [Compiling opencv](#12-compiling-opencv), in addition you may need this trivial patch to fix the build.
 
 Apply patch to fix the build ./cbird/mac/opencv.diff
 
@@ -211,7 +211,7 @@ Add `-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0` to suppress link warnings.
 
 #### 3.4 Compiling cbird
 
-See [Compiling cbird](#1.5-compiling-cbird)
+See [Compiling cbird](#15-compiling-cbird)
 
 Additionally, `make portable` will build the release  binaries in _mac/cbird/
 
@@ -297,11 +297,11 @@ sudo cmake --install .
 
 #### 4.6 FFmpeg
 
-See [Compiling FFmpeg](#1.4b-compiling-ffmpeg)
+See [Compiling FFmpeg](#14b-compiling-ffmpeg)
 
 #### 4.7 opencv
 
-See [Compiling opencv](#1.2-compiling-opencv), with additional flags for compatibility.
+See [Compiling opencv](#12-compiling-opencv), with additional flags for compatibility.
 
 ```shell
 cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_JASPER=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.7/
@@ -309,7 +309,7 @@ cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH
 
 #### 4.7 quazip
 
-See [Compiling quazip](#1.3-compiling-quazip)
+See [Compiling quazip](#13-compiling-quazip)
 
 #### 4.8 cbird
 
