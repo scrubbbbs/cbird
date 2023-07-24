@@ -9,7 +9,9 @@
 #include "pHash.h"
 #endif
 
-class TestCvUtil : public QObject {
+#include "testbase.h"
+
+class TestCvUtil : public TestBase {
   Q_OBJECT
 
   void commonPhashData();
@@ -60,19 +62,6 @@ class TestCvUtil : public QObject {
   void testColorDescriptor_data() { loadDataSet("colormatch"); }
   void testColorDescriptor();
  private:
-
-  void loadDataSet(const QString& dataSetName,
-                   const QStringList& extraColumns = QStringList());
-  void readDataSet(const QString& dataSetName,
-                   const QStringList& extraColumns = QStringList());
-  QString testData(int row, const QString& col);
-
-  QString _dataRoot;
-  QString _dataSetName;
-  QStringList _dataNames;
-  QStringList _dataTypes;
-  QVector<QStringList> _dataRows;
-
   QFile _logFile;
   QVector<uint64_t> _hashes;
 };
@@ -83,18 +72,7 @@ class TestCvUtil : public QObject {
 ::qMetaTypeId<type >()))
 */
 
-// was having issues with qPrintable so using this string pool
-static const char* qCString(const QString& str) {
-  static QMap<QString, const char*> map;
 
-  if (map.contains(str))
-    return map[str];
-  else {
-    const char* cstr = strdup(qPrintable(str));
-    map[str] = cstr;
-    return cstr;
-  }
-}
 
 static void viewImages(const char* label1, const cv::Mat& img1,
                        const char* label2, const cv::Mat& img2) {
@@ -116,160 +94,7 @@ void TestCvUtil::initTestCase() {
   if (root.isEmpty()) qFatal("TEST_DATA_DIR environment is not set");
 }
 
-void TestCvUtil::loadDataSet(const QString& dataSetName,
-                             const QStringList& extraColumns) {
-  readDataSet(dataSetName, extraColumns);
 
-  for (int i = 0; i < _dataTypes.count(); i++) {
-    const QString& type = _dataTypes[i];
-    const char* name = qCString(_dataNames[i]);
-
-    // printf("%d:%d %s:%s\n", lineNumber, i, qCString(type), qCString(name));
-
-    if (type == "str")
-      QTest::addColumn<QString>(name);
-    else if (type == "path")
-      QTest::addColumn<QString>(name);
-    else if (type == "int")
-      QTest::addColumn<int>(name);
-    else if (type == "bool")
-      QTest::addColumn<bool>(name);
-    else if (type == "float")
-      QTest::addColumn<float>(name);
-    else if (type == "double")
-      QTest::addColumn<double>(name);
-    else
-      qFatal("unsupported type %s in %s\n", qCString(type),
-             qCString(_dataRoot));
-  }
-
-  for (QStringList cols : _dataRows) {
-    // data tag is the first column
-    QTestData& row = QTest::newRow(qCString(cols[0]));
-
-    for (int i = 0; i < _dataTypes.count(); i++) {
-      const QString& type = _dataTypes[i];
-      // const QString& name = names[i];
-
-      QString value = cols[i];
-
-      // printf("%d:%d %s\n", lineNumber, i, qCString(value));
-
-      if (type == "str")
-        row << value;
-      else if (type == "path")
-        row << value;
-      else if (type == "int")
-        row << value.toInt();
-      else if (type == "bool")
-        row << (bool)value.toInt();
-      else if (type == "float")
-        row << value.toFloat();
-      else if (type == "double")
-        row << value.toDouble();
-      else
-        qFatal("unsupported type %s in %s\n", qCString(type),
-               qCString(_dataRoot));
-    }
-  }
-}
-
-void TestCvUtil::readDataSet(const QString& dataSetName,
-                             const QStringList& extraColumns) {
-  _dataRoot = getenv("TEST_DATA_DIR");
-  _dataRoot += "/" + dataSetName + "/";
-
-  _dataNames.clear();
-  _dataTypes.clear();
-  _dataRows.clear();
-
-  // first row, data field names
-  // second row, data field types
-  // the rest, test data
-
-  QFile data(_dataRoot + dataSetName + ".csv");
-  if (!data.open(QFile::ReadOnly))
-    qFatal("failure to open %s", qCString(data.fileName()));
-
-  QStringList lines = QString(data.readAll()).split("\n");
-  if (lines.count() < 3)
-    qFatal("data set CSV requires at least 3 rows: %s",
-           qCString(data.fileName()));
-
-  if (extraColumns.count() != 0 && extraColumns.count() != 3)
-    qFatal("extra columns data requires 3 rows: %s", qCString(data.fileName()));
-
-  QStringList names, types;
-  int lineNumber = 0;
-  int dataRows = 0;
-  for (const QString& line : lines) {
-    lineNumber++;
-    if (line.isEmpty() || line.startsWith("#")) continue;
-
-    QStringList cols = line.trimmed().split(",");
-    if (names.count() == 0) {
-      names = cols;
-      _dataNames = names;
-      if (extraColumns.count() > 0)
-        for (QString str : extraColumns[0].split(",")) names.append(str);
-
-      _dataNames = names;
-    } else if (types.count() == 0) {
-      types = cols;
-      if (extraColumns.count() > 0)
-        for (QString str : extraColumns[1].split(",")) types.append(str);
-
-      if (types.count() != names.count())
-        qFatal("type/names column count mismatch in %s",
-               qCString(data.fileName()));
-
-      _dataTypes = types;
-    } else {
-      if (extraColumns.count() > 0)
-        for (QString str : extraColumns[2].split(",")) cols.append(str);
-
-      if (cols.count() != types.count())
-        qFatal("column count mismatch on line %d: %s", lineNumber,
-               qCString(data.fileName()));
-
-      QStringList row;
-
-      for (int i = 0; i < types.count(); i++) {
-        const QString& type = types[i];
-        // const QString& name = names[i];
-
-        QString value = cols[i];
-
-        // replace variables
-        for (int j = 0; j < names.count(); j++) {
-          QString key = "$" + names[j];
-          QString val = cols[j];
-          value.replace(key, val);
-        }
-
-        // path type prepends the data set path
-        if (type == "path") value = _dataRoot + value;
-
-        row.append(value);
-      }
-
-      _dataRows.append(row);
-      dataRows++;
-    }
-  }
-
-  if (dataRows <= 0)
-    qFatal("no test data was parsed in %s", qCString(data.fileName()));
-}
-
-QString TestCvUtil::testData(int row, const QString& col) {
-  if (row >= _dataRows.count()) qFatal("row index of range");
-
-  for (int i = 0; i < _dataNames.count(); i++)
-    if (_dataNames[i] == col) return _dataRows[row][i];
-
-  qFatal("invalid column name");
-}
 
 void TestCvUtil::testAutocrop() {
   QFETCH(QString, file);

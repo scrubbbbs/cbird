@@ -1,6 +1,6 @@
 include("pre.pri")
 
-FILES += testbase cvutil ioutil
+FILES += $$FILES_INDEX testbase
 
 contains(DEFINES, ENABLE_DEPRECATED) {
     LIBS += $$LIBS_LIBPHASH

@@ -1444,7 +1444,9 @@ QPartialOrdering qVariantCompare(const QVariant& a, const QVariant& b) {
 #endif
 
 ShadeWidget::ShadeWidget(QWidget* parent) : QLabel(parent) {
+#ifndef QT_TESTLIB_LIB // theme dep in unit tests
   setProperty("style", Theme::instance().property("style")); // stylesheet sets transparent bg color
+#endif
   setGeometry({0, 0, parent->width(), parent->height()});
   setMargin(0);
   setFrameShape(QFrame::NoFrame);
@@ -1462,26 +1464,53 @@ ShadeWidget::~ShadeWidget() {
 }
 
 int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const QStringView& b) {
-  // fixme: this can be sped up massively by eliminating the regexps
-  //        and perhaps parsing each string in a higher-level structure
-  //        so the next compare can be fast
-  static const QRegularExpression numberStartExp(qq("[0-9]"));
+  static const auto indexOfNumber = [](const QStringView& str, int start) {
+    for (int i = start; i < str.length(); ++i)
+      if (str.at(i).isDigit()) return i;
+    return -1;
+  };
 
-  // non-digit not preceded by digit
-  static const QRegularExpression numberEndExp(qq("(?![0-9])[^0-9]"));
+  static const auto indexOfNonNumber = [](const QStringView& str, int start) {
+    for (int i = start; i < str.length(); ++i)
+      if (!str.at(i).isDigit()) return i;
+    return -1;
+  };
 
   // current index into string
   int ia = a.isEmpty() ? -1 : 0;
   int ib = b.isEmpty() ? -1 : 0;
 
   auto compareNumbers = [&a, &b, &ia, &ib](const int na, const int nb) {
-    ia = a.indexOf(numberEndExp, ia);
-    ib = b.indexOf(numberEndExp, ib);
+    bool fraction = false;
+    if (na > 1 && a[na - 1] == lc('.') && a[na - 2].isDigit() &&
+        nb > 1 && b[nb - 1] == lc('.') && a[nb - 2].isDigit())
+      fraction = true;
+
+    ia = indexOfNonNumber(a, ia);
+    ib = indexOfNonNumber(b, ib);
     auto pa = a.mid(na, ia > 0 ? (ia - na) : -1);
     auto pb = b.mid(nb, ib > 0 ? (ib - nb) : -1);
-    auto intA = pa.toInt();
-    auto intB =  pb.toInt();
-    return intA < intB ? -1 : (intA > intB ? 1 : 0);
+
+    quint64 intA = pa.toULongLong();
+    quint64 intB = pb.toULongLong();
+
+    if (Q_UNLIKELY(fraction && pa.length() != pb.length())) {
+      // pad the smaller number to the same length, to compare as int
+      int min, max;
+      quint64* shorter;
+      const int la = pa.length(), lb = pb.length();
+      if (la < lb)
+        min = la, max = lb, shorter = &intA;
+      else
+        min = lb, max = la, shorter = &intB;
+      while (min < max) {
+        *shorter *= 10;
+        min++;
+      }
+    }
+
+    int order = intA < intB ? -1 : (intA > intB ? 1 : 0);
+    return order;
   };
 
   while (true) {
@@ -1490,31 +1519,29 @@ int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const Q
     if (ia < 0 && ib < 0) return 0;    // empty == empty
     // both >= 0; keep looping
 
-    const int na = a.indexOf(numberStartExp, ia);
+    const int na = indexOfNumber(a, ia);
     if (na == ia) {
-      const int nb = b.indexOf(numberStartExp, ib);
+      const int nb = indexOfNumber(b, ib);
       if (nb == ib) {  // numeric in both
         int r = compareNumbers(na, nb);
         if (r != 0) return r;
         continue;
-      } else {
-        // a is numeric, b is not, a < b
-        return -1;
-      }
+      } else
+        return -1; // a is num, b is not, a < b
     }
-    const int nb = b.indexOf(numberStartExp, ib);
+
+    const int nb = indexOfNumber(b, ib);
     if (nb == ib) {
-      const int na = a.indexOf(numberStartExp, ia);
-      if (na == ia) {  // same block as above
+      const int na = indexOfNumber(a, ia);
+      if (na == ia) {
         int r = compareNumbers(na, nb);
         if (r != 0) return r;
         continue;
       } else
-        return 1;  // b is num, a is not, a > b
+        return 1; // b is num, a is not, a > b
     }
 
-    // if there is a number somewhere,
-    // and prefixes have the same length, compare prefixes
+    // if non-numeric prefixes have the same length, compare prefixes
     if (na > 0 && nb > 0 && na == nb) {
       auto pa = a.mid(ia, na - ia);
       auto pb = b.mid(ib, nb - ib);

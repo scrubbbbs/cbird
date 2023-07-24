@@ -142,8 +142,7 @@ class ShadeWidget : public QLabel {
 
 /**
  * @brief compare strings by segmenting into numeric and non-numeric parts
- * @param cmp locale-aware compare function for all parts
- * @note cmp should probably enable numeric sorting and maybe case insensitivity
+ * @param cmp (probably locale-aware) compare function for the non-numeric part
  * @return -1, 0, or 1
  */
 int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const QStringView& b);
