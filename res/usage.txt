@@ -70,7 +70,7 @@ Filtering
 
 Sorting/Grouping
 ==============================================================================
-  -sort <prop>[#<func>]               sort ascending
+  -sort <prop>[#<func>]               sort ascending, use additional -sort/-sort-rev for multisort
   -sort-rev <prop>[#<func>]           sort descending
   -group-by <prop>[#<func>]           group selection by property, store in result (clears selection)
   -sort-similar                       sort selection by similarity

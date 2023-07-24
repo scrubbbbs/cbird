@@ -47,6 +47,8 @@ typedef std::vector<cv::DMatch> MatchList;
 typedef std::vector<uint64_t> VideoHashList;
 typedef QHash<QString, QString> QStringHash;
 
+typedef std::function<QVariant(const Media&)> PropertyFunc;
+
 #define CVMAT_SIZE(x) (x.total() * x.elemSize())
 #define VECTOR_SIZE(x) (x.capacity() * sizeof(decltype(x)::value_type))
 
@@ -178,7 +180,7 @@ class Media {
   static void mergeGroupList(MediaGroupList& list);
   static void expandGroupList(MediaGroupList& list);
   static void sortGroupList(MediaGroupList& list, const QString& key);
-  static void sortGroup(MediaGroup& group, const QString& key, bool reverse = false);
+  static void sortGroup(MediaGroup& group, const QStringList& properties);
   static int indexInGroupByPath(MediaGroup& group, const QString& path);
   static QString greatestPathPrefix(const MediaGroup& group);
   static QString greatestPathPrefix(const MediaGroupList& list);
@@ -186,11 +188,20 @@ class Media {
   static MediaGroupList splitGroup(const MediaGroup& group, int chunkSize = 1);
 
   /**
+   * @return true if property can be obtained from readMetadata()
+   *
+   * @note there are certain things we'd like to have as properties
+   * that are not stored in the database, like file size, file create/modify date etc.
+   * This function indicates when such properties must be read from the system
+   */
+  static bool isExternalProperty(const QString& expr);
+
+  /**
    * @return function that evaluates expr with Media argument
    *
    * @note useful for implementing generic sorting/grouping
    */
-  static std::function<QVariant(const Media&)> propertyFunc(const QString& expr);
+  static PropertyFunc propertyFunc(const QString& expr);
 
   /**
    * @param expr function[,args][#function[,args] ...]
@@ -267,8 +278,8 @@ class Media {
   void setPath(const QString& path) { _path = path; }
 
   /// fast path components
-  QString dirPath() const { return path().left(path().lastIndexOf("/")); }
-  QString name() const { return path().mid(path().lastIndexOf("/") + 1); }
+  QString dirPath() const { return path().left(path().lastIndexOf("/")); } // fixme: use archivePath?
+  QString name() const { return path().mid(path().lastIndexOf("/") + 1); } // fixme: use archivePath?
   QString suffix() const { return path().mid(path().lastIndexOf(".") + 1); }
   QString completeBaseName() const {
     QString s = name();

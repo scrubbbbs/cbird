@@ -234,14 +234,50 @@ void Media::sortGroupList(MediaGroupList& list, const QString& key) {
     qFatal("unsupported sort key \"%s\"", qPrintable(key));
 }
 
-void Media::sortGroup(MediaGroup& group, const QString& key, bool reverse) {
-  auto f = propertyFunc(key);
+void Media::sortGroup(MediaGroup& group, const QStringList& properties) {
+  QVector<PropertyFunc> functions;
+  QVector<bool> reverse;
+  for (auto& exp : properties) {
+    QString prop = exp;
+    bool rev = false;
+    if (prop.startsWith(lc('^'))) {
+      prop = prop.mid(1);
+      rev = true;
+    }
+    reverse.append(rev);
+    functions.append( propertyFunc(prop) );
+  }
   QCollator collator;
 
+  bool typeWarning = true;
+
   auto cmp = [&](const Media& a, const Media& b) {
-    const QString sa = f(a).toString();
-    const QString sb = f(b).toString();
-    return reverse ^ (0 > qNumericSubstringCompare(collator, sa, sb));
+    bool result = false;
+    for (int i = 0; i < functions.count(); ++i) {
+      auto& f = functions.at(i);
+      const QVariant va = f(a);
+      const QVariant vb = f(b);
+
+      if (typeWarning && va.typeId() != vb.typeId()) {
+        qWarning() << "data type mismatch, sort could be unreliable";
+        typeWarning = false;
+      }
+
+      int order = 0;
+      if (qq("QString") == va.metaType().name())
+        order = qNumericSubstringCompare(collator, va.toString(), vb.toString());
+      else {
+        auto partialOrdering = qVariantCompare(va, vb);
+        if (partialOrdering == QPartialOrdering::Less) order = -1;
+        else if (partialOrdering == QPartialOrdering::Greater) order = 1;
+      }
+
+      // qDebug() << i << order << va << vb;
+
+      result = reverse[i] ^ (0 > order);
+      if (order != 0) break;  // continue if ==
+    }
+    return result;
   };
 
   std::stable_sort(group.begin(), group.end(), cmp);
@@ -290,6 +326,10 @@ MediaGroupList Media::splitGroup(const MediaGroup& group, int chunkSize) {
   MediaGroupList list;
   for (int i = 0; i < group.count(); i += chunkSize) list.append(group.mid(i, chunkSize));
   return list;
+}
+
+bool Media::isExternalProperty(const QString& expr) {
+  return expr.startsWith("compressionRatio") || expr.startsWith("fileSize");
 }
 
 std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
@@ -380,6 +420,8 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
       return QString("%1").arg(num, len, 10, QLatin1Char('0'));
     };
   }
+  // todo: replace(regex,replace-with-captures)
+
   // list functions
   if (fn == "split") {
     if (call.count() != 2) qFatal("split() takes one string argument (separator)");
@@ -536,11 +578,11 @@ QList<QPair<const char*, const char*>> Media::propertyList() {
   };
 }
 
-std::function<QVariant(const Media&)> Media::propertyFunc(const QString& expr) {
+PropertyFunc Media::propertyFunc(const QString& expr) {
   static QHash<QString, QVariant> propCache;
   static QMutex* cacheMutex = new QMutex;
 
-  std::function<QVariant(const Media&)> select;
+  PropertyFunc select;
 
   // shortcut for properties that have accessor with the same name
 #define PAIR(prop)                                \
@@ -1359,7 +1401,9 @@ QImage Media::constrainedResize(const QImage& img, const QSize& size) {
 }
 
 void Media::readMetadata() {
-  if (isArchived()) {
+  if (!_data.isEmpty())
+    _origSize = _data.size();
+  else if (isArchived()) {
     QString sizeText = _img.text(Media::ImgKey_FileSize);
     if (!sizeText.isEmpty()) {
       _origSize = _img.text(Media::ImgKey_FileSize).toLongLong();
@@ -1372,17 +1416,17 @@ void Media::readMetadata() {
         QuaZip zip(zipPath);
         zip.open(QuaZip::mdUnzip);
 
-        auto infoList = zip.getFileInfoList();
-        for (auto& info : infoList)
-          if (info.name == fileName) {
+        if (zip.setCurrentFile(fileName)) {
+          QuaZipFileInfo64 info;
+          if (zip.getCurrentFileInfo(&info)) {
             _origSize = info.uncompressedSize;
             ok = true;
-            break;
           }
+        }
       }
       if (!ok) qWarning() << "file not found in archive" << zipPath << fileName;
     }
-  } else if (_data.isEmpty()) {
+  } else {
     QFileInfo info(path());
     if (info.exists()) _origSize = info.size();
   }

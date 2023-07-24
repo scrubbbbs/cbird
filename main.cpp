@@ -493,6 +493,17 @@ static void nuke(const MediaGroup& group) {
   qInfo() << group.count() << "nuked";
 }
 
+void waitFuture(const QFuture<void>& future, const QString& format) {
+  auto progress = [&future,&format]() {
+    qInfo() << format.arg(future.progressValue()*100/future.progressMaximum());
+  };
+  while (!future.isFinished()) {
+    QThread::msleep(100);
+    progress();
+  }
+  progress();
+}
+
 int main(int argc, char** argv) {
   // parse args ourselves, so we can choose which
   // QApplication type; gui type needed for -show
@@ -1174,13 +1185,47 @@ int main(int argc, char** argv) {
       if (selection.count() > 0)
         selection = fn(selection);
     } else if (arg == "-sort" || arg == "-sort-rev") {
-      const QString sortKey = nextArg();
-      // pre-compute property values and cache them
-      auto getValue = Media::propertyFunc(sortKey);
-      auto future = QtConcurrent::map(selection, getValue);
-      future.waitForFinished();
-      Media::sortGroup(selection, sortKey, arg == "-sort-rev");
-      for (auto& m : selection) m.setAttribute("sort", sortKey);
+      const QChar invertPrefix = lc('^');
+      QStringList keys;
+
+      auto key = nextArg();
+      if (arg == "-sort-rev") key = invertPrefix+key;
+      keys.append(key);
+
+      while (args.count() > 0) {
+        auto& peekArg = args.at(0);
+        if (peekArg != "-sort" && peekArg != "-sort-rev") break;
+        arg = nextArg();
+        key = nextArg();
+        if (arg == "-sort-rev") key = invertPrefix+key;
+        keys.append(key);
+      }
+
+      if (selection.count() <= 0) {
+        qWarning("sort: empty selection");
+        continue;
+      }
+
+      // some properties are slow, pre-compute them, storing them in Media
+      bool external = false;
+      for (auto prop: keys) {
+        if (prop.startsWith(invertPrefix)) prop = prop.mid(1);
+        external |= Media::isExternalProperty(prop);
+        auto getValue = Media::propertyFunc(prop);
+        auto future = QtConcurrent::map(selection, [&getValue](Media& m) {
+          (void)getValue(m);
+        });
+        waitFuture(future, qq("sort: collecting {%1}<PL> %2%").arg(prop).arg("%1"));
+      }
+      if (external) {
+        auto future = QtConcurrent::map(selection, [](Media& m) {
+          m.readMetadata();
+        });
+        waitFuture(future, qq("sort: read metadata<PL> %1%"));
+      }
+
+      Media::sortGroup(selection, keys);
+      for (auto& m : selection) m.setAttribute("sort", "yes");
     } else if (arg == "-group-by") {
       const QString expr = nextArg();
       const auto getProperty = Media::propertyFunc(expr);
@@ -1349,7 +1394,7 @@ int main(int argc, char** argv) {
       else {
         // sort by folder/archive if no sort was given
         if (selection.count() && !selection.first().attributes().contains("sort"))
-          Media::sortGroup(selection, "path", false);
+          Media::sortGroup(selection, {"path"});
 
         auto getProp = Media::propertyFunc("parentPath");
 

@@ -1254,7 +1254,7 @@ void Database::filterMatches(const SearchParams& params, MediaGroupList& matches
     for (const MediaGroup& group : matches) {
       QString str;
       MediaGroup copy = group;
-      Media::sortGroup(copy, "path");
+      Media::sortGroup(copy, {"path"});
       for (const Media& m : copy) str += m.path();
 
       uint hash = qHash(str);

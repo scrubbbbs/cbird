@@ -1431,7 +1431,14 @@ void MessageLog::flush() {
 #if QT_VERSION_MAJOR > 5
 QPartialOrdering qVariantCompare(const QVariant& a, const QVariant& b) {
   QPartialOrdering ord = QVariant::compare(a, b);
-  if (ord == QPartialOrdering::Unordered) qWarning() << a << "and" << b << "are not comparable";
+  if (ord == QPartialOrdering::Unordered) {
+    if (a.isNull())  // sort null before non-null
+      ord = QPartialOrdering::Less;
+    else if (b.isNull())
+      ord = QPartialOrdering::Greater;
+    else
+      qWarning() << a << "and" << b << "are not comparable";
+  }
   return ord;
 }
 #endif

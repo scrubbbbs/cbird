@@ -230,9 +230,8 @@ void Commands::filter(const std::vector<Filter>& filters) const {
     const char* withName = without ? "without" : "with";
 
     // some properties require readMetadata()
-    // fixme: move to Media::loadableProperty(key) ??
     bool usesMetadata = false;
-    if (key.startsWith("compressionRatio") || key.startsWith("fileSize")) usesMetadata = true;
+    if (Media::isExternalProperty(key)) usesMetadata = true;
 
     if (_selection.count() > 0) {
       if (op.rhsIsNeedle())

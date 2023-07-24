@@ -175,7 +175,7 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
   }
 
   qInfo() << "sorting...";
-  Media::sortGroup(index, "path");
+  Media::sortGroup(index, {"path"});
 
   auto opt = options;
   opt.basePath = prefix.mid(0, prefix.length() - 1);
@@ -255,7 +255,7 @@ int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions&
     QThread::msleep(100);
   }
 
-  Media::sortGroup(index, "path");
+  Media::sortGroup(index, {"path"});
   MediaBrowser browser(options);
 
   if (index.count() == 1)
