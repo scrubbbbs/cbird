@@ -32,6 +32,61 @@
 
 #include "opencv2/features2d/features2d.hpp"
 
+class PropertyCompare {
+  QVector<PropertyFunc> _functions;
+  QVector<bool> _reverse;
+  QCollator _collator;
+  bool _typeWarning = true;
+
+ public:
+  void parse(const QStringList& expressions);
+  bool compare(const Media& a, const Media& b);
+};
+
+void PropertyCompare::parse(const QStringList& properties) {
+  for (auto& exp : properties) {
+    QString prop = exp;
+    bool rev = false;
+    if (prop.startsWith(lc('^'))) {
+      prop = prop.mid(1);
+      rev = true;
+    }
+    _reverse.append(rev);
+    _functions.append(Media::propertyFunc(prop));
+  }
+}
+
+bool PropertyCompare::compare(const Media& a, const Media& b) {
+  bool result = false;
+  for (int i = 0; i < _functions.count(); ++i) {
+    auto& f = _functions.at(i);
+    const QVariant va = f(a);
+    const QVariant vb = f(b);
+
+    if (_typeWarning && va.typeId() != vb.typeId()) {
+      qWarning() << "data type mismatch, sort could be unreliable";
+      _typeWarning = false;
+    }
+
+    int order = 0;
+    if (qq("QString") == va.metaType().name())
+      order = qNumericSubstringCompare(_collator, va.toString(), vb.toString());
+    else {
+      auto partialOrdering = qVariantCompare(va, vb);
+      if (partialOrdering == QPartialOrdering::Less)
+        order = -1;
+      else if (partialOrdering == QPartialOrdering::Greater)
+        order = 1;
+    }
+
+    // qDebug() << i << order << va << vb;
+
+    result = _reverse[i] ^ (0 > order);
+    if (order != 0) break;  // continue if ==
+  }
+  return result;
+}
+
 void Media::setDefaults() {
   _id = 0;
   _width = -1;
@@ -218,68 +273,21 @@ void Media::expandGroupList(MediaGroupList& list) {
   list = expanded;
 }
 
-void Media::sortGroupList(MediaGroupList& list, const QString& key) {
-  QCollator collator;
-  auto f = propertyFunc(key);
-  auto numericStringCmp = [&](const MediaGroup& a, const MediaGroup& b) {
-    if (a.count() <= 0) return true;
-    if (b.count() <= 0) return false;
-    const QString sa = f(a.first()).toString();
-    const QString sb = f(b.first()).toString();
-    return 0 > qNumericSubstringCompare(collator, sa, sb);
+void Media::sortGroupList(MediaGroupList& list, const QStringList& properties) {
+  PropertyCompare pc;
+  pc.parse(properties);
+  auto cmp = [&](const MediaGroup& a, const MediaGroup& b) {
+    if (a.count() < 1) return true;
+    if (b.count() < 1) return false;
+    return pc.compare(a.first(), b.first());
   };
-  if (key == "path")
-    std::stable_sort(list.begin(), list.end(), numericStringCmp);
-  else
-    qFatal("unsupported sort key \"%s\"", qPrintable(key));
+  std::stable_sort(list.begin(), list.end(), cmp);
 }
 
 void Media::sortGroup(MediaGroup& group, const QStringList& properties) {
-  QVector<PropertyFunc> functions;
-  QVector<bool> reverse;
-  for (auto& exp : properties) {
-    QString prop = exp;
-    bool rev = false;
-    if (prop.startsWith(lc('^'))) {
-      prop = prop.mid(1);
-      rev = true;
-    }
-    reverse.append(rev);
-    functions.append( propertyFunc(prop) );
-  }
-  QCollator collator;
-
-  bool typeWarning = true;
-
-  auto cmp = [&](const Media& a, const Media& b) {
-    bool result = false;
-    for (int i = 0; i < functions.count(); ++i) {
-      auto& f = functions.at(i);
-      const QVariant va = f(a);
-      const QVariant vb = f(b);
-
-      if (typeWarning && va.typeId() != vb.typeId()) {
-        qWarning() << "data type mismatch, sort could be unreliable";
-        typeWarning = false;
-      }
-
-      int order = 0;
-      if (qq("QString") == va.metaType().name())
-        order = qNumericSubstringCompare(collator, va.toString(), vb.toString());
-      else {
-        auto partialOrdering = qVariantCompare(va, vb);
-        if (partialOrdering == QPartialOrdering::Less) order = -1;
-        else if (partialOrdering == QPartialOrdering::Greater) order = 1;
-      }
-
-      // qDebug() << i << order << va << vb;
-
-      result = reverse[i] ^ (0 > order);
-      if (order != 0) break;  // continue if ==
-    }
-    return result;
-  };
-
+  PropertyCompare pc;
+  pc.parse(properties);
+  auto cmp = [&](const Media& a, const Media& b) { return pc.compare(a, b); };
   std::stable_sort(group.begin(), group.end(), cmp);
 }
 
@@ -326,6 +334,29 @@ MediaGroupList Media::splitGroup(const MediaGroup& group, int chunkSize) {
   MediaGroupList list;
   for (int i = 0; i < group.count(); i += chunkSize) list.append(group.mid(i, chunkSize));
   return list;
+}
+
+MediaGroupList Media::groupBy(const MediaGroup& group_, const QString& expr) {
+  const auto getProperty = Media::propertyFunc(expr);
+
+  MediaGroup group = group_;
+
+  // getProperty can be slow (exif) so thread it
+  auto f = QtConcurrent::map(group, [&](Media& m) {
+    QString attr = expr + " == " + getProperty(m).toString(); // formatting used by gui..
+    m.setAttribute("group", attr);
+  });
+  while (f.isRunning()) {
+    qInfo("<PL> %d/%lld", f.progressValue(), group.count());
+    QThread::msleep(100);
+  }
+  // fixme: use waitProgress("<PL>...");
+
+  QHash<QString, MediaGroup> groups;
+  for (const auto& m : qAsConst(group))
+    groups[m.attributes()["group"]].append(m);
+
+  return groups.values().toVector();
 }
 
 bool Media::isExternalProperty(const QString& expr) {
@@ -1533,3 +1564,4 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
 
   return values;
 }
+

@@ -1180,7 +1180,7 @@ MediaGroupList Database::dupsByMd5(const SearchParams& params) {
     }
   }
 
-  Media::sortGroupList(dups, "path");
+  Media::sortGroupList(dups, {"path"});
 
   return dups;
 }
@@ -1249,7 +1249,7 @@ void Database::filterMatches(const SearchParams& params, MediaGroupList& matches
     QSet<uint> groupHash;
 
     // prevent mixing a=>b with b=>a matches by sorting
-    Media::sortGroupList(matches, "path");
+    Media::sortGroupList(matches, {"path"});
 
     for (const MediaGroup& group : matches) {
       QString str;
@@ -1393,7 +1393,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   filterMatches(params, list);
 
-  Media::sortGroupList(list, "path");
+  Media::sortGroupList(list, {"path"});
 
   qInfo("filtered %lld matches to %lld in %lldms", results.count(), list.count(),
         QDateTime::currentMSecsSinceEpoch() - start);

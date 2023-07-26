@@ -1051,7 +1051,7 @@ int main(int argc, char** argv) {
         }
         engine().db->filterMatches(params, list);
 
-        Media::sortGroupList(list, "path");
+        Media::sortGroupList(list, {"path"});
       }
       selection.clear();
       queryResult = list;
@@ -1228,22 +1228,7 @@ int main(int argc, char** argv) {
       for (auto& m : selection) m.setAttribute("sort", "yes");
     } else if (arg == "-group-by") {
       const QString expr = nextArg();
-      const auto getProperty = Media::propertyFunc(expr);
-
-      // getProperty can be slow (exif) so thread it
-      auto f = QtConcurrent::map(selection, [&](Media& m) {
-        QString attr = expr + " == " + getProperty(m).toString();
-        m.setAttribute("group", attr);
-      });
-      while (f.isRunning()) {
-        qInfo("group-by:<PL> %d/%lld", f.progressValue(), selection.count());
-        QThread::msleep(10);
-      }
-
-      QHash<QString, MediaGroup> groups;
-      for (const auto& m : qAsConst(selection)) groups[m.attributes()["group"]].append(m);
-
-      queryResult = groups.values().toVector();
+      queryResult = Media::groupBy(selection, expr);
       qInfo("group-by: { %s } %lld groups from %lld items", qUtf8Printable(expr),
             queryResult.count(), selection.count());
       selection.clear();

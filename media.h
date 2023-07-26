@@ -179,13 +179,16 @@ class Media {
   static bool groupCompareByContents(const MediaGroup& s1, const MediaGroup& s2);
   static void mergeGroupList(MediaGroupList& list);
   static void expandGroupList(MediaGroupList& list);
-  static void sortGroupList(MediaGroupList& list, const QString& key);
+
+  static void sortGroupList(MediaGroupList& list, const QStringList &properties);
   static void sortGroup(MediaGroup& group, const QStringList& properties);
+
   static int indexInGroupByPath(MediaGroup& group, const QString& path);
   static QString greatestPathPrefix(const MediaGroup& group);
   static QString greatestPathPrefix(const MediaGroupList& list);
 
   static MediaGroupList splitGroup(const MediaGroup& group, int chunkSize = 1);
+  static MediaGroupList groupBy(const MediaGroup& group, const QString& expr);
 
   /**
    * @return true if property can be obtained from readMetadata()
@@ -280,7 +283,11 @@ class Media {
   /// fast path components
   QString dirPath() const { return path().left(path().lastIndexOf("/")); } // fixme: use archivePath?
   QString name() const { return path().mid(path().lastIndexOf("/") + 1); } // fixme: use archivePath?
-  QString suffix() const { return path().mid(path().lastIndexOf(".") + 1); }
+  QString suffix() const {
+    QString s = name();
+    int dot = s.lastIndexOf(".");
+    return dot >= 0 ? s.mid(dot+1) : "";
+  }
   QString completeBaseName() const {
     QString s = name();
     return s.mid(0, s.lastIndexOf("."));
