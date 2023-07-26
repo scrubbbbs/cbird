@@ -34,8 +34,8 @@ Queries
 
 Selections
 ==============================================================================
-  * select commands may be chained to append to the current selection
-  * operations on current selection may clear the selection (-group-by etc)
+  * repeated select commands append to the current selection
+  * operations on current selection usually clear the selection (-group-by etc)
   -select-none                     clear the selection
   -select-all                      everything
   -select-id <integer>             one item by its unique id
@@ -52,9 +52,11 @@ Selections
 
 Batch Deletion
 ==============================================================================
-  -nuke-dups-in <dir>              delete (move to trash) dups under <dir> only
-  -nuke-weeds                      delete (move to trash) all weeds
-  -nuke                            delete selection (move to trash)
+  * deletion uses system trash location/api by default
+  * set CBIRD_TRASH_DIR to your own location
+  -nuke-dups-in <dir>              delete dups under <dir> only
+  -nuke-weeds                      delete all weeds
+  -nuke                            delete selection
 
 Filtering
 ==============================================================================
@@ -70,8 +72,10 @@ Filtering
 
 Sorting/Grouping
 ==============================================================================
-  -sort <prop>[#<func>]               sort ascending, use additional -sort/-sort-rev for multisort
-  -sort-rev <prop>[#<func>]           sort descending
+  * -rev to reverse/sort descending
+  * additional sort key (multisort) with another -sort immediately after
+  -sort[-rev] <prop>[#<func>]         sort selection or result groups
+  -sort-result[-rev] <prop>[#<func>]  sort result by first member of each group
   -group-by <prop>[#<func>]           group selection by property, store in result (clears selection)
   -sort-similar                       sort selection by similarity
   -merge <selector> <selector>        merge two selections by similarity, into a new list,
@@ -146,7 +150,7 @@ Definitions
   <item>                          file in the index
   <group>                         list of items, usually a needle/target and its matches
   <result>                        list of groups, from the last query
-  <selection>                     current list of items for further operations
+  <selection>                     list of items for further operations
   <selector>                      defines a set of (indexed) items by path, matching expression
       :<regular-expression>       - pcre, prefixed with colon
       <grok pattern>              - path in the index with grok-style [*|?] wildcards

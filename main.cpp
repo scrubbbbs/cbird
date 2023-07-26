@@ -160,7 +160,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
   cmds += typeArg;
 
   const QSet<QString> propArg{"-sort", "-sort-rev", "-group-by", "-with", "-without", "-or-with",
-                              "-or-without"};
+                              "-or-without", "-sort-result", "-sort-result-rev"};
   cmds += propArg;
 
   const QSet<QString> fileArg{"-select-one",     "-jpeg-repair-script", "-view-image",
@@ -1184,36 +1184,56 @@ int main(int argc, char** argv) {
         for (auto& g : queryResult) g = fn(g);
       if (selection.count() > 0)
         selection = fn(selection);
-    } else if (arg == "-sort" || arg == "-sort-rev") {
+    } else if (arg.startsWith("-sort") && arg != "-sort-similar") {
       const QChar invertPrefix = lc('^');
       QStringList keys;
 
+      // -sort,-sort-rev,-sort-result,-sort-result-rev
+      bool sortGroupList = false;
+      QStringList validCmds = {"-sort","-sort-rev"};
+      if (arg.mid(5,7)=="-result") {
+        validCmds = {"-sort-result","-sort-result-rev"};
+        sortGroupList = true;
+      }
+
+      if (!validCmds.contains(arg)) {
+        qFatal("invalid argument, expected %s", qUtf8Printable(validCmds.join(" or ")));
+        continue;
+      }
+
       auto key = nextArg();
-      if (arg == "-sort-rev") key = invertPrefix+key;
+      if (arg.endsWith("-rev")) key = invertPrefix+key;
       keys.append(key);
 
       while (args.count() > 0) {
         auto& peekArg = args.at(0);
-        if (peekArg != "-sort" && peekArg != "-sort-rev") break;
+        if (!validCmds.contains(peekArg)) break;
         arg = nextArg();
         key = nextArg();
-        if (arg == "-sort-rev") key = invertPrefix+key;
+        if (arg.endsWith("-rev")) key = invertPrefix+key;
         keys.append(key);
+      }
+
+      if (sortGroupList && queryResult.count() <= 0) {
+        qWarning("sort-result: empty result");
+        continue;
       }
 
       // some properties are slow, pre-compute them
       QVector<Media*> mediaPtr;
       if (queryResult.count() > 0) {
         for (auto& g : queryResult)
-          for (auto& m : g)
+          for (auto& m : g) {
             mediaPtr += &m;
+            if (sortGroupList) break; // sortGroupList sorts by first item
+          }
       }
       else
         for (auto& m : selection)
           mediaPtr += &m;
 
       if (mediaPtr.count() <= 0) {
-        qWarning("sort: empty selection");
+        qWarning("sort: empty selection/result");
         continue;
       }
 
@@ -1235,7 +1255,10 @@ int main(int argc, char** argv) {
       }
 
       if (queryResult.count() > 0) {
-        Media::sortGroups(queryResult, keys);
+        if (sortGroupList)
+          Media::sortGroupList(queryResult, keys);
+        else
+          Media::sortGroups(queryResult, keys);
       }
       else {
         Media::sortGroup(selection, keys);
