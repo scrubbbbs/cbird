@@ -180,8 +180,10 @@ class Media {
   static void mergeGroupList(MediaGroupList& list);
   static void expandGroupList(MediaGroupList& list);
 
-  static void sortGroupList(MediaGroupList& list, const QStringList &properties);
+  static void sortGroupList(MediaGroupList& list, const QStringList& properties);
   static void sortGroup(MediaGroup& group, const QStringList& properties);
+  static void sortGroups(MediaGroupList& group, const QStringList& properties);
+
 
   static int indexInGroupByPath(MediaGroup& group, const QString& path);
   static QString greatestPathPrefix(const MediaGroup& group);

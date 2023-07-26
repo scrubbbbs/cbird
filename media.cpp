@@ -291,6 +291,14 @@ void Media::sortGroup(MediaGroup& group, const QStringList& properties) {
   std::stable_sort(group.begin(), group.end(), cmp);
 }
 
+void Media::sortGroups(MediaGroupList& list, const QStringList& properties) {
+  PropertyCompare pc;
+  pc.parse(properties);
+  auto cmp = [&](const Media& a, const Media& b) { return pc.compare(a, b); };
+  for (auto& g : list)
+    std::stable_sort(g.begin(), g.end(), cmp);
+}
+
 static QString greatestPrefix(const QStringList& list) {
   QString prefix;
   const int count = list.count();

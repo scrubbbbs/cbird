@@ -1201,31 +1201,46 @@ int main(int argc, char** argv) {
         keys.append(key);
       }
 
-      if (selection.count() <= 0) {
+      // some properties are slow, pre-compute them
+      QVector<Media*> mediaPtr;
+      if (queryResult.count() > 0) {
+        for (auto& g : queryResult)
+          for (auto& m : g)
+            mediaPtr += &m;
+      }
+      else
+        for (auto& m : selection)
+          mediaPtr += &m;
+
+      if (mediaPtr.count() <= 0) {
         qWarning("sort: empty selection");
         continue;
       }
 
-      // some properties are slow, pre-compute them, storing them in Media
       bool external = false;
       for (auto prop: keys) {
         if (prop.startsWith(invertPrefix)) prop = prop.mid(1);
         external |= Media::isExternalProperty(prop);
         auto getValue = Media::propertyFunc(prop);
-        auto future = QtConcurrent::map(selection, [&getValue](Media& m) {
-          (void)getValue(m);
+        auto future = QtConcurrent::map(mediaPtr, [&getValue](Media* m) {
+          (void)getValue(*m);
         });
         waitFuture(future, qq("sort: collecting {%1}<PL> %2%").arg(prop).arg("%1"));
       }
       if (external) {
-        auto future = QtConcurrent::map(selection, [](Media& m) {
-          m.readMetadata();
+        auto future = QtConcurrent::map(mediaPtr, [](Media* m) {
+          m->readMetadata();
         });
         waitFuture(future, qq("sort: read metadata<PL> %1%"));
       }
 
-      Media::sortGroup(selection, keys);
-      for (auto& m : selection) m.setAttribute("sort", "yes");
+      if (queryResult.count() > 0) {
+        Media::sortGroups(queryResult, keys);
+      }
+      else {
+        Media::sortGroup(selection, keys);
+        for (auto& m : selection) m.setAttribute("sort", "yes");
+      }
     } else if (arg == "-group-by") {
       const QString expr = nextArg();
       queryResult = Media::groupBy(selection, expr);

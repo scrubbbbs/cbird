@@ -17,6 +17,7 @@ class TestSort : public TestBase {
 
   void testSortGroup();
   void testSortGroupList();
+  void testSortGroups();
 
  private:
   MediaGroup readDir(const QString& dir);
@@ -116,6 +117,38 @@ void TestSort::testSortGroupList() {
   gl.append(MediaGroup());
   Media::sortGroupList(gl, {"completeBaseName"});
   QVERIFY(gl.at(0).isEmpty());
+}
+
+void TestSort::testSortGroups() {
+  const MediaGroup g_ = readDir(qq("exif-samples"));
+
+  MediaGroupList gl = Media::groupBy(g_, "dirPath");
+  QVERIFY(gl.count() > 1);
+
+  QCollator col;
+  Media::sortGroups(gl, {"path"});
+  for (auto& g : gl)
+    for (int i = 1; i < g.count(); ++i) {
+      auto& left = g.at(i - 1);
+      auto& right = g.at(i);
+      int order = col.compare(left.path(), right.path());
+      QVERIFY(order <= 0);
+    }
+
+  int secondary = 0;
+  Media::sortGroups(gl, {"suffix", "^fileSize"});
+  for (auto& g : gl)
+    for (int i = 1; i < g.count(); ++i) {
+      auto& left = g.at(i - 1);
+      auto& right = g.at(i);
+      int order = col.compare(left.suffix(), right.suffix());
+      QVERIFY(order <= 0);
+      if (order == 0) {
+        secondary++;
+        QCOMPARE_GE(left.originalSize(), right.originalSize());
+      }
+    }
+  QVERIFY(secondary > 0);
 }
 
 MediaGroup TestSort::readDir(const QString& dir) {
