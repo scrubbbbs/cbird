@@ -153,7 +153,7 @@ Definitions
   <selection>                     list of items for further operations
   <selector>                      defines a set of (indexed) items by path, matching expression
       :<regular-expression>       - pcre, prefixed with colon
-      <grok pattern>              - path in the index with grok-style [*|?] wildcards
+      <grok pattern>              - path in the index with grok-style [*|?] wildcards (escape with \\*|\\?)
       <dir>|<file>                - existing file or directory
       @                           - use the current selection
   <type>                          item media type (1=image,2=video,3=audio)

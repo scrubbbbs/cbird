@@ -635,8 +635,12 @@ int main(int argc, char** argv) {
 
       // escape the sql groks, replace sh-style ones
       path = sqlEscapePath(path);
+      path = path.replace("\\?", "@question@");
+      path = path.replace("\\*", "@asterisk@");
       path = path.replace("?", "_");
       path = path.replace("*", "%");
+      path = path.replace("@question@", "?");
+      path = path.replace("@asterisk@", "*");
 
       auto selection = engine().db->mediaWithPathLike(path);
 
