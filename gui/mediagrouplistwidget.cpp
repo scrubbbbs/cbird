@@ -2666,7 +2666,8 @@ void MediaGroupListWidget::browseParentAction() {
   else
     path = m.dirPath();
 
-  const MediaGroup siblings = _options.db->mediaWithPathLike(path + lc('%'));
+  MediaGroup siblings = _options.db->mediaWithPathLike(path + lc('%'));
+  Media::sortGroup(siblings, {qq("path")});
 
   MediaWidgetOptions options = _options;
   options.selectOnOpen = m;
