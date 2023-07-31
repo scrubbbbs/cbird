@@ -601,8 +601,11 @@ int main(int argc, char** argv) {
       return selection;
     } else {
       QFileInfo info(path);
-      if (info.exists())
+      if (info.exists()) {
         path = info.absoluteFilePath();
+        if (info.isDir())
+          path += lc('/'); // if path => "./some" don't select "./something"
+      }
       else if (path.contains("/")) {
         // try to form a valid path from the prefix
         QStringList parts = path.split("/");
