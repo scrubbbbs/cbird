@@ -603,7 +603,7 @@ int main(int argc, char** argv) {
       QFileInfo info(path);
       if (info.exists()) {
         path = info.absoluteFilePath();
-        if (info.isDir())
+        if (info.isDir() && !path.endsWith(lc('/')))
           path += lc('/'); // if path => "./some" don't select "./something"
       }
       else if (path.contains("/")) {
