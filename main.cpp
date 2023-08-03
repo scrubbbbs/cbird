@@ -1135,8 +1135,28 @@ int main(int argc, char** argv) {
     } else if (arg == "-move") {
       const QString dstDir = absolutePath(nextArg());
       qInfo() << "moving " << selection.count() << "items to:" << dstDir;
-      for (auto& m : selection)
-        if (!engine().db->move(m, dstDir)) break;
+      MediaGroup moveable;
+      QStringList movedZips;
+      for (auto& m : selection) {
+        if (!m.isArchived()) {
+          moveable.append(m);
+          continue;
+        }
+
+        QString zipPath;
+        m.archivePaths(&zipPath);
+        if (movedZips.contains(zipPath)) continue;
+
+        const QFileInfo info(zipPath);
+        const QString newZipPath = dstDir + lc('/') + info.fileName();
+        qDebug() << "move zip" << zipPath << "=>" << newZipPath;
+        if (!engine().db->moveDir(zipPath, newZipPath)) return -2;
+        movedZips.append(zipPath);
+      }
+      for (auto& m : moveable)
+        if (!engine().db->move(m, dstDir)) return -1;
+
+      selection.clear();
     } else if (arg == "-with" || arg == "-without") {
       std::vector<Commands::Filter> filters;
       filters.push_back({nextArg(), nextArg(), arg == "-without"});
