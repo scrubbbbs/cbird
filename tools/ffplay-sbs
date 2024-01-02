@@ -60,6 +60,12 @@ if [ ! -f "$file2" ]; then
   exit 2
 fi
 
+ffmpeg -filters 2>&1 | grep -q drawtext
+if [ $? -eq 1 ]; then
+  echo $prog ffmpeg filter \"drawtext\" is not available
+  exit 3
+fi
+
 # drop chars that will be a problem for drawtext
 name1=$(basename "$file1" | sed -re "s/[,=:'\"]+/_/g")
 name2=$(basename "$file2" | sed -re  "s/[,=:'\"]+/_/g")
@@ -205,6 +211,9 @@ helptext="[q]uit - [f]ullscreen - [a]udio"
 crop=",crop=$crop_w:$ih"
 #crop=
 
+quiet="-v quiet"
+#quiet=
+
 # crop is optional, but won't fill screen
 # setsar=1 since scale makes input 1:1
 # -f matroska allows forward seek to somewhat work, to fast-forward anyways
@@ -215,7 +224,7 @@ FFREPORT="level=32:file=$log.ff.log" ffmpeg $audio1Args $audio2Args -f lavfi -i 
  [left]$scale1,setsar=1$crop,drawtext=text=$name1:$toptext:$textfmt [ls];\
 [ls][rs]hstack,drawtext=text='$helptext':$bottext:$textfmt [out0]" \
 -map 2:v -c:v rawvideo -map 0:a:0 -map 1:a:0 -c:a pcm_s16le -f matroska - 2>/dev/null | \
-ffplay -fs -autoexit -v quiet -window_title "$prog" -
+ffplay -fs -autoexit $quiet -window_title "$prog" -
 
 # in case process crashes cleanup ffmpeg jobs
 echo $prog cleaning up...
