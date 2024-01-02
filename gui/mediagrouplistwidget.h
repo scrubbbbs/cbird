@@ -284,6 +284,12 @@ class MediaGroupListWidget : public QListWidget {
   /// Increase/decrease items per page
   void resizePage(bool more);
 
+  /// Test if move action should be enabled
+  bool selectionIsMoveable();
+
+  /// Test if move action should be enabled
+  bool selectionParentIsMoveable();
+
   MediaGroupList _list;
   MediaWidgetOptions _options;
   MediaItemDelegate* _itemDelegate;

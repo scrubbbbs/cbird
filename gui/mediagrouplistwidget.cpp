@@ -838,8 +838,19 @@ QMenu* MediaGroupListWidget::dirMenu(const char* slot) {
   if (index.isValid()) selectedIndex = index.row();
 
   for (int i = 0; i < group.count(); ++i)
-    if (i != selectedIndex)
-      if (!isAnalysis(group[i])) groupDirs.insert(group[i].dirPath());
+    if (i != selectedIndex) {
+      const auto& m = group.at(i);
+      if (!isAnalysis(m)) {
+        QString path = m.dirPath();
+        if (m.isArchived()) {
+          m.archivePaths(&path);
+          auto list = path.split(lc('/'));
+          list.removeLast();
+          path = list.join(lc('/'));
+        }
+        groupDirs.insert(path);
+      }
+    }
 
   const auto& keys = groupDirs.values();
   QList<QAction*> actions;
@@ -868,11 +879,13 @@ void MediaGroupListWidget::execContextMenu(const QPoint& p) {
     QMenu* dirs = dirMenu(SLOT(moveFileAction()));
     QAction* act = new QAction("Move File to ...", this);
     act->setMenu(dirs);
+    act->setEnabled( selectionIsMoveable() );
     menu->addAction(act);
 
     dirs = dirMenu(SLOT(moveFolderAction()));
     act = new QAction("Move Parent to ...", this);
     act->setMenu(dirs);
+    act->setEnabled( selectionParentIsMoveable() );
     menu->addAction(act);
   }
 
@@ -1958,6 +1971,36 @@ bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
 
   *selected = &group[selIndex];
   *other = &group[!selIndex];
+  return true;
+}
+
+bool MediaGroupListWidget::selectionIsMoveable() {
+  const auto& selection = selectedMedia();
+  if (selection.count() <= 0)
+    return false;
+
+  for (const auto& m : selection)
+    if (m.isArchived())
+      return false;
+
+  return true;
+}
+
+bool MediaGroupListWidget::selectionParentIsMoveable() {
+  const auto& selection = selectedMedia();
+  if (selection.count() <= 0)
+    return false;
+
+  if (!_options.db) return true;
+
+  const QString& dbPath = QDir(_options.db->path()).absolutePath();
+
+  for (const auto& m : selection) {
+    const QString absSrc = QDir(dbPath).absoluteFilePath(m.dirPath());
+    if (!absSrc.startsWith(dbPath)) return false;
+    if (absSrc == dbPath) return false;
+  }
+
   return true;
 }
 
