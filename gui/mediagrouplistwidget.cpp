@@ -1940,7 +1940,7 @@ void MediaGroupListWidget::renameFolderAction() {
   if (result != QInputDialog::Accepted) return;
 
   // new path is not index-relative...pass absolute
-  QString newPath = parentDir.absoluteFilePath(newName);
+  QString newPath = parentDir.absoluteFilePath(dialog.textValue());
   moveDatabaseDir(m, newPath);
 }
 
