@@ -748,11 +748,7 @@ void WidgetHelper::saveTableState(const QTableView* w, const char* id) {
   if (!id) id = w->metaObject()->className();
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(id);
-
-  QStringList colWidths;
-  for (int i = 0; i < model->columnCount(); ++i)
-    colWidths.append(QString::number(w->columnWidth(i)));
-  settings.setValue("columnWidths", colWidths);
+  settings.setValue("horizontalHeader", w->horizontalHeader()->saveState());
 }
 
 bool WidgetHelper::restoreTableState(QTableView* w, const char* id) {
@@ -760,15 +756,7 @@ bool WidgetHelper::restoreTableState(QTableView* w, const char* id) {
   if (!id) id = w->metaObject()->className();
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(id);
-
-  const QStringList colWidths = settings.value("columnWidths").toStringList();
-  settings.endGroup();
-
-  if (colWidths.count() <= 0) return false;
-
-  for (int i = 0; i < colWidths.count(); i++) w->setColumnWidth(i, colWidths[i].toInt());
-
-  return true;
+  return w->horizontalHeader()->restoreState(settings.value("horizontalHeader").toByteArray());
 }
 
 QAction* WidgetHelper::addAction(QSettings& settings, const QString& label,
