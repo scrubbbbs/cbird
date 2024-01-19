@@ -44,13 +44,14 @@ class Commands {
         _selection(selection),
         _queryResult(queryResult) {}
 
-  QString nextArg();
-  int intArg();
+  QString nextArg();  // remove next arg and return it
+  int intArg();       // .. and also check it is an int
+  QStringList optionList(); // all args up to next switch or eol
 
   void filter(const std::vector<Filter>&) const;
   void rename(Database* db, const QString& srcPat, const QString& dstPat, const QString& option);
   void selectFiles();
-  void verify(Database *db, const QString &jpegFixPath);
+  void verify(Database* db, const QString& jpegFixPath);
 
   void testVideoDecoder(const QString& path);
   void testImageSearch(Engine& engine);

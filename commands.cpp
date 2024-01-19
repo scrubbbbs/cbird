@@ -182,7 +182,7 @@ class Expression {
 
 QString Commands::nextArg() {
   if (_args.count() > 0) return _args.takeFirst();
-  qCritical() << "missing argument to" << _switch;
+  qCritical() << _switch << "requires additional argument(s)";
   ::exit(1);
 }
 
@@ -192,6 +192,17 @@ int Commands::intArg() {
   if (ok) return val;
   qCritical() << _switch << "requires an integer value";
   ::exit(1);
+}
+
+QStringList Commands::optionList() {
+  QStringList list;
+  while (_args.count() > 0 && !_args.first().startsWith(lc('-')))
+    list += _args.takeFirst();
+  if (list.isEmpty()) {
+    qCritical() << _switch << "expects one or more arguments";
+    ::exit(1);
+  }
+  return list;
 }
 
 void Commands::filter(const std::vector<Filter>& filters) const {

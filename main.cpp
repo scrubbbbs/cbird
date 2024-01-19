@@ -679,7 +679,7 @@ int main(int argc, char** argv) {
 
   auto nextArg = [&]() {
     if (args.count() > 0) return args.takeFirst();
-    qCritical() << "missing argument to" << arg;
+    qCritical() << arg << "requires an argument";
     ::exit(1);
   };
 
@@ -1108,23 +1108,26 @@ int main(int argc, char** argv) {
       if (args.count() < 1) qFatal("-select-files expects one or more arguments");
       _commands.selectFiles();
     } else if (arg == "-select-grid") {
-      const Media grid(nextArg());
-      QImage qImg = grid.loadImage();
-      cv::Mat cvImg;
-      QVector<QRect> rects;
+      const QStringList files = _commands.optionList();
+      for (auto& file : files) {
+        const Media grid(file);
+        QImage qImg = grid.loadImage();
+        cv::Mat cvImg;
+        QVector<QRect> rects;
 
-      qImageToCvImg(qImg, cvImg);
-      demosaic(cvImg, rects);
+        qImageToCvImg(qImg, cvImg);
+        demosaic(cvImg, rects);
 
-      MediaGroup g;
-      int i = 0;
-      for (const QRect& r : rects) {
-        Media m;
-        m.setPath(grid.path().split("/").last() + "@rect" + QString::number(i++));
-        m.setImage(qImg.copy(r));
-        g.append(m);
-      }
-      selection.append(g);
+        MediaGroup g;
+        int i = 0;
+        for (const QRect& r : rects) {
+          Media m;
+          m.setPath(grid.path().split("/").last() + "@rect" + QString::number(i++));
+          m.setImage(qImg.copy(r));
+          g.append(m);
+        }
+        selection.append(g);
+      };
     } else if (arg == "-rename") {
       QString srcPat, dstPat, options;
       srcPat = nextArg();
