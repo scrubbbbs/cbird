@@ -1154,7 +1154,7 @@ int main(int argc, char** argv) {
         movedZips.append(zipPath);
       }
       for (auto& m : moveable)
-        if (!engine().db->move(m, dstDir)) return -1;
+        (void)engine().db->move(m, dstDir);
 
       selection.clear();
     } else if (arg == "-with" || arg == "-without") {
