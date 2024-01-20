@@ -266,7 +266,7 @@ bool DesktopHelper::chooseProgram(QStringList& args, const QVector<QStringList>&
     putSetting(settingsKey, args);
   }
 
-  if (args.empty() || (qApp->keyboardModifiers() & Qt::ControlModifier)) {
+  if (args.empty() || (qApp->keyboardModifiers() == CBIRD_DIALOG_MODS)) {
     QStringList optionLabels;
     for (auto& option : qAsConst(options)) optionLabels += option.first();
 
@@ -278,8 +278,9 @@ bool DesktopHelper::chooseProgram(QStringList& args, const QVector<QStringList>&
       int result =
           Theme::instance().execInputDialog(&dialog, dialogTitle,
                                             QString(dialogText) + "\n\n" +
-                                                "To change this setting, press the Control "
-                                                "key while selecting the action.",
+                                                "To change this setting, hold "
+                                                CBIRD_DIALOG_KEYS " "
+                                                "while selecting the action.",
                                             program, optionLabels);
       if (result != QInputDialog::Accepted) return false;
       program = dialog.textValue();
@@ -1378,6 +1379,14 @@ QString MessageLog::format(const LogMsg& msg) const {
 }
 
 void MessageLog::append(const LogMsg& msg) {
+#if CBIRD_LOG_IMMEDIATE
+  auto str = format(msg) + "\n";
+  const QByteArray utf8 = str.toUtf8();
+  fwrite(utf8.data(), utf8.length(), 1, stdout);
+  fflush(stdout);
+  return;
+#endif
+
   if (msg.type != QtFatalMsg) {
     QMutexLocker locker(&_mutex);
     _log.append(msg);

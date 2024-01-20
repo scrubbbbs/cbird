@@ -23,6 +23,8 @@
 #define CBIRD_PROGNAME "cbird"
 #define CBIRD_HOMEPAGE "https://github.com/scrubbbbs/cbird"
 #define INDEX_DIRNAME "_index"
+#define CBIRD_DIALOG_MODS (Qt::ControlModifier) // modifier to force-show suppressed dialogs
+#define CBIRD_DIALOG_KEYS "Control"
 
 #ifdef __WIN32__
 #define _WIN32_WINNT _WIN32_WINNT_VISTA
