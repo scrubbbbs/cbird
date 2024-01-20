@@ -139,11 +139,32 @@ QString Theme::richTextStyleSheet() const {
   QString outCss;
   outCss.reserve(subject.length());  // macro expansion makes it smaller
 
-  QRegularExpressionMatch match;
-  while ((match = exp->match(subject)).hasMatch()) {
-    const auto macro = match.capturedView(1);
-    const auto args = match.capturedView(2).split(lc(','));
+  const auto parse = [](const QStringView& str, QStringView& macro,
+                        QList<QStringView>& args, int&start, int& end) {
+    int i0 = str.indexOf(ll("qt("));
+    int i1 = str.indexOf(ll("theme("));
+    if (i0 < 0 && i1 < 0) return false; // nothing found
+    if (i0 < 0) i0 = INT_MAX; // if not found, its always > the other one
+    if (i1 < 0) i1 = INT_MAX;
+    int offset = 0;
+    if (i0 < i1) { // choose token that occurred first
+      start = i0, offset = 3; // "qt("
+    } else {
+      start = i1, offset = 6; // "theme("
+    }
 
+    end = str.indexOf(lc(')'), start);
+    if (end < 0) return false;
+
+    macro = str.mid(start, offset-1);
+    args = str.mid(start+offset, end-start-offset).split(lc(','));
+    return true;
+  };
+
+  QStringView macro;
+  QList<QStringView> args;
+  int start, end;
+  while (parse(subject, macro, args, start, end)) {
     QColor color(Qt::white);
     if (macro == ll("qt")) {
       if (Q_UNLIKELY(args.count() != 2)) qFatal("qt() requires two arguments");
@@ -168,9 +189,9 @@ QString Theme::richTextStyleSheet() const {
       color = qvariant_cast<QColor>(v);
     }
 
-    outCss += subject.mid(0, match.capturedStart());
+    outCss += subject.mid(0, start);
     outCss += color.name();
-    subject = subject.mid(match.capturedEnd());
+    subject = subject.mid(end+1);
   }
   outCss += subject;
 
