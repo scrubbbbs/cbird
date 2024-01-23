@@ -915,7 +915,7 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
     curFrames++;
 
     if (numFrames > 0xFFFF) {
-      qCritical() << _path << "greater than 64k frames unsupported, quitting";
+      qWarning() << "too many frames, skipping the rest";
       break;
     }
   }
@@ -1233,23 +1233,35 @@ QIODevice* Media::ioDevice() const {
   } else if (isArchived()) {
     QString zipPath, fileName;
     archivePaths(&zipPath, &fileName);
+
     QFileInfo info(zipPath);
-    if (info.isFile()) {
-      QuaZip zip(zipPath);
-      zip.open(QuaZip::mdUnzip);
-      zip.setCurrentFile(fileName);
-      QuaZipFile file(&zip);
-      if (file.open(QIODevice::ReadOnly)) {
-        QBuffer* buf = new QBuffer;
-        buf->setData(file.readAll());
-        io = buf;
-      } else {
-        qWarning() << "failed to unzip" << zipPath << "for" << fileName;
-      }
-    } else {
-      qWarning() << "zip file does not exist" << zipPath << "for" << fileName;
-      qWarning() << "maybe illegal path on this system" << zipPath;
+    if (!info.isFile()) {
+      qWarning() << "zip file does not exist or invalid path";
+      return nullptr;
     }
+
+    QuaZip zip(zipPath);
+    if (!zip.open(QuaZip::mdUnzip)) {
+      qWarning() << "open zip failed";
+      return nullptr;
+    }
+    if (!zip.setCurrentFile(fileName)) {
+      qWarning() << "select zip member failed";
+      return nullptr;
+    }
+
+    QuaZipFile file(&zip);
+    if (!file.open(QIODevice::ReadOnly)) {
+      qWarning() << "open zip member failed";
+      return nullptr;
+    }
+
+    QBuffer* buf = new QBuffer;
+    buf->setData(file.readAll());
+    io = buf;
+    if (buf->size() <= 0)
+      qWarning() << "empty zip member";
+
   } else {
     QFile* file = new QFile(path());
     if (!file->exists()) {
@@ -1487,6 +1499,18 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
 
   QVariantList values;
   for (int i = 0; i < keys.count(); ++i) values.append(QVariant());
+
+  // initialize exif library
+  static const struct Exiv2Init
+  {
+    Exiv2Init() {
+      Exiv2::XmpParser::initialize();
+      //::atexit(Exiv2::XmpParser::terminate); // don't care
+#ifdef EXV_ENABLE_BMFF
+      Exiv2::enableBMFF(true);
+#endif
+    }
+  } exiv2Init;
 
   try {
     std::unique_ptr<Exiv2::Image> image;
