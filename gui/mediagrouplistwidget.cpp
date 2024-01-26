@@ -1443,6 +1443,16 @@ void MediaGroupListWidget::updateItems() {
           qualityScore;
     } compare;
 
+
+    static const auto percent = [](double a, double b) {
+      return int((a - b) * 100.0 / b);
+    };
+
+    static const auto formatPercent = [](double a, double b) {
+      if (b == 0) return QString("--");
+      return QString("%1").arg(percent(a,b));
+    };
+
     if (i == 0) {
       first.compression = compression;
       first.pixels = pixels;
@@ -1463,9 +1473,11 @@ void MediaGroupListWidget::updateItems() {
       compare.jpegQuality = jpegQuality == 0 ? "none" : "same";  // hide unless computed
       compare.qualityScore = qualityScore == 0 ? "none" : "same";
     } else {
-      compare.compression = relativeLabel(first.compression, compression);
+      compare.compression = percent(compression, first.compression) == 0
+                                ? "same"
+                                : relativeLabel(compression, first.compression);
       compare.pixels = relativeLabel(pixels, first.pixels);
-      compare.size = relativeLabel(size, first.size);
+      compare.size = percent(size, first.size) == 0 ? "same" : relativeLabel(size, first.size);
       compare.score = relativeLabel(score, first.score);
       compare.fileCount = relativeLabel(fileCount, first.fileCount);
       compare.jpegQuality =
@@ -1481,12 +1493,6 @@ void MediaGroupListWidget::updateItems() {
       else
         compare.date = "same";
     }
-
-    const auto formatPercent = [](double a, double b) {
-      if (b == 0) return QString("--");
-      double percent = (a - b) * 100.0 / b;
-      return QString("%1").arg(int(percent));
-    };
 
     // elide the first row text, tricky... since there is no html attribute for it,
     // pass via item->data() to the item paint()...then must assume
