@@ -41,13 +41,14 @@
 #define LW_MAX_CACHED_ROWS (5)
 
 #define LW_PAN_STEP (10.0)
-#define LW_ZOOM_IN_STEP (0.9)
-#define LW_ZOOM_OUT_STEP (1.1)
+#define LW_ZOOM_STEP (0.9)
 
 #define LW_ITEM_SPACING (8)
 #define LW_ITEM_MIN_IMAGE_HEIGHT (16)   // do not draw image below this
 #define LW_ITEM_HISTOGRAM_PADDING (16)  // distance from item edge
 #define LW_ITEM_HISTOGRAM_SIZE (32)     // width of histogram plot
+
+#define LW_ELIDE_FILENAME (Qt::ElideMiddle)
 
 static bool isDifferenceAnalysis(const Media& m) { return m.path().endsWith("-diff***"); }
 static bool isAnalysis(const Media& m) { return m.path().endsWith("***"); }
@@ -197,8 +198,9 @@ class MediaItemDelegate : public QAbstractItemDelegate {
   void setPan(const QPointF& pan) { _pan = pan; }
   void setTextHeight(int height) { _textHeight = height; }
 
-  void toggleScaleToFit() { _scaleToFit = !_scaleToFit; }
-  void toggleActualSize() { _actualSize = !_actualSize; }
+  void setScaleMode(int mode) { _scaleMode = mode; }
+  int scaleMode() const { return _scaleMode; }
+  void cycleScaleMode() { _scaleMode = (_scaleMode + 1) % SCALE_NUMMODES; }
 
   void cycleMinFilter() { _minFilter = (_minFilter + 1) % _filters.count(); }
   void cycleMagFilter() { _magFilter = (_magFilter + 1) % _filters.count(); }
@@ -227,12 +229,12 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
     // if we want actual pixels fix the scale factor,
     // zoom still works but starts from here
-    scale = _actualSize ? 1.0 : qMin(sw, sh);
+    scale = _scaleMode == SCALE_NONE ? 1.0 : qMin(sw, sh);
 
-    // usually we want to see the relative sizes, the
-    // largest image fills the viewport
-    // do not scale > 100% unless _scaleToFit
-    if (!_scaleToFit && scale > 1.0) scale = 1.0;
+    // do not scale up small images to better see size differences
+    // fixme: add mode to see relative sizes when all images
+    // are bigger than the viewport
+    if (_scaleMode == SCALE_DOWN && scale > 1.0) scale = 1.0;
 
     scale /= _zoom;
 
@@ -404,13 +406,14 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       painter->restore();
 
       // draw info about the image display (scale factor, mode, filter etc)
-      QString info = QString("%1% %2(%3) %4")
+      QString info = QString("%1%%5 %2 (%3) %4")
                          .arg(int(totalScale * 100))
-                         .arg(_actualSize   ? "[1:1]"
-                              : _scaleToFit ? "[Fit] "
-                                            : "")
+                         .arg(_scaleMode == SCALE_NONE ? "[1:1]"
+                              : _scaleMode == SCALE_UP ? "[Scale Up]" : "[Scale Down]")
                          .arg(_filters[filterIndex].name)
-                         .arg(isRoi ? QString("[ROI] %1\xC2\xB0").arg(rotation, 0, 'f', 1) : "");
+                         .arg(isRoi ? QString("[ROI] %1\xC2\xB0").arg(rotation, 0, 'f', 1) : "")
+                         .arg(_zoom < 1.0 ? QString("[+%1%]").arg(int(100/_zoom)) : "");
+
       int h1 = painter->fontMetrics().lineSpacing();
 
       painter->setPen(QColor(128, 128, 128, 255)); // fixme: theme constants
@@ -448,7 +451,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
     QString title = item->data(Qt::UserRole + 0).toString();
 
-    title = painter->fontMetrics().elidedText(title, Qt::ElideLeft, rect.width(), 0);
+    title = painter->fontMetrics().elidedText(title, LW_ELIDE_FILENAME, rect.width(), 0);
     title = title.mid(0, title.lastIndexOf(lc('('))); // remove separately styled suffix
 
     QString text = item->text();
@@ -579,10 +582,14 @@ class MediaItemDelegate : public QAbstractItemDelegate {
   double _zoom = 1.0;
   QPointF _pan;
   int _equalFilter = 0, _minFilter = 0, _magFilter = 0;
-  bool _scaleToFit = false;
   int _textHeight = 100;
   bool _debug = false;
-  bool _actualSize = false;
+  enum { SCALE_DOWN = 0, // scale large images to fit
+         SCALE_UP = 1,   // scale small images to fit
+         SCALE_NONE = 2,  // actual pixels / no scaling
+         SCALE_NUMMODES = 3
+  };
+  int _scaleMode = SCALE_DOWN;
 };
 
 MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
@@ -602,10 +609,27 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
+  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+
+  settings.beginGroup(staticMetaObject.className() + qq(".view"));
+  _autoDifference = settings.value(ll("enableDifferenceImage"), false).toBool();
+  _itemDelegate->setScaleMode(settings.value(ll("scaleMode"), 0).toInt());
+
   if (list.count() > 0) {
+    if (_autoDifference) addDifferenceAnalysis();
     loadRow(0);
+
+    // we need to select an item, or keyboard nav (arrow keys won't work
+    // - the last item in the group seems like a reasonable choice
+    //   since when using -similar-to the needle is the first one
+    // - also need to make sure the item is selectable (not analysis item)
     int row = 0;
-    if (!(_options.flags & MediaWidgetOptions::FlagSelectFirst)) row = model()->rowCount() - 1;
+    const MediaGroup& g = _list.at(0);
+    if (!(_options.flags & MediaWidgetOptions::FlagSelectFirst)) {
+      row = g.count() > 0 ? g.count() - 1 : 0;
+      while (row > 0 && isAnalysis(g.at(row))) row--;
+    }
+
     setCurrentIndex(model()->index(row, 0));
   }
 
@@ -643,7 +667,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   setContextMenuPolicy(Qt::CustomContextMenu);
   connect(this, &QWidget::customContextMenuRequested, this, &self::execContextMenu);
 
-  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+  settings.endGroup();
   settings.beginGroup(staticMetaObject.className() + qq(".shortcuts"));
 
   WidgetHelper::addAction(settings, "File/Open File", Qt::Key_X, this, SLOT(openAction()));
@@ -711,14 +735,11 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 
   WidgetHelper::addSeparatorAction(this);
 
-  WidgetHelper::addAction(settings, "Display/Toggle Scale-to-Fit", Qt::Key_S, this,
-                          SLOT(normalizeAction()));
+  WidgetHelper::addAction(settings, "Display/Cycle Scale Mode", Qt::Key_S, this,
+                          SLOT(scaleModeAction()));
   WidgetHelper::addAction(settings, "Display/Zoom In", Qt::Key_9, this, SLOT(zoomInAction()));
   WidgetHelper::addAction(settings, "Display/Zoom Out", Qt::Key_7, this, SLOT(zoomOutAction()));
-  WidgetHelper::addAction(settings, "Display/Zoom 100%", Qt::Key_0, this, [&]() {
-    _itemDelegate->toggleActualSize();
-    repaint();
-  });
+
   WidgetHelper::addAction(settings, "Display/Reset Zoom", Qt::Key_5, this, SLOT(resetZoomAction()));
   WidgetHelper::addAction(settings, "Display/Pan Left", Qt::Key_4, this, SLOT(panLeftAction()));
   WidgetHelper::addAction(settings, "Display/Pan Right", Qt::Key_6, this, SLOT(panRightAction()));
@@ -811,6 +832,12 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 MediaGroupListWidget::~MediaGroupListWidget() {
   WidgetHelper::saveGeometry(this);
   qDebug("~MediaGroupListWidget");
+
+  QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
+
+  settings.beginGroup(staticMetaObject.className() + qq(".view"));
+  settings.setValue(ll("enableDifferenceImage"), _autoDifference);
+  settings.setValue(ll("scaleMode"), _itemDelegate->scaleMode());
 }
 
 void MediaGroupListWidget::close() {
@@ -2332,8 +2359,8 @@ bool MediaGroupListWidget::addNegMatch(bool all) {
   return false;
 }
 
-void MediaGroupListWidget::normalizeAction() {
-  _itemDelegate->toggleScaleToFit();
+void MediaGroupListWidget::scaleModeAction() {
+  _itemDelegate->cycleScaleMode();
   repaint();
 }
 
@@ -2460,14 +2487,14 @@ void MediaGroupListWidget::moveToNextScreenAction() {
 }
 
 void MediaGroupListWidget::zoomInAction() {
-  _zoom *= LW_ZOOM_IN_STEP;
+  _zoom *= LW_ZOOM_STEP;
   _zoom = qMax(_zoom, 0.01);
   _itemDelegate->setZoom(_zoom);
   repaint();
 }
 
 void MediaGroupListWidget::zoomOutAction() {
-  _zoom *= LW_ZOOM_OUT_STEP;
+  _zoom *= 1+(1-LW_ZOOM_STEP);
   _zoom = qMin(1.0, _zoom);
   _itemDelegate->setZoom(_zoom);
   repaint();

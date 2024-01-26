@@ -98,7 +98,7 @@ class MediaGroupListWidget : public QListWidget {
   void qualityScoreAction();
 
   /// Scale-up smaller items to match the largest item
-  void normalizeAction();
+  void scaleModeAction();
 
   /// Template match first item to selected item, removing other items
   void templateMatchAction();
