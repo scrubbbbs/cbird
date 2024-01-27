@@ -30,6 +30,7 @@ typedef int (*AvExec2Callback)(AVCodecContext*, void*, int, int);
 };
 
 class VideoContextPrivate;
+class Media;
 
 /// Video decoding
 class VideoContext {
@@ -59,6 +60,8 @@ class VideoContext {
     QString toString(bool styled = false) const;
 
     QTime timeDuration() const { return QTime(0, 0).addSecs(duration); }
+
+    void toMediaAttributes(Media& media) const;
   };
 
   struct DecodeOptions {

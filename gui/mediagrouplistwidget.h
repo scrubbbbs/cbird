@@ -40,7 +40,7 @@ class MediaGroupListWidget : public QListWidget {
   friend class MediaItemDelegate;
 
  public:
-  MediaGroupListWidget(const MediaGroupList& list,
+   MediaGroupListWidget(const MediaGroupList& list,
                        const MediaWidgetOptions& options = MediaWidgetOptions(),
                        QWidget* parent = nullptr);
 

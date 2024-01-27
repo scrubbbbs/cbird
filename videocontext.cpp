@@ -19,7 +19,7 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "videocontext.h"
-
+#include "media.h" // setAttribute()
 #include "qtutil.h"  // message context
 
 #include "opencv2/core.hpp"
@@ -799,10 +799,11 @@ bool VideoContext::decodeFrame() {
       break;
     }
 
+    // AVERROR(EAGAIN)
     if (!_eof) {
-      if (!readPacket()) {
-        avcodec_send_packet(_p->context, nullptr);
-        continue;
+      if (!readPacket()) {                          // if false, _eof == true
+        avcodec_send_packet(_p->context, nullptr);  // flush decoder
+        continue;                                   // => receive_frame()
       }
 
       if (_p->packet.size == 0) {
@@ -1082,6 +1083,13 @@ QString VideoContext::Metadata::toString(bool styled) const {
       .arg(channels)
       .arg(audioCodec)
       .arg(audioBitrate / 1000);
+}
+
+void VideoContext::Metadata::toMediaAttributes(Media& media) const {
+  media.setAttribute("duration", QString::number(duration));
+  media.setAttribute("fps", QString::number(double(frameRate)));
+  media.setAttribute("time", timeDuration().toString("mm:ss"));
+  media.setAttribute("vformat", toString());
 }
 
 VideoContext::DecodeOptions::DecodeOptions() {}

@@ -381,6 +381,7 @@ class Media {
    *       "sort"   - the property key used for sorting
    */
   const QStringHash& attributes() const { return _attrs; }
+  void copyAttributes(const Media& other) { _attrs = other.attributes(); }
   void setAttribute(const char* key, const QString& value) { _attrs[key] = value; }
   void unsetAttribute(const char* key) { _attrs.remove(key); }
 

@@ -892,43 +892,37 @@ int main(int argc, char** argv) {
       const QString to = nextArg();
       const QFileInfo info(to);
 
-      void* arg = nullptr;
-      MediaSearch search;
-      search.params = params;
-
       queryResult.clear();
       MediaGroupList list;
 
       Scanner* scanner = engine().scanner;
 
       const QString ext = info.suffix();
+      const bool isFile = info.isFile();
       const bool isArchive = scanner->archiveTypes().contains(ext);
       const bool isImage = scanner->imageTypes().contains(ext);
       const bool isVideo = scanner->videoTypes().contains(ext);
       const bool isHash = to.startsWith("dct:");
 
-      if ((info.isFile() | isHash) && !isArchive) {
-        if (isHash) {
-          bool ok;
-          uint64_t hash = to.split(":").back().toULongLong(&ok, 16);
-          if (!ok) {
-            qWarning() << "similar-to: failed to parse hash spec";
-            continue;
-          }
-          search.needle = Media("@" + to, Media::TypeImage, -1, -1, "", hash);
-        } else if (params.queryTypes & SearchParams::FlagImage && isImage) {
-          const IndexResult result = scanner->processImageFile(to);
-          if (!result.ok) {
-            qCritical() << "similar-to: failed to process image file:" << to;
-            continue;
-          }
-          search.needle = result.media;
-        } else if (params.queryTypes & SearchParams::FlagVideo && isVideo) {
-          search.needle = engine().db->mediaWithPath(to);
+      MediaGroup needles = selectPath(to);
 
-          // doesn't exist in the database, search by frame grabbing
-          if (!search.needle.isValid()) {
-            QList<QFuture<MediaSearch>> work;
+      if (needles.isEmpty()) {
+        if ((isFile | isHash) && !isArchive) {
+          MessageContext ctx(to);
+          if (isHash
+              && (params.algo == SearchParams::AlgoDCT || params.algo == SearchParams::AlgoVideo)) {
+            bool ok;
+            uint64_t hash = to.split(":").back().toULongLong(&ok, 16);
+            if (!ok) {
+              qWarning() << "similar-to: invalid hash, expected 64-bit hex";
+              continue;
+            }
+            needles += Media("@" + to, Media::TypeImage, -1, -1, "", hash);
+          } else if (isImage && params.queryTypes & SearchParams::FlagImage) {
+            needles += Media(QDir().absoluteFilePath(to));
+          } else if (isVideo && params.queryTypes & SearchParams::FlagVideo) {
+            qWarning() << "similar-to: no video index, grabbing some frames";
+            QList<QFuture<Media>> work;
 
             IndexParams tmp = indexParams;
             tmp.retainImage = true;
@@ -938,15 +932,20 @@ int main(int argc, char** argv) {
             scanner->setIndexParams(tmp);
 
             int numFrames;
+            VideoContext::Metadata meta;
             {
               VideoContext v;
               if (0 != v.open(to)) {
-                qCritical() << "similar-to: frame grabbing failed to open video:" << arg;
+                qCritical() << "similar-to: failed to open video";
                 continue;
               }
 
-              const VideoContext::Metadata md = v.metadata();
-              numFrames = int(md.frameRate * md.duration);
+              meta = v.metadata();
+              numFrames = int(meta.frameRate * meta.duration);
+              if (numFrames <= 0) {
+                qCritical() << "similar-to: no frames/invalid frame count";
+                continue;
+              }
             }
 
             // grab at 10%,20%...90% position
@@ -954,112 +953,96 @@ int main(int argc, char** argv) {
               int pos = int(numFrames * (i * 0.10));
 
               work.append(QtConcurrent::run([=] {
-                QImage frame = VideoContext::frameGrab(to, pos, true);
-                if (!frame.isNull()) {
-                  MediaSearch search;
-                  search.params = params;
+                QImage img = VideoContext::frameGrab(to, pos, true);
+                if (img.isNull())
+                  return Media();
 
-                  search.needle.setType(Media::TypeImage);
-                  search.needle.setPath(to);
-                  search.needle.setImage(frame);
-                  search.needle.setWidth(frame.width());
-                  search.needle.setHeight(frame.height());
+                img = img.convertToFormat(QImage::Format_RGB32); // MGLW needs this
 
-                  // matches can copy this range as their srcIn value
-                  search.needle.setMatchRange(MatchRange(pos, pos, 1));
+                Media m(to, Media::TypeImage, img.width(), img.height());
+                m.setImage(img);
+                m.setMatchRange(MatchRange(pos, pos, 1));     // matches copy srcIn
+                m.setAttribute("grab", QString::number(pos)); // to fix needle after search
 
-                  return engine().query(search);
-                }
-                return MediaSearch();
+                return m;
               }));
             }
 
             for (auto& w : work) {
               w.waitForFinished();
 
-              MediaSearch result = w.result();
+              Media grabbed = w.result();
+              if (grabbed.image().isNull())
+                continue;
 
-              result.needle.setImage(QImage());  // force reading video metatdata
-              result.needle.setType(Media::TypeVideo);
+              meta.toMediaAttributes(grabbed);
 
-              result.matches.prepend(result.needle);
-              if (!engine().db->filterMatch(params, result.matches)) list.append(result.matches);
-              engine().db->filterMatches(params, list);
+              needles += grabbed;
             }
 
-            scanner->setIndexParams(indexParams);  // restore
+            scanner->setIndexParams(indexParams); // restore
 
-            if (list.count() <= 0)
-              qInfo("similar-to[external video]: %s: No matches", qUtf8Printable(to));
+          } else {
+            qWarning("similar-to: invalid filetype for algo or unsupported filetype");
+            if (isVideo)
+              qInfo("similar-to: for video search, use -p.alg video");
 
-            queryResult = list;
             continue;
           }
         } else {
-          qWarning(
-              "similar-to: invalid query type for algo (-p.types/-p.alg) or not a known filetype: "
-              "%s",
-              qUtf8Printable(to));
-          if (isVideo) qInfo("similar-to: for video search, use -p.alg video");
+          // select path as if -select-file was used
+          // fixme: if path contains videos they won't be frame grabbed
+          args.prepend(to);
+          selection.clear();
+          _commands.selectFiles();
+          needles = selection;
+        }
+      } // special inputs
 
-          continue;
+      if (needles.isEmpty())
+        qWarning() << "similar-to: empty selection, is" << to << "a valid path or selector?";
+
+      MediaSearch search;
+      search.params = params;
+
+      // this not the same as similar-in... which is a subset query
+      QList<QFuture<MediaSearch>> work;
+      for (const Media& m : needles)
+        if (search.params.mediaSupported(m)) {
+          search.needle = m;
+          work.append(QtConcurrent::run(&Engine::query, &engine(), search));
         }
 
-        // qInfo() << "-- needle ----------";
-        Media::print(search.needle);
-
-        search = engine().query(search);
-
-        // Media::printGroup(search.matches);
-
-        float vm, ws;
-        Env::memoryUsage(vm, ws);
-        qInfo("similar-to: %lld items %d/%d MB", search.matches.count(), int(ws / 1024),
-              int(vm / 1024));
-
-        search.matches.prepend(search.needle);
-        list.append(search.matches);
-      } else {
-        MediaGroup needles = selectPath(to);
-
-        // todo: external dir search, workaround is adding to
-        // index temporarily
-        if (needles.count() <= 0)
-          qWarning() << "similar-to: empty selection, is" << to << "a valid file path or selector?";
-
-        // this not the same as similar-in... which is a subset query
-        QList<QFuture<MediaSearch>> work;
-        for (const Media& m : needles)
-          if (search.params.mediaSupported(m)) {
-            search.needle = m;
-            work.append(QtConcurrent::run(&Engine::query, &engine(), search));
-          }
-
-        int i = 1;
-        for (auto& w : work) {
-          try { // fixme: what is throwing exceptions? engine::query does not throw
-            w.waitForFinished();
-          } catch (std::exception& e) {
-            qCritical("exception: %s", e.what());
-            w.waitForFinished();
-          }
-
-          search = w.result();
-
-          // note: engine.query(db.similarTo) already filtered matches,
-          // but we still need to filter the whole list, which
-          // requires the needle in the first position
-          if (search.matches.count() > 0) {
-            search.matches.prepend(search.needle);
-            list.append(search.matches);
-          }
-
-          qInfo("similar-to:<PL> %d/%lld", ++i, work.count());
+      int i = 1;
+      for (auto& w : work) {
+        try { // fixme: what is throwing exceptions? engine::query does not throw
+          w.waitForFinished();
+        } catch (std::exception& e) {
+          qCritical("exception: %s", e.what());
+          w.waitForFinished();
         }
-        engine().db->filterMatches(params, list);
 
-        Media::sortGroupList(list, {"path"});
+        search = w.result();
+
+        // if needle is a frame grab we want to display as a video
+        // even though it is an image
+        if (search.needle.attributes().contains("grab"))
+          search.needle.setType(Media::TypeVideo);
+
+        // note: engine.query(db.similarTo) already filtered matches,
+        // but we still need to filter the whole list, which
+        // requires the needle in the first position
+        if (search.matches.count() > 0) {
+          search.matches.prepend(search.needle);
+          list.append(search.matches);
+        }
+
+        qInfo("similar-to:<PL> %d/%lld", ++i, work.count());
       }
+      engine().db->filterMatches(params, list);
+
+      Media::sortGroupList(list, {"path"});
+
       selection.clear();
       queryResult = list;
       qInfo() << "similar-to:" << queryResult.count() << "result(s)";
@@ -1582,7 +1565,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-test-update") {
       _commands.testUpdate(engine());
     } else {
-      qCritical("unknown argument=%s", qUtf8Printable(arg));
+      qCritical("invalid argument=%s", qUtf8Printable(arg));
 #ifdef Q_OS_WIN
       if (arg == "-p" || arg == "-i") qWarning() << "in PowerShell you must use -p: / -i: ";
 #endif

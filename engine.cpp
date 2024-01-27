@@ -192,18 +192,26 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
   MediaGroup& matches = search.matches;
   const SearchParams& params = search.params;
 
-  if (!params.mediaReady(needle))
+  // some options require loading the image
+  // fixme: caller can test beforehand to avoid reloading image
+  // e.g. params.imageNeeded()
+  bool releaseImage = false;
+
+  if (!params.mediaReady(needle)) {
+    if (needle.image().isNull())
+      needle.setImage(needle.loadImage());
+
     if (!needle.image().isNull()) {
       // fixme: we only need to process for the given algo
-      qWarning() << "processImage:" << needle.path();
       IndexResult result = scanner->processImage(needle.path(), "", needle.image());
       if (!result.ok) {
         qWarning() << "failed to process:" << result.path;
         return search;
       }
 
-      // copy some attributes of the needle over so they aren't lost
+      // copy stuff from needle except index data or query data
       Media& m = result.media;
+
       m.setTransform(needle.transform());
       m.setRoi(needle.roi());
       m.setContentType(needle.contentType());
@@ -211,29 +219,30 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
       m.setMatchFlags(needle.matchFlags());
       m.setImage(needle.image());
       m.readMetadata();
+      m.copyAttributes(needle);
+      m.setPosition(needle.position());
+      m.setIsWeed(needle.isWeed());
 
       needle = m;
     }
+  }
+
   if (!params.mediaSupported(needle)) {
     qWarning() << needle.path() << "media type unsupported or disabled with -p.types"
                << params.queryTypes;
-    return search;
+    goto CLEANUP;
   }
 
   if (!params.mediaReady(needle)) {
     // todo: state why
-    qWarning() << needle.path() << "unindexed or unqueryable with algo" << params.algo;
-    return search;
+    qWarning() << needle.path() << "is not indexed or queryable with algo" << params.algo;
+    goto CLEANUP;
   }
 
   if (db->isWeed(needle)) needle.setIsWeed();
 
   matches = db->similarTo(needle, params);
 
-  // some options require loading the image
-  // fixme: caller can test beforehand to avoid reloading image
-  // e.g. params.imageNeeded()
-  bool releaseImage = false;
   if (needle.image().isNull() && (params.mirrorMask || params.templateMatch)) {
     // qWarning() << "loading image for reflection or template match" << needle.path();
     needle.setImage(needle.loadImage());
@@ -254,10 +263,9 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
 
   std::sort(matches.begin(), matches.end());
 
-  if (releaseImage) {
+CLEANUP:
+  if (releaseImage)
     needle.setImage(QImage());
-    // qDebug() << "discarding needle image";
-  }
 
   return search;
 }

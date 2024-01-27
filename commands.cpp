@@ -134,7 +134,7 @@ class Expression {
       qFatal("empty expression, use %%empty or %%null to test for empty/null value");
 
     if (!lhsType.isValid())
-      qWarning("left-hand-side datatype for \"%s\" is unknown, a type conversion may be required, "
+      qWarning("invalid datatype for left-hand-side of \"%s\", a type conversion may be required, "
           "e.g. exif#Photo.DateTimeOriginal#todate",
           qUtf8Printable(expr));
 
@@ -514,7 +514,7 @@ void Commands::selectFiles() {
     else if (sc->videoTypes().contains(ext))
       type = Media::TypeVideo;
     else
-      qWarning() << "select-files: unknown file type:" << arg;
+      qWarning() << "select-files: ignoring unsupported filetype:" << arg;
 
     if (type) _selection.append(Media(info.absoluteFilePath(), type));
   }
@@ -623,7 +623,7 @@ void Commands::testVideoDecoder(const QString& path) {
     } else if (arg == "-no-sws") {
       noSws = true;
     } else
-      qFatal("unknown arg to -test-video-decoder");
+      qFatal("invalid arg to -test-video-decoder");
   }
 
   int numFrames = 0;

@@ -21,6 +21,7 @@ Wish List
 - sort result groups too
 - option to pre-compute no-reference quality score for each image,
   might be reasonable for automatic deletions
+- frame grab any non-indexed video in similar-to
 
 ### Indexing
 - file/directory name filters for inclusion/exclusion
@@ -67,6 +68,7 @@ Wish List
 - select-all, clear-selection
 - ~~action groups to compact the context menu~~
 - option to force layout to use one row/column
+- option to choose default selected index (default == right/last)
 
 ### Misc
 - QString/char* sweep
@@ -83,6 +85,7 @@ Major Bugs
 - sws_scale buffer overflow (264x480 yuv420p)
 - ~~MBW move folder option broken~~ removed in v0.5.1
 - control-c during database write will usually corrupt sqlite database, most likely when the filesystem doesn't support locking
+- gui video decode potentially broken (unconfirmed)
 
 Minor Bugs
 =========================

@@ -1122,10 +1122,7 @@ static void loadImage(ImageWork* work, bool fastSeek) {
     img = VideoContext::frameGrab(m.path(), m.matchRange().dstIn, fastSeek, opt, &work->future);
     if (work->future.isCanceled()) return;
     auto meta = loadVideo(m);
-    m.setAttribute("duration", QString::number(meta.duration));
-    m.setAttribute("fps", QString::number(double(meta.frameRate)));
-    m.setAttribute("time", meta.timeDuration().toString("mm:ss"));
-    m.setAttribute("vformat", meta.toString());
+    meta.toMediaAttributes(m);
   }
 
   if (!img.isNull()) {
