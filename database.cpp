@@ -863,12 +863,14 @@ void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
         Q_ASSERT(rec.indexOf("phash_dct") == _mediaIndex.phash_dct);
     }
     */
-
     int id = query.value(_mediaIndex.id).toInt();
     int type = query.value(_mediaIndex.type).toInt();
 
     const QString relPath = query.value(_mediaIndex.path).toString();
-    Q_ASSERT(!relPath.isEmpty());
+    if (relPath.isEmpty()) {
+      qCritical() << "invalid database record (null path), id=" << id << "type=" << type;
+      continue;
+    }
 
     const QString mediaPath = path() + "/" + relPath;
 
