@@ -475,7 +475,7 @@ void Commands::rename(Database* db, const QString& srcPat, const QString& dstPat
 }
 
 void Commands::selectFiles() {
-  const Scanner sc;
+  static const Scanner* sc = new Scanner; // pointer to avoid static destruction
   while (_args.count() > 0) {
     const QString arg = _args.front();
     if (arg.startsWith("-"))  // next switch
@@ -498,7 +498,7 @@ void Commands::selectFiles() {
 
     QString ext = info.suffix().toLower();
 
-    if (sc.archiveTypes().contains(ext)) {
+    if (sc->archiveTypes().contains(ext)) {
       const auto list = Media::listArchive(arg);
       QStringList zippedFiles;
       for (auto& path : list) zippedFiles.append(path);
@@ -509,9 +509,9 @@ void Commands::selectFiles() {
     }
 
     int type = 0;
-    if (sc.imageTypes().contains(ext))
+    if (sc->imageTypes().contains(ext))
       type = Media::TypeImage;
-    else if (sc.videoTypes().contains(ext))
+    else if (sc->videoTypes().contains(ext))
       type = Media::TypeVideo;
     else
       qWarning() << "select-files: unknown file type:" << arg;
