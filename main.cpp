@@ -961,7 +961,7 @@ int main(int argc, char** argv) {
 
                 Media m(to, Media::TypeImage, img.width(), img.height());
                 m.setImage(img);
-                m.setMatchRange(MatchRange(pos, pos, 1));     // matches copy srcIn
+                m.setMatchRange(MatchRange(-1, pos, 1));      // range.dstIn is the needle's pos
                 m.setAttribute("grab", QString::number(pos)); // to fix needle after search
 
                 return m;

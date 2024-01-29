@@ -250,7 +250,7 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
     result.score = match.distance;
 
     // get the source in reference from needle if it was supplied
-    int srcIn = needle.matchRange().srcIn;
+    int srcIn = needle.matchRange().dstIn;
     if (srcIn < 0) srcIn = 0;
 
     result.range = MatchRange(srcIn, int(dstFrame), 1);

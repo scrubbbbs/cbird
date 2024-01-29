@@ -263,6 +263,10 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
 
   std::sort(matches.begin(), matches.end());
 
+  // needle takes the pos of first video match
+  if (matches.count() > 0)
+    search.needle.setMatchRange({-1, matches[0].matchRange().srcIn, 1});
+
 CLEANUP:
   if (releaseImage)
     needle.setImage(QImage());

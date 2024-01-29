@@ -1238,13 +1238,6 @@ void MediaGroupListWidget::loadMedia(int row) {
         iw->input = {left, right};
       }
 
-      // match needle video range to result if it is missing
-      if (group.count() == 2 && groupIndex == 0 && group[0].type() == Media::TypeVideo &&
-          group[1].type() == Media::TypeVideo && group[0].matchRange().dstIn < 0 &&
-          group[1].matchRange().srcIn >= 0) {
-        iw->media.setMatchRange({-1, group[1].matchRange().srcIn, 0});
-      }
-
       QFutureWatcher<void>* w = new QFutureWatcher<void>(this);
       _loaders.append(w);
 
@@ -2211,9 +2204,9 @@ void MediaGroupListWidget::compareVideosAction() {
 
   MatchRange range(0, 0, -1);
 
-  // if right is needle, left is match; set range
+  // if left is needle, right is match
   if (left.matchRange().srcIn < 0)
-    range = MatchRange(right.matchRange().srcIn, right.matchRange().dstIn, right.matchRange().len);
+    range = right.matchRange();
 
   VideoCompareWidget* comp = new VideoCompareWidget(left, right, range, _options);
   comp->setAttribute(Qt::WA_DeleteOnClose);

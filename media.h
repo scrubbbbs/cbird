@@ -76,11 +76,14 @@ class VideoIndex {
 
 /**
  * Describes a matching interval
- * @note only used for video search, where units are frames
+ * @note for video search, units are frames
+ * @note if needle is frame grab, dstIn should be set to its frame number
+ *
+ * fixme: if frame rates differ, len should be in dst units
  */
 class MatchRange {
  public:
-  int srcIn, dstIn, len;
+  int srcIn, dstIn, len; // needle/other pos, match/our pos, match/our len
 
   MatchRange() {
     srcIn = dstIn = -1;
