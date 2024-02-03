@@ -547,12 +547,8 @@ uint64_t averageHash64(const cv::Mat& cvImg) {
   return hash;
 }
 
-void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst, float clipHistPercent) {
-  Q_ASSERT(clipHistPercent >= 0);
-  Q_ASSERT((src.type() == CV_8UC1) || (src.type() == CV_8UC3) || (src.type() == CV_8UC4));
-
-  int histSize = 256;
-  int minGray = 0, maxGray = 0;
+void grayLevel(const cv::Mat& src, float clipHistPercent, int& minGray, int& maxGray) {
+  const int histSize = 256;
 
   // to calculate grayscale histogram, color => gray
   cv::Mat gray;
@@ -591,14 +587,20 @@ void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst, float clipHistP
 
     // locate left cut, overflow check added for serenity, never crashed here (yet)
     minGray = 0;
-    while (minGray < int(hSize) && accumulator[uint(minGray)] < clipHistPercent) minGray++;
+    while (minGray < int(hSize) && accumulator[uint(minGray)] < clipHistPercent)
+      minGray++;
 
     // locate right cut, overflow check is needed, some inputs will segfault
     maxGray = histSize - 1;
-    while (maxGray >= 0 && accumulator[uint(maxGray)] >= (max - clipHistPercent)) maxGray--;
+    while (maxGray >= 0 && accumulator[uint(maxGray)] >= (max - clipHistPercent))
+      maxGray--;
   }
+}
 
-  if (minGray >= maxGray) { // range could be 0, maybe invalid too
+void stretchContrast(const cv::Mat& src, cv::Mat& dst, int minGray, int maxGray) {
+  const int histSize = 256;
+
+  if (minGray >= maxGray) {  // range could be 0, maybe invalid too
     qWarning() << "no adjustment is possible";
     dst = src;
     return;
@@ -622,6 +624,16 @@ void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst, float clipHistP
   //        cv::mixChannels(&src, 4, &dst,1, from_to, 1);
   //    }
   return;
+}
+
+void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst, float clipHistPercent) {
+  Q_ASSERT(clipHistPercent >= 0);
+  Q_ASSERT((src.type() == CV_8UC1) || (src.type() == CV_8UC3) || (src.type() == CV_8UC4));
+
+  int minGray = 0, maxGray = 0;
+
+  grayLevel(src, clipHistPercent, minGray, maxGray);
+  stretchContrast(src, dst, minGray, maxGray);
 }
 
 // Earth Movers Distance (EMD) test

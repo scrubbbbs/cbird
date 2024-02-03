@@ -186,6 +186,8 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects);
  *  @note In case of BGRA image, we won't touch the transparency
  *  @see doc/brightness-contrast-auto.pdf
  **/
+void grayLevel(const cv::Mat &src, float clipHistPercent, int &minGray, int &maxGray);
+void stretchContrast(const cv::Mat &src, cv::Mat &dst, int minGray, int maxGray);
 void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst, float clipHistPercent = 0);
 
 // libpash optional for testing
