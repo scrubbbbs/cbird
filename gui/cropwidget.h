@@ -61,6 +61,12 @@ class CropWidget : public QLabel {
   const QImage& image() const { return _image; }
 
   /**
+   * @brief Cropped image
+   * @note only valid after widget hides itself
+   */
+  const QRect& cropRect() const { return _cropRect; }
+
+  /**
    * @brief Change selection rectangle constraint
    * @param enable
    * @param num Numerator of aspect ratio
@@ -87,6 +93,10 @@ class CropWidget : public QLabel {
   QImage _image;         // output
   QPoint _lastMousePos;  // mouse pos before mouseMoveEvent()
   QPixmap _background;   // selection area / undimmed
+
+  float _imageScale = 1.0;// scale factor of image
+  QPoint _cropOffset;     // offset of image on the background
+  QRect _cropRect;        // crop rectangle applied to image; might overflow image
 
   bool _constrain = true;
   int _aspect_num = 4, _aspect_den = 3;

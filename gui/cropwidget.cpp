@@ -36,10 +36,12 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
   const QImage thumb = w.image();
   if (thumb.isNull()) return false;
 
+  const QRect cropRect = w.cropRect();
+
   const QString thumbPath = QFileInfo(db.thumbPath()).absoluteFilePath();
   const QString indexPath = QFileInfo(db.path()).absoluteFilePath();
 
-  auto saveFunc = [media, thumb, thumbPath, indexPath, async, after]() {
+  auto saveFunc = [media, thumb, thumbPath, indexPath, async, after, cropRect]() {
     const char *exifKey = "Exif.Photo.UserComment";
 
     // preserve existing comment in case we recrop a thumbnail
@@ -53,9 +55,9 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
       }
     }
 
-    cv::Mat cvImg;
     QImage img = thumb;
     if (img.width() > 1024 || img.height() > 1024) {
+      cv::Mat cvImg;
       qImageToCvImgNoCopy(thumb, cvImg);
       sizeLongestSide(cvImg, 1024);
       cvImgToQImageNoCopy(cvImg, img);
@@ -81,6 +83,11 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
         comment = "cbird thumbnail";
         comment += "\nversion:1";
         comment += "\npath:" + relPath;
+        comment += QString("\ncrop:%1:%2:%3:%4")
+                       .arg(cropRect.x())
+                       .arg(cropRect.y())
+                       .arg(cropRect.width())
+                       .arg(cropRect.height());
 
         QString hash = media.md5();
         if (!hash.isEmpty()) {
@@ -89,6 +96,9 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
         }
         uint64_t dct = media.dctHash();
         if (dct) comment += "\ndct:" + QString::number(dct, 16);
+
+        if (media.matchRange().dstIn >= 0)
+          comment += "\nframe:" + QString::number(media.matchRange().dstIn);
       }
 
       // image->setComment(qPrintable(comment)); // redundant
@@ -128,11 +138,14 @@ CropWidget::CropWidget(const QImage &img_, bool fullscreen, QWidget *parent)
     : QLabel(parent, Qt::Popup) {
   // draw the image in device pixels...for high dpi displays and small images this
   // could be a problem, but it guarantees the output hasn't been scaled (besides the crop)
+  // note it will still be scaled if too large to fit the screen, and
+  // setIndexThumbnail() will scale to some maximum size
   const qreal dpr = this->devicePixelRatio();
 
   QRect geom;                    // size/position of widget
-  cv::Mat cvImg;                 // stores (potentially) rescaled image until draw
+  cv::Mat rescaled;              // note: img is nocopy ref to cvImg when scaling
   QImage img = img_;             // temporary until draw
+
   img.setDevicePixelRatio(dpr);  // trying to force unscaled drawing
 
   if (fullscreen) {
@@ -151,10 +164,11 @@ CropWidget::CropWidget(const QImage &img_, bool fullscreen, QWidget *parent)
       // todo: we can pull crop rect from original so no quality loss!
       // note: don't need to display 1:1 pixels if that's the case...
       qWarning() << "scaling input to fit window, expect quality loss" << QSize(w, h);
-      qImageToCvImgNoCopy(img_, cvImg);
-      sizeStretch(cvImg, w, h);  // lanczos4
-      cvImgToQImageNoCopy(cvImg, img);
+      qImageToCvImgNoCopy(img_, rescaled);
+      sizeStretch(rescaled, w, h);  // lanczos4
+      cvImgToQImageNoCopy(rescaled, img);
       img.setDevicePixelRatio(dpr);
+      _imageScale = float(img_.width())/w;
     }
   } else if (parent) {
     auto r = parent->geometry();
@@ -167,6 +181,12 @@ CropWidget::CropWidget(const QImage &img_, bool fullscreen, QWidget *parent)
   qDebug() << "GEOM:"
            << "display:" << geom << "input:" << img.rect();
 
+  {
+    cv::Mat mat;
+    qImageToCvImgNoCopy(img, mat);
+    brightnessAndContrastAuto(mat, mat);
+  }
+
   // draw image into black background, allows cropping past the edge
   _background = QPixmap(geom.size());
   _background.setDevicePixelRatio(dpr);
@@ -178,22 +198,26 @@ CropWidget::CropWidget(const QImage &img_, bool fullscreen, QWidget *parent)
     const QRect fgRect(x, y, iw, ih), bgRect(0, 0, gw, gh);
     const qreal idpr = 1.0 / dpr;
 
+    _cropOffset.setX(x);
+    _cropOffset.setY(y);
+
     QPainter painter(&_background);
     painter.scale(idpr, idpr);  // makes our images unscaled!
 
     painter.fillRect(bgRect, _BG_COLOR);
     painter.setOpacity(_BG_OPACITY);
     painter.drawImage(fgRect, img);
-    setPixmap(_background);  // widget background (faded image)
+    this->setPixmap(_background);  // widget background is faded image
 
     painter.setOpacity(1.0);
     painter.fillRect(bgRect, _BG_COLOR);
-    painter.drawImage(fgRect, img);  // selection/foreground (normal image)
+    painter.drawImage(fgRect, img);  // _background is now foreground
   }
 
-  // img.save("test1.png", nullptr, 0);
-  // pixmap().toImage().save("test2.png", nullptr, 0);
+  //img.save("test1.png", nullptr, 0);
+  //pixmap().toImage().save("test2.png", nullptr, 0);
   //_background.toImage().save("test3.png", nullptr, 0);
+  //_image = img;
 
   qDebug() << img.size() << _background.size() << this->size();
 
@@ -203,12 +227,14 @@ CropWidget::CropWidget(const QImage &img_, bool fullscreen, QWidget *parent)
   setFixedSize(_background.size() / this->devicePixelRatio());
 
   _selectLabel = new QLabel(this);
+  _selectLabel->setAttribute(Qt::WA_NoSystemBackground); // don't draw background
   _selectLabel->setMargin(0);
   _selectLabel->setFrameShape(QFrame::NoFrame);
+
+  // need at least 1px border and transparent frame to avoid artifacts
   _selectLabel->setStyleSheet(R"qss(
       QLabel {
-        border: 1px solid rgba(255,255,255,128);
-        background-color:rgba(0,0,0,0);
+        border: 1px solid rgba(0,0,0,0);
       })qss");
 
   _selectLabel->hide();
@@ -233,12 +259,25 @@ void CropWidget::repaintSelection() {
   // subtract the border width per stylesheet
   r.adjust(1, 1, -1, -1);
 
-  // convert to device coordinates since our background is unscaled
+  // convert to device coordinates since _background is device pixels
   qreal dpr = this->devicePixelRatio();
   r = QRect(r.topLeft() * dpr, r.size() * dpr);
 
-  _selectLabel->setPixmap(_background.copy(r));  // req device coordinates
+  QPixmap pix = _background.copy(r);
+  {
+    QPainter p(&pix);
+    p.scale(1/dpr, 1/dpr);
+    p.setPen(Qt::gray);
+    p.drawRect(QRect{0,0,r.width()-1,r.height()-1});
+  }
+  _selectLabel->setPixmap(pix);
   _selectLabel->show();
+
+  _cropRect.setTopLeft(r.topLeft()-_cropOffset);
+  _cropRect.setRect(_cropRect.x()*_imageScale,
+                    _cropRect.y()*_imageScale,
+                    r.width()*_imageScale,
+                    r.height()*_imageScale);
 }
 
 void CropWidget::keyPressEvent(QKeyEvent *ev) {
