@@ -1758,21 +1758,20 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
       if (deleteFiles) {
         static bool skipDeleteConfirmation = false;
         int button = 0;
+        const QString fileName = QFileInfo(path).fileName();
         if (m.isArchived()) {
-          QString zipPath = _options.db ? path.mid(_options.db->path().length() + 1) : path;
           QMessageBox dialog(QMessageBox::Warning, qq("Delete Zip Confirmation"),
                              qq("The selected file is a member of \"%1\"\n\n"
                                 "Modification of zip archives is unsupported. Move the "
                                 "entire zip to the trash?")
-                                 .arg(zipPath),
+                                 .arg(fileName),
                              QMessageBox::No | QMessageBox::Yes, this);
           button = Theme::instance().execDialog(&dialog);
         } else if (skipDeleteConfirmation) {
           button = QMessageBox::Yes;
         } else {
-          QString filePath = _options.db ? path.mid(_options.db->path().length() + 1) : path;
           QMessageBox dialog(QMessageBox::Warning, qq("Delete File Confirmation"),
-                             qq("Move this file to the trash?\n\n%1").arg(filePath),
+                             qq("Move this file to the trash?\n\n%1").arg(fileName),
                              QMessageBox::No | QMessageBox::Yes | QMessageBox::YesToAll, this);
           button = Theme::instance().execDialog(&dialog);
         }
@@ -1794,7 +1793,8 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
           _options.db->remove(zipGroup);
           if (_options.trackWeeds) qWarning() << "Cannot track weeds when deleting zip files";
         } else {
-          _options.db->remove(group[index].id());
+          const int mediaId = group.at(index).id();
+          if (mediaId > 0) _options.db->remove(mediaId);
           if (_options.trackWeeds && countNonAnalysis(group) == 2) {
             int otherIndex = (index + 1) % 2;
             Media& other = group[otherIndex];
