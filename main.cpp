@@ -1535,6 +1535,7 @@ int main(int argc, char** argv) {
       }
       int frame = nextArg().toInt();
       m.setImage(VideoContext::frameGrab(m.path(), frame, false));
+      m.setMatchRange({-1, frame, 1});
       CropWidget::setIndexThumbnail(*engine().db, m);
     } else if (arg == "-test-image-loader") {
       ImageLoadOptions options;

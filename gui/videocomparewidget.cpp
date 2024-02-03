@@ -733,8 +733,10 @@ void VideoCompareWidget::compareInKdenlive() {
 void VideoCompareWidget::writeThumbnail(int index) {
   Q_ASSERT(_options.db);
   const auto& v = _video[index];
-  const Frame* frame = v.cache->frame(v.in + _cursor + v.offset);
+  int frameNum = v.in + _cursor + v.offset;
+  const Frame* frame = v.cache->frame(frameNum);
   Media m = v.media;
   m.setImage(frame->image);
+  m.setMatchRange({-1, frameNum, 1});
   CropWidget::setIndexThumbnail(*_options.db, m, this);
 }
