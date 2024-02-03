@@ -689,12 +689,17 @@ PropertyFunc Media::propertyFunc(const QString& expr) {
     if (args.count() == 0) qFatal("exif/iptc/xmp require tag name(s)");
     QStringList exifKeys = args.front().split(",");
     args.pop_front();
+    bool useCache = true;
+    if (exifKeys.at(0) == "nocache") {
+      exifKeys.removeFirst();
+      useCache = false;
+    }
 
     select = [=](const Media& m) {
       if (m.type() != Media::TypeImage) return QVariant();
 
       const QString cacheKey = m.path() + ":" + field + exifKeys.join(",");
-      {
+      if (useCache) {
         QMutexLocker locker(cacheMutex);
         auto it = propCache.find(cacheKey);
         if (it != propCache.end()) return it.value();
@@ -708,7 +713,7 @@ PropertyFunc Media::propertyFunc(const QString& expr) {
           break;
         }
 
-      {
+      if (useCache) {
         QMutexLocker locker(cacheMutex);
         propCache.insert(cacheKey, result);
       }

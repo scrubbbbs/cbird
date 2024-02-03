@@ -1,3 +1,4 @@
+nocache
 Image.ProcessingSoftware
 Image.NewSubfileType
 Image.SubfileType
