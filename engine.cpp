@@ -197,34 +197,34 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
   // e.g. params.imageNeeded()
   bool releaseImage = false;
 
-  if (!params.mediaReady(needle)) {
+  if (!params.mediaReady(needle) && needle.type() == Media::TypeImage) {
+    // fixme: we only need to process for the given algo
+    IndexResult result;
     if (needle.image().isNull())
-      needle.setImage(needle.loadImage());
+      result = scanner->processImageFile(needle.path(), needle.data());
+    else if (!needle.image().isNull())
+      result = scanner->processImage(needle.path(), "", needle.image());
 
-    if (!needle.image().isNull()) {
-      // fixme: we only need to process for the given algo
-      IndexResult result = scanner->processImage(needle.path(), "", needle.image());
-      if (!result.ok) {
-        qWarning() << "failed to process:" << result.path;
-        return search;
-      }
-
-      // copy stuff from needle except index data or query data
-      Media& m = result.media;
-
-      m.setTransform(needle.transform());
-      m.setRoi(needle.roi());
-      m.setContentType(needle.contentType());
-      m.setMatchRange(needle.matchRange());
-      m.setMatchFlags(needle.matchFlags());
-      m.setImage(needle.image());
-      m.readMetadata();
-      m.copyAttributes(needle);
-      m.setPosition(needle.position());
-      m.setIsWeed(needle.isWeed());
-
-      needle = m;
+    if (!result.ok) {
+      qWarning() << "failed to process:" << result.path;
+      return search;
     }
+
+    // copy stuff from needle except index data or query data
+    Media& m = result.media;
+
+    m.setTransform(needle.transform());
+    m.setRoi(needle.roi());
+    m.setContentType(needle.contentType());
+    m.setMatchRange(needle.matchRange());
+    m.setMatchFlags(needle.matchFlags());
+    m.setImage(needle.image());
+    m.readMetadata();
+    m.copyAttributes(needle);
+    m.setPosition(needle.position());
+    m.setIsWeed(needle.isWeed());
+
+    needle = m;
   }
 
   if (!params.mediaSupported(needle)) {
