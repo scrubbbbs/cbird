@@ -43,7 +43,7 @@
 #define LW_PAN_STEP (10.0)
 #define LW_ZOOM_STEP (0.9)
 
-#define LW_ITEM_SPACING (8)
+#define LW_ITEM_SPACING (8)             // can't be too small or it breaks layout logic
 #define LW_ITEM_MIN_IMAGE_HEIGHT (16)   // do not draw image below this
 #define LW_ITEM_HISTOGRAM_PADDING (16)  // distance from item edge
 #define LW_ITEM_HISTOGRAM_SIZE (32)     // width of histogram plot
@@ -274,8 +274,8 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     const MediaGroup& group = parent->_list[parent->_currentRow];
     const Media& m = group[index.row()];
 
-    // offset rectangle for image
-    QRect rect = option.rect.adjusted(0, 0, 0, -_textHeight);
+    const int topInfoHeight = painter->fontMetrics().height();
+    QRect rect = option.rect.adjusted(0, topInfoHeight, 0, -_textHeight);
 
     // draw image
     if (rect.height() > LW_ITEM_MIN_IMAGE_HEIGHT) {
@@ -414,16 +414,26 @@ class MediaItemDelegate : public QAbstractItemDelegate {
                          .arg(isRoi ? QString("[ROI] %1\xC2\xB0").arg(rotation, 0, 'f', 1) : "")
                          .arg(_zoom < 1.0 ? QString("[+%1%]").arg(int(100/_zoom)) : "");
 
-      int h1 = painter->fontMetrics().lineSpacing();
+      QString info1 = QString("%1%%2")
+                      .arg(int(totalScale*100))
+                      .arg(_zoom < 1.0 ? QString("[+%1%]").arg(int(100/_zoom)) : "");
 
-      painter->setPen(QColor(128, 128, 128, 255)); // fixme: theme constants
-      painter->drawText(QPoint{rect.x() + h1, rect.y() + h1}, info);
+      rect = option.rect;
+      rect.setHeight(topInfoHeight);
+
+      painter->setOpacity(0.5);
+      painter->fillRect(rect, palette.base());
+      painter->setOpacity(0.75);
+      painter->setPen(palette.text().color());
+      painter->drawText(rect, info, Qt::AlignCenter|Qt::AlignVCenter);
+      painter->setOpacity(1.0);
 
       const ColorDescriptor& cd = m.colorDescriptor();
       if (cd.numColors > 0) {
         painter->save();
+        rect = option.rect;
         int xOffset = LW_ITEM_HISTOGRAM_PADDING;
-        int yOffset = h1 + LW_ITEM_HISTOGRAM_PADDING;
+        int yOffset = topInfoHeight;
         painter->translate(rect.x() + xOffset, rect.y() + yOffset);
 
         int totalWeight = 1;  // prevent divide-by-zero
@@ -436,7 +446,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
           const DescriptorColor& dc = cd.colors[i];
           QColor rgb = dc.toQColor();
           int w = LW_ITEM_HISTOGRAM_SIZE;
-          int h = int(dc.w) * (rect.height() - yOffset) / totalWeight;
+          int h = int(dc.w) * (rect.height() - topInfoHeight - _textHeight) / totalWeight;
 
           painter->fillRect(x, y, w, h, rgb);
           painter->drawLine(x + w, y + h, x + w + 2, y + h);
