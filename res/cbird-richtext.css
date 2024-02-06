@@ -40,3 +40,4 @@ table { background-color:qt(normal,base); color:qt(normal,text); }
 .file    { color:qt(normal,text); }     /* value is file */
 .weed    { color:theme(weed_base); }    /* value is weed */
 .default { color:qt(normal,text); }     /* default text */
+.locked  { color:theme(locked_base); }  /* value is locked for modification */

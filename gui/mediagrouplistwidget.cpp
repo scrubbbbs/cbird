@@ -236,6 +236,8 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     // are bigger than the viewport
     if (_scaleMode == SCALE_DOWN && scale > 1.0) scale = 1.0;
 
+    // zoom ranges from 0.1 - 1.0 with 1.0 being no scaling
+    // the division makes bigger jumps towards the top end
     scale /= _zoom;
 
     double hw = imgRect.width() / 2.0;
@@ -274,7 +276,9 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     const MediaGroup& group = parent->_list[parent->_currentRow];
     const Media& m = group[index.row()];
 
-    const int topInfoHeight = painter->fontMetrics().height();
+    const QRect tightRect = painter->fontMetrics().tightBoundingRect(qq("Ay"));
+    const int topInfoHeight = tightRect.height() + LW_ITEM_SPACING*2;
+
     QRect rect = option.rect.adjusted(0, topInfoHeight, 0, -_textHeight);
 
     // draw image
@@ -308,7 +312,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       }
 
       // total scale from source image to viewport, to select filter
-      double totalScale = scale / _zoom;
+      double totalScale = scale;
       bool isRoi = false;
       double rotation = 0.0;
 
@@ -406,24 +410,17 @@ class MediaItemDelegate : public QAbstractItemDelegate {
       painter->restore();
 
       // draw info about the image display (scale factor, mode, filter etc)
-      QString info = QString("%1%%5 %2 (%3) %4")
-                         .arg(int(totalScale * 100))
-                         .arg(_scaleMode == SCALE_NONE ? "[1:1]"
-                              : _scaleMode == SCALE_UP ? "[Scale Up]" : "[Scale Down]")
+      QString info = QString("%1%%5 | %2 | %3 %4")
+                         .arg(int(totalScale*100))
+                         .arg(_scaleMode == SCALE_NONE ? "1:1"
+                              : _scaleMode == SCALE_UP ? "+" : "-")
                          .arg(_filters[filterIndex].name)
-                         .arg(isRoi ? QString("[ROI] %1\xC2\xB0").arg(rotation, 0, 'f', 1) : "")
-                         .arg(_zoom < 1.0 ? QString("[+%1%]").arg(int(100/_zoom)) : "");
-
-      QString info1 = QString("%1%%2")
-                      .arg(int(totalScale*100))
-                      .arg(_zoom < 1.0 ? QString("[+%1%]").arg(int(100/_zoom)) : "");
+                         .arg(isRoi ? QString("| %1\xC2\xB0").arg(rotation, 0, 'f', 1) : "")
+                         .arg(_zoom < 1.0 ? QString("[x%1]").arg(int(1.0/_zoom)) : "");
 
       rect = option.rect;
       rect.setHeight(topInfoHeight);
-
       painter->setOpacity(0.5);
-      painter->fillRect(rect, palette.base());
-      painter->setOpacity(0.75);
       painter->setPen(palette.text().color());
       painter->drawText(rect, info, Qt::AlignCenter|Qt::AlignVCenter);
       painter->setOpacity(1.0);
@@ -460,8 +457,12 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     rect = rect.adjusted(0, std::max(0, rect.height() - _textHeight), 0, 0);
 
     QString title = item->data(Qt::UserRole + 0).toString();
-
-    title = painter->fontMetrics().elidedText(title, LW_ELIDE_FILENAME, rect.width(), 0);
+    int cut = title.indexOf(qq(" [x")); // cut title to only elide the filename part
+    QString fileName = title.mid(0, cut);
+    QString info = title.mid(cut);
+    int infoWidth = painter->fontMetrics().tightBoundingRect(info).width();
+    title = painter->fontMetrics().elidedText(fileName, LW_ELIDE_FILENAME, rect.width()-infoWidth, 0);
+    title = title + info;
     title = title.mid(0, title.lastIndexOf(lc('('))); // remove separately styled suffix
 
     QString text = item->text();
@@ -619,6 +620,7 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
+  loadFolderLocks();
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
 
   settings.beginGroup(staticMetaObject.className() + qq(".view"));
@@ -780,6 +782,9 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   }
   WidgetHelper::addAction(settings, text, Qt::Key_Return, this, SLOT(chooseAction()));
 
+  WidgetHelper::addAction(settings, "Navigation/Toggle Folder Lock", Qt::Key_L, this,
+                          SLOT(toggleFolderLockAction()));
+
   WidgetHelper::addAction(settings, "Navigate/Browse Parent", Qt::Key_Tab, this,
                           SLOT(browseParentAction()))
       ->setEnabled(_options.db != nullptr);
@@ -840,8 +845,10 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 }
 
 MediaGroupListWidget::~MediaGroupListWidget() {
-  WidgetHelper::saveGeometry(this);
   qDebug("~MediaGroupListWidget");
+
+  saveFolderLocks();
+  WidgetHelper::saveGeometry(this);
 
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
 
@@ -1375,18 +1382,19 @@ void MediaGroupListWidget::updateItems() {
   for (int i = 0; i < group.count(); i++) {
     const Media& m = group[i];
     // QString fmt;
-    bool isVideo = m.type() == Media::TypeVideo;
+    const bool isVideo = m.type() == Media::TypeVideo;
     // if (isVideo)
     //   fmt = " :: " + m.attributes().value("vformat");
 
     int64_t size = m.originalSize();
-    int pixels = m.resolution();
-    double compression = double(m.compressionRatio());
-    int score = m.score();
-    int jpegQuality = m.attributes().value("jpeg-quality").toInt();
-    int qualityScore = m.attributes().value("quality-score").toInt();
-    int duration = m.attributes().value("duration").toInt();
-    float fps = m.attributes().value("fps").toFloat();
+    const int pixels = m.resolution();
+    const double compression = double(m.compressionRatio());
+    const int score = m.score();
+    const int jpegQuality = m.attributes().value("jpeg-quality").toInt();
+    const int qualityScore = m.attributes().value("quality-score").toInt();
+    const int duration = m.attributes().value("duration").toInt();
+    const float fps = m.attributes().value("fps").toFloat();
+    const bool locked = _lockedFolders.contains(m.dirPath());
 
     QString path = m.path();
     const QFileInfo fileInfo(path);
@@ -1494,14 +1502,29 @@ void MediaGroupListWidget::updateItems() {
         compare.date = "same";
     }
 
-    // elide the first row text, tricky... since there is no html attribute for it,
-    // pass via item->data() to the item paint()...then must assume
-    // drawRichText() uses similar font metrics as the widget
-    // note: the () at the end is only to *measure* that part which is
-    // styled differently, it gets lopped off in paint()
-    QString title = path + QString(" [x%1] (%2)").arg(fileCount).arg(fileCount - first.fileCount);
+    // we want to elide the filename, but we use richtext which has no elide,
+    // and we also need to know how many characters fit in that space to do it correctly
+    //
+    // we have to construct the full text string for the first line (non-elided) into "title",
+    // pass it to paint() via item->data()
+    //
+    // paint() strips out the second part "(%2)" so it is styled differently, as well as
+    // the weed and lock indicator, in the <span> following the filename
+    //
+    // assume drawRichText() uses similar font metrics as the widget paint()
+    //
+    // note: the (%2) is styled differently by lopping it off in paint() and adding
+    // it back in <span> following filename
+    //
+    // note: extra space or else clipping (fontMetrics inaccurate?)
+    //
+    QString title = path + QString(" [x%1] (%2) ").arg(fileCount).arg(fileCount - first.fileCount);
 
-    if (m.isWeed()) title += "WEED ";
+#define WEED_CSTR "\317\211" // omega (curvy w)
+    if (m.isWeed()) title += " " WEED_CSTR;
+
+#define LOCK_CSTR "\316\273" // lambda
+    if (locked) title += " " LOCK_CSTR;
 
     //
     // todo: convert this to some kind of loadable/configurable template with variable replacement
@@ -1519,8 +1542,14 @@ void MediaGroupListWidget::updateItems() {
     const QString text =
         QString(
             "<table width=@width@><tbody>"
-            "<tr class=\"base\"><td class=\"%26\" colspan=\"3\" count=\"%15\">%1<span "
-            "class=\"%16\">(%17)</span></td></tr>"
+            "<tr class=\"base\">"
+            "<td class=\"%26\" colspan=\"3\" count=\"%15\">"
+              "%1"                                 // file name + count
+              "<span class=\"%16\">(%17)</span>"   // count difference
+              "<span class=\"weed\">%27</span>"    // weed
+              "<span class=\"locked\">%28</span>"  // folder lock
+            "</td>"
+            "</tr>"
             "<tr class=\"altbase\">"
             "<td>%2x%3</td>"
             "<td><span class=\"%7\">%11%</span></td>"
@@ -1567,9 +1596,9 @@ void MediaGroupListWidget::updateItems() {
             .arg(isVideo ? QString::number(fps) : QString::number(jpegQuality))
             .arg(compare.qualityScore)
             .arg(qualityScore)
-            .arg(m.isWeed()       ? "weed"
-                 : m.isArchived() ? "archive"
-                                  : "file");
+            .arg(m.isArchived() ? "archive" : "file")
+            .arg(m.isWeed() ? "&nbsp;" WEED_CSTR : "")
+            .arg(locked ? "&nbsp;" LOCK_CSTR : "");
 
     // note: the "type" attribute of QListWidgetItem will be used to refer
     // back to the associated Media object
@@ -1765,7 +1794,17 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
         return;
       }
 
-      if (deleteFiles) {
+      if (_lockedFolders.contains(m.dirPath())) {
+        QMessageBox dialog(
+            QMessageBox::Warning, qq("Delete Item: Folder Locked"),
+            qq("\"%1\" is locked for deletion.\n\n")
+                .arg(m.dirPath()),
+            QMessageBox::Ok, this);
+        (void)Theme::instance().execDialog(&dialog);
+        continue;
+      }
+
+      {
         static bool skipDeleteConfirmation = false;
         int button = 0;
         const QString fileName = QFileInfo(path).fileName();
@@ -2035,6 +2074,40 @@ bool MediaGroupListWidget::selectionParentIsMoveable() {
   }
 
   return true;
+}
+
+void MediaGroupListWidget::loadFolderLocks() {
+  if (!_options.db) return;
+
+  QFile f(_options.db->indexPath() + lc('/') + _FOLDER_LOCKS_FILE);
+  if (!f.open(QFile::ReadOnly)) {
+    qDebug() << f.errorString();
+    return;
+  }
+
+  const QDir base(_options.db->path());
+  const auto lines = f.readAll().split('\n');
+  for (auto& l : lines) {
+    if (l.startsWith("Version:")) continue;
+    QString path = base.absoluteFilePath(l);
+    if (QFileInfo(path).exists())
+      _lockedFolders.insert(path);
+  }
+}
+
+void MediaGroupListWidget::saveFolderLocks() const {
+  if (!_options.db) return;
+
+  QFile f(_options.db->indexPath() + lc('/') + _FOLDER_LOCKS_FILE);
+  if (!f.open(QFile::WriteOnly|QFile::Truncate)) {
+    qDebug() << f.errorString();
+    return;
+  }
+
+  const QDir base(_options.db->path());
+  f.write("Version: 1\n");
+  for (auto& path : _lockedFolders)
+    f.write(qPrintable(base.relativeFilePath(path) + lc('\n')));
 }
 
 bool MediaGroupListWidget::renameWarning() {
@@ -2494,7 +2567,7 @@ void MediaGroupListWidget::moveToNextScreenAction() {
 
 void MediaGroupListWidget::zoomInAction() {
   _zoom *= LW_ZOOM_STEP;
-  _zoom = qMax(_zoom, 0.01);
+  _zoom = qMax(_zoom, 0.001);
   _itemDelegate->setZoom(_zoom);
   repaint();
 }
@@ -2751,6 +2824,19 @@ void MediaGroupListWidget::browseParentAction() {
   MediaBrowser::show(Media::splitGroup(siblings, options.maxPerPage), MediaBrowser::ShowNormal,
                      options);
 #endif
+}
+
+void MediaGroupListWidget::toggleFolderLockAction() {
+  const MediaGroup g = selectedMedia();
+  for (auto& m : g) {
+    const QString dirPath = m.dirPath();
+    const auto it  = _lockedFolders.find(dirPath);
+    if (it != _lockedFolders.end())
+      _lockedFolders.erase(it);
+    else
+      _lockedFolders.insert(dirPath);
+  }
+  updateItems();
 }
 
 bool MediaGroupListWidget::selectItem(const Media& item) {

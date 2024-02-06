@@ -184,6 +184,9 @@ class MediaGroupListWidget : public QListWidget {
   /// Open new window with all images in the selection's folder
   void browseParentAction();
 
+  /// Toggle lock on the selected folder
+  void toggleFolderLockAction();
+
  private:
   void closeEvent(QCloseEvent* event);
   void keyPressEvent(QKeyEvent* event);
@@ -290,6 +293,10 @@ class MediaGroupListWidget : public QListWidget {
   /// Test if move action should be enabled
   bool selectionParentIsMoveable();
 
+  /// Remember locked folders
+  void loadFolderLocks();
+  void saveFolderLocks() const;
+
   MediaGroupList _list;
   MediaWidgetOptions _options;
   MediaItemDelegate* _itemDelegate;
@@ -305,4 +312,6 @@ class MediaGroupListWidget : public QListWidget {
   bool _maximized = false;
 
   QTimer _updateTimer;
+  QSet<QString> _lockedFolders;
+  const char* const _FOLDER_LOCKS_FILE="locks.txt";
 };

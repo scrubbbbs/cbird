@@ -8,6 +8,7 @@ Theme[style="Qt"] {
   qproperty-archive_base: #C29D00;
   qproperty-file_base: #FFF;
   qproperty-weed_base: #0FF;
+  qproperty-locked_base: #F00;
 
   qproperty-more_altbase: #0F0;
   qproperty-less_altbase: #F00;
@@ -18,6 +19,7 @@ Theme[style="Qt"] {
   qproperty-archive_altbase: #FF0;
   qproperty-file_altbase: #FFF;
   qproperty-weed_altbase: #0FF;
+  qproperty-locked_altbase: #F00;
 }
 
 Theme[style="Dark"] {
@@ -30,6 +32,7 @@ Theme[style="Dark"] {
   qproperty-archive_base: #FF0;
   qproperty-file_base: #FFF;
   qproperty-weed_base: #0FF;
+  qproperty-locked_base: #ff7373;
 
   qproperty-more_altbase: #0F0;
   qproperty-less_altbase: #ff7373;
@@ -40,6 +43,7 @@ Theme[style="Dark"] {
   qproperty-archive_altbase: #FF0;
   qproperty-file_altbase: #FFF;
   qproperty-weed_altbase: #0FF;
+  qproperty-locked_altbase: #ff7373;
 }
 
 Theme[style="Light"] {
@@ -52,6 +56,7 @@ Theme[style="Light"] {
   qproperty-archive_base: #C29D00;
   qproperty-file_base: #FFF;
   qproperty-weed_base: #0FF;
+  qproperty-locked_base: #F00;
 
   qproperty-more_altbase: #00ba00;
   qproperty-less_altbase: #F00;
@@ -62,6 +67,7 @@ Theme[style="Light"] {
   qproperty-archive_altbase: #FF0;
   qproperty-file_altbase: #FFF;
   qproperty-weed_altbase: #0FF;
+  qproperty-locked_altbase: #F00;
 }
 
 * {
@@ -88,32 +94,7 @@ MediaFolderListWidget::item {
   padding: 8px;
 }
 
-/*
-MediaFolderListWidget::item:selected {
-  background-color: #444;
-  color: #CCC;
-}
-QScrollBar {
-  background-color: #000;
-}
-QScrollBar::handle {
-  background-color: #444;
-}
-QScrollBar::add-line, QScrollBar::sub-line {
-  background-color: #000;
-}
-QScrollBar::up-arrow, QScrollBar::down-arrow {
-  background-color: #000;
+/* item margin/padding don't work with MGLW due to custom item delegate
+MediaGroupListWidget {
 }
 */
-MediaGroupListWidget {
-  /*background-color: #000;
-  color: #FFF;
-  selection-color: #FFF;
-  selection-background-color: #444;
-  */font-size: 16px;
-}
-
-VideoCompareWidget {
-}
-
