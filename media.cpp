@@ -1153,7 +1153,10 @@ QColor Media::matchColor() const {
   // no match gets dark yellow
   QColor c = QColor(Qt::yellow).darker();
 
-  if (score() >= 0) {
+  if (score() < 0 && isWeed()) {
+    c = QColor(Qt::cyan).darker();
+  }
+  else if (score() >= 0) {
     int flags = matchFlags();
 
     // perfect match is green, no other tests needed
