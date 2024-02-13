@@ -592,7 +592,7 @@ QList<QPair<const char*, const char*>> Media::propertyList() {
       {"relPath", "relative file path to cwd"},
       {"name", "file name"},
       {"completeBaseName", "file name w/o suffix"},
-      {"archivePath", "archive/zip path, or empty if non-archive"},
+      {"archive", "archive/zip path, or empty if non-archive"},
       {"suffix", "file suffix"},
       {"isArchived", "1 if archive member"},
       {"archiveCount", "number of archive members"},
