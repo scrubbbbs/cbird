@@ -2089,7 +2089,8 @@ void MediaGroupListWidget::loadFolderLocks() {
   const auto lines = f.readAll().split('\n');
   for (auto& l : lines) {
     if (l.startsWith("Version:")) continue;
-    QString path = base.absoluteFilePath(l);
+    if (l.isEmpty()) continue;
+    QString path = base.cleanPath(base.absoluteFilePath(l));
     if (QFileInfo(path).exists())
       _lockedFolders.insert(path);
   }
