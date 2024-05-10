@@ -420,7 +420,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
       rect = option.rect;
       rect.setHeight(topInfoHeight);
-      painter->setOpacity(0.5);
+      painter->setOpacity(Theme::INFO_OPACITY);
       painter->setPen(palette.text().color());
       painter->drawText(rect, info, Qt::AlignCenter|Qt::AlignVCenter);
       painter->setOpacity(1.0);
@@ -474,7 +474,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
     if (option.state & QStyle::State_Selected) {
       QBrush selBrush = palette.highlight();
       QColor c = selBrush.color();
-      c.setAlpha(120); // fixme: theme constants
+      c.setAlpha(Theme::SELECTION_OPACITY * 255);
       selBrush.setColor(c);
       painter->fillRect(rect, c);
     }
@@ -861,6 +861,16 @@ void MediaGroupListWidget::close() {
   waitLoaders();
   super::close();
   this->deleteLater();
+}
+
+void MediaGroupListWidget::paintEvent(QPaintEvent* event) {
+  super::paintEvent(event);
+
+  static const QColor c = Theme::instance().palette().text().color();
+  static const QColor barColor = QColor(c.red(), c.green(), c.blue(),
+                                        Theme::INFO_OPACITY*255);
+  QPainter painter(this->viewport());
+  painter.fillRect(0,0, (_currentRow+1)*this->viewport()->width()/_list.count(), 10, barColor);
 }
 
 void MediaGroupListWidget::closeEvent(QCloseEvent* event) {

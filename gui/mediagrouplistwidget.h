@@ -188,9 +188,10 @@ class MediaGroupListWidget : public QListWidget {
   void toggleFolderLockAction();
 
  private:
-  void closeEvent(QCloseEvent* event);
-  void keyPressEvent(QKeyEvent* event);
-  void wheelEvent(QWheelEvent* event);
+  void paintEvent(QPaintEvent* event) override;
+  void closeEvent(QCloseEvent* event) override;
+  void keyPressEvent(QKeyEvent* event) override;
+  void wheelEvent(QWheelEvent* event) override;
 
   /// Clear the list view and add new set of items
   void loadRow(int row);

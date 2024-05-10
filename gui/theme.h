@@ -80,6 +80,9 @@ class Theme : public QWidget {
 
   QString getExistingDirectory(const QString& action, const QString &label, const QString& dirPath, QWidget* parent) const;
 
+  static constexpr float INFO_OPACITY = 0.5; // opacity for extra information (not primary)
+  static constexpr float SELECTION_OPACITY = 0.5; // opacity for selections
+
  private:
   Theme(QWidget* parent);
   ~Theme();
