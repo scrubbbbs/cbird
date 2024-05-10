@@ -150,6 +150,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
                      "-help", "-version", "-about", "-verify", "-vacuum", "-select-result",
                      "-license", "-cwd", "-init", "-list-search-params", "-list-index-params",
                      "-weeds", /*"-track-weeds",*/ "-nuke-weeds", "-dump", "-list-formats",
+                     "-focus-first", "-no-delete",
                      /* one argument */
                      "-select-id", "-select-sql", "-max-per-page", "-head", "-tail", "-theme"};
 
@@ -1428,6 +1429,10 @@ int main(int argc, char** argv) {
       widgetOptions.selectionMode = MediaWidgetOptions::SelectExitCode;
     } else if (arg == "-max-per-page") {
       widgetOptions.maxPerPage = intArg(nextArg());
+    } else if (arg == "-focus-first") {
+      widgetOptions.flags |= MediaWidgetOptions::FlagSelectFirst;
+    } else if (arg == "-no-delete") {
+      widgetOptions.flags |= MediaWidgetOptions::FlagDisableDelete;
     } else if (arg == "-theme") {
       Theme::setDefaultStyle(nextArg());
     } else if (arg == "-show") {

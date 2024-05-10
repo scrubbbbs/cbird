@@ -95,12 +95,15 @@ Operations on Selection/Results
 
 Viewing
 ==============================================================================
+  * to take effect, options must appear before -show
+  -show                            show results browser for the current selection/results
   -folders                         enable group view, group results from the same parent directory
   -sets                            enable group view, group results with the same pair of directories
   -exit-on-select                  "select" action exits with selected index as exit code, < 0 if canceled
+  -focus-first                     select the first item by default (default select last)
   -max-per-page <int>              maximum items on one page [12]
-  -show                            show results browser for the current selection/results
-  -theme <string>                  select color theme, must appear before -show
+  -no-delete                       disable file deletion, renaming/moving is allowed
+  -theme <string>                  select widget theme
      Auto                          * detect Dark/Light from system theme if possible (Mac/Windows default)
      Dark                          * built-in dark theme (Linux default)
      Light                         * built-in light theme
