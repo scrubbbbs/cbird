@@ -725,10 +725,18 @@ int main(int argc, char** argv) {
         qInfo().noquote() << mimeType << QImageReader::imageFormatsForMimeType(mimeType);
       VideoContext::listFormats();
     } else if (arg == "-use") {
-      const QString path = nextArg();
       if (_engine)
         qFatal("-use: database already open on \"%s\", pass -use before other arguments",
                qUtf8Printable(_engine->db->path()));
+      QString path = nextArg();
+      if (path == lc('@')) {
+        QDir dir;
+        while (!dir.exists(qq(INDEX_DIRNAME))) {
+          if (!dir.cdUp())
+            qFatal("-use[@]: failed to find index in the parent");
+        }
+        path = dir.absolutePath();
+      }
       if (!QFileInfo(path).isDir()) qFatal("-use: \"%s\" is not a directory", qUtf8Printable(path));
       indexPath() = path;
     } else if (arg == "-create") {
