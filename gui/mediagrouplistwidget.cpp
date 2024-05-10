@@ -870,7 +870,7 @@ void MediaGroupListWidget::closeEvent(QCloseEvent* event) {
 }
 
 QMenu* MediaGroupListWidget::dirMenu(const char* slot) {
-  QMenu* dirs = MenuHelper::dirMenu(_options.db->path(), this, slot, 3);
+  QMenu* dirs = MenuHelper::dirMenu(_options.db->path(), this, slot, 20, 3);
 
   QSet<QString> groupDirs;
   const auto& group = _list[_currentRow];
@@ -2512,7 +2512,7 @@ void MediaGroupListWidget::copyImageAction() {
 void MediaGroupListWidget::thumbnailAction() {
   auto sel = selectedMedia();
   if (sel.count() != 1) return;
-  CropWidget::setIndexThumbnail(*_options.db, sel[0], this, true);
+  CropWidget::setIndexThumbnail(*_options.db, sel[0], this, false);
 }
 
 void MediaGroupListWidget::moveToNextScreenAction() {

@@ -123,12 +123,16 @@ class DBHelper {
 class MenuHelper {
  public:
   /// build menu for a directory tree
-  static QMenu* dirMenu(const QString& root, QWidget* target, const char* slot,
-                        int maxDepth = INT_MAX);
+ static QMenu* dirMenu(
+     const QString& root, QWidget* target, const char* slot, int maxFolders=20, int maxDepth = INT_MAX);
 
  private:
-  static QMenu* makeDirMenu(const QString& root, QWidget* target, const char* slot, int maxDepth,
-                            int depth);
+ static QMenu* makeDirMenu(const QString& root,
+                           QWidget* target,
+                           const char* slot,
+                           int maxFolders,
+                           int maxDepth,
+                           int depth);
 };
 
 /// obscure parent to emphasize foreground

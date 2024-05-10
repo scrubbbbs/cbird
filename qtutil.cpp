@@ -799,8 +799,9 @@ QDateTime DBHelper::lastModified(const QSqlDatabase& db) {
   return dbInfo.lastModified();
 }
 
-QMenu* MenuHelper::dirMenu(const QString& root, QWidget* target, const char* slot, int maxDepth) {
-  QMenu* menu = makeDirMenu(root, target, slot, maxDepth, 0);
+QMenu* MenuHelper::dirMenu(
+    const QString& root, QWidget* target, const char* slot, int maxFolders, int maxDepth) {
+  QMenu* menu = makeDirMenu(root, target, slot, maxFolders, maxDepth, 0);
   if (!menu) menu = new QMenu;
 
   QAction* action = new QAction("Choose Folder...", menu);
@@ -813,8 +814,8 @@ QMenu* MenuHelper::dirMenu(const QString& root, QWidget* target, const char* slo
   return menu;
 }
 
-QMenu* MenuHelper::makeDirMenu(const QString& root, QWidget* target, const char* slot, int maxDepth,
-                               int depth) {
+QMenu* MenuHelper::makeDirMenu(const QString& root, QWidget* target, const char* slot,
+                               int maxFolders, int maxDepth, int depth) {
   if (depth >= maxDepth) return nullptr;
 
   const auto& list = QDir(root).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
@@ -835,7 +836,6 @@ QMenu* MenuHelper::makeDirMenu(const QString& root, QWidget* target, const char*
     if (fileName == INDEX_DIRNAME) continue;
 
     // todo: setting or detect max popup size
-    const int maxFolders = 20;
     if (list.count() > maxFolders) {
       if (partition == 0) {
         const QString name = fileName;
@@ -847,7 +847,7 @@ QMenu* MenuHelper::makeDirMenu(const QString& root, QWidget* target, const char*
     } else
       partMenu = menu;
 
-    QMenu* subMenu = makeDirMenu(path, target, slot, maxDepth, depth + 1);
+    QMenu* subMenu = makeDirMenu(path, target, slot, maxFolders, maxDepth, depth + 1);
     if (subMenu) {
       subMenu->setTitle(fileName);
       partMenu->addMenu(subMenu);
