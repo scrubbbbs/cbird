@@ -28,8 +28,7 @@
 
 bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidget *parent,
                                    bool async, const std::function<void(bool)> &after) {
-  QImage img = media.loadImage();
-  CropWidget w(img, true, parent);
+  CropWidget w(media.loadImage(), true, parent);
   w.show();
   while (w.isVisible()) qApp->processEvents();
 
@@ -113,10 +112,9 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
 #ifdef Q_OS_UNIX
     // remove xdg thumbnail cache entries..shouldn't be required
     // but seems to be needed in my case (krusader)
-    auto hash =
-        QCryptographicHash::hash(("file://" + QFileInfo(thumbPath).canonicalFilePath()).toUtf8(),
-                                 QCryptographicHash::Md5)
-            .toHex();
+    const auto url = QUrl::fromLocalFile(QFileInfo(thumbPath).canonicalFilePath());
+    const auto bytes = url.toString(QUrl::FullyEncoded).toLocal8Bit();
+    auto hash = QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex();
     QString cacheDir = qEnvironmentVariable("XDG_CACHE_HOME", "$HOME/.cache/thumbnails");
     QString flushCacheCmd = QString("rm -v \"%1/\"*/%2.png").arg(cacheDir).arg(hash);
     if (0 == system(qPrintable(flushCacheCmd))) qInfo() << "thumbnail cache flushed";
