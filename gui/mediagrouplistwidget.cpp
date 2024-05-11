@@ -870,7 +870,8 @@ void MediaGroupListWidget::paintEvent(QPaintEvent* event) {
   static const QColor barColor = QColor(c.red(), c.green(), c.blue(),
                                         Theme::INFO_OPACITY*255);
   QPainter painter(this->viewport());
-  painter.fillRect(0,0, (_currentRow+1)*this->viewport()->width()/_list.count(), 10, barColor);
+  float maxWidth = this->viewport()->width();
+  painter.fillRect(0,0, maxWidth - (_list.count()*maxWidth/_origCount), 10, barColor);
 }
 
 void MediaGroupListWidget::closeEvent(QCloseEvent* event) {

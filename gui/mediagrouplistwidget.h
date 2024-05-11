@@ -311,6 +311,7 @@ class MediaGroupListWidget : public QListWidget {
   double _panX = 0, _panY = 0;
   bool _autoDifference = false;
   bool _maximized = false;
+  const int _origCount; // count before any deletions
 
   QTimer _updateTimer;
   QSet<QString> _lockedFolders;
