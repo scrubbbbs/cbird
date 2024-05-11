@@ -366,6 +366,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   for (unsigned int i = 0; i < _p->format->nb_streams; i++) {
     AVStream* stream = _p->format->streams[i];
     const AVCodecParameters* codecParams = stream->codecpar;
+    stream->discard = AVDISCARD_ALL;
 
     if (codecParams->codec_type == AVMEDIA_TYPE_VIDEO) {
       if (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) continue;
@@ -381,6 +382,8 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
       const AVCodec* vCodec = avcodec_find_decoder(codecParams->codec_id);
       if (vCodec) _metadata.videoCodec = vCodec->name;
+
+      stream->discard = AVDISCARD_NONE;
 
     } else if (codecParams->codec_type == AVMEDIA_TYPE_AUDIO) {
       if (audioStreamIndex >= 0) continue;
