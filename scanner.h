@@ -241,6 +241,7 @@ class Scanner : public QObject {
   int _existingFiles = 0, _ignoredFiles = 0, _modifiedFiles = 0, _queuedFiles = 0, _processedFiles = 0;
 
   QDateTime _modifiedSince;   // date index was last updated, to re-index modified files
+  QDateTime _startTime;       // time when scan started
 
   int _extraThreads = 0;      // count threads not managed by thread pool
 

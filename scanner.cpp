@@ -87,6 +87,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   _queuedFiles = 0;
   _modifiedSince = modifiedSince;
   _inodes.clear();
+  _startTime = QDateTime::currentDateTime();
   readDirectory(path, expected);
   scanProgress(path);
 
@@ -125,11 +126,11 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
 
   _queuedFiles = _imageQueue.count() + _videoQueue.count();
   if (_imageQueue.count() > 0 || _videoQueue.count() > 0) {
-    qInfo() << "scan completed, indexing" << _imageQueue.count() << "image(s),"
-            << _videoQueue.count() << "video(s)";
+    qInfo() << "scan completed, removing" << expected.count() << "file(s), adding"
+            << _imageQueue.count() << "image(s)," << _videoQueue.count() << "video(s)";
     QTimer::singleShot(1, this, &Scanner::processOne);
   } else {
-    qInfo() << "scan completed, index up-to-date";
+    qInfo() << "scan completed, no changes";
     QTimer::singleShot(1, this, [&] { emit scanCompleted(); });
   }
 }
@@ -284,6 +285,10 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         continue;
       }
       _modifiedFiles++;
+
+       // files with invalid modtimes will always be re-indexed
+      if (entry.lastModified() > _startTime)
+        qWarning() << "future modtime:" << path;
     }
 
     if (entry.isFile() && !_activeWork.contains(path)) {
@@ -600,7 +605,7 @@ void Scanner::processFinished() {
   w->deleteLater();
 
   if (_activeWork.empty() && _imageQueue.empty() && _videoQueue.empty()) {
-    qInfo() << "indexing completed";
+    qDebug() << "indexing completed";
     emit scanCompleted();
   }
 }

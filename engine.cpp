@@ -129,7 +129,7 @@ void Engine::update(bool wait) {
 
   QVector<int> toRemove;
   if (skip.count() > 0) {
-    qInfo("removing %lld files from index", skip.count());
+    qDebug("removing %lld files from index", skip.count());
     QList<QString> sorted = skip.values();
     std::sort(sorted.begin(), sorted.end());
     int i = 0;
