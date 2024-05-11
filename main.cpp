@@ -150,7 +150,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
                      "-help", "-version", "-about", "-verify", "-vacuum", "-select-result",
                      "-license", "-cwd", "-init", "-list-search-params", "-list-index-params",
                      "-weeds", /*"-track-weeds",*/ "-nuke-weeds", "-dump", "-list-formats",
-                     "-focus-first", "-no-delete",
+                     "-focus-first", "-no-delete", "-v", "-verbose", "-q", "-quiet"
                      /* one argument */
                      "-select-id", "-select-sql", "-max-per-page", "-head", "-tail", "-theme"};
 
@@ -506,33 +506,42 @@ void waitFuture(const QFuture<void>& future, const QString& format) {
 }
 
 int main(int argc, char** argv) {
-  // parse args ourselves, so we can choose which
-  // QApplication type; gui type needed for -show
-  QStringList args;
-  for (int i = 0; i < argc; i++) args.append(argv[i]);
+  QStringList args(argv, argv+argc);
 
-  if (args.contains("-complete")) return printCompletions(argv[0], args);
+  if (args.contains("-complete"))
+    return printCompletions(argv[0], args);
 
   if (args.contains("-h") || args.contains("-help") || args.contains("--help"))
     return printUsage(argc, argv);
 
   (void)qInstallMessageHandler(qColorMessageOutput);
 
+  do {
+    const char* logFilter = "*.debug=false";
+    if (args.contains("-v") || args.contains("-verbose"))
+      break; // use the default filtering (QT_LOGGING_RULES etc)
+    if (args.contains("-q") || args.contains("-quiet"))
+      logFilter="*.debug=false\n*.info=false\n*.warning=false";
+    QLoggingCategory::setFilterRules(logFilter);
+  } while(0);
+
   // if we are pretty sure there is no display connected we can
   // enable headless mode
   bool noDisplay = false;
 #if defined(Q_OS_LINUX)
-  if (!args.contains("-headless") && !args.contains("-platform") &&  // qt5 built-in
-      !args.contains("-display") &&                                  // qt5 built-in
+  if (!args.contains("-headless") && !args.contains("-platform") && // qt5 built-in
+      !args.contains("-display") &&                                 // qt5 built-in
       getenv("WAYLAND_DISPLAY") == nullptr && getenv("DISPLAY") == nullptr) {
     noDisplay = true;
-    qInfo() << "no DISPLAY environment, assuming -headless";
+    qDebug() << "no display detected, use DISPLAY/WAYLAND_DISPLAY/-platform/-display";
   }
 #endif
 
   std::unique_ptr<QCoreApplication> app;
-  if (args.contains("-headless") || noDisplay)
+  if (args.contains("-headless") || noDisplay) {
     app.reset(new QCoreApplication(argc, argv));
+    qInfo("selected headless mode, gui functions (-show,etc) will abort");
+  }
   else {
     auto* guiApp = new QApplication(argc, argv);
     const char* iconPath = ":cbird.svg";
@@ -548,8 +557,19 @@ int main(int argc, char** argv) {
   args = app->arguments();  // args after qt strips out its own stuff
   args.removeFirst();
 
+
+  // remove global args we already handled
+  args.removeIf([](const QString& s) {
+    static const QSet<QString> loggingArgs{qq("-headless"),
+                                           qq("-v"),
+                                           qq("-verbose"),
+                                           qq("-q"),
+                                           qq("-quiet")};
+    return loggingArgs.contains(s);
+  });
+
   if (args.count() <= 0) {
-    printUsage(argc, argv);
+    qInfo() << "nothing to do, see -h|-help for usage";
     return 1;
   }
 
@@ -726,24 +746,29 @@ int main(int argc, char** argv) {
         qInfo().noquote() << mimeType << QImageReader::imageFormatsForMimeType(mimeType);
       VideoContext::listFormats();
     } else if (arg == "-use") {
-      if (_engine)
-        qFatal("-use: database already open on \"%s\", pass -use before other arguments",
-               qUtf8Printable(_engine->db->path()));
+      if (_engine) {
+        qWarning("-use: database already open on \"%s\", pass -use before other arguments",
+                  qUtf8Printable(_engine->db->path()));
+        return -1;
+      }
       QString path = nextArg();
       if (path == lc('@')) {
         QDir dir;
         while (!dir.exists(qq(INDEX_DIRNAME))) {
-          if (!dir.cdUp())
-            qFatal("-use[@]: failed to find index in the parent");
+          if (!dir.cdUp()) {
+            qWarning("-use[@]: failed to find index in the parent tree");
+            return -1;
+          }
         }
         path = dir.absolutePath();
       }
-      if (!QFileInfo(path).isDir()) qFatal("-use: \"%s\" is not a directory", qUtf8Printable(path));
+      if (!QFileInfo(path).isDir()) {
+        qWarning("-use: \"%s\" is not a directory", qUtf8Printable(path));
+        return -1;
+      }
       indexPath() = path;
     } else if (arg == "-create") {
       checkIndexPathExists = false;
-    } else if (arg == "-headless") {
-      qDebug("selected headless mode, gui functions will abort");
     } else if (arg == "-update") {
       checkIndexPathExists = false;
       int threads = indexParams.indexThreads;
@@ -789,7 +814,7 @@ int main(int argc, char** argv) {
       qInfo() << db->countType(Media::TypeAudio) << "audio files";
       qInfo() << "see -license for software license";
 
-    } else if (arg == "-v" || arg == "-version" || arg == "--version") {
+    } else if (arg == "-version" || arg == "--version") {
       qInfo() << app->applicationName() << app->applicationVersion() << CBIRD_GITVERSION;
     } else if (arg == "-license" || arg == "--license") {
       printLicense();
