@@ -605,7 +605,7 @@ class MediaItemDelegate : public QAbstractItemDelegate {
 
 MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
                                            const MediaWidgetOptions& options, QWidget* parent)
-    : QListWidget(parent), _list(list), _options(options) {
+    : QListWidget(parent), _list(list), _options(options), _origCount(list.count()) {
   _itemDelegate = new MediaItemDelegate(this);
 
   setViewMode(QListView::IconMode);
@@ -1744,22 +1744,37 @@ void MediaGroupListWidget::loadRow(int row) {
   }
 }
 
-void MediaGroupListWidget::updateCurrentRow(const MediaGroup& group) {
+void MediaGroupListWidget::updateCurrentRow() {
   // if there is one non-analysis image left, remove the group
   // if there are no groups left, close the viewer
-  int count = countNonAnalysis(group);
 
-  if (count <= 1) {
+  // this is made somewhat tricky because there are a few
+  // things that reference the row index which this invalidates
+
+  int loaderOffset = 0; // offset to the job id for deleted row
+
+  while (countNonAnalysis(_list.at(_currentRow)) <= 1) {
     qInfo() << "auto remove row" << _currentRow << "with one item left";
-    waitLoaders(_currentRow);
+    waitLoaders(_currentRow + loaderOffset, true);
+
     _list.removeAt(_currentRow);
+
+    // lru indicies > _currentRow are invalidated, must be shifted backward
     _lruRows.removeAll(_currentRow);
     for (auto& row : _lruRows)
       if (row > _currentRow) row--;
 
-    if (_list.count() < 1) {
+    if (_currentRow == _list.count()) {
+      _currentRow--;
+      loaderOffset = 0;
+    }
+    else
+      loaderOffset++;
+
+    if (_currentRow < 0) {
       qInfo() << "closing view, nothing left to display";
       close();
+      return;
     }
   }
 
@@ -1791,7 +1806,8 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
     return;
   }
 
-  QVector<int> removed;
+  QVector<int> removed; // group indexes
+  QSet<int> removedIds; // database media ids
 
   for (int i = 0; i < items.count(); ++i) {
     int index = items[i]->type();
@@ -1799,100 +1815,125 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
     QString path = m.path();
     if (m.isArchived()) m.archivePaths(&path);
 
-    if (deleteFiles) {
-      if (replace && m.isArchived()) {
-        qWarning() << "delete+replace for archives unsupported";
-        return;
-      }
-
-      if (_lockedFolders.contains(m.dirPath())) {
-        QMessageBox dialog(
-            QMessageBox::Warning, qq("Delete Item: Folder Locked"),
-            qq("\"%1\" is locked for deletion.\n\n")
-                .arg(m.dirPath()),
-            QMessageBox::Ok, this);
-        (void)Theme::instance().execDialog(&dialog);
-        continue;
-      }
-
-      {
-        static bool skipDeleteConfirmation = false;
-        int button = 0;
-        const QString fileName = QFileInfo(path).fileName();
-        if (m.isArchived()) {
-          QMessageBox dialog(QMessageBox::Warning, qq("Delete Zip Confirmation"),
-                             qq("The selected file is a member of \"%1\"\n\n"
-                                "Modification of zip archives is unsupported. Move the "
-                                "entire zip to the trash?")
-                                 .arg(fileName),
-                             QMessageBox::No | QMessageBox::Yes, this);
-          button = Theme::instance().execDialog(&dialog);
-        } else if (skipDeleteConfirmation) {
-          button = QMessageBox::Yes;
-        } else {
-          QMessageBox dialog(QMessageBox::Warning, qq("Delete File Confirmation"),
-                             qq("Move this file to the trash?\n\n%1").arg(fileName),
-                             QMessageBox::No | QMessageBox::Yes | QMessageBox::YesToAll, this);
-          button = Theme::instance().execDialog(&dialog);
-        }
-
-        if (button == QMessageBox::YesToAll)
-          skipDeleteConfirmation = true;
-        else if (button != QMessageBox::Yes)
-          return;
-      }
-
-      if (!DesktopHelper::moveToTrash(path)) return;
-
-      if (_options.db) {
-        if (m.isArchived()) {
-          QString like = path;
-          like.replace("%", "\\%").replace("_", "\\_");
-          like += ":%";
-          MediaGroup zipGroup = _options.db->mediaWithPathLike(like);
-          _options.db->remove(zipGroup);
-          if (_options.trackWeeds) qWarning() << "Cannot track weeds when deleting zip files";
-        } else {
-          const int mediaId = group.at(index).id();
-          if (mediaId > 0) _options.db->remove(mediaId);
-          if (_options.trackWeeds && countNonAnalysis(group) == 2) {
-            int otherIndex = (index + 1) % 2;
-            Media& other = group[otherIndex];
-            Q_ASSERT(!isAnalysis(other));
-            if (group[index].md5() != other.md5() && !_options.db->addWeed(group[index], other))
-              qWarning() << "Failed to add weed" << group[index].md5() << other.md5();
-          }
-          if (replace && countNonAnalysis(group) == 2) {
-            int otherIndex = (index + 1) % 2;
-            Media& other = group[otherIndex];
-            Q_ASSERT(!isAnalysis(other));
-            const QFileInfo info(path);
-            const QFileInfo otherInfo(other.path());
-
-            // the new name must keep the suffix, could be different
-            QString newName = info.completeBaseName() + "." + otherInfo.suffix();
-
-            // rename (if needed) and then move
-            if (otherInfo.fileName() == newName || _options.db->rename(other, newName))
-              _options.db->move(other, info.dir().absolutePath());
-          }
-        }
-      }
+    if (!deleteFiles) {
+      removed.append(index);
+      continue;
     }
 
+    if (replace && m.isArchived()) {
+      qWarning() << "delete+replace for archives unsupported";
+      return;
+    }
+
+    if (_lockedFolders.contains(m.dirPath())) {
+      QMessageBox dialog(
+          QMessageBox::Warning, qq("Delete Item: Folder Locked"),
+          qq("\"%1\" is locked for deletion.\n\n")
+              .arg(m.dirPath()),
+          QMessageBox::Ok, this);
+      (void)Theme::instance().execDialog(&dialog);
+      continue;
+    }
+
+    {
+      static bool skipDeleteConfirmation = false;
+      int button = 0;
+      const QString fileName = QFileInfo(path).fileName();
+      if (m.isArchived()) {
+        QMessageBox dialog(QMessageBox::Warning, qq("Delete Zip Confirmation"),
+                           qq("The selected file is a member of \"%1\"\n\n"
+                              "Modification of zip archives is unsupported. Move the "
+                              "entire zip to the trash?")
+                               .arg(fileName),
+                           QMessageBox::No | QMessageBox::Yes, this);
+        button = Theme::instance().execDialog(&dialog);
+      } else if (skipDeleteConfirmation) {
+        button = QMessageBox::Yes;
+      } else {
+        QMessageBox dialog(QMessageBox::Warning, qq("Delete File Confirmation"),
+                           qq("Move this file to the trash?\n\n%1").arg(fileName),
+                           QMessageBox::No | QMessageBox::Yes | QMessageBox::YesToAll, this);
+        button = Theme::instance().execDialog(&dialog);
+      }
+
+      if (button == QMessageBox::YesToAll)
+        skipDeleteConfirmation = true;
+      else if (button != QMessageBox::Yes)
+        return;
+    }
+
+    if (!DesktopHelper::moveToTrash(path)) return;
+
     removed.append(index);
-  }
+
+    if (!_options.db) continue;
+
+    if (m.isArchived()) {
+      QString like = path;
+      like.replace("%", "\\%").replace("_", "\\_");
+      like += ":%";
+      MediaGroup zipGroup = _options.db->mediaWithPathLike(like);
+      _options.db->remove(zipGroup);
+
+      for (auto& mm : qAsConst(zipGroup))
+        removedIds.insert(mm.id());
+
+      if (_options.trackWeeds)
+        qWarning() << "Cannot track weeds when deleting zip files";
+    } else {
+      const int mediaId = group.at(index).id();
+      if (mediaId > 0) {
+        _options.db->remove(mediaId);
+        removedIds.insert(mediaId);
+      }
+
+      const bool isPair = countNonAnalysis(group) == 2;
+      if (!isPair) continue;
+
+      // we can do extra stuff on pairs of items
+      if (_options.trackWeeds) {
+        int otherIndex = (index + 1) % 2;
+        Media& other = group[otherIndex];
+        Q_ASSERT(!isAnalysis(other));
+        if (group[index].md5() != other.md5() && !_options.db->addWeed(group[index], other))
+          qWarning() << "Failed to add weed" << group[index].md5() << other.md5();
+      }
+      if (replace) {
+        int otherIndex = (index + 1) % 2;
+        Media& other = group[otherIndex];
+        Q_ASSERT(!isAnalysis(other));
+        const QFileInfo info(path);
+        const QFileInfo otherInfo(other.path());
+
+        // the new name must keep the suffix, could be different
+        QString newName = info.completeBaseName() + "." + otherInfo.suffix();
+
+        // rename (if needed) and then move
+        if (otherInfo.fileName() == newName || _options.db->rename(other, newName))
+          _options.db->move(other, info.dir().absolutePath());
+      }
+    } // not archived
+  } // for each selected item
 
   if (removed.count() <= 0) return;
 
-  // remove deleted indices; we cannot remove using
-  // path because of renaming
-  MediaGroup newGroup;
-  const int oldCount = group.count();
-  for (int i = 0; i < oldCount; ++i)
-    if (!removed.contains(i)) newGroup.append(group[i]);
-  group = newGroup;
-  updateCurrentRow(group);
+
+  if (removedIds.count()>0) {
+    for (int i = 0; i < _list.count(); ++i) {
+      waitLoaders(i);
+      _list[i].removeIf([&removedIds](const Media& m) { return removedIds.contains(m.id()); });
+    }
+  }
+  else {
+    // remove deleted indices; we cannot remove using
+    // path because of renaming
+    MediaGroup newGroup;
+    const int oldCount = group.count();
+    for (int i = 0; i < oldCount; ++i)
+      if (!removed.contains(i)) newGroup.append(group[i]);
+    group = newGroup;
+  }
+  updateCurrentRow();
 }
 
 void MediaGroupListWidget::removeAnalysis() {
@@ -2497,7 +2538,7 @@ void MediaGroupListWidget::templateMatchAction() {
   if (haystack.count() > 0) group[targetIndex] = haystack[0];
 
   // reload since we may have deleted items
-  updateCurrentRow(group);
+  updateCurrentRow();
 }
 
 void MediaGroupListWidget::reloadAction() {
@@ -2510,7 +2551,7 @@ void MediaGroupListWidget::reloadAction() {
     if (isAnalysis(m)) g.remove(i--);  // recompute
   }
   resetZoom();
-  updateCurrentRow(g);
+  updateCurrentRow();
 }
 
 void MediaGroupListWidget::copyImageAction() {

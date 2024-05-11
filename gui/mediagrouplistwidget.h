@@ -200,11 +200,10 @@ class MediaGroupListWidget : public QListWidget {
   void updateItems();
 
   /**
-   * @brief Remove current row if nothing useful is left to see, or reload it to
+   * @brief Remove current and consecutive rows if nothing useful is left to see, or reload it to
    * reflect changes
-   * @param group modified group of the current row
    */
-  void updateCurrentRow(const MediaGroup& current);
+  void updateCurrentRow();
 
   /**
    * @brief Advance to next row if it is possible
