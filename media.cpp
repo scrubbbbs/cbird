@@ -846,7 +846,8 @@ void Media::makeKeyPointHashes(const cv::Mat& cvImg, const KeyPointList& keyPoin
   }
 }
 
-void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIndex) const {
+void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIndex,
+                           const std::function<void(int)>& progressCb) const {
   auto& index = outIndex;
   index.hashes.clear();
   index.frames.clear();
@@ -881,13 +882,15 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
 
   while (video.nextFrame(img)) {
     qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - then > 5000) {
+    if (now - then > 1000) {
+      int percent = numFrames * 100 / std::max(totalFrames, 1);
       qDebug("%dx%d %dpx %d:1 %s(%d) %dfps %d%% ", _width, _height, qMax(img.cols, img.rows),
              numFrames / std::max(numFrames - nearFrames, 1), (video.isHardware() ? "GPU" : "CPU"),
              video.threadCount(), int(curFrames * 1000 / (now - then)),
-             numFrames * 100 / std::max(totalFrames, 1));
+             percent);
       curFrames = 0;
       then = now;
+      progressCb(percent);
     }
 
     // de-letterbox prior to p-hashing
@@ -933,6 +936,8 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
 
   qDebug("%s nframes=%d near=%d filt=%d corrupt=%d", qUtf8Printable(video.path()), numFrames,
          nearFrames, filteredFrames, corruptFrames);
+
+  progressCb(100);
 }
 
 void VideoIndex::save(const QString& file) const {

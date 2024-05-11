@@ -189,6 +189,8 @@ class Scanner : public QObject {
   // schedule the next call to processOne()
   void processOne();
 
+  void processStarted();
+
   // called when a QFuture<Media> finishes processing,
   // at which point we call fileAdded() and remove it from _work
   void processFinished();
@@ -210,9 +212,13 @@ class Scanner : public QObject {
     return _activeWork.count() + _videoQueue.count() + _imageQueue.count();
   }
 
+  // number of running thread pool and extra threads
+  int totalThreadCount() const;
+
   static void setError(const QString& path, const QString& error, bool print=true);
 
   IndexParams _params;
+
   QSet<QString> _imageTypes;
   QSet<QString> _videoTypes;
   QStringList _jpegTypes;
@@ -220,21 +226,24 @@ class Scanner : public QObject {
 
   QHash<FileId, QString> _inodes;  // unique files (inodes) seen during scan (link tracking)
 
-  QList<QFutureWatcher<IndexResult>*> _work;  // qtconcurrent-issued jobs
+  // jobs exist in (only) one of these 3 lists managed by the main thread
+  QSet<QString> _activeWork;  // scheduled on thread pool
+  QStringList _videoQueue;    // not on thread pool
+  QStringList _imageQueue;    // not on thread pool
 
-  // jobs exist in (only) one of these lists
-  QSet<QString> _activeWork;  // qtconcurrent-issued
-  QStringList _videoQueue;    // waiting video jobs
-  QStringList _imageQueue;    // waiting image jobs
+  QList<QFutureWatcher<IndexResult>*> _work; // scheduled work
 
-  // additional set for fast lookup
-  QSet<QString> _queuedWork;
+  QSet<QString> _queuedWork;  // all jobs; for fast lookup
 
-  // separate pools to manage number of threads used
-  QThreadPool _gpuPool;
-  QThreadPool _videoPool;
+  QThreadPool _gpuPool;       // separate pool since cpu doesn't do much
 
-  QString _topDirPath;
-  int _existingFiles, _ignoredFiles, _modifiedFiles, _processedFiles;
-  QDateTime _modifiedSince;
+  QString _topDirPath;        // relative path for logging
+  int _existingFiles = 0, _ignoredFiles = 0, _modifiedFiles = 0, _queuedFiles = 0, _processedFiles = 0;
+
+  QDateTime _modifiedSince;   // date index was last updated, to re-index modified files
+
+  int _extraThreads = 0;      // count threads not managed by thread pool
+
+  QMutex _progressMutex;      // track video progress for display purposes
+  QHash<QString, int> _videoProgress;
 };

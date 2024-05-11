@@ -527,10 +527,11 @@ class Media {
                                KeyPointDescriptors& outDescriptors) const;  // CvFeaturesIndex
   void makeKeyPointHashes(const cv::Mat& cvImg, const KeyPointList& keyPoints,
                           KeyPointHashList& outHashes) const;              // DctFeaturesIndex
-  void makeVideoIndex(VideoContext& video, int threshold,
-                      VideoIndex& outIndex) const;  // DctVideoIndex
+  void makeVideoIndex(
+      VideoContext& video, int threshold, VideoIndex& outIndex,
+      const std::function<void(int)>& progressCb) const;  // DctVideoIndex
 
-//  const KeyPointList& keyPoints() const;
+  //  const KeyPointList& keyPoints() const;
   const KeyPointDescriptors& keyPointDescriptors() const { return _descriptors; }
 //  const KeyPointRectList& keyPointRects() const;
   const KeyPointHashList& keyPointHashes() const { return _kpHashes; }

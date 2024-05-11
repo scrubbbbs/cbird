@@ -57,25 +57,34 @@ Scanner::~Scanner() { flush(); }
 void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
                             const QDateTime& modifiedSince) {
   if (_params.indexThreads <= 0) _params.indexThreads = QThread::idealThreadCount();
-  if (_params.decoderThreads <= 0) _params.decoderThreads = QThread::idealThreadCount();
+  if (_params.decoderThreads <= 0) _params.decoderThreads = qMin(_params.indexThreads, QThread::idealThreadCount());
 
 #ifdef Q_OS_WIN
   if (!_params.dupInodes)
     qWarning() << "duplicate inode check (-i.dups 0) can be extremely slow on network volumes";
 #endif
 
+  if (_params.decoderThreads > _params.indexThreads) {
+    qWarning() << "index threads must be >= decoder threads";
+    _params.decoderThreads = _params.indexThreads;
+  }
+
+  // even if this is false, underutilization is still possible by mixing
+  // single-threaded and parallel codecs
+  if (_params.indexThreads % _params.decoderThreads != 0)
+    qWarning() << "index threads are not a multiple of decoder threads, expect underutilization";
+
   // todo: subdirectory limiter for large indexes
   // if (!_params.subdir.isEmpty())
 
   _gpuPool.setMaxThreadCount(_params.gpuThreads);
-  _videoPool.setMaxThreadCount(_params.indexThreads);
-  //_imagePool.setMaxThreadCount(_params.indexThreads);
 
   _topDirPath = path;
   _existingFiles = 0;
   _ignoredFiles = 0;
   _modifiedFiles = 0;
   _processedFiles = 0;
+  _queuedFiles = 0;
   _modifiedSince = modifiedSince;
   _inodes.clear();
   readDirectory(path, expected);
@@ -99,8 +108,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
       if (v.open(path) < 0) continue;
 
       VideoContext::Metadata d = v.metadata();
-      cost[path] =
-          (d.frameRate * d.duration * d.frameSize.width() * d.frameSize.height()) / v.threadCount();
+      cost[path] = d.frameRate * d.duration * d.frameSize.width() * d.frameSize.height();
     }
 
     std::sort(_videoQueue.begin(), _videoQueue.end(),
@@ -115,11 +123,13 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
     flush(false);
   }
 
+  _queuedFiles = _imageQueue.count() + _videoQueue.count();
   if (_imageQueue.count() > 0 || _videoQueue.count() > 0) {
-    qInfo() << "scan completed, indexing" << remainingWork() << "additions...";
+    qInfo() << "scan completed, indexing" << _imageQueue.count() << "image(s),"
+            << _videoQueue.count() << "video(s)";
     QTimer::singleShot(1, this, &Scanner::processOne);
   } else {
-    qInfo() << "scan completed, nothing to index";
+    qInfo() << "scan completed, index up-to-date";
     QTimer::singleShot(1, this, [&] { emit scanCompleted(); });
   }
 }
@@ -303,11 +313,17 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         } else if (!isQueued(path))
           _videoQueue.append(path);
       } else if (_archiveTypes.contains(type)) {
-        // todo: attempt to skip deep scan of zip files... this is slow
-        // 1. the zip modified date is before _modifiedSince
-        // 2. the expected list contains the zip members
-        // 3. remove all from expected list
-        // if (entry.metadataChangeTime() >= _modifiedSince)
+        // skip deep scan of zip files...
+        // use metadataChangeTime() since lastModified() will not detect the case
+        // where a zip is replaced with an older zip with the same name
+        if (entry.metadataChangeTime() < _modifiedSince) {
+          const QString memberPrefix = path + ":";
+          int removed = expected.removeIf([&memberPrefix](const QString& exp) {
+            return exp.startsWith(memberPrefix);
+          });
+          _existingFiles += removed;
+          if (removed > 0) continue;
+        }
         scanProgress(path);
         readArchive(path, expected);
       } else {
@@ -374,23 +390,56 @@ void Scanner::finish() {
   QEventLoop loop;
   QTimer timer;
   connect(&timer, &QTimer::timeout, [=, &timer, &loop]() {
-    if (_imageQueue.empty() && _videoQueue.empty() && _activeWork.empty()) {
+    const int pendingFiles = _imageQueue.count() + _videoQueue.count() + _activeWork.count();
+
+    if (_queuedFiles > 0) {
+      int finished = (_queuedFiles - pendingFiles);
+      int progress = finished * 100 / _queuedFiles;
+
+      QString vProgress;
+      if (_videoProgress.count() > 0) {
+        vProgress = ll("videos:[");
+        for (int i : qAsConst(_videoProgress).values())
+          vProgress += QString(ll(" %1%")).arg(i);
+        vProgress += ll(" ] ");
+      }
+      QString status = QString::asprintf(
+          "<NC>%s<PL> i:%lld v:%lld ip:%lld gpu:%d cpu:%d thr:%d "
+          "progress:%d/%d %d%% <EL>%s",
+          qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(),
+          _activeWork.count(), _gpuPool.activeThreadCount(),
+          QThreadPool::globalInstance()->activeThreadCount(), totalThreadCount(),
+          finished, _queuedFiles, progress, qUtf8Printable(vProgress));
+      qInfo().noquote() << status;
+
+      QStringList vDone;
+      for (const QString& k : qAsConst(_videoProgress).keys())
+        if (_videoProgress.value(k) >= 100)
+          vDone += k;
+      for (const QString& k : qAsConst(vDone))
+        _videoProgress.remove(k);
+    }
+
+    if (pendingFiles == 0) {
       timer.stop();
       loop.exit(0);
       return;
     }
-    QString status = QString::asprintf(
-        "<NC>queued:<PL>image=%lld,video=%lld:batch=%lld,threadpool:gpu=%d,video=%d,global=%"
-        "d    ",
-        _imageQueue.count(), _videoQueue.count(), _activeWork.count(), _gpuPool.activeThreadCount(),
-        _videoPool.activeThreadCount(), QThreadPool::globalInstance()->activeThreadCount());
-    qInfo().noquote() << status;
     timer.setInterval(100);
   });
 
   timer.setInterval(1);
   timer.start();
   loop.exec();
+}
+
+int Scanner::totalThreadCount() const {
+//  int extraThreads = 0;
+//  for (const auto* w : _work)
+//    if (w->future().isRunning())
+//      extraThreads += w->property("childThreads").toInt();
+
+  return QThreadPool::globalInstance()->activeThreadCount() + _extraThreads;
 }
 
 void Scanner::processOne() {
@@ -405,7 +454,6 @@ void Scanner::processOne() {
   //
   // queue enough work to keep thread pool full
   // - queue up to _params.writeBatchSize for images to hide database write latency
-  // - queue up to _params.indexThreads for videos to save memory
   //
   int queueLimit = _params.indexThreads;
 
@@ -419,35 +467,28 @@ void Scanner::processOne() {
   }
 
   if (_activeWork.count() < queueLimit) {
-    QString path;
+    QString path;         // file path
+    int childThreads = 0; // additional threads used by job
     if (!_videoQueue.empty()) {
       path = _videoQueue.first();
       const MessageContext mc(path.mid(_topDirPath.length() + 1));
 
-      bool tryGpu =
-          _params.useHardwareDec && _gpuPool.activeThreadCount() < _gpuPool.maxThreadCount();
-      const int availThreads = _videoPool.maxThreadCount() - _videoPool.activeThreadCount();
+      const bool tryGpu = _params.useHardwareDec &&
+                          _gpuPool.activeThreadCount() < _gpuPool.maxThreadCount();
 
-      int cpuThreads = 0;
-      if (availThreads >= _params.decoderThreads) cpuThreads = _params.decoderThreads;
+      const int activeThreads = totalThreadCount();
+      const int availThreads = _params.indexThreads - activeThreads;
+      Q_ASSERT(availThreads >= 0);
 
-      // not mp-aware-codec gets 1 thread
-      if (QFileInfo(path).suffix().toLower() == ll("wmv")) cpuThreads = qMin(availThreads, 1);
+      // try to process even if we don't have enough threads, which will max
+      // out the cpu now, at the expense of possibly underutilizing later
+      int cpuThreads = qMin(availThreads, _params.decoderThreads);
 
-      // something is wrong with this logic, we end up with 1 thread on everything
-      //      if (_videoQueue.count() > _videoPool.maxThreadCount()) {
-      //        // try fully utilizing machine when there are a lot of videos
-      //        // this will take longer if one video is very long and the others are short
-      //        cpuThreads = 1;
-      //      }
-      //      else
+      // last video can have all the threads to reduce starvation
+      if (_videoQueue.count() == 1)
+        cpuThreads = availThreads;
 
-      // there is one video left, it can have all the available threads
-      if (_videoQueue.count() == 1) {
-        if (availThreads > _params.decoderThreads) cpuThreads = availThreads;
-        // else
-        //   cpuThreads = _videoPool.maxThreadCount() - _videoPool.activeThreadCount();
-      }
+      // qWarning() << "threads" << activeThreads << availThreads << cpuThreads;
 
       if (tryGpu || cpuThreads > 0) {
         VideoContext* v = initVideoProcess(path, tryGpu, cpuThreads);
@@ -455,12 +496,14 @@ void Scanner::processOne() {
           QThreadPool* pool = nullptr;
           if (v->isHardware()) {
             pool = &_gpuPool;
-            // qDebug() << "gpu pool" << v->threadCount();
           } else if (cpuThreads > 0) {
-            pool = &_videoPool;
-            // qDebug() << "cpu pool" << v->threadCount();
-            if (v->threadCount() > 1)
-              pool->setMaxThreadCount(qMax(1, pool->maxThreadCount() - v->threadCount() + 1));
+            pool = QThreadPool::globalInstance();
+
+            // subtract the job thread, which means actual threads used are greater
+            // - if indexThreads is divisible by decoderThreads we get expected number of parallel jobs
+            // - the job thread isn't doing much compared to the decoder
+            // - the total utilization is usually much less than 100% of threadCount threads.
+            childThreads += v->threadCount() - 1;
           }
 
           if (!pool && tryGpu) {
@@ -477,27 +520,22 @@ void Scanner::processOne() {
           }
         } else
           _videoQueue.removeFirst();  // failed to open
-        // printf("v");
-        // fflush(stdout);
       }
     } else if (!_imageQueue.empty()) {
       path = _imageQueue.takeFirst();
       _queuedWork.remove(path);
       f = QtConcurrent::run(&Scanner::processImageFile, this, path, QByteArray());
       queuedImage = true;
-      // printf("i");
-      // fflush(stdout);
-    } else {
-      // printf(".");
-      // fflush(stdout);
     }
 
     if (!f.isCanceled()) {
       _activeWork.insert(path);
       QFutureWatcher<IndexResult>* w = new QFutureWatcher<IndexResult>;
+      connect(w, SIGNAL(started()), this, SLOT(processStarted()));
       connect(w, SIGNAL(finished()), this, SLOT(processFinished()));
       w->setFuture(f);
       w->setProperty("path", path);
+      w->setProperty("childThreads", childThreads);
       _work.append(w);
     }
   }
@@ -506,7 +544,7 @@ void Scanner::processOne() {
   // fixme: seems delay is no longer needed
   int delay = -1;
   if (!_videoQueue.empty())
-    delay = 10;
+    delay = 100;
   else if (!_imageQueue.empty()) {
     // if we did not queue an image, sleep 1ms to reduce polling,
     // otherwise run immediately to top-up queue
@@ -518,9 +556,19 @@ void Scanner::processOne() {
   if (delay >= 0) QTimer::singleShot(delay, this, &Scanner::processOne);
 }
 
+void Scanner::processStarted() {
+  auto w = dynamic_cast<QFutureWatcher<IndexResult>*>(sender());
+  if (!w) return;
+
+  _extraThreads += w->property("childThreads").toInt();
+}
+
 void Scanner::processFinished() {
   auto w = dynamic_cast<QFutureWatcher<IndexResult>*>(sender());
   if (!w) return;
+
+  _extraThreads -= w->property("childThreads").toInt();
+  Q_ASSERT(_extraThreads >= 0);
 
   IndexResult result;
   if (w->future().isCanceled()) {
@@ -535,12 +583,6 @@ void Scanner::processFinished() {
 
     VideoContext* v = result.context;
     if (v) {
-      if (!v->isHardware() && v->threadCount() > 1) {
-        int threads =
-            qMin(_params.indexThreads, _videoPool.maxThreadCount() + v->threadCount() - 1);
-        _videoPool.setMaxThreadCount(threads);
-      }
-
       delete v;
       result.context = nullptr;
     }
@@ -787,16 +829,15 @@ VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu, int cp
   opt.deviceIndex = deviceIndex;
   opt.maxH = 128;  // need just enough to detect/crop borders
   opt.maxW = 128;
-  opt.fast = true;  // enable speeds ok for indexing
-  opt.gray = true;  // only look at the "Y" channel, dct algo is grayscale
+  opt.fast = true; // enable speeds ok for indexing
+  opt.gray = true; // only look at the "Y" channel, dct algo is grayscale
   if (video->open(path, opt) < 0) {
     setError(path, ErrorLoad);
     delete video;
     return nullptr;
   }
 
-  // qDebug("decode using %s, threads=%d\n\n", video->isHardware() ? "gpu" : "cpu",
-  //       video->threadCount());
+  Q_ASSERT(video->threadCount() > 0); // required for thread counting
 
   return video;
 }
@@ -832,8 +873,14 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
   } else {
     int64_t start = QDateTime::currentMSecsSinceEpoch();
 
+    const auto progressCb = [this,m](int percent) {
+      Scanner* nonConst = const_cast<Scanner*>(this);            // unfortunate
+      QMetaObject::invokeMethod(nonConst, [nonConst,m,percent] { // call to scanner's thread
+        nonConst->_videoProgress.insert(m.path(), percent);
+      });
+    };
     VideoIndex index;
-    m.makeVideoIndex(*video, _params.videoThreshold, index);
+    m.makeVideoIndex(*video, _params.videoThreshold, index, progressCb);
     m.setVideoIndex(index);
 
     int64_t end = QDateTime::currentMSecsSinceEpoch();
