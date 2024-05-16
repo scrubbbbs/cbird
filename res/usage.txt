@@ -32,7 +32,11 @@ Queries
   -dups-in <selector>              exact duplicates in subset
   -similar                         similar items in entire index
   -similar-in <selector>           similar items within a subset
-  -similar-to <file>|<selector>    similar items to a file, directory, or subset, within entire index
+  -similar-to <file>|<selector>    similar items to a file, directory, or subset
+                                   - <file> can point outside the index parent
+                                   - non-indexed files are temporarly indexed
+                                   - non-indexed videos search for a few evenly-spaced frame grabs
+                                   - -p.refl only works with this method
   -weeds                           previously deleted files that came back
 
 Selections
@@ -49,7 +53,7 @@ Selections
   -select-result                   to chain queries: convert the last query result into a selection,
                                    and clear the result
   -select-sql <sql>                items with sql statement [select * from media where ...]
-  -select-files <file> [<file>]... ignore index, existing files of supported file types
+  -select-files <file> [<file>]... ignore index, existing files/directories of supported file types
   -select-grid  <file> [<file>]... ignore index, detect a grid of thumbnails,
                                    break up into separate images
 
@@ -61,7 +65,7 @@ Batch Deletion
   -nuke-weeds                      delete all weeds
   -nuke                            delete selection
 
-Filtering
+Selection/Result Filtering
 ==============================================================================
   -with[out]    <prop>[#<func>] <expr> remove items if expression is false, invert with -without
                                        first in each group (needle) is never filtered
@@ -86,6 +90,7 @@ Sorting/Grouping
 
 Operations on Selection/Results
 ==============================================================================
+  * move/rename operations preserve the index information (useful for videos or large corpus)
   -remove                            remove from the index (force re-indexing)
   -nuke                              remove from index and move files to trash
   -rename <find> <replace> [-vxp]    rename selection with find/replace, ignoring/preserving file extension
@@ -118,7 +123,7 @@ Miscellaneous
   -simtest testfile                run automated matching test
   -jpeg-repair-script <file>       script/program to repair truncated jpeg files (-verify) [~/bin/jpegfix.sh]
   -compare-videos <file> <file>    open a pair of videos in compare tool
-  -view-image <file>               open results  owser with file
+  -view-image <file>               open results browser with file
   -test-csv <file>                 read csv of src/dst pairs for a similar-to test, store results in match.csv
   -test-image-loader <file>        test image decoding
   -test-video-decoder <file>       test video decoding
@@ -155,7 +160,7 @@ Definitions
   <dir>                           path to directory
   <item>                          file in the index
   <group>                         list of items, usually a needle/target and its matches
-  <result>                        list of groups, from the last query
+  <result>                        list of groups, from a query or group-by
   <selection>                     list of items for further operations
   <selector>                      defines a set of (indexed) items by path, matching expression
       :<regular-expression>       - pcre, prefixed with colon
