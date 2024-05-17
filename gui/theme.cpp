@@ -131,7 +131,10 @@ QString Theme::richTextStyleSheet() const {
   static const auto* exp = new QRegularExpression(qq("(qt|theme)\\((.*?)\\)"));
 
   QFile f(qq(":res/cbird-richtext.css"));
-  if (!f.open(QFile::ReadOnly)) qFatal("failed to open rich text stylesheet");
+  if (!f.open(QFile::ReadOnly)) {
+    qWarning("failed to open rich text stylesheet");
+    return "";
+  }
 
   const QString inCss = f.readAll();
   QStringView subject(inCss);
