@@ -25,7 +25,6 @@
 #include "index.h"
 #include "media.h"
 #include "opencv2/features2d.hpp"
-#include "opencv2/highgui/highgui.hpp"
 #include "opencv2/video/tracking.hpp"  // estimateRigidTransform
 #include "profile.h"
 
@@ -48,7 +47,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
 
   for (const Media& m : group)
     if (m.md5().isEmpty()) {
-      qWarning() << "cand image has no md5 sum, won't cache:" << m.path();
+      if (params.verbose) qWarning() << "cand image has no md5 sum, won't cache:" << m.path();
       useCache = false;
     }
 
@@ -112,7 +111,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
   tmplMedia.makeKeyPointDescriptors(tmplImg, tmplKeypoints, tmplDescriptors);
 
   if (params.verbose)
-    qInfo("query kp=%d descriptors=%d (max %d)", int(tmplKeypoints.size()),
+    qInfo("tmpl kp=%d descriptors=%d (max %d)", int(tmplKeypoints.size()),
           int(tmplDescriptors.cols), params.needleFeatures);
 
   if (tmplDescriptors.cols <= 0) {
@@ -128,14 +127,11 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
   haystack.push_back(tmplDescriptors);
   matcher.add(haystack);
 
-  // similarity hash for matching good candidates
-  uint64_t tmplHash = dctHash64(tmplImg);
-
   struct {
-    uint64_t targetResize;
-    uint64_t targetLoad;
-    uint64_t targetKeyPoints;
-    uint64_t targetFeatures;
+    uint64_t candResize;
+    uint64_t candLoad;
+    uint64_t candKeypoints;
+    uint64_t candFeatures;
     uint64_t radiusMatch;
     uint64_t matchSort;
     uint64_t estimateTransform;
@@ -151,13 +147,12 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
   x += (ns1 - ns0); \
   ns0 = ns1;
 
-  // check each candidate image
+  // check each candidate image against the template
   for (int i = 0; i < notCached.count(); i++) {
     Media& m = notCached[i];
     QString cacheKey(m.md5() + tmplMedia.md5());
     if (!useCache) cacheKey = "invalid-cache-key";
 
-    // decompress and build larger set of keypoints (params.haystackFeatures)
     qImg = m.loadImage();
     if (qImg.isNull()) {
       qWarning() << "failure to load cand image:" << m.path();
@@ -167,42 +162,43 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
     cv::Mat img;
     qImageToCvImg(qImg, img);
 
-    PROFILE(timing.targetLoad);
+    PROFILE(timing.candLoad);
 
     // if the candidate image is much larger than the
-    // target image, resize the candidate to better focus features
-    // Assumes the crop did not take away the majority of the image.
-    // fixme:settings: the scale factor should be a search parameter
+    // target image, we generate too many features that
+    // don't show up in the template. If we have some
+    // idea of how much cropping there is we can
+    // shrink the cand first.
     float candScale = 1.0;
 
     if (tmplImg.rows * tmplImg.cols < img.rows * img.cols) {
       int cSize = std::max(img.cols, img.rows);
       int tSize = std::max(tmplImg.rows, tmplImg.cols);
-      int maxSize = tSize * 2;
+      int maxSize = tSize * params.tmScalePct / 100.0;
       if (cSize > maxSize) {
         candScale = float(maxSize) / cSize;
         sizeScaleFactor(img, candScale);
       }
     }
 
-    PROFILE(timing.targetResize);
+    PROFILE(timing.candResize);
 
     KeyPointList queryKeypoints;
     m.makeKeyPoints(img, params.haystackFeatures, queryKeypoints);
 
-    PROFILE(timing.targetKeyPoints);
+    PROFILE(timing.candKeypoints);
 
     KeyPointDescriptors queryDescriptors;
     m.makeKeyPointDescriptors(img, queryKeypoints, queryDescriptors);
 
-    PROFILE(timing.targetFeatures);
+    PROFILE(timing.candFeatures);
 
     if (params.verbose)
-      qInfo("(%d) candidate scale=%.2f kp=%d descriptors=%d (max %d)", i, double(candScale),
+      qInfo("(%d) cand scale=%.2f kp=%d descriptors=%d (max %d)", i, double(candScale),
             int(queryKeypoints.size()), int(queryDescriptors.rows), params.haystackFeatures);
 
     if (queryDescriptors.cols <= 0) {
-      if (params.verbose) qWarning("(%d): no keypoints in candidate", i);
+      if (params.verbose) qWarning("(%d) no keypoints in cand", i);
       continue;
     }
 
@@ -212,23 +208,17 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
 
     PROFILE(timing.radiusMatch);
 
-    //    int score = 0;
     int nMatches = 0;
-
     MatchList matches;
 
     for (size_t k = 0; k < dmatch.size(); k++)
       for (size_t j = 0; j < dmatch[k].size(); j++) {
-        //        int distance = int(dmatch[k][j].distance);
-
         matches.push_back(dmatch[k][j]);
-
         nMatches++;
-        //        score += distance;
       }
 
     if (nMatches <= 0) {
-      if (params.verbose) qInfo("(%d): no keypoint matches", i);
+      if (params.verbose) qInfo("(%d) no keypoint matches", i);
       QWriteLocker locker(&_lock);
       _cache[cacheKey] = INT_MAX;
       continue;
@@ -253,7 +243,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
 
     // need at least 3 points to estimate transform
     if (tmplPoints.size() < 3) {
-      if (params.verbose) qInfo("(%d): less than 3 keypoint matches", i);
+      if (params.verbose) qInfo("(%d) less than 3 keypoint matches", i);
       QWriteLocker locker(&_lock);
       _cache[cacheKey] = INT_MAX;
       continue;
@@ -266,7 +256,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
     PROFILE(timing.estimateTransform);
 
     if (transform.empty()) {
-      if (params.verbose) qInfo("(%d): no transform found", i);
+      if (params.verbose) qInfo("(%d) no transform found", i);
       QWriteLocker locker(&_lock);
       _cache[cacheKey] = INT_MAX;
       continue;
@@ -280,6 +270,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
     // backgrounds; to solve that, don't use phash to score; one idea,
     // use the closest x matched keypoints, transform them, and measure
     // the distance from the actual keypoint
+
     std::vector<cv::Point2f> tmplRect;
     tmplRect.push_back(cv::Point2f(0, 0));
     tmplRect.push_back(cv::Point2f(tmplImg.cols, 0));
@@ -307,9 +298,9 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
 
       const cv::Mat tx = cv::estimateRigidTransform(tmplPoints, matchPoints, false);
       if (tx.empty())
-        qWarning("(%d): roi: empty transform", i);
+        qWarning("(%d) roi: empty transform", i);
       else if (tx.rows < 2 || tx.cols < 3)
-        qWarning("(%d): roi: transform rows/cols invalid", i);
+        qWarning("(%d) roi: transform rows/cols invalid", i);
       else {
         QTransform qtx(tx.at<double>(0, 0), tx.at<double>(1, 0), tx.at<double>(0, 1),
                        tx.at<double>(1, 1), tx.at<double>(0, 2), tx.at<double>(1, 2));
@@ -318,35 +309,59 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
       }
     }
 
-    // score the match by transforming cand patch and taking its phash
-    // we could do the reverse (transform the template) but this is better
-    // assuming candidate is bigger than the template
+    // score the match by transforming cand patch and taking its hash
+    //
+    // if the cand patch is smaller than the template, undefined pixels
+    // are around it (black); Copy those pixels to a copy of the template
+    // image so the two are compareable.
+    //
+    // if template has alpha channel, copy it to the cand as well
+    //
+    //
     cv::invertAffineTransform(transform, transform);
-    cv::warpAffine(img, img, transform, tmplImg.size());
+    cv::warpAffine(img, img, transform, tmplImg.size(), cv::INTER_AREA,
+                   cv::BORDER_CONSTANT, cv::Scalar(0,0,0,255));
+
+    PROFILE(timing.matchResize);
+
+    cv::Mat tmplMasked = tmplImg.clone();
+
+    // make "0" the mask indicator, dctHash needs gray anyways
     grayscale(img, img);
 
-    // if template has alpha channel, copy it to the transformed image (mask)
-    // otherwise, the phashes won't match at all
-    if (tmplImg.channels() == 4) {
+    {
+      const int srcChannels = tmplMasked.channels();
+      Q_ASSERT(srcChannels >= 1 && srcChannels <= 4);
       Q_ASSERT(img.channels() == 1);
 
-      for (int y = 0; y < tmplImg.rows; y++) {
-        uint8_t* src = tmplImg.ptr(y);
+      for (int y = 0; y < tmplMasked.rows; ++y) {
+        uint8_t* src = tmplMasked.ptr(y);
         uint8_t* dst = img.ptr(y);
 
-        for (int x = 0; x < tmplImg.cols; x++) {
-          uint8_t srcAlpha = *(src + x * 4 + 3);
-
-          if (srcAlpha == 0) *(dst + x) = 0;
+        for (int x = 0; x < tmplMasked.cols; ++x) {
+          uint8_t* dp = dst + x;
+          uint8_t* sp = src + x * srcChannels;
+          const uint8_t dstPixel = *dp;
+          const uint8_t dstMask = dstPixel != 0 ? 255 : 0;
+          if (srcChannels < 4) {
+            for (int j = 0; j < srcChannels; ++j)
+              *sp++ &= dstMask;
+          } else {
+            const int srcAlpha = sp[3];
+            sp[0] = ((sp[0] * srcAlpha) >> 8) & dstMask;
+            sp[1] = ((sp[1] * srcAlpha) >> 8) & dstMask;
+            sp[2] = ((sp[2] * srcAlpha) >> 8) & dstMask;
+            sp[3] = 255;
+            *dp = (dstPixel * srcAlpha) >> 8;
+          }
         }
       }
     }
 
-    PROFILE(timing.matchResize);
+    uint64_t candHash = dctHash64(img);
+    uint64_t tmplHash = dctHash64(tmplMasked);
 
-    uint64_t imgHash = dctHash64(img);
-
-    int dist = hamm64(imgHash, tmplHash);
+    int dist = hamm64(candHash, tmplHash);
 
     PROFILE(timing.matchPhash);
 
@@ -355,26 +370,31 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
     if (dist < params.tmThresh)
       good.append(m);
     else {
-      if (params.verbose) qInfo("(%d): dct hash on transform doesn't match: score %d", i, dist);
+      if (params.verbose) qInfo("(%d) match above threshold (%d), consider raising tmThresh", i, dist);
 
-      // show the images that we hashed side by side
       if (getenv("TEMPLATE_MATCHER_DEBUG")) {
-        QImage test(1200, 1200, QImage::Format_RGB32);
-        test.fill(Qt::green);
-        QPainter painter(&test);
-
         QImage tImg, txImg;
-        cvImgToQImage(tmplImg, tImg);
+        cvImgToQImage(tmplMasked, tImg);
         cvImgToQImage(img, txImg);
 
-        painter.drawImage(0, 0, tImg);
-        painter.drawImage(tImg.width(), 0, txImg);
+        qDebug() << txImg;
 
-        cv::Mat testImg;
-        qImageToCvImg(test, testImg);
-        cv::namedWindow("crop");
-        cv::imshow("crop", testImg);
-        cv::waitKey(0);
+        QImage test(tImg.width() + txImg.width() + 30,
+                    qMax(tImg.height(), txImg.height()) + 20,
+                    QImage::Format_RGB32);
+        test.fill(Qt::green);
+
+        QPainter painter(&test);
+        painter.setPen(Qt::magenta);
+        painter.drawImage(10, 10, tImg);
+        painter.translate(10+5+tImg.width(), 10);
+        painter.drawImage(0,0, txImg);
+
+        static auto *window = new QLabel();
+        window->setWindowTitle(QString("template|cand score:%1").arg(dist));
+        window->setFixedSize(test.size());
+        window->setPixmap(QPixmap::fromImage(test));
+        window->show();
       }
     }
 
@@ -387,19 +407,19 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
 
   if (params.verbose)
     qInfo(
-        "%lld/%lld %dms:tot %lldms:ea | tl=%.2f tr=%.2f tk=%.2f "
-        "tf=%.2f rm=%.2f ms=%.2f ert=%.2f mr=%.2f mp=%.2f ttl=%.2f",
+        "%lld/%lld %dms:tot %lldms:ea | ld=%.2f rz=%.2f kp=%.2f "
+        "ft=%.2f rm=%.2f ms=%.2f ert=%.2f mr=%.2f mp=%.2f ttl=%.2f",
         good.count(), notCached.count(), int(total) / 1000000, total / 1000000 / notCached.count(),
-        timing.targetLoad * 100.0 / total, timing.targetResize * 100.0 / total,
-        timing.targetKeyPoints * 100.0 / total, timing.targetFeatures * 100.0 / total,
+        timing.candLoad * 100.0 / total, timing.candResize * 100.0 / total,
+        timing.candKeypoints * 100.0 / total, timing.candFeatures * 100.0 / total,
         timing.radiusMatch * 100.0 / total, timing.matchSort * 100.0 / total,
         timing.estimateTransform * 100.0 / total, timing.matchResize * 100.0 / total,
         timing.matchPhash * 100.0 / total,
-        (timing.targetLoad + timing.targetResize + timing.targetKeyPoints + timing.targetFeatures +
+        (timing.candLoad + timing.candResize + timing.candKeypoints + timing.candFeatures +
          timing.radiusMatch + timing.matchSort + timing.estimateTransform + timing.matchResize +
          timing.matchPhash) *
             100.0 / total);
 
   group = good;
-  std::sort(group.begin(), group.end());
+  std::sort(group.begin(), group.end()); // sort by score
 }
