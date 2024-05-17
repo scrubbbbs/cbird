@@ -2527,9 +2527,9 @@ void MediaGroupListWidget::templateMatchAction() {
   int targetIndex = 1;
 
   // set threshold high to consider all matches with a transform,
-  // regardless if it is a good match or not
-  SearchParams params;
-  params.dctThresh = 64;
+  // regardless if it is a good match or not, since we can visually evaluate
+  SearchParams params = _options.params;
+  params.tmThresh = 64;
 
   MediaGroup haystack;
   haystack.append(group[targetIndex]);
