@@ -123,7 +123,6 @@ Miscellaneous
   -simtest testfile                run automated matching test
   -jpeg-repair-script <file>       script/program to repair truncated jpeg files (-verify) [~/bin/jpegfix.sh]
   -compare-videos <file> <file>    open a pair of videos in compare tool
-  -view-image <file>               open results browser with file
   -test-csv <file>                 read csv of src/dst pairs for a similar-to test, store results in match.csv
   -test-image-loader <file>        test image decoding
   -test-video-decoder <file>       test video decoding
