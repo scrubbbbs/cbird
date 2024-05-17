@@ -113,6 +113,9 @@ SearchParams::SearchParams() {
   add({"tdht", "Template matcher DCT hash threshold", Value::Int, counter++, SET_INT(tmThresh),
        GET(tmThresh), NO_NAMES, GET_CONST(positive)});
 
+  add({"tscale", "Template matcher scale factor %", Value::Int, counter++, SET_INT(tmScalePct),
+      GET(tmScalePct), NO_NAMES, GET_CONST(nonzero)});
+
   add({"diag", "Enable diagnostic/verbose output", Value::Bool, counter++, SET_BOOL(verbose),
        GET(verbose), NO_NAMES, NO_RANGE});
 

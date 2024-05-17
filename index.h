@@ -76,11 +76,12 @@ class SearchParams : public Params {
       cvThresh = 25,         // threshold for ORB descriptors distance
       minMatches = 1,        // minimum number of matches required
       maxMatches = 5,        // maximum number of matches after sort by score
-      needleFeatures = 100,  // template match: number of needle features
-      haystackFeatures = 1000,  // template match: number of haystack features
+      needleFeatures = 100,  // template match: number of needle/template features
+      haystackFeatures = 1000,  // template match: number of haystack/candidate features
       mirrorMask = MirrorNone,  // MirrorXXX flags for mirror search
-      maxThresh = 0,            // if > 0, increment dct/cv/Thresh < maxThresh until match is found
-      tmThresh = 5;             // threshold for template match DCT hash
+      maxThresh = 0,          // if > 0, increment dct/cv/Thresh < maxThresh until match is found
+      tmThresh = 7,           // template match: threshold for match validation
+      tmScalePct = 200;       // template match: max scale factor between template/cand
 
   bool templateMatch = false,  // remove results that don't pass the template matcher
       negativeMatch = false,   // remove results in the negative matches (blacklist)
