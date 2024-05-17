@@ -420,9 +420,10 @@ void cvImgToQImageNoCopy(const cv::Mat& src, QImage& dst, QImage::Format forceFo
 }
 
 uint64_t dctHash64(const cv::Mat& cvImg) {
-  // convert RGB(A) to YUV, extract and work with Y channel
   cv::Mat gray;
   grayscale(cvImg, gray);
+  bool isCopy = cvImg.data != gray.data;
+
   // cv::imwrite("1.gray.png", gray);
 
   // blur with 7x7 mean filter (all one's) convolution kernel
@@ -438,13 +439,21 @@ uint64_t dctHash64(const cv::Mat& cvImg) {
   else
     kernelSize = 7;
 
-  if (kernelSize) cv::blur(gray, gray, cv::Size(kernelSize, kernelSize));
+  if (kernelSize) {
+    // note: blur will be done in-place unless we haven't taken a copy,
+    // otherwise input would be modified (even though it is const!)
+    cv::Mat blur;
+    if (isCopy) blur = gray;
+    else qWarning() << "possibly avoidable copy";
+    cv::blur(gray, blur, cv::Size(kernelSize, kernelSize));
+    gray = blur;
+  }
 
   // cv::imwrite("2.blur.png", gray);
 
   // resize to 32x32
   // v2: use INTER_AREA instead of INTER_NEAREST
-  cv::resize(gray, gray, cv::Size(32, 32), 0, 0, cv::INTER_AREA);
+  cv::resize(gray, gray, cv::Size(32, 32), 0, 0, cv::INTER_AREA); // noop if gray is already 32x32
   // cv::imwrite("3.size.png", gray);
 
   // 32x32 DCT
@@ -1234,10 +1243,10 @@ void grayscale(const cv::Mat& input, cv::Mat& output) {
   switch (type) {
     case CV_8UC(3):
     case CV_16UC(3):
-      cv::cvtColor(input, output, CV_BGR2GRAY);
+      cv::cvtColor(input, output, CV_BGR2GRAY, 1);
       break;
     case CV_8UC(4):
-      cv::cvtColor(input, output, CV_BGRA2GRAY);
+      cv::cvtColor(input, output, CV_BGRA2GRAY, 1);
       break;
     case CV_8UC(1):
       output = input;
@@ -1246,6 +1255,7 @@ void grayscale(const cv::Mat& input, cv::Mat& output) {
       qFatal("unsupported cvImage type for grayscale conversion: %s",
              qPrintable(cvMatTypeName(type)));
   }
+  Q_ASSERT(output.type() == CV_8UC(1));
 }
 
 void autocrop(cv::Mat& cvImg, int range) {
