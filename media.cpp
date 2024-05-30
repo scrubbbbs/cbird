@@ -119,7 +119,6 @@ void Media::imageHash() {
     try {
       cv::Mat cvImg;
       qImageToCvImg(_img, cvImg);
-
       _dctHash = dctHash64(cvImg);
       ColorDescriptor::create(cvImg, _colorDescriptor);
     } catch (...) {
@@ -1320,7 +1319,8 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
 
   if (options.fastJpegIdct && format == "jpeg") reader.setQuality(0);  // use libjpeg JDCT_IFAST
 
-  QSize origSize = reader.size();
+  QSize origSize = reader.size(); // must be known to do scaled decode
+  QSize outSize = origSize;       // output from image reader
   const int maxDim = qMax(origSize.width(), origSize.height());
   if (options.readScaled && origSize.isValid() && maxDim > options.maxSize &&
       reader.supportsOption(QImageIOHandler::ScaledSize)) {
@@ -1355,13 +1355,60 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
       int rw = origSize.width() & ~0x7;
       int rh = origSize.height() & ~0x7;
 
-      QSize ssize(int(rw / 8 * numerator), int(rh / 8 * numerator));
-      reader.setScaledSize(ssize);
+      outSize = QSize(int(rw / 8 * numerator), int(rh / 8 * numerator));
+      reader.setScaledSize(outSize);
 
       // qDebug() << "downscale " << rw << rh << ssize << numerator;
     }
   }
-  QImage img = reader.read();
+
+  QImage img; // imagereader output
+
+  // optionally use a custom allocator; in most cases files are the same
+  // format and dimensions so we could avoid repeated allocations
+  const QImage::Format fmt = reader.imageFormat();
+  if (options.alloc && outSize.isValid() && fmt != QImage::Format_Invalid) {
+    uchar* dataPtr = options.alloc->alloc(outSize, fmt);
+    if (dataPtr == nullptr) {
+      qCritical("memory allocation failed");
+      img = QImage(1, 1, fmt); // setText() requires valid image
+      img.setText("oom", "true");
+    }
+    else {
+      struct CallbackData
+      {
+        ImageAllocator* alloc;
+        void* ptr;
+      }* cbd = new CallbackData{options.alloc, dataPtr};
+      Q_ASSERT(cbd != nullptr);
+
+      img = QImage(
+          dataPtr,
+          outSize.width(),
+          outSize.height(),
+          fmt,
+          [](void* userData) {
+            auto* cbd = (CallbackData*) userData;
+            cbd->alloc->free(cbd->ptr);
+            delete cbd;
+          },
+          cbd);
+
+      // must alloc color table separately for indexed formats
+      // we don't know what it is but should be <= 256 colors
+      if (img.pixelFormat().colorModel() == QPixelFormat::Indexed)
+        img.setColorCount(256);
+
+      void* data = img.data_ptr();
+
+      if (!reader.read(&img))
+        qWarning() << "read (pointer) failure";
+      if (data != img.data_ptr())
+        qWarning() << "read (pointer) in-place failed";
+    }
+  } else {
+    img = reader.read();
+  }
 
   if (future && future->isCanceled())  // io could have been canceled, assume incomplete image
     img = QImage();
@@ -1426,7 +1473,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
   return img;
 }
 
-QImage Media::loadImage(const QSize& size, QFuture<void>* future) const {
+QImage Media::loadImage(const QSize& size, QFuture<void>* future, const ImageLoadOptions& options) const {
   // if the full-size image is loaded(cached),
   // use it, otherwise load and possibly rescale,
   // but do not cache anything
@@ -1438,7 +1485,7 @@ QImage Media::loadImage(const QSize& size, QFuture<void>* future) const {
     if (io && io->open(QIODevice::ReadOnly)) {
       QByteArray data = io.get()->readAll();
       if (future && future->isCanceled()) return img;
-      img = loadImage(data, size, path(), future);
+      img = loadImage(data, size, path(), future, options);
     }
   } else if (size != QSize())
     img = constrainedResize(img, size);

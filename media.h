@@ -102,11 +102,18 @@ class MatchRange {
 /**
  * Pass advanced options to loadImage()
  */
+class ImageAllocator {
+ public:
+  virtual uchar* alloc(const QSize& size, QImage::Format fmt) = 0;
+  virtual void free(void* ptr) = 0;
+};
+
 class ImageLoadOptions {
  public:
   bool fastJpegIdct = false;     // use JDCT_FAST in libjpeg, unused if scaling
   bool readScaled = false;       // scale image down in the decompress phase
   int minSize = 0, maxSize = 0;  // acceptable size range (best-effort, could be bigger)
+  ImageAllocator* alloc  = nullptr; // custom image allocator
 };
 
 /**
@@ -474,10 +481,13 @@ class Media {
    * @param size If the width or height==0, constrain
    *        in the other dimension, preserving aspect ratio
    * @param future If set, future->isCancelled() will stop decompressing early
+   * @param options Advanced loading options
    * @note will use image(), data() or read from disk as needed
    * @note calls loadImage() (static) as needed
    */
-  QImage loadImage(const QSize& size = QSize(), QFuture<void>* future = nullptr) const;
+  QImage loadImage(const QSize& size = QSize(),
+                   QFuture<void>* future = nullptr,
+                   const ImageLoadOptions& options=ImageLoadOptions()) const;
 
   /**
    * return true if image can be reloaded from data() or path()
