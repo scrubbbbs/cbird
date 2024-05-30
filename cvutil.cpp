@@ -419,10 +419,12 @@ void cvImgToQImageNoCopy(const cv::Mat& src, QImage& dst, QImage::Format forceFo
   dst = QImage(src.ptr(0), src.cols, src.rows, int(src.step[0]), format);
 }
 
-uint64_t dctHash64(const cv::Mat& cvImg) {
+uint64_t dctHash64(const cv::Mat& cvImg, bool inPlace) {
   cv::Mat gray;
   grayscale(cvImg, gray);
   bool isCopy = cvImg.data != gray.data;
+  if (isCopy && inPlace)
+    qWarning() << "input is not grayscale, taking a copy";
 
   // cv::imwrite("1.gray.png", gray);
 
@@ -440,11 +442,11 @@ uint64_t dctHash64(const cv::Mat& cvImg) {
     kernelSize = 7;
 
   if (kernelSize) {
-    // note: blur will be done in-place unless we haven't taken a copy,
-    // otherwise input would be modified (even though it is const!)
     cv::Mat blur;
-    if (isCopy) blur = gray;
-    else qWarning() << "possibly avoidable copy";
+    if (isCopy || inPlace)
+      blur = gray;
+    else
+      qDebug() << "blur() taking a copy"; // expected iif input is grayscale
     cv::blur(gray, blur, cv::Size(kernelSize, kernelSize));
     gray = blur;
   }

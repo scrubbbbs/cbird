@@ -195,8 +195,13 @@ void brightnessAndContrastAuto(const cv::Mat& src, cv::Mat& dst, float clipHistP
 uint64_t phash64_cimg(const cv::Mat& cvImg);
 #endif
 
-/// phash-like 64-bit dct hash
-uint64_t dctHash64(const cv::Mat& cvImg);
+/**
+ * @brief phash-like 64-bit dct hash
+ * @param cvImg input image, will be converted to grayscale
+ * @param inPlace if true then accept that input could be modified
+ * @return
+ */
+uint64_t dctHash64(const cv::Mat& cvImg, bool inPlace=false);
 
 /// average intensity with phash-like quantization
 uint64_t averageHash64(const cv::Mat& cvImg);

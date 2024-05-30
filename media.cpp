@@ -799,6 +799,7 @@ void Media::makeKeyPointDescriptors(const cv::Mat& cvImg, KeyPointList& keyPoint
 void Media::makeKeyPointHashes(const cv::Mat& cvImg, const KeyPointList& keyPoints,
                                KeyPointHashList& outHashes) const {
   KeyPointRectList rects;
+  Q_ASSERT(cvImg.type() == CV_8UC(1)); // grayscale
 
   for (const cv::KeyPoint& kp : keyPoints) {
     float size = kp.size;
@@ -831,7 +832,7 @@ void Media::makeKeyPointHashes(const cv::Mat& cvImg, const KeyPointList& keyPoin
     // extract sub-image and store hash
     cv::Mat sub = cvImg.colRange(r.x, r.x + r.width).rowRange(r.y, r.y + r.height);
 
-    uint64_t hash = dctHash64(sub);
+    uint64_t hash = dctHash64(sub, true);
 
     /* we could drop near hashes, but typically not many
     for (uint64_t h : hashes)
@@ -871,16 +872,19 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
   QString path = video.path();
   if (path.startsWith(cwd)) path = path.mid(cwd.length() + 1);
 
-  if (video.nextFrame(img)) {
-    // fixme: index settings
-    autocrop(img, 20);
-    uint64_t hash = dctHash64(img);
+  cv::Mat cvFrame;
+  if (video.nextFrame(cvFrame)) {
+    grayscale(cvFrame, img);
+    Q_ASSERT(cvFrame.data == img.data); // grayscale should be noop (decoder outputs grayscale)
+
+    autocrop(img, 20); // fixme: settings
+    uint64_t hash = dctHash64(img, true);
     index.hashes.push_back(hash);
     index.frames.push_back(numFrames & 0xFFFF);
     numFrames++;
   }
 
-  while (video.nextFrame(img)) {
+  while (video.nextFrame(cvFrame)) {
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (now - then > 1000) {
       int percent = numFrames * 100 / std::max(totalFrames, 1);
@@ -893,11 +897,12 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
       progressCb(percent);
     }
 
-    // de-letterbox prior to p-hashing
-    // fixme: index settings
-    autocrop(img, 20);
+    grayscale(cvFrame, img);
 
-    uint64_t hash = dctHash64(img);
+    // de-letterbox prior to p-hashing
+    autocrop(img, 20); // fixme: index settings
+
+    uint64_t hash = dctHash64(img, true);
 
     // compress hash list, since nearby hashes
     // are likely be similar

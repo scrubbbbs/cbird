@@ -105,8 +105,10 @@ static void avImgToCvImg(uint8_t* planes[4], int linesizes[4], int width, int he
   int skip = linesizes[0];
 
   if (fmt != AV_PIX_FMT_BGR24) {
-    if (dst.rows != height || dst.cols != width || dst.type() != CV_8UC(1))
+    if (dst.rows != height || dst.cols != width || dst.type() != CV_8UC(1)) {
+      qDebug() << "allocating cvImg";
       dst = cv::Mat(height, width, CV_8UC(1));
+    }
 
     for (int y = 0; y < height; y++) {
       uchar* dstLine = dst.ptr(y);
@@ -146,7 +148,10 @@ static void avFrameToCvImg(const AVFrame& frame, cv::Mat& dst) {
   int w = frame.width, h = frame.height, skip = frame.linesize[0];
   const uchar* const data = frame.data[0];
 
-  if (dst.rows != h || dst.cols != w || dst.type() != CV_8UC(1)) dst = cv::Mat(h, w, CV_8UC(1));
+  if (dst.rows != h || dst.cols != w || dst.type() != CV_8UC(1)) {
+    qDebug() << "allocating cvImg";
+    dst = cv::Mat(h, w, CV_8UC(1));
+  }
 
   for (int y = 0; y < h; y++) {
     uchar* dstLine = dst.ptr(y);

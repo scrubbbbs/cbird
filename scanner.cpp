@@ -635,17 +635,17 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
       Q_ASSERT(ok);
     }
 
-    cv::Mat cvImg;
-    qImageToCvImg(qImg, cvImg);  // can this use nocopy?
+    cv::Mat cvColor, cvGray;
+    qImageToCvImg(qImg, cvColor);  // fixme: can this use nocopy?
+    grayscale(cvColor, cvGray);
 
-    // note: this should probably only be used
-    // for algos without features
-    // threshold 20 may be a bit high...
+    // note: this should probably only be used for algos without features
+    // threshold 20 may be a bit high
     // todo: setting for indexer autocrop threshold
-    if (_params.algos && _params.autocrop) autocrop(cvImg, 20);
+    if (_params.algos && _params.autocrop) autocrop(cvGray, 20);
 
     uint64_t dctHash = 0;
-    if (_params.algos & (1 << SearchParams::AlgoDCT)) dctHash = dctHash64(cvImg);
+    if (_params.algos & (1 << SearchParams::AlgoDCT)) dctHash = dctHash64(cvGray);
 
     result.media = Media(path, Media::TypeImage, width, height, digest, dctHash);
     Media& m = result.media;
@@ -654,24 +654,24 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
 
     if (_params.algos & (1 << SearchParams::AlgoColor)) {
       ColorDescriptor colorDesc;
-      ColorDescriptor::create(cvImg, colorDesc);
+      ColorDescriptor::create(cvColor, colorDesc);
       m.setColorDescriptor(colorDesc);
     }
 
     if (_params.algos & (1 << SearchParams::AlgoDCTFeatures | 1 << SearchParams::AlgoCVFeatures)) {
-      sizeLongestSide(cvImg, _params.resizeLongestSide);
+      sizeLongestSide(cvGray, _params.resizeLongestSide);
 
       KeyPointList keyPoints;
-      m.makeKeyPoints(cvImg, _params.numFeatures, keyPoints);
+      m.makeKeyPoints(cvGray, _params.numFeatures, keyPoints);
 
       KeyPointDescriptors kpDescriptors;
       if (_params.algos & (1 << SearchParams::AlgoCVFeatures)) {
-        m.makeKeyPointDescriptors(cvImg, keyPoints, kpDescriptors);
+        m.makeKeyPointDescriptors(cvGray, keyPoints, kpDescriptors);
         m.setKeyPointDescriptors(kpDescriptors);
       }
       if (_params.algos & (1 << SearchParams::AlgoDCTFeatures)) {
         KeyPointHashList kpHashes;
-        m.makeKeyPointHashes(cvImg, keyPoints, kpHashes);
+        m.makeKeyPointHashes(cvGray, keyPoints, kpHashes);
         m.setKeyPointHashes(kpHashes);
       }
     }
