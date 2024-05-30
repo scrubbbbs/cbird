@@ -953,7 +953,7 @@ IndexParams::IndexParams() {
   add({"dirs", "Enable indexing of subdirectories", Value::Bool, counter++, SET_BOOL(recursive),
        GET(recursive), NO_NAMES, NO_RANGE});
 
-  add({"ignored", "Log all ignored files", Value::Bool, counter++, SET_INT(showIgnored),
+  add({"ignored", "Log all ignored files", Value::Bool, counter++, SET_BOOL(showIgnored),
        GET(showIgnored), NO_NAMES, NO_RANGE});
 
   add({"links", "Follow symlinks to files and directories", Value::Bool, counter++,
