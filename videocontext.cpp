@@ -404,6 +404,17 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     }
   }
 
+  const int fileBitRate = _p->format->bit_rate;
+  if (!_metadata.videoBitrate && fileBitRate) { // not all codecs/formats provide bitrate (MKV)
+    if (_metadata.audioBitrate)
+      _metadata.videoBitrate = fileBitRate - _metadata.audioBitrate;
+    else if (_p->format->bit_rate) {
+      qDebug() << "no codec bitrate provided, guessing from file bitrate";
+      _metadata.audioBitrate = 128000;
+      _metadata.videoBitrate = fileBitRate - _metadata.audioBitrate;
+    }
+  }
+
   _metadata.duration = int(_p->format->duration / AV_TIME_BASE);
 
   if (_p->format->metadata) {
