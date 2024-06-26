@@ -150,21 +150,23 @@ void Engine::update(bool wait) {
   // check for missing external index data, (currently only video index)
   // todo: should be implemented by specific index
   // todo: re-index missing item now
-  if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo))
+  if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo)) {
+    qInfo() << "verifying video index...";
     for (const Media& m : db->mediaWithType(Media::TypeVideo)) {
       QString vIndexPath = QString("%1/%2.vdx").arg(db->videoPath()).arg(m.id());
       if (!QFileInfo(vIndexPath).exists()) {
-        qWarning() << "video index missing:" << m.path();
+        qWarning() << "video index missing, rerun -update" << m.path();
         toRemove.append(m.id());
       } else {
         VideoIndex idx;
         idx.load(vIndexPath);
         if (idx.isEmpty()) {
-          qWarning() << "video index is empty, forcing re-index:" << m.path();
+          qWarning() << "video index is corrupt, rerun -update" << m.path();
           toRemove.append(m.id());
         }
       }
     }
+  }
 
   if (!scanner->indexParams().dryRun && !toRemove.isEmpty()) db->remove(toRemove);
 

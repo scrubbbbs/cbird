@@ -88,7 +88,17 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   _modifiedSince = modifiedSince;
   _inodes.clear();
   _startTime = QDateTime::currentDateTime();
-  readDirectory(path, expected);
+
+  // index zipped files for the zip modtime optimization
+  QMap<QString, QStringList> zipFiles;
+  for (const QString& path : qAsConst(expected)) {
+    if (!Media::isArchived(path)) continue;
+    QString zipFile;
+    Media::archivePaths(path, &zipFile);
+    zipFiles[zipFile].append(path);
+  }
+
+  readDirectory(path, zipFiles, expected);
   scanProgress(path);
 
   // estimate the cost of each video, to process longest-job-first (LJF),
@@ -213,7 +223,7 @@ void Scanner::scanProgress(const QString& path) const {
   qInfo().noquote() << status;
 }
 
-void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
+void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringList> zipFiles, QSet<QString>& expected) {
   const QDir dir(dirPath);
   if (!dir.exists()) {
     qWarning("%s does not exist", qUtf8Printable(dirPath));
@@ -318,14 +328,19 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
         } else if (!isQueued(path))
           _videoQueue.append(path);
       } else if (_archiveTypes.contains(type)) {
-        // skip deep scan of zip files...
+        // skip deep scan of zip files
         // use metadataChangeTime() since lastModified() will not detect the case
         // where a zip is replaced with an older zip with the same name
+        // fixme: metadataChangeTime() may not be available on all filesystems, must validate!
         if (entry.metadataChangeTime() < _modifiedSince) {
-          const QString memberPrefix = path + ":";
-          int removed = expected.removeIf([&memberPrefix](const QString& exp) {
-            return exp.startsWith(memberPrefix);
-          });
+          int removed = 0;
+          const auto it = zipFiles.find(path);
+          if (it != zipFiles.end())
+            for (auto& path : it.value()) {
+              expected.remove(path);
+              removed++;
+            }
+
           _existingFiles += removed;
           if (removed > 0) continue;
         }
@@ -341,7 +356,7 @@ void Scanner::readDirectory(const QString& dirPath, QSet<QString>& expected) {
   }
 
   if (_params.recursive)
-    for (int i = 0; i < dirs.count(); i++) readDirectory(dirs[i], expected);
+    for (int i = 0; i < dirs.count(); i++) readDirectory(dirs[i], zipFiles, expected);
 }
 
 void Scanner::flush(bool wait) {

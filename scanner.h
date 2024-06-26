@@ -202,7 +202,7 @@ class Scanner : public QObject {
   IndexResult processVideo(VideoContext* video) const;
 
  private:
-  void readDirectory(const QString& dir, QSet<QString>& expected);
+  void readDirectory(const QString& dir, const QMap<QString,QStringList> zipFiles, QSet<QString>& expected);
   void readArchive(const QString& path, QSet<QString>& expected);
   void scanProgress(const QString& path) const;
 
