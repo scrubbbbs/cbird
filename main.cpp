@@ -164,9 +164,9 @@ int printCompletions(const char* argv0, const QStringList& args) {
                               "-or-without", "-sort-result", "-sort-result-rev"};
   cmds += propArg;
 
-  const QSet<QString> fileArg{"-select-one",     "-jpeg-repair-script", "-view-image",
-                              "-test-csv",       "-test-video-decoder", "-select-grid",
-                              "-compare-videos", "-test-image-loader",  "-video-thumbnail"};
+  const QSet<QString> fileArg{"-select-one",     "-jpeg-repair-script", "-test-csv",
+                              "-test-video-decoder", "-select-grid", "-compare-videos",
+                              "-test-image-loader",  "-video-thumbnail"};
   cmds += fileArg;
 
   const QSet<QString> dirArg{"-use", "-dups-in", "-nuke-dups-in", "-similar-in", "-move"};
@@ -747,7 +747,7 @@ int main(int argc, char** argv) {
       VideoContext::listFormats();
     } else if (arg == "-use") {
       if (_engine) {
-        qWarning("-use: database already open on \"%s\", pass -use before other arguments",
+        qCritical("-use: database already open on \"%s\", pass -use before other arguments",
                   qUtf8Printable(_engine->db->path()));
         return -1;
       }
@@ -756,14 +756,14 @@ int main(int argc, char** argv) {
         QDir dir;
         while (!dir.exists(qq(INDEX_DIRNAME))) {
           if (!dir.cdUp()) {
-            qWarning("-use[@]: failed to find index in the parent tree");
+            qCritical("-use[@]: failed to find index in the parent tree");
             return -1;
           }
         }
         path = dir.absolutePath();
       }
       if (!QFileInfo(path).isDir()) {
-        qWarning("-use: \"%s\" is not a directory", qUtf8Printable(path));
+        qCritical("-use: \"%s\" is not a directory", qUtf8Printable(path));
         return -1;
       }
       indexPath() = path;
@@ -915,9 +915,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-similar") {
       queryResult = engine().db->similar(params);
     } else if (arg == "-similar-in") {
-      const auto group = selectPath(nextArg());
-      for (auto& m : group)
-        if (m.type() & params.queryTypes) params.set.append(m);
+      params.set = selectPath(nextArg());
       params.inSet = true;
       selection.clear();
       queryResult = engine().db->similar(params);
@@ -1071,7 +1069,7 @@ int main(int argc, char** argv) {
           list.append(search.matches);
         }
 
-        qInfo("similar-to:<PL> %d/%lld", ++i, work.count());
+        qInfo("similar-to:<PL> %d/%lld matches:%d", ++i, work.count(), (int)list.count());
       }
       engine().db->filterMatches(params, list);
 
@@ -1145,6 +1143,9 @@ int main(int argc, char** argv) {
         }
         selection.append(g);
       };
+    } else if (arg == "-slice") {
+      params.set = selectPath(nextArg());
+      params.inSet = true;
     } else if (arg == "-rename") {
       QString srcPat, dstPat, options;
       srcPat = nextArg();

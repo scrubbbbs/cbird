@@ -1279,22 +1279,21 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   if (params.mirrorMask) qWarning() << "reflected images unsupported, use -similar-to";
 
-  // note: if set is provided, it is assumed to contain relevant media type(s)
-  // fixme: should be ok to filter set to relevant type of the query index
   MediaGroup haystack;
-  if (params.inSet)
+  if (params.inSet) {
     haystack = params.set;
+  }
   else {
-    // select all media with specified types
-    // e.g. for image-only indexes, query type should be images
-    //      for video index, query type can be video, image, or (future) audio
+    // select all relevant media we'll need for the search space
     QStringList queryTypes;
-    int flags = params.queryTypes;
+    int mediaTypes = params.queryTypes;
+    mediaTypes |= params.resultTypes();
+
     int type = 1;
-    while (flags) {
-      if (flags & 1) queryTypes << QString::number(type);
+    while (mediaTypes) {
+      if (mediaTypes & 1) queryTypes << QString::number(type);
       type++;
-      flags >>= 1;
+      mediaTypes >>= 1;
     }
 
     QSqlQuery query(connect());
@@ -1311,12 +1310,16 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   // use id map to avoid slow database query in the work item
   QHash<int, Media> idMap;
-  for (auto& m : haystack) idMap.insert(m.id(), m);
+  for (auto& m : qAsConst(haystack))
+    idMap.insert(m.id(), m);
 
-  // if we are searching a subset, take a slice of the search space
+  // slice the search index for fast subset search
   if (params.inSet) {
     QSet<uint32_t> ids;
-    for (const auto& m : params.set) ids.insert(uint32_t(m.id()));
+    const int validTypes = params.resultTypes();
+    for (const auto& m : params.set)
+      if (m.type() & validTypes)
+        ids.insert(uint32_t(m.id()));
 
     if (!ids.isEmpty()) {
       QReadLocker lock(&_rwLock);
@@ -1327,6 +1330,27 @@ MediaGroupList Database::similar(const SearchParams& params) {
       } else
         qWarning() << "Index::slice unsupported for index" << index->id();
     }
+  }
+
+  {
+    int resultTypes = params.resultTypes();
+    size_t count = std::count_if(haystack.begin(),haystack.end(),[resultTypes](const Media& m)  {
+        return m.type() & resultTypes;
+    });
+    if (count <= 0) {
+      qWarning()  << "invalid search space, no media with type(s)" << Media::typeFlagsString(resultTypes);
+      return MediaGroupList();
+    }
+  }
+
+  // haystack also includes result types we might not want
+  haystack.removeIf([&params](const Media& m) {
+    return 0 == (m.type() & params.queryTypes);
+  });
+
+  if (haystack.empty()) {
+    qWarning()  << "empty search space, did you set -p.types correctly?";
+    return MediaGroupList();
   }
 
   qInfo("index loaded in %dms", int(QDateTime::currentMSecsSinceEpoch() - start));
@@ -1390,14 +1414,18 @@ MediaGroupList Database::similar(const SearchParams& params) {
   start = QDateTime::currentMSecsSinceEpoch();
 
   MediaGroupList list;
-  for (MediaGroup& match : results)
-    if (match.count() > 0 && !filterMatch(params, match)) list.append(match);
+  int matchCount = 0;
+  for (MediaGroup& match : results) {
+    if (match.count() <= 0) continue; // expected since results ==# of needles
+    matchCount++;
+    if (!filterMatch(params, match)) list.append(match);
+  }
 
   filterMatches(params, list);
 
   Media::sortGroupList(list, {"path"});
 
-  qInfo("filtered %lld matches to %lld in %lldms", results.count(), list.count(),
+  qInfo("filtered %lld matches to %lld in %lldms", matchCount, list.count(),
         QDateTime::currentMSecsSinceEpoch() - start);
   return list;
 }
@@ -1517,7 +1545,7 @@ void Database::saveIndices() {
 }
 
 MediaGroup Database::searchIndex(Index* index, const Media& needle, const SearchParams& params,
-                                 const QHash<int, Media>& subset) {
+                                 const QHash<int, Media>& idMap) {
   QReadLocker locker(&_rwLock);
 
   QVector<Index::Match> matches = index->find(needle, params);
@@ -1559,18 +1587,13 @@ DONE:
     if (params.filterSelf && int(match.mediaId) == needle.id()) continue;
     if (group.count() >= params.maxMatches) break;
 
-    // static QAtomicInt num;
-
     Media media;
-    if (!subset.isEmpty()) {
-      auto ii = subset.find(int(match.mediaId));
-      if (ii != subset.end()) media = ii.value();
-    } else {
-      // qint64 then = QDateTime::currentMSecsSinceEpoch();
-      media = mediaWithId(int(match.mediaId));
-      // qint64 now = QDateTime::currentMSecsSinceEpoch();
-      // qDebug() << "query ms:" << num++ << (now-then);
+    if (!idMap.isEmpty()) {
+      auto ii = idMap.find(int(match.mediaId));
+      if (ii != idMap.end()) media = ii.value();
     }
+    else
+      media = mediaWithId(int(match.mediaId));
 
     if (media.isValid()) {
       (void)index->findIndexData(media);

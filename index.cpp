@@ -4,6 +4,13 @@
 
 #include "opencv2/core.hpp"
 
+int SearchParams::resultTypes() const {
+  int types = Media::TypeImage;
+  if (algo == AlgoVideo)
+    types = Media::TypeVideo;
+  return types;
+}
+
 bool SearchParams::mediaSupported(const Media& needle) const {
   int type = 0;
   switch (needle.type()) {

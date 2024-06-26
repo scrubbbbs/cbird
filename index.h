@@ -91,13 +91,13 @@ class SearchParams : public Params {
   QString path;         // subdirectory to search or accept/reject results from
   bool inPath = false;  // true==accept results from, false=reject results from
 
-  MediaGroup set;      // subset to search within (using Index::slice())
+  MediaGroup set;      // subset to search within, must include result types and query types
   bool inSet = false;  // true==use subset
 
   /// @deprecated overlaps with inSet, has limited use, should be removed
   Q_DECL_DEPRECATED uint32_t target = 0;  // specify a media id to search in/for (Media::id())
 
-  int queryTypes = FlagImage;  // types to include in query set/result set
+  int queryTypes = FlagImage;  // types to include in query set
 
   int skipFrames = 300;       // video search: ignore first and last N frames of video
   int minFramesMatched = 30;  // video search: require >N frames match between videos
@@ -117,6 +117,12 @@ class SearchParams : public Params {
 
   /// @return true if the needle is is indexed to allow a search with these parameters
   bool mediaReady(const Media& needle) const;
+
+  /// @return valid query/needle tytpes of algo
+  //int needleTypes() const;
+
+  /// @return valid result types of algo
+  int resultTypes() const;
 
   SearchParams();
 

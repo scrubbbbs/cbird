@@ -168,6 +168,7 @@ QVector<Index::Match> DctVideoIndex::find(const Media& needle, const SearchParam
 }
 
 QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const SearchParams& params) {
+  Q_ASSERT(needle.type() == Media::TypeImage);
   qint64 start = QDateTime::currentMSecsSinceEpoch();
 
   const HammingTree* queryIndex = _tree;
@@ -278,6 +279,8 @@ Index* DctVideoIndex::slice(const QSet<uint32_t>& mediaIds) const {
 }
 
 QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const SearchParams& params) {
+  Q_ASSERT(needle.type() == Media::TypeVideo);
+
   VideoIndex srcIndex;
   QVector<Index::Match> results;
 
@@ -299,52 +302,83 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
 
   const int lastFrame = srcIndex.frames[srcIndex.frames.size() - 1];
   for (size_t i = 0; i < srcIndex.hashes.size(); i++) {
-    uint64_t hash = srcIndex.hashes[i];
+    const int srcFrame = srcIndex.frames[i];
+    const uint64_t srcHash = srcIndex.hashes[i];
+
+    if (srcFrame < params.skipFrames || srcFrame > (lastFrame - params.skipFrames)) continue;
+
     std::vector<HammingTree::Match> matches;
-    queryIndex->search(hash, params.dctThresh, matches);
+    queryIndex->search(srcHash, params.dctThresh, matches);
+
+    // we really only need the one closest frame for each matching video,
+    // except in a corner-case where video repeats the same frame over and over (but this is rare)
+    // fixme: this implies there is a faster/better way to do this? (array of vptree?)
+    struct ScoredMatch { int score; uint32_t frame; };
+    std::unordered_map<int, ScoredMatch> closestMatch;
 
     for (const HammingTree::Match& match : matches) {
-      uint32_t dstFrame = match.value.index & 0xFFFF;
-      uint32_t mediaIndex = match.value.index >> 16;
+      const uint32_t dstFrame = match.value.index & 0xFFFF;
+      const uint32_t dstIndex = match.value.index >> 16;
+      const uint64_t dstHash = match.value.hash;
 
-      uint32_t id = _mediaId[mediaIndex];
+      const uint32_t id = _mediaId[dstIndex];
       if (!params.filterSelf || id != uint32_t(needle.id())) {
-        int srcFrame = srcIndex.frames[i];
-        if (srcFrame < params.skipFrames || srcFrame > (lastFrame - params.skipFrames)) continue;
-
-        cand[id].push_back(MatchRange(srcFrame, int(dstFrame), 1));
+        const auto it = closestMatch.find(id);
+        const int score = hamm64(srcHash, dstHash);
+        if (it == closestMatch.end() || score < it->second.score)
+          closestMatch[id] = {score, dstFrame};
       }
     }
+
+    for (auto& closest : qAsConst(closestMatch))
+      cand[closest.first].push_back(MatchRange(srcFrame, int(closest.second.frame), 1));
   }
+
+  int nearMargin = 15; // todo: params
 
   for (auto it = cand.begin(); it != cand.end(); ++it) {
     auto ranges = it.value();
 
-    std::sort(ranges.begin(), ranges.end());
+    //std::sort(ranges.begin(), ranges.end()); already sorted by srcFrame
 
     int num = int(ranges.size());  // number of frames that matched
-    // int min = matches.front().srcIn; // frame number of first match
-    // int max = matches.back().srcIn;  // frame number of last match
 
-    // we sorted by src frame, we would expect all matches
-    // to also be in ascending order
+    // ranges are sorted by src frame, we would expect all matches
+    // to also be in ascending order, so score them based on how
+    // ascending they are
     int numAscending = 0;
     int lastFrame = 0;
-    for (const MatchRange& range : ranges) {
+    for (const MatchRange& range : qAsConst(ranges)) {
+      // some number of frames before and after are still "nearby" because
+      // the indexer removed similar consecutive frames
       int frame = range.dstIn;
-      // fixme: small # of back frames are also valid
-      // should all neighboring frames be checked with hamming?
-      if (frame > lastFrame) numAscending++;
+      if (abs(frame-lastFrame) < nearMargin) numAscending++;
       lastFrame = frame;
     }
 
     int percentNear = numAscending * 100 / num;
 
-    if (num > params.minFramesMatched && percentNear > params.minFramesNear) {
-      // printf("\t%d\t%d%%\n", num, percentNear);
+    float shortClipMatches=0.75;
+
+    if (num < params.minFramesMatched) {
+      VideoIndex dstIndex;
+      dstIndex.load(QString("%1/%2.vdx").arg(_dataPath).arg(it.key()));
+      if (num < dstIndex.frames.size()*shortClipMatches) {
+        if (params.verbose)
+          qInfo() << "reject id" << it.key() << "too few matches" << num << "/" << dstIndex.frames.size();
+        continue;
+      }
+    }
+    if (percentNear < params.minFramesNear) {
+      if (params.verbose)
+        qInfo() << "reject id" << it.key() << "bad match locality" << percentNear;
+      continue;
+    }
+
+    {
       Index::Match im;
       im.mediaId = it.key();
-      im.score = 100 - percentNear;  // num;
+      im.score = 100 - percentNear;
       im.range.srcIn = ranges.front().srcIn;
       im.range.dstIn = it.value().front().dstIn;
 
@@ -353,8 +387,6 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
       im.range.len = std::max(srcLen, dstLen);
 
       results.append(im);
-    } else if (params.verbose) {
-      qInfo() << "reject id" << it.key() << "matches:" << num << "%nearby:" << percentNear;
     }
   }
 

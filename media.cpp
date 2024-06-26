@@ -163,6 +163,23 @@ Media::Media(const QString& path, int type, int width, int height, const QString
   _dctHash = dctHash;
 }
 
+QString Media::typeString(int mediaType) {
+  switch(mediaType) {
+    case TypeImage: return "image";
+    case TypeVideo: return "video";
+    case TypeAudio: return "audio";
+    default: return "unknown";
+  }
+}
+
+QStringList Media::typeFlagsString(int typeFlags) {
+  QStringList types;
+  for (int type = TypeImage; type <= TypeAudio; ++type)
+    if (typeFlags & (1 << (type-1)))
+      types.append(typeString(type));
+  return types;
+}
+
 // Media::Media(const QString& path, int type, int width, int height,
 //              const QString& md5, const uint64_t dctHash,
 //              const ColorDescriptor& colorDesc, const KeyPointList& keyPoints,

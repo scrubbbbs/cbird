@@ -217,11 +217,11 @@ private:
    * @param index  Index to search
    * @param needle Needle, processed for searching
    * @param params Search parameters
-   * @param subset If not empty, restrict results to this subset
+   * @param idMap If not empty, used to lookup media info
    */
   MediaGroup searchIndex(Index* index, const Media& needle,
                          const SearchParams& params,
-                         const QHash<int, Media>& subset);
+                         const QHash<int, Media>& idMap);
 
   /// Create database (sql) tables for index id 0, the others use Index interface
   void createTables();

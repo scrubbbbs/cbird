@@ -275,6 +275,8 @@ class Media {
    */
   int type() const { return _type; }
   void setType(int type) { _type = type; }
+  static QString typeString(int mediaType);
+  static QStringList typeFlagsString(int typeFlags);
 
   /**
    * @return base64 checksum of file content, identifies exact duplicates
