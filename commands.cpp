@@ -461,7 +461,7 @@ void Commands::rename(Database* db, const QString& srcPat, const QString& dstPat
 
   for (int i = 0; i < toRename.count(); ++i) {
     auto m = toRename[i];
-    qDebug() << m.path() << "->" << newNames[i];
+    qInfo() << m.path() << "->" << newNames[i];
     if (options.indexOf("x") < 0) continue;
     if (!db->rename(m, newNames[i].split("/").back()))
       qFatal("rename failed, maybe index is stale...");
@@ -622,6 +622,10 @@ void Commands::testVideoDecoder(const QString& path) {
       zoom = true;
     } else if (arg == "-no-sws") {
       noSws = true;
+    } else if (arg == "-iframes") {
+      opt.iframes = true;
+    } else if (arg == "-lowres") {
+      opt.lowres = intArg();
     } else
       qFatal("invalid arg to -test-video-decoder");
   }
@@ -694,11 +698,13 @@ void Commands::testVideoDecoder(const QString& path) {
   do {
     VideoContext video;
     Q_ASSERT(0 == video.open(path, opt));
+    auto md = video.metadata();
+    qInfo() << md.frameSize << md.frameRate << md.videoCodec  << md.pixelFormat << md.videoBitrate;
+
     then = QDateTime::currentMSecsSinceEpoch();
     numFrames = 0;
     if (scale) {
-      QImage img;
-      QImage out;
+      QImage img, out;
       while ((noSws ? video.decodeFrame() : video.nextFrame(img))) {
         if (quit) ::exit(0);
         if (crop) {

@@ -69,6 +69,8 @@ class VideoContext {
     int maxH = 0;
     bool gray = false;  // color or yuv/grayscale output
     bool fast = false;  // faster but lower quality, maybe suitable for indexing
+    bool iframes = false; // only decode intra frames; use lastFrameNumber() to get the frame number
+    int lowres = 0;       // lowres decoding factor: 1=1/2 resolution, 2=1/4 etc
 
     int threads = 1;      // max # of threads
     bool gpu = false;     // try gpu decoding
@@ -160,6 +162,9 @@ class VideoContext {
   /// @note only public for benchmarking
   bool decodeFrame();
 
+  /// @note only useful in iframes-only mode
+  int lastFrameNumber() const { return _lastFrameNumber; }
+
  private:
   bool readPacket();
   bool convertFrame(int& w, int& h, int& fmt);
@@ -190,4 +195,5 @@ class VideoContext {
   VideoContext::DecodeOptions _opt;
 
   const int _MAX_DUMBSEEK_FRAMES = 10000; // do not seek if there are too many
+  int _lastFrameNumber;    // estimated last frame number based on pts&frame rate
 };

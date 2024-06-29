@@ -261,6 +261,7 @@ VideoContext::VideoContext() {
   _isHardware = false;
   _eof = false;
   _numThreads = 1;
+  _lastFrameNumber = -1;
 }
 
 VideoContext::~VideoContext() {
@@ -278,6 +279,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   _firstPts = AV_NOPTS_VALUE;
   _deviceIndex = -1;
   _isHardware = false;
+  _lastFrameNumber = -1;
   _eof = false;
   _p->packet.size = 0;
   _p->packet.data = nullptr;
@@ -540,6 +542,28 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     // av_dict_set(&codecOptions, "flags", "gray", 0);
   }
 
+  if (opt.iframes) {
+    // note: some codecs do not support this or are already intra-frame codecs, there
+    // fixme: is there a way to tell before we see the gap in the frame numbers?
+    // fixme: for certain codecs we may want "nointra";  "nokey" works on almost everything
+    av_dict_set(&codecOptions, "skip_frame", "nokey", 0);
+  }
+
+  if (opt.lowres > 0) {
+    // this is quite good for some old codecs; nothing modern though
+    // todo: set lowres value so it gives >= maxw/maxh
+    int lowres = opt.lowres;
+    if (_p->codec->max_lowres <= 0)
+      qDebug("lowres decoding requested but %s doesn't support it", qPrintable(_metadata.videoCodec));
+    else {
+      if (lowres > _p->codec->max_lowres) {
+        lowres = _p->codec->max_lowres;
+        qWarning("lowres limited to %d", lowres);
+      }
+      av_dict_set(&codecOptions, "lowres", qPrintable(QString::number(lowres)), 0);
+    }
+  }
+
   // if (_p->codec->capabilities & CODEC_CAP_TRUNCATED)
   //    _p->context->flags|= CODEC_FLAG_TRUNCATED; // we do not send complete
   //    frames
@@ -550,12 +574,8 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     _numThreads = opt.threads;
 
   // note: no need to set thread_type, let ffmpeg choose the best options
-  if (_numThreads > 0) {
+  if (_numThreads > 0)
     _p->context->thread_count = _numThreads;
-    //        _p->context->thread_type = 0;// FF_THREAD_FRAME|FF_THREAD_SLICE;
-    //        _p->context->execute = avExecute;
-    //        _p->context->execute2 = avExecute2;
-  }
 
   if ((err = avcodec_open2(_p->context, _p->codec, &codecOptions)) < 0) {
     if (_isHardware) {
@@ -608,6 +628,7 @@ void VideoContext::close() {
   _videoFrameCount = 0;
   _numThreads = 1;
   _isHardware = false;
+  _lastFrameNumber = -1;
 
   // QMutexLocker locker(ffGlobalMutex());//&_mutex);
 
@@ -808,7 +829,30 @@ bool VideoContext::readPacket() {
 bool VideoContext::decodeFrame() {
   while (true) {
     int err = avcodec_receive_frame(_p->context, _p->frame);
-    if (err == 0) return true;
+
+    if (err == 0) {
+      if (_opt.iframes) {
+        auto conv = av_mul_q(_p->videoStream->time_base, _p->videoStream->r_frame_rate);
+        auto pts = av_make_q(_p->frame->best_effort_timestamp, 1);
+        int frameNumber = av_q2d(av_mul_q(pts, conv));
+        if (frameNumber == _lastFrameNumber) {
+          // qWarning() << "non-increasing frame number" << frameNumber << _p->context->frame_num;
+          // seems to be rounding issue so just bump it
+          frameNumber++;
+        }
+
+        // fixme: this will happen, commonly live stream captures
+        if (frameNumber < _lastFrameNumber)
+          qWarning() << "backwards frame number" << frameNumber << _lastFrameNumber << _p->context->frame_num;
+
+        // if (frameNumber != _lastFrameNumber+1) // we expect this if skip_frame is working
+        //   qWarning() << "non-monotonically increasing frame number" << frameNumber << _lastFrameNumber << _p->context->frame_num;
+
+        _lastFrameNumber = frameNumber;
+      }
+
+      return true;
+    }
 
     if (err == AVERROR_EOF) {
       AV_DEBUG("avcodec_receive_frame eof");
