@@ -173,6 +173,9 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context, cons
 /// flush logger, required before using printf/scanf etc
 void qFlushMessageLog();
 
+/// if enable=false, ignore logs with matching QMessageLogContext::category
+void qMessageLogCategoryEnable(const QString& category, bool enable);
+
 /// log message extra per-thread context, e.g. the currently active file
 /// note: const because not using MessageContext stack will mess it up
 const QThreadStorage<QString>& qMessageContext();

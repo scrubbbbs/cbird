@@ -1011,6 +1011,8 @@ class MessageLog {
   mutable int64_t _lastTime = nanoTime();    // format()
   mutable QString _formatStr;                // format()
 
+  QStringList _categoryFilters;
+
   MessageLog();
   ~MessageLog();
 
@@ -1030,9 +1032,23 @@ class MessageLog {
 
   void append(const LogMsg& msg);
   void flush();
+
+  void setCategoryFilter(const QString& category, bool enable) {
+    QMutexLocker locker(&_mutex);
+    if (!enable) {
+      if (!_categoryFilters.contains(category))
+        _categoryFilters.append(category);
+    } else {
+      _categoryFilters.removeOne(category);
+    }
+  }
 };
 
 void qFlushMessageLog() { MessageLog::instance().flush(); }
+
+void qMessageLogCategoryEnable(const QString& category, bool enable) {
+  MessageLog::instance().setCategoryFilter(category, enable);
+}
 
 const QThreadStorage<QString> &qMessageContext() { return MessageLog::context(); }
 
@@ -1149,7 +1165,7 @@ MessageLog::MessageLog() {
   if (!tc.isEmpty()) _termColumns = tc.toInt();
 
 #ifdef DEBUG
-  if (_isTerm) printf("term width=%d colors=%d\n", _termColumns, _termColors);
+  if (_isTerm) printf("[DEBUG] term width=%d colors=%d\n", _termColumns, _termColors);
 #endif
 
   _homePath = QDir::homePath();
@@ -1190,6 +1206,10 @@ void MessageLog::outputThread() {
     }
     while (_log.count() > 0) {
       const LogMsg msg = _log.takeFirst();
+
+#ifndef DEBUG // we don't want to miss any logs in debug builds
+      if (_categoryFilters.contains(msg.category)) continue;
+#endif
 
       // compress repeats while we hold the lock
       int pl = msg.msg.indexOf(tokenProgress);  // do not compress progress lines
