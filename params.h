@@ -76,8 +76,12 @@ class Params {
  protected:
   QHash<QString, Value> _params;
   Value _invalid;
+  QSet<QString> _wasSet; // keys successful in setValue()
 
   void add(const Value&& v);
+
+  /// set another parameter if user set the first one (setValue()),
+  /// but only if user never set the second one
   void link(const QString& keyA, const QVariant& valueA, const QString& keyB,
             const QVariant& valueB);
 };

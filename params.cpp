@@ -21,8 +21,10 @@ void Params::setValue(const QString& key, const QVariant& val) {
   else if (!it->set(val))
     qWarning() << "failed to set:" << key << "to:" << val;
   else {
+    _wasSet.insert(key);
     for (const auto& l : it->link)
-      if (l.value == it->get()) setValue(l.target, l.targetValue);
+      if (l.value == it->get() && !_wasSet.contains(l.target))
+        setValue(l.target, l.targetValue);
   }
 }
 

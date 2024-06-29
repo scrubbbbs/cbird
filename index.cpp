@@ -132,7 +132,7 @@ SearchParams::SearchParams() {
   add({"crop", "Enable de-letterbox/autocrop pre-filter", Value::Bool, counter++,
        SET_BOOL(autoCrop), GET(autoCrop), NO_NAMES, NO_RANGE});
 
-  add({"vtrim", "Number of frames go ignore at start/end (video)", Value::Int, counter++,
+  add({"vtrim", "Number of frames to ignore at start/end (video)", Value::Int, counter++,
        SET_INT(skipFrames), GET(skipFrames), NO_NAMES, GET_CONST(positive)});
 
   add({"vfm", "Minimum number of frames matched per video", Value::Int, counter++,
@@ -157,7 +157,7 @@ SearchParams::SearchParams() {
        SET_BOOL(expandGroups), GET(expandGroups), NO_NAMES, NO_RANGE});
 
   // link algo change to also set the query media type,
-  // "-p.alg video -p.types 3" == "-p.alg video"
+  // "-p.alg video" == "-p.alg video -p.types 3", but only if -p.types was not seen yet
   for (int i = 0; i < NumAlgos; ++i) {
     int types = FlagImage;
     if (i == AlgoVideo) types |= FlagVideo;
