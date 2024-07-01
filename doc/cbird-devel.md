@@ -1,27 +1,32 @@
-Release Blockers (v0.7)
+Release Blockers (v0.8)
 =========================
 
+- check if metadatacchangetime works or not before relying on it
+- index is spawning more parallel jobs than it should
+- "invalid key size" with odt too large  > 100?  (-sort-similar)
+- can we avoid "memory allocation failed" error from qimagereader?
 
 Wish List
 =========================
 
 ### Command Line
-- "-use" special notation to find root index in the parent (tree)
+- ~"-use" special notation to find root index in the parent (tree)~ added in v0.7
 - symbolic names for all enumerations (e.g. "v" == video)
-- disable/reduce logging (-verbose, -quiet etc)
+- ~disable/reduce logging (-verbose, -quiet etc)~ improved in v0.7.2
 - typecheck param values
 - presets for multiple parameters
 - move/link files rather than delete/rename
 - prune groups, keeping/ignoring needle
 - rename folders based on filenames
-- copy or sync exif data with matching images
+- copy or sync exif data with matching images (on delete/replace)
 - nuke-dups-in: show how many would not be deleted
 - group-by breaks the sort/sort doesn't work on group-by?
 - -with type <x>, recognize enumerations as in params
 - sort result groups too
 - option to pre-compute no-reference quality score for each image,
   might be reasonable for automatic deletions
-- frame grab any non-indexed video in similar-to
+- ~frame grab any non-indexed video in similar-to~ added in v0.7.?
+- sort by path should sort files before files in subfolders
 
 ### Indexing
 - file/directory name filters for inclusion/exclusion
@@ -50,16 +55,17 @@ Wish List
 - ~~filter for hard/soft links~~ added in v0.6
 - query, edit negative matches
 - refine video search matches using neighboring hashes
+- reflected needle should be tagged so it can be handled better (template matcher, difference image etc)
 
 ### GUI
 - barebones index/search gui
 - open zip'd files/dirs directly where supported (dolphin/gwenview/nomacs?)
 - cv min/max filter 8-bit indexed
 - disable/enable relevant actions per selection/other state
-- show results in batches as they are being computed, for slow queries
+- show results in batches as they are being computed, make slow queries less painful
 - toggle histogram view
 - context menu: copy path to clipboard
-- when deleting zip, remove all zip contents from viewer
+- when deleting zip, remove all zip contents from viewer (on other pages)
 - ~~remember past deletions and optionally replay them in the future should they reappear (via traal)~~ added "weeds" feature v0.6
 - detect breaking of symlinks on delete/rename
 - visual indicator of the needle in group view, gets lost when rotating
@@ -77,6 +83,7 @@ Wish List
 - "override"
 - "const"
 - replace getenv() calls with qt version
+- replace qFatal() with qCritical() if error recovery is possible
 
 Major Bugs
 ==========================
@@ -86,6 +93,7 @@ Major Bugs
 - ~~MBW move folder option broken~~ removed in v0.5.1
 - control-c during database write will usually corrupt sqlite database, most likely when the filesystem doesn't support locking
 - gui video decode potentially broken (unconfirmed)
+- video index may be leaking file handle (#xyz)
 
 Minor Bugs
 =========================
@@ -101,12 +109,13 @@ Minor Bugs
 - ~~MGLW scale-to-fit does not work when diff image enabled~~ fixed v0.6
 - MGLW up/down key selection swaps sides (scroll wheel does not)
 - MGLW: delete multi-select as one batch
-- MGLW: suppress QIR eof warnings from thread cancellation
+- ~~MGLW: suppress QIR eof warnings from thread cancellation~~ fixed v0.7.2
 - MGLW: load next row loses focus item on some systems (gnome?)
 - ~~MGLW: template match (T) hides diff image / doesn't restore after reset (F5)~~ fixed v0.6
-- MGLW: rename folder doesn't update all affected viewer paths
+- ~MGLW: rename folder doesn't update all affected viewer paths~ fixed v0.7.2
 - MGLW: difference image clips white/light shades of grayscale images
 - MGLW: mouse motion eats the next scroll wheel event  (gnome3+xcb)
+- MGLW: vertical resize doesn't repaint window, horizontal is fine (gnome)
 - weeds: when deleting a file, do something about broken weeds condition
 - weeds: add something to report and fix broken weed records, maybe part of -update
 - ~~Theme: background shade stacks up with context menu~~
@@ -143,12 +152,11 @@ Conventions
 - Editor: Qt Creator is nice (enable ClangFormat plugin)
 
 ## Idioms
-- Qt-based classes should use NO_COPY, NO_COPY_NO_DEFAULT.
+- QWidget-derived classes should use NO_COPY, NO_COPY_NO_DEFAULT.
 - Non-qt should use Q_DISABLE_COPY_MOVE, unless copying is desired
 - use "super" and "self" to refer to respective classes
 - use QT_ASSERT liberally. Assertions are never disabled (yet, maybe some day). Frequent assertions are eventually replaced with error handling
 - use qDebug() etc not printf/cout
-
 
 Unit tests
 =========================
