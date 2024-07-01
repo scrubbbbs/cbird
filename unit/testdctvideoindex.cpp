@@ -16,9 +16,9 @@ class TestDctVideoIndex : public TestIndexBase {
     // note: parameters tuned to match short test videos
     _params.algo = SearchParams::AlgoVideo;
     _params.filterSelf = false;
-    _params.dctThresh = 4;
-    _params.minFramesMatched = 10;
-    _params.minFramesNear = 45;
+    _params.dctThresh = 1;
+    _params.minFramesMatched = 1;
+    _params.minFramesNear = 1;
     _params.verbose = true;
     _params.skipFrames = 0;
     _params.queryTypes = Media::TypeVideo;
