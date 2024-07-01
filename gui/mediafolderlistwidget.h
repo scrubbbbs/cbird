@@ -29,9 +29,10 @@ class MediaFolderListWidget : public QListWidget {
   NO_COPY_NO_DEFAULT(MediaFolderListWidget, QListWidget)
 
  public:
-  MediaFolderListWidget(const MediaGroup& list,
-                        const MediaWidgetOptions& options = MediaWidgetOptions(),
-                        QWidget* parent = nullptr);
+  MediaFolderListWidget(
+      const MediaGroup& list,
+      const MediaWidgetOptions& options = MediaWidgetOptions(),
+      QWidget* parent = nullptr);
   virtual ~MediaFolderListWidget();
 
   void show();

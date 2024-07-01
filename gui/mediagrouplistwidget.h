@@ -24,6 +24,8 @@
 
 class Database;
 class MediaItemDelegate;
+class MediaPage;
+class ImageWork;
 
 /**
  * @class MediaGroupListWidget
@@ -58,8 +60,6 @@ class MediaGroupListWidget : public QListWidget {
 
   void close();
 
-  bool fastSeek() const { return _options.flags & MediaWidgetOptions::FlagFastSeek; }
-
  Q_SIGNALS:
   /// Emitted by chooseAction()
   void mediaSelected(const MediaGroup& group);
@@ -82,26 +82,38 @@ class MediaGroupListWidget : public QListWidget {
   /// Move selected file to subdir of its index
   void moveFileAction();
 
-  /// Move folder/zip of selected file to subdir
-  void moveFolderAction();
-
   /// Rename selected file
   void renameFileAction();
+
+  /// Rename; take name from the other (unselected) item in a pair (keep extension)
+  void copyNameAction();
+
+  /// Move folder/zip of selected file to subdir
+  void moveFolderAction();
 
   /// Rename folder/container of selected file
   void renameFolderAction();
 
-  /// Copy name from the other (unselected) item in a pair
-  void copyNameAction();
+  /// Copy image to clipboard
+  void copyImageAction();
+
+  /// Set a thumbnail for the index
+  void thumbnailAction();
+
+  /// Cycle positions of items
+  void rotateAction();
+
+  /// Remove selected items from the view (do not delete files)
+  void clearAction() { removeSelection(false); }
 
   /// Add no-reference quality score to item descriptions
   void qualityScoreAction();
 
-  /// Scale-up smaller items to match the largest item
-  void scaleModeAction();
-
   /// Template match first item to selected item, removing other items
   void templateMatchAction();
+
+  /// Toggle image-pair differences visualization
+  void toggleAutoDifferenceAction();
 
   /// Compare the first item to selected item
   void compareVideosAction();
@@ -109,23 +121,8 @@ class MediaGroupListWidget : public QListWidget {
   /// Compare first item to selected item
   void compareAudioAction();
 
-  /// Remove selected items from the view (do not delete files)
-  void clearAction() { removeSelection(false); }
-
-  /// Cycle positions of items
-  void rotateAction() { rotateGroup(_currentRow); }
-
-  /// When enter key is pressed, emit mediaSelected()
-  void chooseAction();
-
   /// Reset changes to the current row
   void reloadAction();
-
-  /// Copy image to clipboard
-  void copyImageAction();
-
-  /// Set a thumbnail for the index
-  void thumbnailAction();
 
   /// Record positive match to csv file
   void recordMatchTrueAction() { recordMatch(true); }
@@ -148,17 +145,8 @@ class MediaGroupListWidget : public QListWidget {
     nextGroupAction();
   }
 
-  // navigation
-  void nextGroupAction() { loadRow(_currentRow + 1); }
-  void prevGroupAction() { loadRow(_currentRow - 1); }
-  void jumpForwardAction() { loadRow(_currentRow + 100); }
-  void jumpBackAction() { loadRow(_currentRow - 100); }
-  void jumpToStartAction() { loadRow(0); }
-  void jumpToEndAction() { loadRow(_list.count() - 1); }
-
-  /// Move window to next available screen
-  void moveToNextScreenAction();
-  // void toggleFullscreenAction();
+  /// Scale-up smaller items to match the largest item
+  void scaleModeAction();
 
   // item zoom/pan
   void zoomInAction();
@@ -169,47 +157,39 @@ class MediaGroupListWidget : public QListWidget {
   void panDownAction();
   void resetZoomAction();
 
-  /// Cycle minification filter (scale < 100%)
+  // scaling filter
   void cycleMinFilter();
-
-  /// Cycle magnification filter (scale > 100%)
   void cycleMagFilter();
 
-  /// Toggle image-pair differences visualization
-  void toggleAutoDifferenceAction();
-
+  // change items per page
   void increasePageSize() { resizePage(true); }
   void decreasePageSize() { resizePage(false); }
 
-  /// Open new window with all images in the selection's folder
-  void browseParentAction();
+  /// When enter key is pressed, emit mediaSelected()
+  void chooseAction();
 
   /// Toggle lock on the selected folder
   void toggleFolderLockAction();
 
+  /// Open new window with all images in the selection's folder
+  void browseParentAction();
+
+  // Page navigation
+  void nextGroupAction() { loadRow(_currentRow + 1); }
+  void prevGroupAction() { loadRow(_currentRow - 1); }
+  void jumpForwardAction() { loadRow(_currentRow + 100); }
+  void jumpBackAction() { loadRow(_currentRow - 100); }
+  void jumpToStartAction() { loadRow(0); }
+  void jumpToEndAction() { loadRow(_list.count() - 1); }
+
  private:
-  void paintEvent(QPaintEvent* event) override;
   void closeEvent(QCloseEvent* event) override;
   void keyPressEvent(QKeyEvent* event) override;
+  void paintEvent(QPaintEvent* event) override;
   void wheelEvent(QWheelEvent* event) override;
 
-  /// Clear the list view and add new set of items
-  void loadRow(int row);
-
-  /// Update list view items, for example when images are loaded
-  void updateItems();
-
-  /**
-   * @brief Remove current and consecutive rows if nothing useful is left to see, or reload it to
-   * reflect changes
-   */
-  void updateCurrentRow();
-
-  /**
-   * @brief Advance to next row if it is possible
-   * @param exit if true, then exit the viewer at the end
-   */
-  void loadNextRow(bool closeAtEnd);
+  /// Menu tree for moving stuff
+  QMenu* dirMenu(const char* slot);
 
   /**
    * @brief Remove items from the current group
@@ -220,6 +200,12 @@ class MediaGroupListWidget : public QListWidget {
    * move to the next group
    */
   void removeSelection(bool deleteFiles, bool replace = false);
+
+  /// Warn about renaming w/o database present
+  bool renameWarning();
+
+  /// Move parent of child(file) to newName
+  void moveDatabaseDir(const Media& child, const QString& newName);
 
   /**
    * @brief Build file for verifying a dataset
@@ -239,48 +225,6 @@ class MediaGroupListWidget : public QListWidget {
    */
   bool addNegMatch(bool all);
 
-  /// Move positions of items forward, the last item becomes the first
-  void rotateGroup(int row);
-
-  /// Update _list for changes to media (e.g. rename)
-  void updateMedia(const QString& path, const Media& m);
-
-  /// Start background jobs for the given row
-  void loadMedia(int row);
-
-  /// Block and finish loaders for row (-1 for all rows)
-  void waitLoaders(int row = -1, bool cancel = true);
-
-  /// Cancel image loaders except for the given row
-  void cancelOtherLoaders(int row);
-
-  /// @return List of selected items as Media objects
-  MediaGroup selectedMedia();
-
-  /// Remove analysis media items from all groups
-  void removeAnalysis();
-
-  /// Add difference media item to all groups
-  void addDifferenceAnalysis();
-
-  /// Estimate additional memory requirement of unloaded or partially loaded row
-  float requiredMemory(int row) const;
-
-  /// Try to restore selected item after a layout change
-  void restoreSelectedItem(const QModelIndex& last);
-
-  /// Return true if there is a pair displayed and one is selected
-  bool selectedPair(Media** selected, Media** other);
-
-  /// Warn about renaming w/o database present
-  bool renameWarning();
-
-  /// Move parent of child(file) to newName
-  void moveDatabaseDir(const Media& child, const QString& newName);
-
-  /// Menu tree for moving stuff
-  QMenu* dirMenu(const char* slot);
-
   /// Reset zoom and pan
   void resetZoom();
 
@@ -297,22 +241,92 @@ class MediaGroupListWidget : public QListWidget {
   void loadFolderLocks();
   void saveFolderLocks() const;
 
-  MediaGroupList _list;
-  MediaWidgetOptions _options;
-  MediaItemDelegate* _itemDelegate;
+  MediaPage* currentPage() const { return _list.at(_currentRow); }
 
-  QList<QFutureWatcher<void>*> _loaders;  // loadMedia() threadpool tasks
-  QList<int> _lruRows;                    // least-recently-used rows
+  /// List of media corresponding to and in the same order as list view items
+  const MediaGroup& currentGroup() const;
+
+  /// List of selected items as Media objects
+  MediaGroup selectedMedia();
+
+  /// true if there is a pair displayed and one is selected
+  bool selectedPair(Media** selected, Media** other);
+
+  /// Try to restore selected item after a layout change
+  void restoreSelectedItem(const QModelIndex& last);
+
+  /// Set the text block and call update(; call when items change (image loaded etc)
+  void updateItems();
+
+  /// Call after deleting or adding items to the current row
+  void itemCountChanged();
+
+  /// Replace all items in all rows with the given path (e.g. after move/rename)
+  void updateMedia(const QString& path, const Media& m);
+
+  // Sanity check memory usage
+  void checkMemoryUsage() const;
+
+  /// Move all pages from _list into _deletedPages
+  void deletePages();
+
+  /// Move one page from _list into _deletedPages
+  void deletePage(int index);
+
+  /// Block and finish all loaders (not advised, use cancel and timers instead)
+  void waitLoaders();
+
+  /// Cancel image loaders except for the given pages
+  void cancelOtherLoaders(QSet<const MediaPage*> keep);
+
+  /// Image loader out of memory; free stuff and try again
+  void loaderOutOfMemory();
+
+  /// Load one image/videothumb/analysis in the background
+  /// @section loading
+  void loadOne(MediaPage* page, int index);
+
+  /// Start background jobs for the given page, not necessarily the displayed page
+  void loadMedia(MediaPage* page);
+
+  /**
+   * @brief Clear the list view and add new set of items, slow parts are processed in the background
+   * @param row index into _list we are going to display
+   * @param preloadNextRow if true then guess the next row index and
+   *                       fetch once this row completes
+   */
+  void loadRow(int row, bool preloadNextRow=true);
+
+
+  QVector<MediaPage*> _list;        // model data; each page is a MediaGroup
+  MediaWidgetOptions _options;      // global ui options
+  MediaItemDelegate* _itemDelegate; // layout and paint items
+
+  QList<ImageWork*> _loaders;       // loadMedia() threadpool tasks
+  QList<MediaPage*> _loadedPages;   // least-recently-used rows
+
   QHash<QString, int> _archiveFileCount;  // cache # files in an archive
 
-  int _currentRow = -1;
-  double _zoom = 1.0;
-  double _panX = 0, _panY = 0;
-  bool _autoDifference = false;
-  bool _maximized = false;
-  const int _origCount; // count before any deletions
+  int _currentRow = -1; // index into _list[] for the displayed page
 
-  QTimer _updateTimer;
-  QSet<QString> _lockedFolders;
+  double _zoom = 1.0; // scale factor (added to scale modes scaling)
+  double _panX = 0, _panY = 0;  // translate the view
+  bool _autoDifference = false; // if true show the difference image on the right side
+  const int _origCount = 0; // count before any deletions for top progress bar
+
+  bool _maximized = false; // true if window was maximized on last exit
+
+  QTimer _updateTimer; // delayed calls to updateItems()
+
+  MediaPage* _preloadPage=nullptr; // optional additional page for load timer
+  QTimer _loadTimer; // delayed call to loadMedia()
+
+  QSet<QString> _lockedFolders; // folders we disallow modifications on
   const char* const _FOLDER_LOCKS_FILE="locks.txt";
+
+  QSet<MediaPage*> _deletedPages; // removed and unloaded pages
+
+  QTimer _oomGuard;   // fires occasionally to prevent system oom condition
+
+  QTimer _oomTimer; // fires when we are oom on the image loader
 };
