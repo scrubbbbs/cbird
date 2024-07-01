@@ -279,6 +279,9 @@ Database::Database(const QString& path_) {
   // an index for columns of the "media" table (in setup())
   memset(&_mediaIndex, 0xFF, sizeof(_mediaIndex));
 
+  if (!dir.exists(indexPath()))
+    _firstTime = true;
+
   if (!dir.mkpath(indexPath()))
     qFatal("failed to create index folder: \"%s\"", qUtf8Printable(indexPath()));
 
@@ -324,7 +327,7 @@ QDateTime Database::lastAdded() {
   // note: we cannot use the date of the database file, because
   //       other operations like rename, vacuum will modify it
   QFileInfo info(indexPath() + "/last-added.txt");
-  if (!info.exists()) {
+  if (!info.exists() && !_firstTime) {
     qWarning() << "missing timestamp file, -update may ignore modified files";
     return DBHelper::lastModified(connect());
   }

@@ -288,4 +288,6 @@ private:
 
   QHash<QString, QString> _weeds; /// deleted hash => retained hash
   bool _weedsLoaded = false;
+
+  bool _firstTime = false; /// true if running for the first time
 };
