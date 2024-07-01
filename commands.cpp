@@ -260,16 +260,14 @@ void Commands::filter(const std::vector<Filter>& filters) const {
         }
       });
 
-      const auto progress = [&]() {
-        int percent = future.progressValue() * 100 / future.progressMaximum();
-        qInfo().nospace().noquote() << "{" << withName << " " << key << " " << valueExp
-                                    << "} <PL>" << percent << "% matched " << count.loadRelaxed();
-      };
+      PROGRESS_LOGGER(pl,
+                      qq("{%1 %2 %3}<PL> %percent %bignum checked, %4 matched").arg(withName, key, valueExp, "%1"),
+                      future.progressMaximum());
       while (future.isRunning()) {
         QThread::msleep(100);
-        progress();
+        pl.step(future.progressValue(), {count.loadRelaxed()});
       }
-      progress();  // always show 100%
+      pl.end(0, {count.loadRelaxed()});
     }
 
     if (_queryResult.count() > 0) {

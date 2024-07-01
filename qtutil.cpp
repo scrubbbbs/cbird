@@ -1379,9 +1379,9 @@ QString MessageLog::format(const LogMsg& msg) const {
   if (msg.msg.startsWith(QLatin1String("<NC>")))  // no context
     _formatStr += QStringView(msg.msg).mid(4);
   else {
-    _formatStr += QLatin1Char('[');
-    _formatStr += fmt.label;
-    _formatStr += QLatin1String("][");
+    //_formatStr += fmt.label;
+    //_formatStr += QLatin1Char(' ');
+    _formatStr += QLatin1Char('@');
 
     _formatStr += shortFunction;
     if (!msg.threadContext.isNull()) {
@@ -1389,7 +1389,8 @@ QString MessageLog::format(const LogMsg& msg) const {
       _formatStr += msg.threadContext;
       _formatStr += QLatin1Char('}');
     }
-    _formatStr += QLatin1String("] ");
+    _formatStr += QLatin1Char('$');
+    _formatStr += QLatin1Char(' ');
     _formatStr += msg.msg;
   }
 
@@ -1574,4 +1575,52 @@ int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const Q
 
     Q_UNREACHABLE();  // every case either continues or returns
   }
+}
+
+void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantList& args) const {
+  if (_max > 0)
+    str.replace("%percent", QString::number(step * 100 / _max) + '%');
+
+  str.replace("%bignum", _locale.toString(step));
+
+  for (int i = 0; i < args.size(); ++i) {
+    const QVariant& val = args.at(i);
+    const QMetaType type = val.metaType();
+
+    QString repl;
+
+    switch (type.id()) {
+      case QMetaType::Int:
+      case QMetaType::UInt:
+      case QMetaType::LongLong:
+      case QMetaType::ULongLong:
+      case QMetaType::Long:
+      case QMetaType::ULong:
+        repl = _locale.toString(val.toULongLong());
+        break;
+      case QMetaType::Float:
+      case QMetaType::Double:
+        repl = _locale.toString(val.toDouble());
+        break;
+      default:
+        repl = val.toString();
+    }
+
+    str.replace("%"+QString::number(i+1), repl);
+  }
+}
+
+void ProgressLogger::step(uint64_t step, const QVariantList& args) const {
+  if (_timer.elapsed() < 500) return;
+  QString out = _format;
+  formatString(out, step, args);
+  qColorMessageOutput(QtInfoMsg, _context, out);
+}
+
+void ProgressLogger::end(uint64_t step, const QVariantList& args) const {
+  if (_timer.elapsed() < 500) return;
+  QString out = _format;
+  out +=  ", " + QString::number(_timer.elapsed()) + "ms";
+  formatString(out, step > 0 ? step : _max, args);
+  qColorMessageOutput(QtInfoMsg, _context, out);
 }

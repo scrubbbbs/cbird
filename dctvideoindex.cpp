@@ -20,7 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #include "dctvideoindex.h"
 
-#include "profile.h"
+#include "qtutil.h"
 #include "tree/hammingtree.h"
 
 DctVideoIndex::DctVideoIndex() {
@@ -85,10 +85,15 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
 
   if (!_tree) {
     auto* tree = new HammingTree;
-    for (size_t i = 0; i < _mediaId.size(); i++) insertHashes(int(i), tree, params);
+    PROGRESS_LOGGER(pl, "<PL>%percent %bignum videos", _mediaId.size());
+    for (size_t i = 0; i < _mediaId.size(); i++) {
+      pl.step(i);
+      insertHashes(int(i), tree, params);
+    }
+    pl.end();
 
     HammingTree::Stats stats = tree->stats();
-    qInfo("%d/%d hashes %.1f MB, nodes=%d maxHeight=%d vtrim=%d", int(tree->size()),
+    qInfo("%d hashes, %.1f MB, %d nodes, depth %d, vtrim %d",
           stats.numValues, stats.memory / 1024.0 / 1024.0, stats.numNodes, stats.maxHeight,
           params.skipFrames);
 
@@ -99,8 +104,6 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
 void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) {
   (void)cachePath;
   _dataPath = dataPath;
-
-  uint64_t start = nanoTime();
 
   QSqlQuery query(db);
   query.setForwardOnly(true);
@@ -116,15 +119,20 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QStri
   _mediaId.clear();
   _isLoaded = false;
 
-  while (query.next()) _mediaId.push_back(query.value(0).toUInt());
+  PROGRESS_LOGGER(pl, "<PL>sql query: %bignum videos", 0);
+
+  int i = 0;
+  while (query.next()) {
+    _mediaId.push_back(query.value(0).toUInt());
+    if (++i % 1000 == 0) pl.step(i);
+  }
 
   if (_mediaId.size() > 0xFFFF) qFatal("maximum of %d videos can be searched", 0xFFFF);
 
   // lazy load the tree since findFrame may not need it
   _isLoaded = true;
 
-  uint64_t end = nanoTime();
-  qInfo("%d videos, %dms", int(_mediaId.size()), int((end - start) / 1000000));
+  pl.end();
 }
 
 void DctVideoIndex::save(QSqlDatabase& db, const QString& cachePath) {
@@ -210,7 +218,7 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
 
   uint64_t hash = needle.dctHash();
   if (hash == 0) {
-    qWarning("needle has no dct hash");
+    qWarning()  << "needle has no dct hash" << needle.id() << needle.path();
     return results;
   }
 

@@ -20,7 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #include "dcthashindex.h"
 
-#include "profile.h"
+#include "qtutil.h"
 #include "tree/dcttree.h"
 
 DctHashIndex::DctHashIndex() {
@@ -73,49 +73,43 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath, const QStrin
 
     _isLoaded = true;
 
-    uint64_t start = nanoTime();
+    QSqlQuery query(db);
+    query.setForwardOnly(true);
 
-    {
-      QSqlQuery query(db);
-      query.setForwardOnly(true);
+    // progress bar
+    if (!query.exec("select count(0) from media")) SQL_FATAL(exec);
+    if (!query.next()) SQL_FATAL(next);
 
-      // progress bar
-      if (!query.exec("select count(0) from media")) SQL_FATAL(exec);
-      if (!query.next()) SQL_FATAL(next);
+    const uint64_t rowCount = query.value(0).toLongLong();
 
-      const uint64_t rowCount = query.value(0).toLongLong();
-      const QLocale locale;
+    if (!query.exec(hashQuery())) SQL_FATAL(exec);
 
-      if (!query.exec(hashQuery())) SQL_FATAL(exec);
+    int chunkSize = 1024;
+    int capacity = 0;
+    int i = 0;
 
-      int chunkSize = 1024;
-      int capacity = 0;
-      int i = 0;
+    PROGRESS_LOGGER(pl, "<PL>%percent %bignum hashes", rowCount);
 
-      while (query.next()) {
-        if (i % chunkSize == 0) {
-          capacity += chunkSize;
+    while (query.next()) {
+      if (i % chunkSize == 0) {
+        capacity += chunkSize;
 
-          _hashes = strict_realloc(_hashes, capacity);
-          _mediaId = strict_realloc(_mediaId, capacity);
+        _hashes = strict_realloc(_hashes, capacity);
+        _mediaId = strict_realloc(_mediaId, capacity);
 
-          qInfo("sql query:<PL> %d%% %s hashes", int(uint64_t(i) * 100 / rowCount),
-                qPrintable(locale.toString(i)));
-        }
-
-        _mediaId[i] = query.value(0).toUInt();
-        _hashes[i] = uint64_t(query.value(1).toLongLong());
-        i++;
-
+        pl.step(i);
       }
 
-      _numHashes = i;
+      _mediaId[i] = query.value(0).toUInt();
+      _hashes[i] = uint64_t(query.value(1).toLongLong());
+      i++;
     }
+
+    _numHashes = i;
 
     buildTree();
 
-    uint64_t end = nanoTime();
-    qInfo("%d hashes, %dms", _numHashes, int((end - start) / 1000000));
+    pl.end();
   }
 }
 

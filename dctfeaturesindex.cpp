@@ -107,7 +107,7 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
     _tree = new HammingTree;
 
     if (!stale) {
-      qInfo("from cache");
+      qInfo("reading cache file");
       _tree->read(qUtf8Printable(path));
     } else {
       QSqlQuery query(db);
@@ -125,6 +125,8 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
       std::vector<HammingTree::Value> chunk;  // build tree in chunks to reduce temp memory
       const int minChunkSize = 100000;
 
+      PROGRESS_LOGGER(pl, "<PL>%percent %bignum images", rowCount);
+
       if (!query.exec("select media_id,hashes from kphash")) SQL_FATAL(exec);
 
       while (query.next()) {
@@ -141,18 +143,18 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
         const uint64_t* ptr = reinterpret_cast<const uint64_t*>(hashes.constData());
         const int len = int(size_t(hashes.size()) / sizeof(uint64_t));
 
-        for (int j = 0; j < len; j++) chunk.push_back(HammingTree::Value(mediaId, ptr[j]));
+        for (int j = 0; j < len; ++j)
+          chunk.push_back(HammingTree::Value(mediaId, ptr[j]));
 
         numHashes += len;
 
         if (chunk.size() >= minChunkSize) {  // todo: this size seems to have some small effect
           _tree->insert(chunk);
           chunk.clear();  // no reallocation
-
-          qInfo("sql query:<PL> %d%% %s hashes", int(currentRow * 100 / rowCount),
-                qPrintable(locale.toString(numHashes)));
+          pl.step(currentRow);
         }
       }
+      pl.end();
       _tree->insert(chunk);
       chunk.clear();
       save(db, cachePath);
@@ -173,7 +175,7 @@ void DctFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
 
   if (!DBHelper::isCacheFileStale(db, path)) return;
 
-  qInfo() << "save tree";
+  qInfo() << "writing cache file";
   writeFileAtomically(path, [this](QFile& f) { _tree->write(f); });
 }
 
@@ -209,7 +211,7 @@ Index* DctFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
 
   HammingTree::Stats stats = chunk->_tree->stats();
 
-  qInfo("%dKhash, height=%d nodes=%d %dMB %dms", stats.numValues / 1000, stats.maxHeight,
+  qDebug("%dKhash, height=%d nodes=%d %dMB %dms", stats.numValues / 1000, stats.maxHeight,
         stats.numNodes, int(stats.memory / 1000000),
         int(QDateTime::currentMSecsSinceEpoch() - then));
 
@@ -232,7 +234,7 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle, const SearchPa
     if (needle.id() > 0) _tree->findIndex(needle.id(), hashes);
 
     if (hashes.size() <= 0) {
-      qWarning() << "no hashes for needle id" << needle.id() << needle.path();
+      qWarning() << "needle has no hashes" << needle.id() << needle.path();
       return QVector<Index::Match>();
     }
   }

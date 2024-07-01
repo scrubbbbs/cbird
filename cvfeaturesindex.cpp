@@ -173,7 +173,7 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
     _index = nullptr;
 
     if (!stale) {
-      qInfo("from cache");
+      qInfo("reading cache file");
       loadIndex(cachePath);
     } else {
       QSqlQuery query(db);
@@ -185,6 +185,8 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
       const uint64_t rowCount = query.value(0).toLongLong();
       uint64_t currentRow = 0;
       const QLocale locale;
+
+      PROGRESS_LOGGER(pl, "sql query:<PL> %percent %bignum images", rowCount);
 
       if (!query.exec("select media_id,rows,cols,type,stride,data from matrix order by media_id"))
         SQL_FATAL(exec)
@@ -230,11 +232,11 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
         lastId = id;
 
         if (numDesc > nextProgress) {
-          qInfo("sql query:<PL> %d%% %s descriptors", int(currentRow * 100 / rowCount),
-                qPrintable(locale.toString(numDesc)));
+          pl.step(currentRow);
           nextProgress = numDesc + progressStep;
         }
       }
+      pl.end();
       Q_ASSERT(_descriptors.rows == int(numDesc));
 
       // build flann index
@@ -336,13 +338,16 @@ void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
     //_index = new cv::flann::Index(_descriptors, indexParams); // non-incremental build
     _index = new cv::flann::Index;
 
-    // build the index incrementally, it is a quite bit faster
+    // build the index incrementally, it is a quite faster
     // somehow, and does not seem to affect accuracy
+    PROGRESS_LOGGER(pl, "<PL>%percent %bignum descriptors", _descriptors.rows);
+
     for (int i = 0; i < _descriptors.rows; i += 10000) {
       int upper = std::min(i + 10000, _descriptors.rows);
       _index->build(_descriptors.rowRange(0, upper), _descriptors.rowRange(i, upper), indexParams);
-      qInfo("adding descriptors:<PL> %d%%", int(int64_t(i) * 100 / _descriptors.rows));
+      pl.step(i+upper);
     }
+    pl.end();
   }
 
   ms = QDateTime::currentMSecsSinceEpoch() - ms;
@@ -371,18 +376,18 @@ void CvFeaturesIndex::loadIndex(const QString& path) {
 }
 
 void CvFeaturesIndex::saveIndex(const QString& cachePath) {
-  qInfo() << "<PL>descriptors...";
+  qInfo() << "<PL>writing descriptors...";
   saveMatrix(_descriptors, cachePath + "/cvfeatures.mat");
-  qInfo() << "<PL>ids...        ";
+  qInfo() << "<PL>writing ids...        ";
   saveMap(_idMap, cachePath + "/cvfeatures_idmap.map");
-  qInfo() << "<PL>indices...    ";
+  qInfo() << "<PL>writing indices...    ";
   saveMap(_indexMap, cachePath + "/cvfeatures_indexmap.map");
-  qInfo() << "<PL>marker...     ";
+  qInfo() << "<PL>writing marker...     ";
   writeFileAtomically(cacheFile(cachePath), [](QFile& f) {
     QByteArray mark("this file indicates index was saved successfully");
     if (mark.length() != f.write(mark)) throw f.errorString();
   });
-  qInfo() << "<PL>complete      ";
+  qInfo() << "<PL>writing complete      ";
 }
 
 cv::Mat CvFeaturesIndex::descriptorsForMediaId(uint32_t mediaId) const {
@@ -411,7 +416,7 @@ QVector<Index::Match> CvFeaturesIndex::find(const Media& needle, const SearchPar
   if (descriptors.rows <= 0) descriptors = descriptorsForMediaId(uint32_t(needle.id()));
 
   if (descriptors.rows <= 0) {
-    qWarning("needle has no descriptors");
+    qWarning() << "needle has no descriptors" << needle.id() << needle.path();
     return {};
   }
 

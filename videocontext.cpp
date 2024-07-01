@@ -1121,7 +1121,7 @@ float VideoContext::pixelAspectRatio() const {
 
   _p->sar = float(av_q2d(av_guess_sample_aspect_ratio(_p->format, _p->videoStream, _p->frame)));
   if (_p->sar == 0.0f) {
-    AV_WARNING("unable to guess SAR, assuming 1.0");
+    AV_DEBUG("no SAR given, assuming 1.0");
     _p->sar = 1.0f;
   }
   return _p->sar;

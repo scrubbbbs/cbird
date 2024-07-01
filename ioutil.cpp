@@ -234,6 +234,7 @@ const Dangling* Dangling::_this = nullptr;
 
 void writeFileAtomically(const QString& path, const std::function<void(QFile&)>& fn) {
   // static auto* d = new Dangling;
+  // fixme: using exceptions for control flow
   try {
     QTemporaryFile f(path);
     if (!f.open()) throw f.errorString();

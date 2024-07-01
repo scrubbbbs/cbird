@@ -217,7 +217,7 @@ void Scanner::scanProgress(const QString& path) const {
   const QString elided = qElide(path.mid(_topDirPath.length() + 1), 80);
 
   QString status =
-      QString::asprintf("<NC>%s<PL> i:%lld v:%lld ign:%d mod:%d ok:%d <EL>%s",
+      QString::asprintf("<NC>checking %s<PL> new{i:%lld v:%lld} ignored:%d modified:%d ok:%d <EL>%s",
                         qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(),
                         _ignoredFiles, _modifiedFiles, _existingFiles, qUtf8Printable(elided));
   qInfo().noquote() << status;
@@ -416,20 +416,23 @@ void Scanner::finish() {
       int finished = (_queuedFiles - pendingFiles);
       int progress = finished * 100 / _queuedFiles;
 
-      QString vProgress;
-      if (_videoProgress.count() > 0) {
-        vProgress = ll("videos:[");
-        for (int i : qAsConst(_videoProgress).values())
-          vProgress += QString(ll(" %1%")).arg(i);
-        vProgress += ll(" ] ");
-      }
+      QStringList vList;
+      if (_videoProgress.count() > 0)
+        for (int percent : qAsConst(_videoProgress).values()) {
+          if (percent == 100) continue; // we don't need to see quick jobs
+          vList += qq("%1%").arg(percent);
+        }
+
+      const QString vProgress = vList.count() ? ", videos{" + vList.join(',') + '}' : "";
+
       QString status = QString::asprintf(
-          "<NC>%s<PL> i:%lld v:%lld ip:%lld gpu:%d cpu:%d thr:%d "
-          "progress:%d/%d %d%% <EL>%s",
+          "<NC>indexing %s<PL> waiting{i:%lld v:%lld} running{gpu:%d cpu:%d} threads:%d "
+          "%d%% %d indexed<EL>%s",
           qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(),
-          _activeWork.count(), _gpuPool.activeThreadCount(),
-          QThreadPool::globalInstance()->activeThreadCount(), totalThreadCount(),
-          finished, _queuedFiles, progress, qUtf8Printable(vProgress));
+          _gpuPool.activeThreadCount(),
+          QThreadPool::globalInstance()->activeThreadCount(),
+          totalThreadCount(),
+          progress, finished, qUtf8Printable(vProgress));
       qInfo().noquote() << status;
 
       QStringList vDone;
@@ -502,6 +505,8 @@ void Scanner::processOne() {
 
       // try to process even if we don't have enough threads, which will max
       // out the cpu now, at the expense of possibly underutilizing later
+      // fixme: after some time #jobs > indexThreads/decoderThreads
+      //        even when all jobs are mt
       int cpuThreads = qMin(availThreads, _params.decoderThreads);
 
       // last video can have all the threads to reduce starvation

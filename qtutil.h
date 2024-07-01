@@ -213,3 +213,30 @@ Q_ALWAYS_INLINE bool operator>=(const QVariant& a, const QVariant& b) {
   return ord == QPartialOrdering::Greater || ord == QPartialOrdering::Equivalent;
 }
 #endif
+
+class ProgressLogger {
+  Q_DISABLE_COPY_MOVE(ProgressLogger);
+  ProgressLogger() = delete;
+
+  const QString _format;
+  const uint64_t _max;
+  const QMessageLogContext _context;
+  const QLocale _locale;
+
+  QElapsedTimer _timer;
+
+  void formatString(QString& str, uint64_t step, const QVariantList& args={}) const;
+
+ public:
+  ProgressLogger(const QString& format, uint64_t maxStep, const char* contextFunc)
+      : _format(format)
+      , _max(maxStep)
+      , _context("", 0, contextFunc, "") {
+    _timer.start();
+  }
+  void step(uint64_t step, const QVariantList& args={}) const;
+  void end(uint64_t step = 0, const QVariantList& args={}) const;
+};
+
+#define PROGRESS_LOGGER(__name, __format, __max) \
+  ProgressLogger __name((__format), (__max), QT_MESSAGELOG_FUNC)

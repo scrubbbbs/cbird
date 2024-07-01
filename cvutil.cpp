@@ -772,7 +772,7 @@ QColor DescriptorColor::toQColor() const {
 void ColorDescriptor::create(const cv::Mat& cvImg, ColorDescriptor& desc) {
   // todo: there seems to be some randomness in the descriptor with identical input
   if (cvImg.type() != CV_8UC3 && cvImg.type() != CV_8UC4) {
-    qWarning("input is not rgb or rgba");
+    qDebug("passed a grayscale image");
     return;
   }
 

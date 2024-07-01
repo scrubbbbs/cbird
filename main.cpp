@@ -618,7 +618,7 @@ int main(int argc, char** argv) {
 
       auto selection = engine().db->mediaWithPathRegexp(path);
 
-      qInfo() << "select all with path regexp ~=" << path << ":" << selection.count() << "items";
+      qInfo().nospace() << "select {path ~= " << path << "}: " << selection.count() << " items";
       return selection;
     } else {
       QFileInfo info(path);
@@ -668,8 +668,7 @@ int main(int argc, char** argv) {
 
       auto selection = engine().db->mediaWithPathLike(path);
 
-      qInfo() << "select all with path like" << path << ":" << selection.count() << "items";
-
+      qInfo().nospace() << "select {path like " << path << "}: " << selection.count() << " items";
       return selection;
     }
     Q_UNREACHABLE();
@@ -1045,6 +1044,8 @@ int main(int argc, char** argv) {
           work.append(QtConcurrent::run(&Engine::query, &engine(), search));
         }
 
+      PROGRESS_LOGGER(pl, "similar-to:<PL> %percent %bignum lookups, %1 results", work.count());
+
       int i = 1;
       for (auto& w : work) {
         try { // fixme: what is throwing exceptions? engine::query does not throw
@@ -1069,7 +1070,8 @@ int main(int argc, char** argv) {
           list.append(search.matches);
         }
 
-        qInfo("similar-to:<PL> %d/%lld matches:%d", ++i, work.count(), (int)list.count());
+        if (++i % 10 == 0)
+          pl.step(i, {list.count()});
       }
       engine().db->filterMatches(params, list);
 
@@ -1077,7 +1079,7 @@ int main(int argc, char** argv) {
 
       selection.clear();
       queryResult = list;
-      qInfo() << "similar-to:" << queryResult.count() << "result(s)";
+      pl.end(0, {queryResult.count()});
     } else if (arg == "-weeds") {
       selection.clear();
       queryResult = engine().db->weeds();
@@ -1289,17 +1291,31 @@ int main(int argc, char** argv) {
       for (auto prop: keys) {
         if (prop.startsWith(invertPrefix)) prop = prop.mid(1);
         external |= Media::isExternalProperty(prop);
+
+        QAtomicInt nonNull = 0;
         auto getValue = Media::propertyFunc(prop);
-        auto future = QtConcurrent::map(mediaPtr, [&getValue](Media* m) {
-          (void)getValue(*m);
+        auto future = QtConcurrent::map(mediaPtr, [&getValue, &nonNull](Media* m) {
+          if (!getValue(*m).isNull()) nonNull.fetchAndAddRelaxed(1);
         });
-        waitFuture(future, qq("sort: collecting {%1}<PL> %2%").arg(prop).arg("%1"));
+        PROGRESS_LOGGER(pl,
+                        qq("sort: collecting {%1}<PL> %percent %bignum lookups, %2 values").arg(prop).arg("%1"),
+                        future.progressMaximum());
+        while (!future.isFinished()) {
+          QThread::msleep(100);
+          pl.step(future.progressValue(), {nonNull.loadRelaxed()});
+        }
+        pl.end(0, {nonNull.loadRelaxed()});
       }
       if (external) {
         auto future = QtConcurrent::map(mediaPtr, [](Media* m) {
           m->readMetadata();
         });
-        waitFuture(future, qq("sort: read metadata<PL> %1%"));
+        PROGRESS_LOGGER(pl, "sort: read metadata<PL> %percent %bignum files", future.progressMaximum());
+        while (!future.isFinished()) {
+          QThread::msleep(100);
+          pl.step(future.progressValue());
+        }
+        pl.end();
       }
 
       if (queryResult.count() > 0) {
@@ -1335,12 +1351,18 @@ int main(int argc, char** argv) {
       sorted.append(selection.front());
       unsorted.remove(selection.front().path());
 
+      // todo: use merge sort; each partition can be threaded
+      PROGRESS_LOGGER(pl, "sort-similar:<PL> %percent %1 queries, %2 not found", selection.count()-1);
+
+      int queries = 0, notFound = 0;
       for (int i = 0; i < selection.count() - 1; ++i) {
         // search won't necessarily find anything,
-        // improve chances by looking behind up to 5 items
-        for (int j = 0; j < qMin(lookBehind, sorted.count()); j++) {
+        // improve chances by looking behind
+        for (int j = 0; j < qMin(lookBehind, sorted.count()); ++j) {
           MediaSearch search;
           search.params = sp;
+          //search.params.cvThresh = search.params.dctThresh = INT_MAX;
+          //search.params.maxMatches = 1;
           search.needle = sorted[sorted.count() - 1 - j];
 
           // set must also contain needle or else we can't search for it
@@ -1354,21 +1376,20 @@ int main(int argc, char** argv) {
 
           if (search.matches.count() > 0) {
             Media& match = search.matches[0];
-            // sorted.append(match);
             sorted.insert(sorted.count() - j, match);
             unsorted.remove(match.path());
-            break;
           }
+          else
+            notFound++;
+
+          if (++queries % 100 == 0) pl.step(i, {queries, notFound});
         }
-
-        // if we did not find anything, what now?
-        if (i % 100 == 0) qInfo("sort-similar:<PL> %d / %lld", i, selection.count());
       }
+      pl.end(0, {queries, notFound});
 
-      int missed = selection.count() - sorted.count();
-      if (missed != 0)
-        qWarning() << "sort-similar: " << missed
-                   << " items were not found and dropped, use fuzzier search";
+      if (notFound)
+        qWarning() << "sort-similar: " << notFound
+                   << " items were not found and could not be sorted, try fuzzier search params";
       selection = sorted;
       for (auto& m : selection) m.setAttribute("sort", "similar");
 

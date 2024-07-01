@@ -169,10 +169,12 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
     m.readMetadata();
   });
 
+  PROGRESS_LOGGER(pl, "loading thumbnails... <PL>%percent %bignum folders", f.progressMaximum());
   while (f.isRunning()) {
-    qInfo("loading thumbnails... <PL>%d/%d", f.progressValue(), f.progressMaximum());
+    pl.step(f.progressValue());
     QThread::msleep(100);
   }
+  pl.end();
 
   qInfo() << "sorting...";
   Media::sortGroup(index, {"path"});
@@ -250,10 +252,13 @@ int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions&
     m.setImage(loadThumb(sets[m.path()][0][0], options));
     m.readMetadata();
   });
+
+  PROGRESS_LOGGER(pl, "loading thumbnails... <PL>%percent %bignum sets", f.progressMaximum());
   while (f.isRunning()) {
-    qInfo("loading thumbnails... <PL>%d/%d", f.progressValue(), f.progressMaximum());
     QThread::msleep(100);
+    pl.step(f.progressValue());
   }
+  pl.end();
 
   Media::sortGroup(index, {"path"});
   MediaBrowser browser(options);

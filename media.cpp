@@ -366,15 +366,19 @@ MediaGroupList Media::groupBy(const MediaGroup& group_, const QString& expr) {
   MediaGroup group = group_;
 
   // getProperty can be slow (exif) so thread it
+  QAtomicInt nonNull;
   auto f = QtConcurrent::map(group, [&](Media& m) {
-    QString attr = expr + " == " + getProperty(m).toString(); // formatting used by gui..
+    const QVariant v = getProperty(m);
+    if (!v.isNull()) nonNull.fetchAndAddRelaxed(1);;
+    QString attr = expr + " == " + v.toString(); // formatting used by gui..
     m.setAttribute("group", attr);
   });
+  PROGRESS_LOGGER(pl, qq("collecting {%1} <PL>%percent %bignum lookups, %2 values").arg(expr).arg("%1"), f.progressMaximum());
   while (f.isRunning()) {
-    qInfo("<PL> %d/%lld", f.progressValue(), group.count());
     QThread::msleep(100);
+    pl.step(f.progressValue(), {nonNull.loadRelaxed()});
   }
-  // fixme: use waitProgress("<PL>...");
+  pl.end(0, {nonNull.loadRelaxed()});
 
   QHash<QString, MediaGroup> groups;
   for (const auto& m : qAsConst(group))

@@ -849,6 +849,8 @@ bool Database::moveDir(const QString& dirPath, const QString& newName) {
 
 void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
   int i = 1;
+  PROGRESS_LOGGER(pl, "sql query:<PL> %bignum rows", -1);
+
   while (query.next()) {
     /*
     {
@@ -887,10 +889,10 @@ void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
     media.append(m);
 
     if (maxLen > 0 && i >= maxLen) break;
-
-    if (i % 1000 == 0) qInfo("sql query:<PL> %d", i);
+    if (i % 1000 == 0) pl.step(i);
     i++;
   }
+  pl.end(i-1);
 }
 
 /*
@@ -1373,9 +1375,11 @@ MediaGroupList Database::similar(const SearchParams& params) {
   QSet<int> skip;
   QMutex mutex;
 
+  PROGRESS_LOGGER(pl, "<PL>%percent %bignum lookups", progressTotal);
+
   QFuture<void> f =
-      QtConcurrent::map(haystack, [&idMap, &results, &progress, &tm, progressInterval,
-                                   progressTotal, params, index, this](const Media& m) {
+      QtConcurrent::map(haystack, [&idMap, &results, &progress, &tm, &pl, progressInterval,
+                                   params, index, this](const Media& m) {
 
         MediaGroup result = this->searchIndex(index, m, params, idMap);
 
@@ -1401,11 +1405,12 @@ MediaGroupList Database::similar(const SearchParams& params) {
           results[resultIndex] = result;
         }
         if ((resultIndex % progressInterval) == 0)
-          qInfo() << "<PL>" << resultIndex << progressTotal;
+          pl.step(resultIndex);
       });
 
   f.waitForFinished();
   delete slice;
+  pl.end();
 
   qInfo("searched %d items and found %lld matches in %dms", haystackSize, results.count(),
         int(QDateTime::currentMSecsSinceEpoch() - start));

@@ -19,10 +19,9 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "colordescindex.h"
-#include "profile.h"
+#include "qtutil.h"
 
 #include <cfloat>
-
 
 ColorDescIndex::ColorDescIndex() : Index() {
   _id = SearchParams::AlgoColor;
@@ -115,8 +114,6 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath, const QStr
 
   unload();
 
-  uint64_t start = nanoTime();
-
   QSqlQuery query(db);
 
   // item count for memory allocation
@@ -126,6 +123,8 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath, const QStr
   _count = query.value(0).toInt();
   if (_count == 0) return;
 
+  PROGRESS_LOGGER(pl, "<PL>%percent %bignum descriptors", _count);
+
   // allocate using malloc so we can use realloc() later
   _descriptors = strict_malloc(_descriptors, _count);
   _mediaId = strict_malloc(_mediaId, _count);
@@ -133,9 +132,7 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath, const QStr
   query.exec("select media_id,color_desc from color");
   if (!query.first()) SQL_FATAL(exec);
 
-  QLocale locale;
   int i = 0;
-  int empty = 0;
   do {
     // buffer overflow guard
     if (i >= _count) {
@@ -152,20 +149,16 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath, const QStr
       memcpy(_descriptors + i, bytes.constData(), sizeof(ColorDescriptor));
     else {
       // this should not happen anymore since addRecords() prevents it
-      empty++;
       _descriptors[i].clear();
       qWarning("no color desc for id %d, correct by re-indexing", _mediaId[i]);
     }
     i++;
 
     if (i % 20000 == 0)
-      qInfo("sql query:<PL> %d%% %s descriptors", int(uint64_t(i) * 100 / _count),
-            qPrintable(locale.toString(i)));
+      pl.step(i);
 
   } while (query.next());
-
-  uint64_t end = nanoTime();
-  qInfo("%d descriptors, %d empty, %dms", _count, empty, int((end - start) / 1000000));
+  pl.end();
 }
 
 void ColorDescIndex::save(QSqlDatabase& db, const QString& cachePath) {
@@ -245,7 +238,7 @@ QVector<Index::Match> ColorDescIndex::find(const Media& m, const SearchParams& p
     if (findIndexData(tmp))
       target = tmp.colorDescriptor();
     else
-      qWarning() << "needle has no color descriptor" << m.path();
+      qWarning() << "needle has no color descriptor" << m.id() << m.path();
   }
 
   for (int i = 0; i < _count; i++) {
