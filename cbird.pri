@@ -13,7 +13,7 @@ macx {
   CONFIG -= app_bundle
 }
 
-VERSION=0.7.1
+VERSION=0.7.2
 
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
 QMAKE_CXXFLAGS += -Wno-deprecated-declarations
@@ -120,7 +120,7 @@ unix:!macx {
     # .. so we need to find quazip ourself
     # fixme: qt6 seems to have moved to cmake so throw all of this out..
     QUAZIP_MODULE=quazip1-qt6
-    QUAZIP_VERSION=$$system("pkg-config $$QUAZIP_MODULE --modversion")
+		QUAZIP_VERSION=$$system("pkg-config $$QUAZIP_MODULE --modversion") # 1.4
     QUAZIP_HEADERS="/usr/local/include/QuaZip-Qt6-$$QUAZIP_VERSION"
     QUAZIP_LIB = "/usr/local/lib/lib$${QUAZIP_MODULE}.so"
 
