@@ -53,7 +53,7 @@ MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,
 
   int index = 0;
   for (const Media& m : list) {
-    // todo: using type() for list index is not necessary since
+    // TODO: using type() for list index is not necessary since
     // we have indexFromItem()
     QListWidgetItem* item = new QListWidgetItem(m.path(), nullptr, index++);
     item->setIcon(QIcon(QPixmap::fromImage(m.image())));

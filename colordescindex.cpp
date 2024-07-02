@@ -185,7 +185,7 @@ void ColorDescIndex::remove(const QVector<int>& toRemove) {
   if (!isLoaded()) return;
 
   // rather than realloc the index we can nullify the removed items
-  // todo: track the amount of wasted space and compact at some point
+  // TODO: track the amount of wasted space and compact at some point
   QSet<int> ids;
   for (int id : toRemove) ids.insert(id);
 
@@ -228,7 +228,7 @@ Index* ColorDescIndex::slice(const QSet<uint32_t>& mediaIds) const {
 QVector<Index::Match> ColorDescIndex::find(const Media& m, const SearchParams& p) {
   (void)p;
 
-  // todo: search tree for histograms
+  // TODO: search tree for histograms
 
   QVector<Index::Match> results;
 

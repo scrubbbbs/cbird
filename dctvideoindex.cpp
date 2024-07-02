@@ -53,8 +53,9 @@ void DctVideoIndex::insertHashes(int mediaIndex, HammingTree* tree, const Search
   std::vector<HammingTree::Value> values;
   for (size_t j = 0; j < index.hashes.size(); j++) {
     // drop hashes with < 5 0's or 1's (insufficient detail)
-    // todo: figure out what value is reasonable
-    // todo: drop these when creating the index
+    // TODO: figure out what value is reasonable
+    // TODO: drop these when creating the index
+    // TODO: params
     uint64_t hash = index.hashes[j];
     if (hamm64(hash, 0) < 5 || hamm64(hash, 0xFFFFFFFFFFFFFFFF) < 5) continue;
 
@@ -264,11 +265,8 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
 
     result.range = MatchRange(srcIn, int(dstFrame), 1);
 
-    // fixme: best match is media with most good matches,
+    // FIXME: best match is media with most good matches,
     // not the single best match?
-
-    // int matches = most[mediaIndex];
-    // m.setScore(matches);
 
     results.append(result);
   }
@@ -320,7 +318,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
 
     // we really only need the one closest frame for each matching video,
     // except in a corner-case where video repeats the same frame over and over (but this is rare)
-    // fixme: this implies there is a faster/better way to do this? (array of vptree?)
+    // FIXME: this implies there is a faster/better way to do this? (array of vptree?)
     struct ScoredMatch { int score; uint32_t frame; };
     std::unordered_map<int, ScoredMatch> closestMatch;
 
@@ -342,7 +340,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
       cand[closest.first].push_back(MatchRange(srcFrame, int(closest.second.frame), 1));
   }
 
-  int nearMargin = 15; // todo: params
+  int nearMargin = 15; // TODO: params
 
   for (auto it = cand.begin(); it != cand.end(); ++it) {
     auto ranges = it.value();

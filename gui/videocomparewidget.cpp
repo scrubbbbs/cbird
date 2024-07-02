@@ -140,7 +140,7 @@ class FrameCache {
       // The amount we need is at most the maximum keyframe interval (aka gop size),
       // which we discover by seeking a few times.
       //
-      // todo: for intra-only codecs, seek before pos and decode a few frames
+      // TODO: for intra-only codecs, seek before pos and decode a few frames
       //
       (void)scrub;
       int interFrames = 0;
@@ -588,7 +588,7 @@ void VideoCompareWidget::alignSpatially() {
   for (int xOffset = -8; xOffset <= 8; ++xOffset)
     for (int yOffset = -8; yOffset <= 8; ++yOffset) {
       int64_t sad = 0;
-      // todo: sum of absolute differences function
+      // TODO: refactor, also used by temporal alignment
       for (int y = 8; y < 256 - 8; ++y) {
         const uchar* lp = img[0].constScanLine(y + yOffset) + 3 * 8 + 3 * xOffset;
         const uchar* rp = img[1].constScanLine(y) + 3 * 8;
@@ -668,7 +668,7 @@ void VideoCompareWidget::alignTemporally() {
 }
 
 void VideoCompareWidget::wheelEvent(QWheelEvent* event) {
-  // fixme: not getting reliable shift modifier (or with keyboardModifiers()
+  // FIXME: not getting reliable shift modifier (or with keyboardModifiers()
   const bool shift = qApp->queryKeyboardModifiers() & Qt::ShiftModifier;
   const int num = event->angleDelta().y() > 0 ? -1 : 1;
   if (shift)
@@ -710,7 +710,7 @@ void VideoCompareWidget::playSideBySide() {
 }
 
 void VideoCompareWidget::compareInKdenlive() {
-  const float templateFps = 29.97;  // todo: read from template
+  const float templateFps = 29.97;  // TODO: read from template
   const QString templateFile = ":/res/template.kdenlive";
   KdenEdit edit(templateFile);
 

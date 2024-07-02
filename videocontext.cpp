@@ -215,8 +215,8 @@ QImage VideoContext::frameGrab(const QString& path, int frame, bool fastSeek,
                                const VideoContext::DecodeOptions& options, QFuture<void>* future) {
   QImage img;
 
-  // note: hardware decoder is much slower to open, not worthwhile
-  // todo: system configuration for grab location
+  // note, hardware decoder is much slower to open, not worthwhile here
+  // TODO: system configuration for grab location
   VideoContext video;
   if (0 != video.open(path, options)) return img;
   if (future && future->isCanceled()) return img;
@@ -317,7 +317,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     if (stream->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) continue;
     if (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) continue;
 
-    // todo: if this is reliable we don't need this loop...
+    // TODO: if this is reliable we don't need this loop...
     //    if (stream->start_time != AV_NOPTS_VALUE) {
     //      _firstPts = stream->start_time;
     //      qDebug() << "stream start_time" << _firstPts;
@@ -469,12 +469,12 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     return -3;
   }
 
-  // fixme: hwdec is probably broken since using current FFmpeg (git ~2022/12)
+  // FIXME: hwdec is probably broken since using current FFmpeg (git ~2022/12)
   bool tryHardware = opt.gpu;
   if (tryHardware) {
     // the actual format support doesn't seem to be published by ffmpeg
     // the codec says only nv12, p010le, p016le, but yuv420 works fine
-    // todo: system configuration
+    // TODO: system configuration
     constexpr AVPixelFormat hwFormats[] = {AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUV440P, AV_PIX_FMT_NV12,
                                            AV_PIX_FMT_NONE};
     bool supported = false;
@@ -490,8 +490,8 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   }
 
   if (tryHardware) {
-    // todo: multiple device support
-    // todo: system configuration
+    // TODO: multiple device support
+    // TODO: system configuration
     constexpr struct {
       AVCodecID id;
       int flag;
@@ -544,14 +544,14 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
   if (opt.iframes) {
     // note: some codecs do not support this or are already intra-frame codecs, there
-    // fixme: is there a way to tell before we see the gap in the frame numbers?
-    // fixme: for certain codecs we may want "nointra";  "nokey" works on almost everything
+    // FIXME: is there a way to tell before we see the gap in the frame numbers?
+    // FIXME: for certain codecs we may want "nointra";  "nokey" works on almost everything
     av_dict_set(&codecOptions, "skip_frame", "nokey", 0);
   }
 
   if (opt.lowres > 0) {
     // this is quite good for some old codecs; nothing modern though
-    // todo: set lowres value so it gives >= maxw/maxh
+    // TODO: set lowres value so it gives >= maxw/maxh
     int lowres = opt.lowres;
     if (_p->codec->max_lowres <= 0)
       qDebug("lowres decoding requested but %s doesn't support it", qPrintable(_metadata.videoCodec));
@@ -841,7 +841,7 @@ bool VideoContext::decodeFrame() {
           frameNumber++;
         }
 
-        // fixme: this will happen, commonly live stream captures
+        // NOTE: this will happen, commonly with stream captures; but it would break indexer(maybe)
         if (frameNumber < _lastFrameNumber)
           qWarning() << "backwards frame number" << frameNumber << _lastFrameNumber << _p->context->frame_num;
 

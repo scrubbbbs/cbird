@@ -211,7 +211,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
   debug << "curr:" << curr << "prev:" << prev << "prev1:" << prev1 << "\n";
 
   auto completePath = [&](const QDir::Filters& filter) {
-    // fixme: does not work if path contains a space
+    // FIXME: does not work if path contains a space
     QString path = curr;
     path.replace("\\", "");  // remove shell escape so QFileInfo works
     path = path.trimmed();
@@ -272,9 +272,9 @@ int printCompletions(const char* argv0, const QStringList& args) {
   };
 
   auto completeProp = [&]() {
-    struct {
+    static constexpr struct {
       const char *prop, *propHash, *tagFile;
-    } metaTags[3] = {{"exif", "exif#", ":res/exif.txt"}, // fixme: xmp tags
+    } metaTags[3] = {{"exif", "exif#", ":res/exif.txt"}, // FIXME: xmp tags
                      {"iptc", "iptc#", ":res/iptc.txt"},
                      {"ffmeta", "ffmeta#", ":res/ffmeta.txt"}};
 
@@ -576,7 +576,7 @@ int main(int argc, char** argv) {
   // always refers to last arg removed from args
   QString arg;
 
-  // fixme: could this be done lazily?
+  // FIXME: could this be done lazily? Yes! Put in VideoContext::open()
   VideoContext::loadLibrary();
 
   // default of 128 sometimes not enough...
@@ -593,7 +593,7 @@ int main(int argc, char** argv) {
 
   // set defaults
   indexPath() = ".";
-  QString jpegFixPath = "~/bin/jpegfix.sh"; // fixme: hardcoded configuration?
+  QString jpegFixPath = "~/bin/jpegfix.sh"; // FIXME: hardcoded configuration
 
   // show/display options
   int showMode = MediaBrowser::ShowNormal;
@@ -1022,7 +1022,7 @@ int main(int argc, char** argv) {
           }
         } else {
           // select path as if -select-file was used
-          // fixme: if path contains videos they won't be frame grabbed
+          // FIXME: if path contains videos they won't be frame grabbed
           args.prepend(to);
           selection.clear();
           _commands.selectFiles();
@@ -1048,7 +1048,7 @@ int main(int argc, char** argv) {
 
       int i = 1;
       for (auto& w : work) {
-        try { // fixme: what is throwing exceptions? engine::query does not throw
+        try { // FIXME: what is throwing exceptions? engine::query does not throw
           w.waitForFinished();
         } catch (std::exception& e) {
           qCritical("exception: %s", e.what());
@@ -1351,7 +1351,7 @@ int main(int argc, char** argv) {
       sorted.append(selection.front());
       unsorted.remove(selection.front().path());
 
-      // todo: use merge sort; each partition can be threaded
+      // TODO: use merge sort; each partition can be threaded
       PROGRESS_LOGGER(pl, "sort-similar:<PL> %percent %1 queries, %2 not found", selection.count()-1);
 
       int queries = 0, notFound = 0;
@@ -1397,7 +1397,7 @@ int main(int argc, char** argv) {
       MediaGroup setA = selectPath(nextArg());
       MediaGroup setB = selectPath(nextArg());
 
-      // todo: generalized multisearch
+      // TODO: generalized multisearch
       auto multiSearch = [](const Media& needle, const SearchParams& params) {
         MediaSearch search;
         search.params = params;
@@ -1568,7 +1568,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-jpeg-repair-script") {
       jpegFixPath = nextArg();
     } else if (arg == "-verify") {
-      _commands.verify(engine().db, jpegFixPath); // fixme: move to database::
+      _commands.verify(engine().db, jpegFixPath); // TODO: move to database
     } else if (arg == "-test-csv") {
       _commands.testCsv(engine(), nextArg());
     } else if (arg == "-vacuum") {

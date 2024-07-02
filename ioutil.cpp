@@ -123,8 +123,8 @@ void saveBinaryData(const void* data, uint64_t len, const QString& path, bool co
 QString fullMd5(QIODevice& io) {
 #define THREADED_IO (1)
 #if THREADED_IO
-  // todo: qt5 md5 seems slower than it should be
-  QSemaphore producer(2);  // todo: maybe setting for queue depth
+  // TODO: qt md5 seems slower than it should be
+  QSemaphore producer(2);  // TODO: maybe setting for queue depth
   QSemaphore consumer;
   QMutex mutex;
   QList<QByteArray> chunks;
@@ -135,7 +135,7 @@ QString fullMd5(QIODevice& io) {
   ioPool.start([&]() {
     while (!io.atEnd()) {
       producer.acquire();
-      QByteArray buf = io.read(128 * 1024);  // todo: setting for file i/o buffer size
+      QByteArray buf = io.read(128 * 1024);  // TODO: setting for file i/o buffer size
       {
         QMutexLocker locker(&mutex);
         chunks.append(buf);
@@ -176,7 +176,7 @@ QString fullMd5(QIODevice& io) {
 QString sparseMd5(QIODevice& file) {
   // if the file is small, md5 the whole thing,
   // otherwise, distribute over the first 1MB?
-  // fixme: distribute; make sure to include
+  // FIXME: distribute; make sure to include
   // the head/tail and something in the middle
   QByteArray bytes;
   const qint64 size = file.size();
@@ -234,7 +234,7 @@ const Dangling* Dangling::_this = nullptr;
 
 void writeFileAtomically(const QString& path, const std::function<void(QFile&)>& fn) {
   // static auto* d = new Dangling;
-  // fixme: using exceptions for control flow
+  // FIXME: using exceptions for control flow
   try {
     QTemporaryFile f(path);
     if (!f.open()) throw f.errorString();

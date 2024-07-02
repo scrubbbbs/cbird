@@ -33,7 +33,7 @@ uchar* PooledImageAllocator::alloc(const QSize& size, QImage::Format fmt) {
   Q_ASSERT(bytesPerLine % 4 == 0);
 
   size_t dataSz = size_t(bytesPerLine) * size.height();
-  // todo: round size up so slightly different images can use the same buffers
+  // TODO: round size up so slightly different images (rotated) can use the same buffers
 
   uchar* dataPtr = nullptr;
   {
@@ -87,7 +87,7 @@ uchar* PooledImageAllocator::alloc(const QSize& size, QImage::Format fmt) {
 
 void PooledImageAllocator::free(void* ptr) {
   Q_ASSERT(ptr);
-  // todo: maybe also zero the buffer
+  // TODO: maybe also zero the buffer
   QMutexLocker locker(&_mutex);
   _free.insert((uchar*) ptr);
 }

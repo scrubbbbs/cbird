@@ -136,12 +136,14 @@ class MediaGroupListWidget : public QListWidget {
   /// Add first item and selected items to negative matches
   void negMatchAction() {
     addNegMatch(false);
+    // TODO: apply the new exclusion to all rows
     removeSelection(false);
   }
 
   /// Add all items to negative matches
   void negMatchAllAction() {
     addNegMatch(true);
+    // TODO: apply the new exclusion to all rows
     nextGroupAction();
   }
 
@@ -221,7 +223,6 @@ class MediaGroupListWidget : public QListWidget {
    * @return true if successful
    * @details The negative match list (as a filter) is enabled in the search
    * query options. The exclusion list is always available regardless.
-   * todo: apply exclusions to the current data
    */
   bool addNegMatch(bool all);
 

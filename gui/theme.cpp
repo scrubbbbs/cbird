@@ -228,7 +228,7 @@ void Theme::drawRichText(QPainter* painter, const QRect& r, const QString& text)
 
 int Theme::execDialog(QMessageBox* dialog) const {
 
-  // fixme: warning icon is bugged (qt 6.5.1) set it ourselves
+  // NOTE: warning icon is bugged (qt 6.5.1) set it ourselves
 #ifdef Q_OS_MAC
   if (dialog->icon()==QMessageBox::Warning) {
     auto style = dialog->style();

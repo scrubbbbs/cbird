@@ -159,8 +159,8 @@ CropWidget::CropWidget(const QImage &img_, bool fullscreen, QWidget *parent)
         w = gw;
         h = w * ih / iw;
       }
-      // todo: we can pull crop rect from original so no quality loss!
-      // note: don't need to display 1:1 pixels if that's the case...
+      // TODO: we can pull crop rect from original so no quality loss!
+      //       don't need to display 1:1 pixels if that's the case...
       qWarning() << "scaling input to fit window, expect quality loss" << QSize(w, h);
       qImageToCvImgNoCopy(img_, rescaled);
       sizeStretch(rescaled, w, h);  // lanczos4

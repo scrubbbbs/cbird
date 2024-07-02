@@ -74,7 +74,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   if (_params.indexThreads % _params.decoderThreads != 0)
     qWarning() << "index threads are not a multiple of decoder threads, expect underutilization";
 
-  // todo: subdirectory limiter for large indexes
+  // TODO: subdirectory limiter for large indexes
   // if (!_params.subdir.isEmpty())
 
   _gpuPool.setMaxThreadCount(_params.gpuThreads);
@@ -114,7 +114,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
       const QString context = path.mid(_topDirPath.length() + 1);
       const MessageContext mc(context);
 
-      // todo: cost could be better by considering codec/decoder
+      // TODO: cost could be better by considering codec/decoder
       VideoContext v;
       if (v.open(path) < 0) continue;
 
@@ -161,7 +161,7 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
     QString file = entry.name;
     if (file.endsWith("/")) continue;
 
-    // todo: setting for ignored folder names
+    // TODO: setting for ignored folder names
     const QString zipPath = Media::virtualPath(path, file);
     if (file.startsWith(".") || file.startsWith("__MACOSX")) {
       _ignoredFiles++;
@@ -286,9 +286,8 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
     }
 
     if (expected.contains(path)) {
-      // fixme: database should store modification date?
       // metadataChangeTime() could be used but will re-index
-      // anything we touch ourselves
+      // changes that don't modify the file content
       if (entry.lastModified() < _modifiedSince) {
         expected.remove(path);
         _existingFiles++;
@@ -331,7 +330,7 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
         // skip deep scan of zip files
         // use metadataChangeTime() since lastModified() will not detect the case
         // where a zip is replaced with an older zip with the same name
-        // fixme: metadataChangeTime() may not be available on all filesystems, must validate!
+        // FIXME: metadataChangeTime() may not be available on all filesystems, must validate!
         if (entry.metadataChangeTime() < _modifiedSince) {
           int removed = 0;
           const auto it = zipFiles.find(path);
@@ -379,7 +378,7 @@ void Scanner::flush(bool wait) {
     w->cancel();
   }
 
-  // todo: clear started slow-running jobs (process video)
+  // TODO: clear started slow-running jobs (process video)
 
   // in case this is called for no reason
   if (cancelled <= 0 && _activeWork.count() <= 0) qDebug() << "nothing to flush";
@@ -505,8 +504,8 @@ void Scanner::processOne() {
 
       // try to process even if we don't have enough threads, which will max
       // out the cpu now, at the expense of possibly underutilizing later
-      // fixme: after some time #jobs > indexThreads/decoderThreads
-      //        even when all jobs are mt
+      // BUG: after some time #jobs > indexThreads/decoderThreads
+      //      even when all jobs are mt
       int cpuThreads = qMin(availThreads, _params.decoderThreads);
 
       // last video can have all the threads to reduce starvation
@@ -533,8 +532,8 @@ void Scanner::processOne() {
 
           if (!pool && tryGpu) {
             // stop gpu from retrying the same file
-            // fixme: disable gpu after too many fails
-            // fixme: search queue for things that will possibly work
+            // FIXME: disable gpu after too many fails
+            // FIXME: search queue for possibly compatible files
             _videoQueue.removeFirst();
             _videoQueue.append(path);
           }
@@ -612,7 +611,7 @@ void Scanner::processFinished() {
       result.context = nullptr;
     }
 
-    // todo: indicate when done with a type so caller (engine) can commit early
+    // TODO: indicate when done with a type so caller (engine) can commit early
     // for example there are no images left and long-running video is holding
     // up the commit
   }
@@ -661,7 +660,7 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
 
     // note: this should probably only be used for algos without features
     // threshold 20 may be a bit high
-    // todo: setting for indexer autocrop threshold
+    // TODO: setting for indexer autocrop threshold
     if (_params.algos && _params.autocrop) autocrop(cvGray, 20);
 
     uint64_t dctHash = 0;

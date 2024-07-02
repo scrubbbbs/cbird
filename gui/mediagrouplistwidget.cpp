@@ -102,7 +102,7 @@ static QImage differenceImage(const Media& ml, const Media& mr,
   if (future && future->isCanceled()) return nullImage;
 
   // normalize to reduce the effects of brightness/exposure
-  // todo: setting for % histogram clipping
+  // TODO: setting for % histogram clipping
   Q_ASSERT(inLeft.format() == QImage::Format_RGB32);
   Q_ASSERT(inRight.format() == QImage::Format_RGB32);
   cv::Mat norm1, norm2;
@@ -144,7 +144,7 @@ static QImage differenceImage(const Media& ml, const Media& mr,
 
   QImage img(left.size(), left.format());
 
-  // fixme: shouldn't threads work on a range of lines?
+  // FIXME: each thread should take a block of scanlines
   QVector<int> lines;
   for (int y = 0; y < img.height(); ++y) lines.append(y);
 
@@ -323,8 +323,6 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   int res = RLIMIT_DATA;
   struct rlimit rlim  = { limit, limit };
   Q_ASSERT(0 == setrlimit(res, &rlim));
-  // fixme: restore rlimit on exit?
-  // fixme: if multiple MGLWs open what happens?
 #endif
 
   int id = 1000;
@@ -339,7 +337,8 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 
   // we expect libjpeg errors due to i/o cancellation
   // color-correction errors aren't an issue
-  // fixme: if indexer is running in another thread we drop errors we would probably like to see
+  // FIXME: if query is running in another thread, as we would like to do in the future,
+  //        we would be dropping errors we would probably like to see
   qMessageLogCategoryEnable("qt.gui.imageio.jpeg", false);
   qMessageLogCategoryEnable("qt.gui.icc", false);
 
@@ -811,9 +810,10 @@ void MediaGroupListWidget::openAction() {
   float seek = 0;
 
   if (m.type() == Media::TypeVideo) {
-    // fixme: make sure dstIn is valid
+    int dstIn = m.matchRange().dstIn;
     float fps = m.attributes().value("fps").toFloat();
-    if (fps != 0.0f) seek = m.matchRange().dstIn / fps;
+    if (dstIn > 0 && fps > 0.0f) seek = m.matchRange().dstIn / fps;
+    else qDebug() << "cannot seek video: no position or fps given";
   }
   Media::openMedia(m, seek);
 }
@@ -1109,7 +1109,7 @@ void MediaGroupListWidget::copyNameAction() {
   if (other->isArchived())
     other->archivePaths(nullptr, &otherName);
   else
-    otherName = other->name();  // fixme: should name() work with archives?
+    otherName = other->name();  // TODO: should name() work with archives?
 
   QString newName = QFileInfo(otherName).completeBaseName() + "." + info.suffix();
   const QString oldPath = selected->path();
@@ -1753,7 +1753,6 @@ MediaGroup MediaGroupListWidget::selectedMedia() {
 }
 
 bool MediaGroupListWidget::selectedPair(Media** selected, Media** other) {
-  // fixme: doesn't work when analysis image enabled
   MediaPage* p = currentPage();
   const auto& selection = selectedItems();
   if (selection.count() != 1 || !p->isPair()) return false;
@@ -1945,7 +1944,7 @@ void MediaGroupListWidget::updateItems() {
     if (locked) title += " " LOCK_CSTR;
 
     //
-    // todo: convert this to some kind of loadable/configurable template with variable replacement
+    // TODO: convert this to some kind of loadable/configurable template with variable replacement
     // - media property keys & unary functions
     // - properties from here
     //
@@ -2018,8 +2017,8 @@ void MediaGroupListWidget::updateItems() {
             .arg(m.isWeed() ? "&nbsp;" WEED_CSTR : "")
             .arg(locked ? "&nbsp;" LOCK_CSTR : "");
 
-    // note: QListWidgetItem::type() will be used to refer back to the associated Media object
-    // todo: using type() for list index is not needed anymore, use indexFromItem()
+    // QListWidgetItem::type() will be used to refer back to the associated Media object
+    // setting: using type() for list index is not needed anymore, use indexFromItem()
     QListWidgetItem* item;
     if (i < this->count()) {
       item = this->item(i);

@@ -229,8 +229,7 @@ void Database::createTables() {
                   " path    text not null,"
                   " width   integer not null,"
                   " height  integer not null,"
-                  " md5     text not null,"  // fixme: could be number/binary to
-                                             // save space
+                  " md5     text not null,"
                   " phash_dct  integer not null"
                   " );"))
     SQL_FATAL(exec);
@@ -298,9 +297,9 @@ Database::~Database() {
 
   // close all db connections; hopefully there are no
   // threads running that want the db
-  // fixme: why is this commented out?
-  // maybe we don't have to do this anymore since
-  // connect() will disconnect the old ones?
+  // FIXME: remove this code or fix it if it is actually needed
+  //        maybe we don't have to do this anymore since
+  //        connect() will disconnect the old ones?
   /*
       QMutexLocker locker(&_dbMutex);
 
@@ -542,9 +541,9 @@ void Database::remove(const QVector<int>& ids) {
   uint64_t now;
   uint64_t then = nanoTime();
 
-  // todo: vacuum database after a lot of deletions
+  // TODO: vacuum database after a lot of deletions
 
-  // fixme: see if we should delete in reverse order of creation; maybe it
+  // TODO: see if we should delete in reverse order of creation; maybe it
   // fragments the database file less?
 #ifdef ENABLE_KEYPOINTS_DB
   for (int id : ids) ("delete from keypoint where media_id=" + QString::number(id));
@@ -586,7 +585,7 @@ void Database::remove(const QVector<int>& ids) {
   }
 
   // if it's a video, delete the hash file
-  // todo: this could be in removeRecords()
+  // TODO: this could be in removeRecords()
   for (int id : ids) {
     QString hashFile = QString::asprintf("%s/%d.vdx", qPrintable(videoPath()), id);
     if (QFileInfo::exists(hashFile))
@@ -622,10 +621,10 @@ void Database::vacuum() {
     int id = f.split(".").first().toInt(&ok);
     if (!ok) continue;
     if (mediaWithId(id).isValid()) continue;
-    qInfo() << "orphaned video index" << f;
+    qWarning() << "removing orphaned video index" << f;
     if (!QFile(videoPath() + "/" + f).remove()) qWarning() << "failed to remove" << f;
   }
-  // fixme: remove cache/tmp files
+  // FIXME: remove cache/tmp files as they might contain deleted items
 }
 
 QString Database::moveFile(const QString& srcPath, const QString& dstDir) {
@@ -752,7 +751,7 @@ bool Database::updatePaths(const MediaGroup& group, const QStringList& newPaths)
       return false;
     }
 
-  // todo:: write locker
+  // TODO: write locker
   QSqlDatabase db(connect());
   if (!db.transaction()) qFatal("db.transaction");
 
@@ -1135,8 +1134,8 @@ MediaGroup Database::mediaWithIds(const QVector<int>& ids) {
     return g;
   }
 
-  // fixme: seems pointless to use prepare here
-  // fixme: if ids list is huge we could hit limits?
+  // FIXME: seems pointless to use prepare here
+  // FIXME: if ids list is huge we could hit limits?
   QStringList names;
   for (int i = 0; i < ids.count(); i++) names.append(":" + QString::number(ids[i]));
 
@@ -1458,7 +1457,7 @@ MediaGroup Database::similarTo(const Media& needle, const SearchParams& params) 
     }
   }
 
-  // todo: multicore search, for *huge* indexes it's an issue
+  // TODO: multithread search, for *huge* indexes it's an issue
   MediaGroup result = searchIndex(index, needle, params, idMap);
 
   delete slice;
@@ -1482,7 +1481,7 @@ MediaGroup Database::similarTo(const Media& needle, const SearchParams& params) 
   }
 
   // set match flags
-  // todo: seems like this should this be moved to filterMatch
+  // TODO: seems like this should this be moved to filterMatch
   for (Media& m : result) {
     m.readMetadata();
 
@@ -1702,7 +1701,7 @@ bool Database::addWeed(const Media& weed, const Media& original) {
     QReadLocker locker(&_rwLock);
     if (_weeds.value(weed.md5()) == original.md5())  // did not change the mapping
       return true;
-    // fixme: this would be OK but we have to rewrite the weed.dat
+    // FIXME: this would be OK but we have to rewrite the weed.dat
     qWarning() << "cannot replace existing weed with a different source" << weed.md5();
     return false;
   }

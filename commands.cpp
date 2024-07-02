@@ -435,7 +435,7 @@ void Commands::rename(Database* db, const QString& srcPat, const QString& dstPat
     }
 
     newName += "." + info.suffix();
-    if (newName.contains("/"))  // fixme: add proper set
+    if (newName.contains("/"))  // FIXME: add reasonable set of invalid filename characters
       qFatal("rename: new filename contains illegal characters %s -> <%s>",
              qUtf8Printable(m.path()), qUtf8Printable(newName));
 
@@ -543,7 +543,7 @@ void Commands::verify(Database* db, const QString& jpegFixPath) {
   };
 
   // to avoid thrashing, large files are hashed sequentially
-  // todo: setting for anti-thrash file size
+  // TODO: setting
   const qint64 largeFileSize = 16 * 1024 * 1024;
 
   for (const auto& m : _selection)

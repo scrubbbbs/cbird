@@ -128,7 +128,7 @@ Theme
 =========================
 
 #### qdarkstyle/*/ (QSS widget stylesheet)
-- QDarkStyle has been modified to make it grayscale and fix a few issues, todo: fork on github and put the link here
+- QDarkStyle has been modified to make it grayscale and fix a few issues, TODO: fork on github and put the link here
 - tools/copystylesheet.sh copies Dark and Light style from QDarkStyle project
 
 #### res/cbird.qss

@@ -42,7 +42,7 @@ class MediaWidgetOptions {
   Database* db = nullptr; /// database for SelectSearch or other things
   Media selectOnOpen;     /// media to reveal/select on open
 
-  // todo: WidgetParams
+  // TODO: put these in WidgetParams for cmdline access
   bool trackWeeds = true; /// if true, remember user deletions
   int maxPerPage = 12;    /// max images for paged views
   int iconSize = 256;     /// thumbnail size for icon views

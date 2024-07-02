@@ -20,7 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 #include "qtutil.h"
 
-#include "gui/theme.h"  // todo: I don't like this dependency
+#include "gui/theme.h"  // TODO: I don't like this dependency
 #include "profile.h"
 
 // qttools/src/qdbus/qdbus/qdbus.cpp
@@ -830,12 +830,12 @@ QMenu* MenuHelper::makeDirMenu(const QString& root, QWidget* target, const char*
   QMenu* partMenu = nullptr;
 
   for (const auto& fileName : list) {
-    // todo: setting for index dir name
+    // TODO: setting for index dir name
     // const QString& path = entry.absoluteFilePath();
     const QString& path = root + "/" + fileName;
     if (fileName == INDEX_DIRNAME) continue;
 
-    // todo: setting or detect max popup size
+    // TODO: setting or detect max popup size
     if (list.count() > maxFolders) {
       if (partition == 0) {
         const QString name = fileName;
@@ -929,9 +929,9 @@ bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
 // - compression
 //    * repeated log lines show # of repeats
 //
-// todo: drop logs if too much piles up
-// todo: do bigger console writes, combine lines with timer
-// todo: use ::write() instead of fwrite
+// TODO: drop logs if too much piles up
+// TODO: do bigger console writes, combine lines with timer
+// TODO: use ::write() instead of fwrite
 //
 
 #if !defined(QT_MESSAGELOGCONTEXT)  // disabled in release targets by default... but we need it

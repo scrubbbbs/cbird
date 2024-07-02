@@ -100,7 +100,7 @@ class Database {
   MediaGroup mediaWithPathRegexp(const QString& exp);
   MediaGroup mediaWithMd5(const QString& md5);
   MediaGroup mediaWithType(int type);
-  MediaGroup mediaWithIds(const QVector<int>& ids);
+  [[deprecated]] MediaGroup mediaWithIds(const QVector<int>& ids); // doesn't seem to be used anywhere
   MediaGroup mediaWithSql(const QString& sql, const QString& placeholder="",
                           const QVariant& value=QVariant());
 

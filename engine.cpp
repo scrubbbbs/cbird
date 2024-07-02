@@ -91,8 +91,8 @@ void Engine::update(bool wait) {
     // if the stored database paths are not canonical there
     // is a bug somewhere, though not fatal it will prevent
     // updating correctly
-    // fixme: this can take a long time, figure out where
-    //        the invalid paths come from
+    // FIXME: this can take a long time, figure out where
+    //        the invalid paths actually come from
     QStringList paths = skip.values();  // sort to reduce random access
     paths.sort();
     QSet<QString> checked;
@@ -133,7 +133,7 @@ void Engine::update(bool wait) {
     QList<QString> sorted = skip.values();
     std::sort(sorted.begin(), sorted.end());
     int i = 0;
-    // todo: this takes a long time for big removals...could be threaded
+    // TODO: this takes a long time for big removals...could be threaded
     for (const auto& path : qAsConst(sorted)) {
       i++;
       if (i % 100 == 0) qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << path;
@@ -148,8 +148,7 @@ void Engine::update(bool wait) {
   }
 
   // check for missing external index data, (currently only video index)
-  // todo: should be implemented by specific index
-  // todo: re-index missing item now
+  // TODO: should be implemented by specific index
   if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo)) {
     qInfo() << "verifying video index...";
     for (const Media& m : db->mediaWithType(Media::TypeVideo)) {
@@ -194,13 +193,12 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
   MediaGroup& matches = search.matches;
   const SearchParams& params = search.params;
 
-  // some options require loading the image
-  // fixme: caller can test beforehand to avoid reloading image
-  // e.g. params.imageNeeded()
+  // some options require loading the image, then we would be responsible for releasing it
+  // TODO: caller can test beforehand to avoid this e.g. params.imageNeeded(m)
   bool releaseImage = false;
 
   if (!params.mediaReady(needle) && needle.type() == Media::TypeImage) {
-    // fixme: we only need to process for the given algo
+    // FIXME: we only need to process for params.algo
     IndexResult result;
     if (needle.image().isNull())
       result = scanner->processImageFile(needle.path(), needle.data());
@@ -236,8 +234,7 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
   }
 
   if (!params.mediaReady(needle)) {
-    // todo: state why
-    qWarning() << needle.path() << "is not indexed or queryable with algo" << params.algo;
+    qWarning() << needle.path() << "is not indexed for algo" << params.algo;
     goto CLEANUP;
   }
 

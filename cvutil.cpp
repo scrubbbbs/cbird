@@ -30,7 +30,7 @@
 
 static_assert(cv::INTER_LANCZOS4 == FWD_INTER_LANCZOS4, "check header for invalid constant");
 
-// todo: new versions of load/save matrix that do not have to
+// TODO: new versions of load/save matrix that do not have to
 // read the whole file into memory before we can start reading/writing
 struct MatrixHeader {
   uint32_t id;
@@ -628,7 +628,7 @@ void stretchContrast(const cv::Mat& src, cv::Mat& dst, int minGray, int maxGray)
   src.convertTo(dst, -1, double(alpha), double(beta));
 
   // restore alpha channel from source
-  // fixme: crashes
+  // FIXME: crashes here
   //    if (dst.type() == CV_8UC4)
   //    {
   //        int from_to[] = { 3, 3};
@@ -747,9 +747,10 @@ static bool brightFilter(float l, float u, float v) {
   return l > 4;  //!(l > 250 || l < 5);
 }
 
-// fixme: these are OpenCV 8-bit scaled values...
+// skin tones are not very useful either but this is not reliable
 // static bool skinToneFilter(float l, float u, float v)
 //{
+//    // NOTE: these are OpenCV 8-bit scaled values
 //    return !(u >= 100 && u < 158 && v >= 135 && v < 195)
 //           && !(l < 10 || l > 245);
 //}
@@ -770,7 +771,7 @@ QColor DescriptorColor::toQColor() const {
 }
 
 void ColorDescriptor::create(const cv::Mat& cvImg, ColorDescriptor& desc) {
-  // todo: there seems to be some randomness in the descriptor with identical input
+  // FIXME: there seems to be some randomness in the descriptor with identical input
   if (cvImg.type() != CV_8UC3 && cvImg.type() != CV_8UC4) {
     qDebug("passed a grayscale image");
     return;
@@ -1387,7 +1388,7 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
 
   // assume mosaic uses a flat background or small gradient
   // images are arranged in a grid with some background between them
-  // fixme: this doesn't work on grids with no background between thumbnails
+  // FIXME: this doesn't work on grids with no background between thumbnails
 
   const int brightThreshold = 30;      // max gray level distance between pixels on a line
   const float lengthThreshold = 0.9f;  // fraction of contiguous pixels needed to make a line
@@ -1545,7 +1546,7 @@ void autocrop(cv::Mat& cvImg, int range)
 bottom);
 
     // only crop if each side has something to crop
-    // todo: de-letterbox flag also check that amount off of each side
+    // TODO: de-letterbox flag also check that amount off of each side
     // is approximately the same
     if ( (left != 0 && right != img.cols) ||
          (top != 0 && bottom != img.rows))

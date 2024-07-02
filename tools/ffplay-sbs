@@ -118,7 +118,7 @@ ffprobe -show_streams "$file2" 2>/dev/null > $info2
 videoArgs="  -f yuv4mpegpipe -pix_fmt yuv420p -y"
 audioArgs="  -f wav -y"
 
-# fixme: ffplay halts instead of looping; mpv does not
+# FIXME: ffplay halts instead of looping; mpv does not
 #loop="-stream_loop -1 -t 2"
 loop=""
 

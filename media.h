@@ -61,7 +61,7 @@ typedef std::function<QVariant(const Media&)> PropertyFunc;
  *
  * @note uint16_t limits video to < 2^16-1 frames indexed
  *
- * fixme: increase this by storing the offset from previous frame (maybe uint8)
+ * FIXME: increase this by storing the offset from previous frame (maybe uint8)
  */
 class VideoIndex {
  public:
@@ -79,7 +79,7 @@ class VideoIndex {
  * @note for video search, units are frames
  * @note if needle is frame grab, dstIn should be set to its frame number
  *
- * fixme: if frame rates differ, len should be in dst units
+ * FIXME: if frame rates differ, len should be in dst units
  */
 class MatchRange {
  public:
@@ -152,7 +152,7 @@ class Media {
   enum {
     TypeImage = 1,
     TypeVideo = 2,
-    TypeAudio = 3  // todo: implement indexer for audio files
+    TypeAudio = 3  // TODO: indexer for audio files
   };
 
   /**
@@ -177,7 +177,7 @@ class Media {
   static constexpr const char* ImgKey_FileHeight = "height";  // original/pre-scaled height
 
   // hooks to external things
-  // fixme: gui functions don't belong here
+  // TODO: gui functions don't belong here
   static void playSideBySide(const Media& left, float seekLeft, const Media& right,
                              float seekRight);
   static void openMedia(const Media& m, float seek = 0);
@@ -232,7 +232,7 @@ class Media {
    * Construct from decompressed image
    * @param originalSize Size of the compressed data, if known
    *
-   * fixme: inconsistency: unlike other constructors, this will compute
+   * NOTE: inconsistency: unlike other constructors, this will compute
    * certain hashes from the image
    */
   Media(const QImage& qImg, int originalSize = 0);
@@ -248,7 +248,7 @@ class Media {
 
   /**
    * Compare by score (for sorting matches)
-   * fixme: maybe remove this, confusion with ==
+   * FIXME: maybe remove this, confusion with ==
    */
   bool operator<(const Media& other) const {
     // exact matches go to the front regardless of score
@@ -271,7 +271,6 @@ class Media {
   /**
    * @return wide classification such as audio, video, image
    * @return TypeXYZ enum
-   * fixme: use typed enum
    */
   int type() const { return _type; }
   void setType(int type) { _type = type; }
@@ -295,8 +294,8 @@ class Media {
   void setPath(const QString& path) { _path = path; }
 
   /// fast path components
-  QString dirPath() const { return path().left(path().lastIndexOf("/")); } // fixme: use archivePath?
-  QString name() const { return path().mid(path().lastIndexOf("/") + 1); } // fixme: use archivePath?
+  QString dirPath() const { return path().left(path().lastIndexOf("/")); } // FIXME: use archivePath?
+  QString name() const { return path().mid(path().lastIndexOf("/") + 1); } // FIXME: use archivePath?
   QString suffix() const {
     QString s = name();
     int dot = s.lastIndexOf(".");
@@ -404,7 +403,7 @@ class Media {
   Q_DECL_DEPRECATED const QString& uid() const { return _uid; }
   Q_DECL_DEPRECATED void setUid(const QString& uid) { _uid = uid; }
 
-  // fixme: private interface or refactor
+  // FIXME: private interface or refactor
   void setColorDescriptor(const ColorDescriptor& desc) { _colorDescriptor = desc; }
 
   /// @deprecated use readMetadata
@@ -533,7 +532,7 @@ class Media {
   QVariantList readEmbeddedMetadata(const QStringList& keys, const QString& type) const;
 
   /// @section index processing
-  // fixme: should be moved into index subclasses, but some have multiple uses
+  // FIXME: should be moved into index subclasses, but some have multiple uses; maybe use index.cpp
   void makeKeyPoints(const cv::Mat& cvImg, int numKeyPoints, KeyPointList &outKeypoints) const;  // *FeaturesIndex, TemplateMatcher
   void makeKeyPointDescriptors(const cv::Mat& cvImg, KeyPointList &keyPoints,
                                KeyPointDescriptors& outDescriptors) const;  // CvFeaturesIndex

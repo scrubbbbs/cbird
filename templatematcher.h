@@ -52,7 +52,7 @@ class TemplateMatcher {
    */
   void match(const Media& tmplMedia, MediaGroup& group, const SearchParams& params);
 
-  // todo: cache load/save/update
+  // TODO: cache load/save/update
 
  private:
   QHash<QString, int> _cache;

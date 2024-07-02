@@ -212,10 +212,10 @@ void MediaGroupTableModel::applyFilter(int match, int size, const QString& path)
     return true;
   };
 
-  // todo: change this to composition of functions
+  // TODO: change this to composition of functions
   if (match == ShowAll) {
     if (size > 0) {
-      // fixme: path != "" case
+      // FIXME: path != "" case
       _filterFunc = [size](const Media& a) {
         // minsize filter
         return std::max(a.width(), a.height()) < size;
@@ -536,11 +536,10 @@ void MediaGroupTableWidget::setModel(QAbstractItemModel* model) {
 void MediaGroupTableWidget::execContextMenu(const QPoint& p) {
   QMenu* menu = new QMenu(this);
 
-  // todo: fast menu for folder(s) in any matches
-  // needs access to search results of the selected media
+  // TODO: fast menu for folder(s) in any matches
 
   if (!_indexPath.isEmpty()) {
-    // fixme: don't iterate the filesystem twice here
+    // FIXME: don't iterate the filesystem twice here
     QAction* folders = new QAction(this);
     folders->setMenu(MenuHelper::dirMenu(_indexPath, this, SLOT(downloadToFolderAction())));
     folders->setText("Save to Folder");

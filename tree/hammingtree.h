@@ -358,7 +358,7 @@ class HammingTree {
   static void write(const Level* level, QFile& f) {
     bool isLeaf = level->left == nullptr;
     if (isLeaf) {
-      // todo: compact entries that have been "removed" (index == 0)
+      // TODO: compact entries that have been "removed" (index == 0)
       QByteArray data;
       data.append((char*)&isLeaf, sizeof(isLeaf));
       data.append((char*)&level->count, sizeof(level->count));

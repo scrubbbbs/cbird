@@ -15,7 +15,7 @@ echo building $VERSION $ARCH in $PKG_DIR
 # we need this for dll discovery
 mkdir -p _index
 
-# todo: copy the plugins we actually need
+# TODO: copy the plugins we actually need
 echo qt plugins...
 cp -au "$QT_DIR/plugins" "$PKG_DIR"
 

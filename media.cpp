@@ -259,7 +259,7 @@ int Media::indexInGroupByPath(MediaGroup& group, const QString& path) {
 void Media::mergeGroupList(MediaGroupList& list) {
   // merge 1-connected matches
   // e.g. if a matches b and b matches c, then a matches c;
-  // fixme: probably want to find something better than n*n
+  // TODO: probably want to find something better than n*n
   for (int i = 0; i < list.count(); i++) {
     MediaGroup& a = list[i];
     for (int j = 0; j < list.count(); j++)
@@ -341,13 +341,13 @@ static QString greatestPrefix(const QStringList& list) {
 
 QString Media::greatestPathPrefix(const MediaGroupList& gl) {
   QStringList list;
-  // fixme: path could be http:// or @tag or data-url://
+  // FIXME: path could be http:// or @tag or data-url://
   for (const MediaGroup& g : gl) list.append(greatestPathPrefix(g));
   return greatestPrefix(list);
 }
 
 QString Media::greatestPathPrefix(const MediaGroup& group) {
-  // fixme: path could be http:// or @tag or data-url://
+  // FIXME: path could be http:// or @tag or data-url://
   QStringList list;
   for (const Media& m : group)
     if (QFileInfo(m.path()).isAbsolute()) list.append(m.path());
@@ -479,7 +479,7 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
       return QString("%1").arg(num, len, 10, QLatin1Char('0'));
     };
   }
-  // todo: replace(regex,replace-with-captures)
+  // TODO: replace(regex,replace-with-captures)
 
   // list functions
   if (fn == "split") {
@@ -693,7 +693,7 @@ PropertyFunc Media::propertyFunc(const QString& expr) {
          return m.dirPath();
        }},
 
-      /// todo: attr(), VideoContext::metadata
+      /// TODO: attr(), VideoContext::metadata
   });
 
   // prop#args#unaryFunc[#unaryFunc]...
@@ -796,7 +796,7 @@ size_t Media::memSize() const {
 
   total += size_t(_img.bytesPerLine() * _img.height());
 
-  // todo: matchlist, matchrange
+  // TODO: matchlist, matchrange
 
   return total;
 }
@@ -806,7 +806,7 @@ void Media::makeKeyPoints(const cv::Mat& cvImg, int numKeyPoints,
   cv::OrbFeatureDetector detector(numKeyPoints, 1.2f, 12, 31, 0, 2,
                                   cv::OrbFeatureDetector::HARRIS_SCORE, 31);
 
-  // todo: use mask to exclude borders/watermarks etc
+  // TODO: use mask to exclude borders/watermarks etc
   detector.detect(cvImg, outKeypoints);
 }
 
@@ -830,7 +830,7 @@ void Media::makeKeyPointHashes(const cv::Mat& cvImg, const KeyPointList& keyPoin
     // if resulting rectangle is too small dct hash is worthless
     if (size < 31) continue;
 
-    // fixme: if size is kp diameter and point is center,
+    // FIXME: if size is kp diameter and point is center,
     // this should be centered?
     float x0 = kp.pt.x;  // + xOffset; //+ _roi.x;
     float y0 = kp.pt.y;  // + yOffset; //+ _roi.y;
@@ -897,7 +897,7 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
     grayscale(cvFrame, img);
     Q_ASSERT(cvFrame.data == img.data); // grayscale should be noop (decoder outputs grayscale)
 
-    autocrop(img, 20); // fixme: settings
+    autocrop(img, 20); // FIXME: index settings
     uint64_t hash = dctHash64(img, true);
     index.hashes.push_back(hash);
     index.frames.push_back(numFrames & 0xFFFF);
@@ -920,7 +920,7 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
     grayscale(cvFrame, img);
 
     // de-letterbox prior to p-hashing
-    autocrop(img, 20); // fixme: index settings
+    autocrop(img, 20); // FIXME: index settings
 
     uint64_t hash = dctHash64(img, true);
 
@@ -1000,7 +1000,7 @@ void VideoIndex::load(const QString& file) {
   Q_ASSERT(frames.capacity() == numFrames);
   Q_ASSERT(hashes.capacity() == numFrames);
 
-  // todo: it seems this could be read with one operation
+  // TODO: it seems this could be read with one operation
   for (int i = 0; i < numFrames; i++) {
     uint16_t frame;
     if (1 != fread(&frame, sizeof(frame), 1, indexFile))
@@ -1126,7 +1126,7 @@ void Media::openMedia(const Media& m, float seek) {
     QString child;
     m.archivePaths(nullptr, &child);
 
-    // todo: open file within archive...have it be browseable
+    // TODO: open file within archive...have it be browseable
     //       there are various ways this is done depending on
     //       the viewer
     // nomacs: zipfile.zipdIrChAr/child.jpg => opens but not browseable
@@ -1252,7 +1252,7 @@ QStringList Media::listArchive(const QString& path) {
 
   const auto zipList = zip.getFileNameList();
   for (auto& file : zipList) {
-    // todo: setting for ignored dirnames (same as scanner...);
+    // TODO: setting for ignored dirnames (same as scanner...);
     if (file.endsWith("/") || file.startsWith(".") || file.startsWith("__MACOSX")) continue;
 
     list.append(Media::virtualPath(path, file));
@@ -1464,7 +1464,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
     }
   }
 
-  // fixme: skipping exif mirror orientations (2,4,5,7)
+  // FIXME: skipping exif mirror orientations (2,4,5,7)
   qreal rotate = 0;
   switch (exifOrientation) {
     case 1:
@@ -1483,7 +1483,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
 
   if (exifOrientation) img = img.transformed(QTransform().rotate(rotate));
 
-  // fixme: is size before or after orientation?
+  // FIXME: is size before or after orientation?
   if (size != QSize()) img = constrainedResize(img, size);
 
   if (reader.error())

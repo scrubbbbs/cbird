@@ -60,7 +60,7 @@ void MediaItemDelegate::calculate(const QRect& imgRect,
   scale = _scaleMode == SCALE_NONE ? 1.0 : qMin(sw, sh);
 
   // do not scale up small images to better see size differences
-  // fixme: add mode to see relative sizes when all images
+  // TODO: add mode to see relative sizes when all images
   // are bigger than the viewport
   if (_scaleMode == SCALE_DOWN && scale > 1.0) scale = 1.0;
 
@@ -80,7 +80,7 @@ void MediaItemDelegate::calculate(const QRect& imgRect,
   dstRect = dstRect.intersected(itemRect);
 
   // pan gets less sensitive at higher scales
-  // fixme: doesn't stay on center
+  // FIXME: doesn't stay on center
   double px = _pan.x() / scale;
   double py = _pan.y() / scale;
 
@@ -386,9 +386,6 @@ QSize MediaItemDelegate::sizeHint(const QStyleOptionViewItem& option,
         }
       }
 
-  // fixme: should probably be minimum that forces scrollbar
-  // if (ih < 32 || iw <32) continue;
-
   // sanity check
   if (numRows < 1) numRows = 1;
   if (numCols < 1) numCols = 1;
@@ -396,7 +393,7 @@ QSize MediaItemDelegate::sizeHint(const QStyleOptionViewItem& option,
   if (numRows == 1) numCols = itemCount;
   if (numCols == 1) numRows = itemCount;
 
-  // todo: we want to force 1-row in some situations, make it a toggle/option
+  // TODO: we want to force 1-row in some situations, make it a toggle/option
   // possible options:
   // Layout:
   //   - Automatic
@@ -408,7 +405,7 @@ QSize MediaItemDelegate::sizeHint(const QStyleOptionViewItem& option,
     numCols = itemCount;
   }
 
-  // fixme: cannot seem to tell what the true spacing, add extra to prevent scrollbar
+  // FIXME: cannot seem to tell what the true spacing is, add extra to prevent scrollbar
   // - there is additional unknown space on the right besides the scrollbar
   // - we shouldn't have to subtract scrollbarWidth, unless forcing a minimum
   QSize hint((viewSize.width() - SPACING * (numCols + 2)) / numCols,

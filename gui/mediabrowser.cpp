@@ -130,7 +130,7 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
     if (key.isEmpty()) {
       if (first.isArchived())
         first.archivePaths(&key);
-      else if (first.type() == Media::TypeVideo)  // don't group videos todo: option
+      else if (first.type() == Media::TypeVideo)  // don't group videos TODO: option
         key = first.path();
       else
         key = first.dirPath();
@@ -212,7 +212,7 @@ int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions&
     // we have a pair, add it
     if (dirPaths.count() == 2) {
       // find the common prefix, exclude from the key
-      // todo: maybe overflow potential, but all paths should be absolute...
+      // TODO: maybe overflow potential, but all paths should be absolute...
       const QString& a = dirPaths[0];
       const QString& b = dirPaths[1];
       int i = 0;
@@ -370,7 +370,7 @@ void MediaBrowser::mediaSelected(const MediaGroup& group) {
       search.params = _options.params;
       search = Engine(_options.db->path(), IndexParams()).query(search);
 
-      // fixme: refactor common filtering logic
+      // TODO: refactor common filtering logic
       search.matches.prepend(search.needle);
       MediaGroupList list;
       if (!_options.db->filterMatch(_options.params, search.matches)) list.append(search.matches);

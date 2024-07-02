@@ -148,7 +148,7 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
 
         numHashes += len;
 
-        if (chunk.size() >= minChunkSize) {  // todo: this size seems to have some small effect
+        if (chunk.size() >= minChunkSize) {  // TODO: this size seems to have some small effect
           _tree->insert(chunk);
           chunk.clear();  // no reallocation
           pl.step(currentRow);
@@ -244,7 +244,7 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle, const SearchPa
 
   for (int j = 0; j < numNeedleHashes; j++) nHash[j] = hashes[j];
 
-  // todo: investigate if it may be possible to prune the search
+  // TODO: investigate if it may be possible to prune the search
   // - if a hash has no matches, nearby hashes probably also have no matches
   std::vector<HammingTree::Match> cand[numNeedleHashes];
   for (int j = 0; j < numNeedleHashes; j++) _tree->search(nHash[j], params.dctThresh, cand[j]);

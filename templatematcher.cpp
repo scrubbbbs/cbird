@@ -120,7 +120,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
   }
 
   // build brute force matcher for the target image
-  // fixme: would another matcher be faster?
+  // TODO: FLANN should be faster, but does other overhead dominate?
   cv::BFMatcher matcher(cv::NORM_HAMMING, true);
   std::vector<cv::Mat> haystack;
 
@@ -266,10 +266,10 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
     // take section from candidate that should represent
     // the target, then compare with the template image
     // for similarity
-    // todo: this fails to match images that have been put on different
-    // backgrounds; to solve that, don't use phash to score; one idea,
-    // use the closest x matched keypoints, transform them, and measure
-    // the distance from the actual keypoint
+    // TODO: this fails to match images that have been put on different
+    // backgrounds; to solve that, don't use phash to score; score
+    // the area around each keypoint; or don't do this at and use strength
+    // of the keypoint correlation
 
     std::vector<cv::Point2f> tmplRect;
     tmplRect.push_back(cv::Point2f(0, 0));
@@ -283,7 +283,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
 
     {
       // set the roi rect in the match;
-      // todo: instead of the image corners, map the image borders
+      // TODO: instead of the image corners, map the image borders
       QVector<QPoint> roi;
       for (uint i = 0; i < 4; i++)
         roi.append(QPoint(int(candRect[i].x / candScale), int(candRect[i].y / candScale)));

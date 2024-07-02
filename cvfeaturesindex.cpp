@@ -449,7 +449,7 @@ QVector<Index::Match> CvFeaturesIndex::find(const Media& needle, const SearchPar
   uint64_t nsLoad = now - then;
   then = now;
 
-  // todo: scoring system needs validation
+  // TODO: scoring system needs validation
   // note various methods attempted below
   struct Match_ {
     int count = 0;
@@ -463,7 +463,7 @@ QVector<Index::Match> CvFeaturesIndex::find(const Media& needle, const SearchPar
   int maxMatches = 0;
 
   // for every descriptor in the needle, find the 10 nearest in the index
-  // todo: how many do we actually have to find (should it be a parameter?)
+  // TODO: how many do we actually have to find (should it be a parameter?)
   cv::Mat flannIndices;
   cv::Mat flannDists;
   _index->knnSearch(descriptors, flannIndices, flannDists, 10);

@@ -50,7 +50,7 @@ void DctHashIndex::unload() {
 }
 
 size_t DctHashIndex::memoryUsage() const {
-  // todo: tree->memoryUsage
+  // TODO: tree->memoryUsage
   return (sizeof(*_hashes) + sizeof(*_mediaId)) * size_t(_numHashes);
 }
 
@@ -116,7 +116,7 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath, const QStrin
 void DctHashIndex::save(QSqlDatabase& db, const QString& cachePath) {
   (void)db;
   (void)cachePath;
-  // todo: _tree->save()
+  // TODO: _tree->save()
 }
 
 void DctHashIndex::add(const MediaGroup& media) {
@@ -132,7 +132,7 @@ void DctHashIndex::add(const MediaGroup& media) {
     _mediaId[i + end] = uint32_t(m.id());
   }
 
-  // todo: _tree->insert(media);
+  // TODO: _tree->insert(media);
   buildTree();
 }
 
@@ -140,7 +140,7 @@ void DctHashIndex::remove(const QVector<int>& removed) {
   if (!isLoaded()) return;
 
   // rather than realloc the index, nullify the removed items
-  // todo: track the amount of wasted space and compact at some point
+  // TODO: track the amount of wasted space and compact at some point
   QSet<int> ids;
   for (int id : removed) ids.insert(id);
 
@@ -150,7 +150,7 @@ void DctHashIndex::remove(const QVector<int>& removed) {
       _hashes[i] = 0;
     }
 
-  // todo: _tree->remove()
+  // TODO: _tree->remove()
   buildTree();
 }
 
@@ -167,7 +167,7 @@ QVector<Index::Match> DctHashIndex::find(const Media& m, const SearchParams& p) 
     qWarning() << "empty/null tree";
     return results;
   }
-// todo: maybe use brute if threshold is high
+// TODO: maybe use brute if threshold is high
 #if 1
   results = _tree->search(target, p.dctThresh);
 #else
