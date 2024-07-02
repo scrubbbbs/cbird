@@ -179,15 +179,36 @@ QStringList VideoContext::ffVersions() {
 }
 
 void VideoContext::listFormats() {
+
+  qWarning("listing FFmpeg configuration, not necessarily available for indexing (see -about)");
+
   void* opaque = nullptr;
   const AVInputFormat* fmt;
-  qWarning("showing all formats, not necessarily enabled for indexing");
-  qWarning("see enabled extensions with -about");
-  qInfo("-----------------------------");
-  qInfo("Format \"Description\" (Known Extensions)]");
-  qInfo("-----------------------------");
+
+  qInfo("----------------------------------------");
+  qInfo("Name \"Description\" (Known Extensions)]");
+  qInfo("----------------------------------------");
   while (nullptr != (fmt = av_demuxer_iterate(&opaque)))
     qInfo("%s \"%s\" (%s)", fmt->name, fmt->long_name, fmt->extensions);
+}
+
+void VideoContext::listCodecs() {
+
+  qWarning("listing FFmpeg configuration, not necessarily available for indexing");
+
+  void* opaque = nullptr;
+  const AVCodec* codec;
+  qInfo("------------------------------");
+  qInfo("Threads Type Name Description]");
+  qInfo("------------------------------");
+  while (nullptr != (codec = av_codec_iterate(&opaque))) {
+    if (codec->type == AVMEDIA_TYPE_VIDEO)
+      qInfo("%3s %3s %-20s %s",
+            codec->capabilities & (AV_CODEC_CAP_SLICE_THREADS | AV_CODEC_CAP_FRAME_THREADS) ? "mt" : "st",
+            codec->capabilities & AV_CODEC_CAP_HARDWARE ? "gpu" : "cpu",
+            codec->name,
+            codec->long_name);
+  }
 }
 
 class VideoContextPrivate {

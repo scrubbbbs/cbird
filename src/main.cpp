@@ -150,7 +150,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
                      "-help", "-version", "-about", "-verify", "-vacuum", "-select-result",
                      "-license", "-cwd", "-init", "-list-search-params", "-list-index-params",
                      "-weeds", /*"-track-weeds",*/ "-nuke-weeds", "-dump", "-list-formats",
-                     "-focus-first", "-no-delete", "-v", "-verbose", "-q", "-quiet"
+                     "-focus-first", "-no-delete", "-v", "-verbose", "-q", "-quiet", "-list-codecs",
                      /* one argument */
                      "-select-id", "-select-sql", "-max-per-page", "-head", "-tail", "-theme"};
 
@@ -746,6 +746,8 @@ int main(int argc, char** argv) {
       for (auto& mimeType : QImageReader::supportedMimeTypes())
         qInfo().noquote() << mimeType << QImageReader::imageFormatsForMimeType(mimeType);
       VideoContext::listFormats();
+    } else if (arg == "-list-codecs") {
+      VideoContext::listCodecs();
     } else if (arg == "-use") {
       if (_engine) {
         qCritical("-use: database already open on \"%s\", pass -use before other arguments",

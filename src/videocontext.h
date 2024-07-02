@@ -108,6 +108,7 @@ class VideoContext {
 
   /// list available formats/codecs
   static void listFormats();
+  static void listCodecs();
 
   VideoContext();
   ~VideoContext();

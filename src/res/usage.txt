@@ -131,6 +131,7 @@ Miscellaneous
   -list-index-params               list current index parameters
   -list-search-params              list current search parameters
   -list-formats                    list available image and video formats
+	-list-codecs										 list	available video codecs
   -video-thumbnail <file> <frame#> crop video thumbnail at frame
 
 Search Parameters (for -similar*)
