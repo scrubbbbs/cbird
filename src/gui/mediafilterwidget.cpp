@@ -5,7 +5,7 @@
 
 MediaFilterWidget::MediaFilterWidget(QWidget* parent) : QWidget(parent) {
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
-  settings.beginGroup(metaObject()->className());
+  settings.beginGroup(self::staticMetaObject.className());
 
   _match = settings.value("matchMask").toInt();
   if (_match <= 0) _match = MediaGroupTableModel::ShowAll;
@@ -83,7 +83,7 @@ MediaFilterWidget::MediaFilterWidget(QWidget* parent) : QWidget(parent) {
 
 MediaFilterWidget::~MediaFilterWidget() {
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
-  settings.beginGroup(metaObject()->className());
+  settings.beginGroup(self::staticMetaObject.className());
 
   settings.setValue("matchMask", _match);
   settings.setValue("minSize", _size);

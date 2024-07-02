@@ -229,7 +229,7 @@ void MediaGroupTableModel::applyFilter(int match, int size, const QString& path)
         return false;
       };
     }
-  } else if (match != 0) {
+  } else if (match) {
     _filterFunc = [size, path, match](const Media& a) {
       // minsize
       if (size != 0 && std::max(a.width(), a.height()) < size) return true;
@@ -496,7 +496,7 @@ MediaGroupTableWidget::~MediaGroupTableWidget() {
   WidgetHelper::saveGeometry(this);
 
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
-  settings.beginGroup(this->metaObject()->className());
+  settings.beginGroup(self::staticMetaObject.className());
 
   if (model()) {
     QStringList colWidths;

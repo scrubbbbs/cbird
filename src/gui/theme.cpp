@@ -128,7 +128,6 @@ void Theme::showWindow(QWidget* window, bool maximized) const {
 QString Theme::richTextStyleSheet() const {
   // not thread-safe due to static qregexp
   Q_ASSERT(qApp->thread() == QThread::currentThread());
-  static const auto* exp = new QRegularExpression(qq("(qt|theme)\\((.*?)\\)"));
 
   QFile f(qq(":res/cbird-richtext.css"));
   if (!f.open(QFile::ReadOnly)) {

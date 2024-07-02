@@ -387,7 +387,7 @@ VideoCompareWidget::~VideoCompareWidget() {
   WidgetHelper::saveGeometry(this);
 
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
-  settings.beginGroup(this->metaObject()->className());
+  settings.beginGroup(self::staticMetaObject.className());
   settings.setValue("stacked", _stacked);
 }
 

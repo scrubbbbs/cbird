@@ -1432,7 +1432,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   Media::sortGroupList(list, {"path"});
 
-  qInfo("filtered %lld matches to %lld in %lldms", matchCount, list.count(),
+  qInfo("filtered %d matches to %lld in %lldms", matchCount, list.count(),
         QDateTime::currentMSecsSinceEpoch() - start);
   return list;
 }

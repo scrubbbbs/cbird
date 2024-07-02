@@ -676,7 +676,7 @@ void WidgetHelper::setWindowCloak(QWidget* window, bool enable) {
 #endif
 
 void WidgetHelper::saveGeometry(const QWidget* w, const char* id) {
-  if (!id) id = w->metaObject()->className();
+  if (!id) id = w->staticMetaObject.className();
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(id);
 
@@ -696,7 +696,7 @@ void WidgetHelper::saveGeometry(const QWidget* w, const char* id) {
 }
 
 bool WidgetHelper::restoreGeometry(QWidget* w, const char* id) {
-  if (!id) id = w->metaObject()->className();
+  if (!id) id = w->staticMetaObject.className();
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(id);
 

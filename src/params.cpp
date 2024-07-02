@@ -82,7 +82,7 @@ QString Params::Value::toString() const {
 }
 
 const char* Params::Value::typeName() const {
-  const char* name = "Unknown type";
+  const char* name;
   switch (type) {
     case Bool:
       name = "bool";
@@ -96,6 +96,8 @@ const char* Params::Value::typeName() const {
     case Flags:
       name = "flags";
       break;
+    default:
+      Q_UNREACHABLE();
   }
   return name;
 }
