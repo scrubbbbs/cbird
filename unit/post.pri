@@ -4,7 +4,7 @@
 # note: path relative to CWD of this .qm file!
 for (BASE, FILES) {
 
-    LIST=../$${BASE}.cpp $${BASE}.cpp
+    LIST=../src/$${BASE}.cpp $${BASE}.cpp
 
     for (FILE, LIST) {
         exists($$FILE) {
@@ -12,7 +12,7 @@ for (BASE, FILES) {
         }
     }
 
-    LIST=../$${BASE}.h $${BASE}.h
+    LIST=../src/$${BASE}.h $${BASE}.h
     for (FILE, LIST) {
         exists($$FILE) {
             HEADERS += $$FILE

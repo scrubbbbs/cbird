@@ -20,7 +20,7 @@ include(../cbird.pri)
 
 QMAKE_CXXFLAGS -= -Werror
 
-INCLUDEPATH += . .. ../..
+INCLUDEPATH += . ../src
 
 QTCORE_PRIVATE_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include/QtCore/$$QT_VERSION"
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
@@ -38,14 +38,14 @@ FILES_GUI = gui/mediagrouplistwidget gui/mediafolderlistwidget env \
     gui/theme gui/mediapage gui/mediaitemdelegate gui/pooledimageallocator
 
 win32 {
-  PRECOMPILED_HEADER=../prefix.h
+  PRECOMPILED_HEADER=../src/prefix.h
   CONFIG += precompile_header
 }
 unix {
   # using this hack to share precomp header with all targets,
   # instead of PRECOMPILED_HEADER, so it is only compiled once
   QT_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include"
-  QMAKE_CXXFLAGS += -fPIC -I $$QT_HEADERS -include ../prefix.h
+  QMAKE_CXXFLAGS += -fPIC -I $$QT_HEADERS -include ../src/prefix.h
 }
 
 

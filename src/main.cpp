@@ -529,9 +529,11 @@ int main(int argc, char** argv) {
   // enable headless mode
   bool noDisplay = false;
 #if defined(Q_OS_LINUX)
-  if (!args.contains("-headless") && !args.contains("-platform") && // qt5 built-in
-      !args.contains("-display") &&                                 // qt5 built-in
-      getenv("WAYLAND_DISPLAY") == nullptr && getenv("DISPLAY") == nullptr) {
+  if (!args.contains("-headless") &&
+      !args.contains("-platform") && // qt
+      !args.contains("-display") &&  // qt
+      getenv("WAYLAND_DISPLAY") == nullptr &&
+      getenv("DISPLAY") == nullptr) {
     noDisplay = true;
     qDebug() << "no display detected, use DISPLAY/WAYLAND_DISPLAY/-platform/-display";
   }
@@ -544,7 +546,7 @@ int main(int argc, char** argv) {
   }
   else {
     auto* guiApp = new QApplication(argc, argv);
-    const char* iconPath = ":cbird.svg";
+    const char* iconPath = ":res/cbird.svg";
 #if defined(Q_OS_MAC)
     iconPath=":mac/cbird.icns";
 #endif

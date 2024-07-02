@@ -19,7 +19,7 @@ include(cbird.pri)
 
 CONFIG += precompile_header
 
-PRECOMPILED_HEADER=prefix.h
+PRECOMPILED_HEADER=src/prefix.h
 precompile_header {
 
     win32-deprecated {
@@ -39,8 +39,8 @@ precompile_header {
 
     warning("no precompiled headers... run 'make prefix.h.gch' first")
 
-    QMAKE_PRE_TARGETDEPS += prefix.h.gch
-    QMAKE_CXX = $$COMPILER -include prefix.h
+    QMAKE_PRE_TARGETDEPS += src/prefix.h.gch
+    QMAKE_CXX = $$COMPILER -include src/prefix.h
     precompiled_header.target = prefix.h.gch
     precompiled_header.commands = $$COMPILER $(CXXFLAGS) $(INCPATH) -x c++-header $$PRECOMPILED_HEADER
     precompiled_header.depends = $$PRECOMPILED_HEADER index.pro
@@ -56,18 +56,18 @@ QMAKE_EXTRA_TARGETS += git
 
 # input
 
-RESOURCES += cbird.qrc qdarkstyle/dark/darkstyle.qrc qdarkstyle/light/lightstyle.qrc
+RESOURCES += src/cbird.qrc src/qdarkstyle/dark/darkstyle.qrc src/qdarkstyle/light/lightstyle.qrc
 
-HEADERS += $$files(*.h)
-HEADERS += $$files(gui/*.h)
-HEADERS += $$files(lib/*.h)
-HEADERS += $$files(tree/*.h)
+HEADERS += $$files(src/*.h)
+HEADERS += $$files(src/gui/*.h)
+HEADERS += $$files(src/lib/*.h)
+HEADERS += $$files(src/tree/*.h)
 
-SOURCES += $$files(*.cpp)
-SOURCES += $$files(gui/*.cpp)
-SOURCES += $$files(lib/*.cpp)
+SOURCES += $$files(src/*.cpp)
+SOURCES += $$files(src/gui/*.cpp)
+SOURCES += $$files(src/lib/*.cpp)
 
-!contains(DEFINES, ENABLE_CIMG): SOURCES -= cimgops.cpp
+!contains(DEFINES, ENABLE_CIMG): SOURCES -= src/cimgops.cpp
 
 
 win32: {
@@ -120,10 +120,10 @@ macx: {
 
 unix:!macx: {
 
-    desktop.files = cbird.desktop
+    desktop.files = unix/cbird.desktop
     desktop.path = $$PREFIX/share/applications
 
-    icon.files = cbird.svg
+    icon.files = src/res/cbird.svg
     icon.path = $$PREFIX/share/icons/hicolor/scalable
 
     #scripts.extra = echo extra
