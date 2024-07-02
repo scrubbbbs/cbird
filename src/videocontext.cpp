@@ -516,7 +516,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     _p->codec = avcodec_find_decoder(_p->context->codec_id);
     if (!_p->codec) {
       AV_WARNING("no codec found");
-      avLoggerSetFileName(_p->context, fileName);
+      freeContext();
       return -4;
     }
   } else {
@@ -525,7 +525,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     if (opt.maxW > 0 && opt.maxW == opt.maxH && QString(_p->codec->name).endsWith("cuvid")) {
       // enable hardware scaler
       QString size = QString("%1x%2").arg(opt.maxW).arg(opt.maxH);
-      qInfo() << "using gpu scaler@" << size;
+      qDebug() << "using gpu scaler@" << size;
       av_dict_set(&codecOptions, "resize", qPrintable(size), 0);
       _isHardwareScaled = true;
     }
