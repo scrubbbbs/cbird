@@ -564,10 +564,24 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   }
 
   if (opt.iframes) {
-    // note: some codecs do not support this or are already intra-frame codecs, there
+    // note: some codecs do not support this or are already intra-frame codecs
     // FIXME: is there a way to tell before we see the gap in the frame numbers?
-    // FIXME: for certain codecs we may want "nointra";  "nokey" works on almost everything
-    av_dict_set(&codecOptions, "skip_frame", "nokey", 0);
+
+    // for these codecs we want "nointra", to get more keyframes; note if this list
+    // is wrong, we get 0 keyframes
+    static constexpr AVCodecID codecs[] = {AV_CODEC_ID_H264,
+                                           AV_CODEC_ID_AV1,
+                                           AV_CODEC_ID_HEVC,
+                                           AV_CODEC_ID_MPEG2VIDEO,
+                                           AV_CODEC_ID_PDV,
+                                           AV_CODEC_ID_NONE};
+    const char* skip = "nokey";
+    for (int i = 0; codecs[i]; ++i)
+      if (_p->codec->id == codecs[i]) {
+        skip = "nointra";
+        break;
+      }
+    av_dict_set(&codecOptions, "skip_frame", skip, 0);
   }
 
   if (opt.lowres > 0) {
