@@ -628,11 +628,12 @@ void Commands::testVideoDecoder(const QString& path) {
       qFatal("invalid arg to -test-video-decoder");
   }
 
-  int numFrames = 0;
+  int numFrames = 0, totalFrames = 0;
   qint64 then;
 
   auto timing = [&]() {
     numFrames++;
+    totalFrames++;
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (now - then > 1000) {
       qInfo() << numFrames * 1000.0f / (now - then) << "frames/second";
@@ -701,6 +702,7 @@ void Commands::testVideoDecoder(const QString& path) {
 
     then = QDateTime::currentMSecsSinceEpoch();
     numFrames = 0;
+    totalFrames = 0;
     if (scale) {
       QImage img, out;
       while ((noSws ? video.decodeFrame() : video.nextFrame(img))) {
@@ -724,6 +726,8 @@ void Commands::testVideoDecoder(const QString& path) {
     } else
       while (video.decodeFrame()) timing();
     video.seekFast(0);
+    qInfo() << "decoded" << totalFrames << "frames";
+    totalFrames = 0;
   } while (loop);
 }
 
