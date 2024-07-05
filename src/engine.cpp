@@ -28,6 +28,7 @@
 #include "dctvideoindex.h"
 #include "scanner.h"
 #include "templatematcher.h"
+#include "qtutil.h"
 
 Engine::Engine(const QString& path, const IndexParams& params) {
   db = new Database(path);
@@ -150,8 +151,10 @@ void Engine::update(bool wait) {
   // check for missing external index data, (currently only video index)
   // TODO: should be implemented by specific index
   if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo)) {
-    qInfo() << "verifying video index...";
-    for (const Media& m : db->mediaWithType(Media::TypeVideo)) {
+    const MediaGroup videos = db->mediaWithType(Media::TypeVideo);
+    PROGRESS_LOGGER(pl, "verifying video index:<PL> %percent %bignum", videos.count());
+    int i = 0;
+    for (const Media& m : videos) {
       QString vIndexPath = QString("%1/%2.vdx").arg(db->videoPath()).arg(m.id());
       if (!QFileInfo(vIndexPath).exists()) {
         qWarning() << "video index missing, rerun -update" << m.path();
@@ -164,7 +167,9 @@ void Engine::update(bool wait) {
           toRemove.append(m.id());
         }
       }
+      pl.step(++i);
     }
+    pl.end();
   }
 
   if (!scanner->indexParams().dryRun && !toRemove.isEmpty()) db->remove(toRemove);

@@ -217,7 +217,7 @@ void Scanner::scanProgress(const QString& path) const {
   const QString elided = qElide(path.mid(_topDirPath.length() + 1), 80);
 
   QString status =
-      QString::asprintf("<NC>checking %s<PL> new{i:%lld v:%lld} ignored:%d modified:%d ok:%d <EL>%s",
+      QString::asprintf("<NC>checking %s$<PL> new{i:%lld v:%lld} ignored:%d modified:%d ok:%d <EL>%s",
                         qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(),
                         _ignoredFiles, _modifiedFiles, _existingFiles, qUtf8Printable(elided));
   qInfo().noquote() << status;
@@ -300,11 +300,16 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
         qWarning() << "future modtime:" << path;
     }
 
-    if (entry.isFile() && !_activeWork.contains(path)) {
+    if (entry.isFile()) {
       //            printf("considering: images=%d videos=%d %s \r",
       //                   _imageQueue.count(), _videoQueue.count(),
       //                   qPrintable(path));
       //            fflush(stdout);
+      if (_activeWork.contains(path)) {
+        qDebug() << "skipping active work" << path;
+        continue;
+      }
+
       const QString type = entry.suffix().toLower();
       if (type.isEmpty()) {
         _ignoredFiles++;
@@ -425,7 +430,7 @@ void Scanner::finish() {
       const QString vProgress = vList.count() ? ", videos{" + vList.join(',') + '}' : "";
 
       QString status = QString::asprintf(
-          "<NC>indexing %s<PL> waiting{i:%lld v:%lld} running{gpu:%d cpu:%d} threads:%d "
+          "<NC>indexing %s$<PL> waiting{i:%lld v:%lld} running{gpu:%d cpu:%d} threads:%d "
           "%d%% %d indexed<EL>%s",
           qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(),
           _gpuPool.activeThreadCount(),
