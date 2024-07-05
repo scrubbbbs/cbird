@@ -959,6 +959,7 @@ static void exifLogHandler(int level, const char* msg) {
 #  include <unistd.h>  // isatty
 extern "C" {
 #  include <termcap.h>
+#  include <sys/signal.h>
 }
 #endif
 
@@ -1042,6 +1043,37 @@ class MessageLog {
       _categoryFilters.removeOne(category);
     }
   }
+#ifndef Q_OS_WIN
+  static int getTTYColumns() {
+    // https://stackoverflow.com/questions/1022957/getting-terminal-width-in-c
+    const char* termEnv = getenv("TERM");
+    if (termEnv) {
+      char termBuf[2048];
+      int err = tgetent(termBuf, termEnv);
+      if (err <= 0)
+        printf("unknown terminal TERM=%s TERMCAP=%s err=%d, cannot guess config\n",
+               termEnv,
+               getenv("TERMCAP"),
+               err);
+      else {
+        char li[2] = {'l', 'i'};
+        char co[2] = {'c', 'o'};
+        int termLines = tgetnum(li);
+        int termCols = tgetnum(co);
+        if (termCols > 0 && termLines > 0) return termCols;
+
+        printf("unknown terminal TERM=%s no lines/cols provided, use CBIRD_CONSOLE_WIDTH\n",
+               termEnv);
+      }
+    }
+    return -1;
+  }
+
+  static void sigWinchHandler(int sig) {
+    (void) sig;
+    instance()._termColumns = getTTYColumns();
+  }
+#endif
 };
 
 void qFlushMessageLog() { MessageLog::instance().flush(); }
@@ -1137,23 +1169,13 @@ MessageLog::MessageLog() {
   _isTerm = isatty(fileno(stdout));
   if (_isTerm) {
     _termColors = true;  // assume we have color on unix-like systems
-    // https://stackoverflow.com/questions/1022957/getting-terminal-width-in-c
-    const char* termEnv = getenv("TERM");
-    if (termEnv) {
-      char termBuf[2048];
-      int err = tgetent(termBuf, termEnv);
-      if (err <= 0)
-        printf("unknown terminal TERM=%s TERMCAP=%s err=%d, cannot guess config\n", termEnv,
-               getenv("TERMCAP"), err);
-      else {
-        char li[2] = {'l','i'};
-        char co[2] = {'c','o'};
-        int termLines = tgetnum(li);
-        _termColumns = tgetnum(co);
-        if (termLines < 0 || _termColumns < 0)
-          printf("unknown terminal TERM=%s %dx%d, cannot guess config\n", termEnv, _termColumns,
-                 termLines);
-      }
+    _termColumns = getTTYColumns();
+    if (_termColumns <= 0)
+      _termColumns = 80;
+    else if (!getenv("CBIRD_CONSOLE_WIDTH")) {
+      // handle tty resize events
+      if (signal(SIGWINCH, sigWinchHandler) == SIG_ERR)
+        printf("signal(SIGWINCH) failed: %d %s\n", errno, strerror(errno));
     }
   }
 #endif
