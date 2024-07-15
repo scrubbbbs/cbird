@@ -429,13 +429,22 @@ void Scanner::finish() {
 
       const QString vProgress = vList.count() ? ", videos{" + vList.join(',') + '}' : "";
 
+      int gpuJobs = _gpuPool.activeThreadCount();
+      int cpuJobs = QThreadPool::globalInstance()->activeThreadCount();
+      int threads = totalThreadCount();
+
+      QString runningStatus;
+      if (gpuJobs)
+        runningStatus = qq("running{gpu:%1 cpu:%2}").arg(gpuJobs).arg(cpuJobs);
+      else
+        runningStatus = qq("running:%1").arg(cpuJobs);
+
       QString status = QString::asprintf(
-          "<NC>indexing %s$<PL> waiting{i:%lld v:%lld} running{gpu:%d cpu:%d} threads:%d "
+          "<NC>indexing %s$<PL> waiting{i:%lld v:%lld} %s threads:%d "
           "%d%% %d indexed<EL>%s",
           qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(),
-          _gpuPool.activeThreadCount(),
-          QThreadPool::globalInstance()->activeThreadCount(),
-          totalThreadCount(),
+          qUtf8Printable(runningStatus),
+          threads,
           progress, finished, qUtf8Printable(vProgress));
       qInfo().noquote() << status;
 
