@@ -573,9 +573,23 @@ void WidgetHelper::setWindowTheme(QWidget* window, bool dark) {
 }
 
 void WidgetHelper::hackShowWindow(QWidget* window, bool maximized) {
-  if (maximized)
-    window->showMaximized();
-  else
+  if (maximized) {
+#ifdef Q_OS_UNIX
+    // showMaximize is inherently broken on some window managers/display servers
+    // https://doc.qt.io/qt-6/application-windows.html#x11-peculiarities
+    bool isX11 = qEnvironmentVariable("XDG_SESSION_TYPE") == "x11";
+    bool brokenMaximize = isX11 && qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("GNOME");
+
+    if (brokenMaximize || qEnvironmentVariableIsSet("CBIRD_MAXIMIZE_HACK")) {
+      window->show();
+      while (!window->isActiveWindow()) // isVisible() doesn't work here
+        qApp->processEvents();
+
+      window->showMaximized();
+    } else
+#endif
+      window->showMaximized();
+  } else
     window->show();
 }
 
@@ -692,7 +706,7 @@ void WidgetHelper::saveGeometry(const QWidget* w, const char* id) {
   // known to be broken: xfwm4 - maximized window->normalGeometry==geometry
   auto geom = w->normalGeometry();
   settings.setValue("normalGeometry", geom);
-  qDebug() << "normalGeometry:"  << geom;
+  qDebug() << "normalGeometry:" << geom << "maximized:" << maximized;
 }
 
 bool WidgetHelper::restoreGeometry(QWidget* w, const char* id) {
@@ -738,6 +752,8 @@ bool WidgetHelper::restoreGeometry(QWidget* w, const char* id) {
 
   // hopefully restores normalGeometry()
   w->setGeometry(pos.x(), pos.y(), width, height);
+
+  qDebug() << "geometry:" << pos << width << height << "maximized:" << maximized;
 
   return maximized;
 }

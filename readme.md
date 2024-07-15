@@ -178,6 +178,8 @@ There are a few for power users.
 - `QT_IMAGE_ALLOC_LIMIT_MB` maximum memory allocation for image files (default 256)
 - `QT_SCALE_FACTOR` global scale factor for UI
 - `TMPDIR` override default directory for temporary files; used for opening zip file contents
+- `CBIRD_MAXIMIZE_HACK` set if window manager/qt is not restoring maximized windows (default auto-detect)
+
 
 Wish List, Bugs, Etc
 ====================
