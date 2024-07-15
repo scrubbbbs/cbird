@@ -37,7 +37,7 @@ class Expression {
 
   Expression() = delete;
 
-  void parseBinaryExpression(const QString& valueExp, const QMetaType& lhsType) {
+  int parseBinaryExpression(const QString& valueExp, const QMetaType& lhsType) {
     int valueOffset=0;
     if (valueExp.startsWith("==")) {
       valueOffset = 2;
@@ -66,6 +66,27 @@ class Expression {
     } else if (valueExp.startsWith("!")) {
       valueOffset = 1;
       _operator = [](const QVariant& lhs, const QVariant& rhs) { return !lhs.toString().contains(rhs.toString()); };
+    } else if (valueExp.startsWith("%")) {
+      static const QVector<int> intTypes{QMetaType::LongLong,QMetaType::ULongLong,QMetaType::Int,QMetaType::UInt};
+      static const QVector<int> floatTypes{QMetaType::Float,QMetaType::Double};
+
+      valueOffset = 1 + parseBinaryExpression(valueExp.mid(1), lhsType);
+      auto cmp = _operator;
+      QVariant rhs = _rhs;
+      _rhsIsNeedle = true;
+
+      if (intTypes.contains(lhsType.id()))
+        _operator = [rhs, cmp](const QVariant& lhs, const QVariant& needle) {
+          return cmp(llabs(lhs.toLongLong() - needle.toLongLong()), rhs);
+        };
+      else if (floatTypes.contains(lhsType.id()))
+        _operator = [rhs, cmp](const QVariant& lhs, const QVariant& needle) {
+          return cmp(fabs(lhs.toDouble() - needle.toDouble()), rhs);
+        };
+      else
+        qFatal("in expression \"%s\", lhs type (\"%s\") is not numeric",
+               qUtf8Printable(valueExp),
+               lhsType.name());
     } else {
       _operator = [](const QVariant& lhs, const QVariant& rhs) { return lhs == rhs; };
     }
@@ -73,14 +94,18 @@ class Expression {
     _opToken = valueExp.mid(0, valueOffset);
 
     QString constant = valueExp.mid(valueOffset).trimmed();
-    _rhsIsNeedle = constant == "%needle";
+
+    if (!_rhsIsNeedle)
+      _rhsIsNeedle = constant == "%needle";
 
     if (!_rhsIsNeedle) {
       _rhs = QVariant(constant);
       if (lhsType.isValid() && !_rhs.convert(lhsType))
-        qFatal("in expression \"%s\", constant \"%s\" is not convertable to \"%s\"",
+        qFatal("in expression \"%s\", rhs constant \"%s\" is not convertable to lhs type \"%s\"",
                qUtf8Printable(valueExp), qUtf8Printable(constant), lhsType.name());
     }
+
+    return valueOffset;
   }
 
   enum {

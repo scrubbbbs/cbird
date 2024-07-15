@@ -187,8 +187,9 @@ Definitions
   <expr>                          expression to test a value, returns true or false, default operator ==
       :<regular-expression>       - pcre matches value
       [<binop>]<string>           - compare using operator, string is converted to value's type
-      [<binop>]%needle            - compare with the needle (first item in group)
-      <expr>&&<expr>              - logical AND, if both expressions are true -> true
+			[<binop>]%needle            - compare with needle (first item in group)
+			%<binop><string>            - compare with needle, absolute difference
+			<expr>&&<expr>              - logical AND, if both expressions are true -> true
       <expr>||<expr>              - logical OR, one expression is true -> true
       %null                       - true if value is null
       !%null                      - true if value is not null
