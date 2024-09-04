@@ -26,7 +26,10 @@ License along with cbird; if not, see
 uchar* PooledImageAllocator::alloc(const QSize& size, QImage::Format fmt) {
   QPixelFormat pFmt = QImage::toPixelFormat(fmt);
   int bytesPerPixel = pFmt.bitsPerPixel() / 8;
-  Q_ASSERT(bytesPerPixel > 0);
+  if (bytesPerPixel <= 0) {
+    qCritical() << "invalid pixel format: bpp:" << pFmt.bitsPerPixel();
+    return nullptr;
+  }
 
   int bytesPerLine = size.width() * bytesPerPixel;
   bytesPerLine += bytesPerLine % 4 == 0 ? 0 : 4 - bytesPerLine % 4;
