@@ -135,6 +135,7 @@ void Engine::update(bool wait) {
     std::sort(sorted.begin(), sorted.end());
     int i = 0;
     // TODO: this takes a long time for big removals...could be threaded
+    // NOTE: use db->indexedFiles() instead of querying each file
     for (const auto& path : qAsConst(sorted)) {
       i++;
       if (i % 100 == 0) qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << path;
