@@ -1,10 +1,16 @@
 Release Blockers (v0.8)
 =========================
 
+- opencv 4
+- review and update the build notes
 - check if metadatacchangetime works or not before relying on it
 - index is spawning more parallel jobs than it should
 - "invalid key size" with odt too large  > 100?  (-sort-similar)
 - can we avoid "memory allocation failed" error from qimagereader?
+
+```
+@{QImageReader: Morphology_1_Tutorial_Theory_Dilation.png}$ ASSERT: "bytesPerPixel > 0" in file src/gui/pooledimageallocator.cpp, line 29
+```
 
 Wish List
 =========================
@@ -46,6 +52,7 @@ Wish List
 - ~~see if `skip_loop_filter` for h264 decoding is a good idea: about 20% faster decoding, unknown affect on hash quality~~ enabled in v0.6
 - ~~same with `SWS_AREA` rescaler instead of `SWS_BICUBIC`~~ enabled in v0.6
 - index videos with partition and merge approach to overcome ffmpeg thread limitations
+- PDF support
 
 ### Search
 - search tree for histograms
@@ -56,6 +63,8 @@ Wish List
 - query, edit negative matches
 - refine video search matches using neighboring hashes
 - reflected needle should be tagged so it can be handled better (template matcher, difference image etc)
+- user setting for discarding low-detail hashes [#17]
+- video coverage map to tell if one clip includes all frames of another clip [#17]
 
 ### GUI
 - barebones index/search gui
