@@ -2333,6 +2333,7 @@ void MediaGroupListWidget::loadRow(int row, bool preloadNextRow) {
   }
 
   qDebug() << "page" << _currentRow << "=>" << row;
+  int rowSkip = row - _currentRow;
   _currentRow = row;
   clear();
 
@@ -2365,7 +2366,7 @@ void MediaGroupListWidget::loadRow(int row, bool preloadNextRow) {
   // preload the next row we expect to see after the displayed page finishes loading
   _preloadPage = nullptr;
 
-  int nextRow = row + (row - _currentRow);
+  int nextRow = row + rowSkip;
   if (nextRow == row) nextRow++; // we removed a row, next one is ok
 
   if (preloadNextRow && nextRow >= 0 && nextRow < _list.count()) {
