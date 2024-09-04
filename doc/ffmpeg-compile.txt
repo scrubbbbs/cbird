@@ -4,16 +4,15 @@ apt install git build-essential nasm mercurial cmake cmake-curses-gui libspeex-d
 git clone https://git.videolan.org/git/x264.git
 ./configure --enable-shared --chroma-format=all
 
-hg clone http://hg.videolan.org/x265
+git clone https://bitbucket.org/multicoreware/x265_git.git
 cd build; cmake ../source; 
 
 git clone https://github.com/FFmpeg/nv-codec-headers.git
 make && sudo make install
 
 git clone https://github.com/FFmpeg/FFmpeg
-git checkout 358c0b
 
-./configure --enable-nonfree --enable-gpl --enable-shared --enable-libx264 --enable-libx265 --enable-libspeex --enable-libfreetype --enable-libfontconfig --enable-libfribidi --enable-libvpx --enable-ffplay --enable-libxml2 --enable-openssl
+./configure --enable-nonfree --enable-gpl --enable-shared --enable-libx264 --enable-libx265 --enable-libspeex --enable-libfreetype --enable-libfontconfig --enable-libfribidi --enable-libvpx --enable-ffplay --enable-libxml2 --enable-openssl --enable-libdav1d
 
 optional
 --enable-vdpau --enable-opencl --enable-cuvid
