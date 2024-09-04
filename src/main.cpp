@@ -834,12 +834,15 @@ int main(int argc, char** argv) {
       queryResult = engine().db->dupsByMd5(params);
       qInfo("dups: %lld groups found", queryResult.count());
     } else if (arg == "-dups-in") {
-      params.set = selectPath(nextArg());
-      params.inSet = true;
+      // dups *within* set ~ similar-in
+      SearchParams p = params;
+      p.set = selectPath(nextArg());
+      p.inSet = true;
       selection.clear();
-      queryResult = engine().db->dupsByMd5(params);
+      queryResult = engine().db->dupsByMd5(p);
       qInfo("dups-in: %lld groups found", queryResult.count());
     } else if (arg == "-nuke-dups-in") {
+      // dups *in* directory ~ similar-to
       QString path = nextArg();
 
       QFileInfo info(path);
