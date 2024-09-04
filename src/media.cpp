@@ -1302,10 +1302,9 @@ QIODevice* Media::ioDevice() const {
 
   } else {
     QFile* file = new QFile(path());
-    if (!file->exists()) {
+    if (!file->exists())
       qWarning() << "file does not exist" << _path;
-      qWarning() << "maybe illegal path on this system" << _path;
-    }
+
     io = file;
   }
 
