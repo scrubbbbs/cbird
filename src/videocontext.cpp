@@ -1186,7 +1186,7 @@ QString VideoContext::Metadata::toString(bool styled) const {
 void VideoContext::Metadata::toMediaAttributes(Media& media) const {
   media.setAttribute("duration", QString::number(duration));
   media.setAttribute("fps", QString::number(double(frameRate)));
-  media.setAttribute("time", timeDuration().toString("mm:ss"));
+  media.setAttribute("time", timeDuration().toString("h:mm:ss"));
   media.setAttribute("vformat", toString());
 }
 
