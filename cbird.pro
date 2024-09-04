@@ -124,7 +124,7 @@ unix:!macx: {
     desktop.path = $$PREFIX/share/applications
 
     icon.files = src/res/cbird.svg
-    icon.path = $$PREFIX/share/icons/hicolor/scalable
+		icon.path = $$PREFIX/share/icons/hicolor/scalable/apps
 
     #scripts.extra = echo extra
 
