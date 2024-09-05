@@ -50,7 +50,7 @@ class Commands {
 
   void filter(const std::vector<Filter>&) const;
   void rename(Database* db, const QString& srcPat, const QString& dstPat, const QString& option);
-  void selectFiles();
+  MediaGroup selectFiles();
   void verify(Database* db, const QString& jpegFixPath);
 
   void testVideoDecoder(const QString& path);

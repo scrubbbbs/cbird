@@ -98,6 +98,7 @@ void Media::setDefaults() {
   _score = -1;
   _position = -1;
   _type = TypeImage;
+  _isFile = true;
 }
 
 Media::Media(const QImage& qImg, int originalSize) {
@@ -109,6 +110,7 @@ Media::Media(const QImage& qImg, int originalSize) {
   _height = _img.height();
   _origSize = originalSize;
   _path = QString("qimage://%1").arg(qImg.cacheKey(), 0, 16, QChar('0'));
+  _isFile = false;
 
   imageHash();
 }
@@ -1514,8 +1516,10 @@ QImage Media::loadImage(const QSize& size, QFuture<void>* future, const ImageLoa
 }
 
 bool Media::isReloadable() const {
-  return type() == Media::TypeImage &&
-         (data().length() > 0 || id() > 0 || isArchived() || QFileInfo(path()).exists());
+  if (type() != Media::TypeImage) return false;
+  if (data().length() > 0) return true;
+  if (!_isFile) return false;
+  return id() > 0 || isArchived() || QFileInfo(path()).exists();
 }
 
 QImage Media::constrainedResize(const QImage& img, const QSize& size) {

@@ -497,8 +497,9 @@ void Commands::rename(Database* db, const QString& srcPat, const QString& dstPat
   _selection.clear();
 }
 
-void Commands::selectFiles() {
+MediaGroup Commands::selectFiles() {
   static const Scanner* sc = new Scanner; // pointer to avoid static destruction
+  MediaGroup fileList;
   while (_args.count() > 0) {
     const QString arg = _args.front();
     if (arg.startsWith("-"))  // next switch
@@ -511,7 +512,7 @@ void Commands::selectFiles() {
       continue;
     }
     if (info.isDir()) {
-      qDebug() << "selected-files: listing dir:" << arg;
+      qDebug() << "select-files: listing dir:" << arg;
       const auto paths = QDir(arg).entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot,
                                              QDir::DirsFirst | QDir::Reversed);
       for (auto& path : paths)
@@ -539,8 +540,9 @@ void Commands::selectFiles() {
     else
       qWarning() << "select-files: ignoring unsupported filetype:" << arg;
 
-    if (type) _selection.append(Media(info.absoluteFilePath(), type));
+    if (type) fileList.append(Media(info.absoluteFilePath(), type));
   }
+  return fileList;
 }
 
 void Commands::verify(Database* db, const QString& jpegFixPath) {

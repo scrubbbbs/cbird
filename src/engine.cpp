@@ -229,6 +229,7 @@ MediaSearch Engine::query(const MediaSearch& search_) const {
     m.copyAttributes(needle);
     m.setPosition(needle.position());
     m.setIsWeed(needle.isWeed());
+    m.setIsFile(needle.isFile());
 
     needle = m;
   }

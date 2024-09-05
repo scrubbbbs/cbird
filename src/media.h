@@ -498,6 +498,13 @@ class Media {
   bool isReloadable() const;
 
   /**
+   * explicitly state that something is not a file; if false then
+   * we don't expect to be able to reload it
+   */
+  bool isFile() const { return _isFile; }
+  void setIsFile(bool set = true) { _isFile = set; }
+
+  /**
    * decompress image and optionally rescale
    * @param data Compressed image data
    * @param size Rescale to the non-zero dimension
@@ -627,6 +634,8 @@ class Media {
   int _position;
   int _matchFlags;
   int _width, _height;
+
+  bool _isFile;
 
   MatchRange _matchRange;
 

@@ -165,14 +165,14 @@ int printCompletions(const char* argv0, const QStringList& args) {
   cmds += propArg;
 
   const QSet<QString> fileArg{"-select-one",     "-jpeg-repair-script", "-test-csv",
-                              "-test-video-decoder", "-select-grid", "-compare-videos",
+                              "-test-video-decoder", "-compare-videos",
                               "-test-image-loader",  "-video-thumbnail"};
   cmds += fileArg;
 
   const QSet<QString> dirArg{"-use", "-dups-in", "-nuke-dups-in", "-similar-in", "-move"};
   cmds += dirArg;
 
-  const QSet<QString> fileOrDirArg{"-similar-to", "-select-path", "-select-files", "-merge"};
+  const QSet<QString> fileOrDirArg{"-similar-to", "-select-path", "-select-files", "-merge", "-select-grid"};
   cmds += fileOrDirArg;
 
   const SearchParams searchParams;
@@ -1031,8 +1031,7 @@ int main(int argc, char** argv) {
           // select path as if -select-file was used
           // FIXME: if path contains videos they won't be frame grabbed
           args.prepend(to);
-          selection.clear();
-          _commands.selectFiles();
+          selection = _commands.selectFiles();
           needles = selection;
         }
       } // special inputs
@@ -1130,11 +1129,12 @@ int main(int argc, char** argv) {
       selection.append(engine().db->mediaWithSql(nextArg()));
     } else if (arg == "-select-files") {
       if (args.count() < 1) qFatal("-select-files expects one or more arguments");
-      _commands.selectFiles();
+      selection.append(_commands.selectFiles());
     } else if (arg == "-select-grid") {
-      const QStringList files = _commands.optionList();
-      for (auto& file : files) {
-        const Media grid(file);
+      const MediaGroup fileList = _commands.selectFiles();
+      for (const Media& grid : fileList) {
+        MessageContext ctx(grid.path());
+
         QImage qImg = grid.loadImage();
         cv::Mat cvImg;
         QVector<QRect> rects;
@@ -1142,15 +1142,14 @@ int main(int argc, char** argv) {
         qImageToCvImg(qImg, cvImg);
         demosaic(cvImg, rects);
 
-        MediaGroup g;
-        int i = 0;
+        int i = 1;
         for (const QRect& r : rects) {
-          Media m;
-          m.setPath(grid.path().split("/").last() + "@rect" + QString::number(i++));
+          QString path = grid.path() + "@rect" + QString::number(i++);
+          Media m(path, Media::TypeImage, r.width(), r.height());
           m.setImage(qImg.copy(r));
-          g.append(m);
+          m.setIsFile(false);
+          selection.append(m);
         }
-        selection.append(g);
       };
     } else if (arg == "-slice") {
       params.set = selectPath(nextArg());

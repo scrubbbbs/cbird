@@ -312,6 +312,10 @@ void qImageToCvImg(const QImage& src, cv::Mat& dst) {
       }
       break;
 
+    case 0:
+      qWarning("invalid image: depth=%d width=%d height=%d", src.depth(), srcW, srcH);
+      break;
+
     default:
       qWarning("unsupported depth: %d, converting to RGB888", src.depth());
       QImage tmp = src.convertToFormat(QImage::Format_RGB888);
@@ -1417,7 +1421,7 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
     if (right - left >= img.cols * lengthThreshold) {
       lastLine = y;
       if (hLineIn.count() && y - lastNonLine == 1) {
-        qInfo() << "hline out @ y=" << y;
+        //qInfo() << "hline out @ y=" << y;
         // cv::line(cvImg, cv::Point(0, y), cv::Point(img.cols-1, y), {0,255,0},
         // 1);
         hLineOut.append(y);
@@ -1425,7 +1429,7 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
     } else {
       lastNonLine = y;
       if (y - lastLine == 1) {
-        qInfo() << "hline in @ y=" << y;
+        //qInfo() << "hline in @ y=" << y;
         // cv::line(cvImg, cv::Point(0, y), cv::Point(img.cols-1, y), {0,0,255},
         // 1);
         hLineIn.append(y);
@@ -1453,7 +1457,7 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
     if (bot - top >= img.rows * lengthThreshold) {
       lastLine = x;
       if (vLineIn.count() && x - lastNonLine == 1) {
-        qInfo() << "vline end @ x=" << x;
+        //qInfo() << "vline end @ x=" << x;
         // cv::line(cvImg, cv::Point(x, 0), cv::Point(x, img.rows-1), {255,0,0},
         // 1);
         vLineOut.append(x);
@@ -1461,7 +1465,7 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
     } else {
       lastNonLine = x;
       if (x - lastLine == 1) {
-        qInfo() << "vline start @ x=" << x;
+        //qInfo() << "vline start @ x=" << x;
         // cv::line(cvImg, cv::Point(x, 0), cv::Point(x, img.rows-1), {0,255,0},
         // 1);
         vLineIn.append(x);
