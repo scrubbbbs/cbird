@@ -613,6 +613,8 @@ QList<QPair<const char*, const char*>> Media::propertyList() {
       {"dirPath", "parent directory path"},
       {"relPath", "relative file path to cwd"},
       {"name", "file name"},
+      {"modified", "date/time file was modified"},
+      {"created", "date/time file was created"},
       {"completeBaseName", "file name w/o suffix"},
       {"archive", "archive/zip path, or empty if non-archive"},
       {"suffix", "file suffix"},
@@ -635,7 +637,7 @@ QList<QPair<const char*, const char*>> Media::propertyList() {
        "comma-separated IPTC tags, first available tag is used (\"Iptc.\" prefix optional)"},
       {"xmp#<tag1[,tagN]>",
        "comma-separated XMP tags, first available tag is used (\"Xmp.\" prefix optional)"},
-      {"ffmeta#<tag1[,tagN]", "comma-separated ffmpeg metadata tags, first available tag is used"},
+      {"ffmeta#<tag1[,tagN]", "comma-separated ffmpeg metadata tags, first available tag is used"}
   };
 }
 
@@ -694,6 +696,21 @@ PropertyFunc Media::propertyFunc(const QString& expr) {
          }
          return m.dirPath();
        }},
+      {"created",
+       [](const Media& m) {
+         QString path = m.path();
+         if (m.isArchived()) m.archivePaths(&path);
+         QFileInfo info(path);
+         return info.birthTime();
+       }},
+      {"modified",
+       [](const Media& m) {
+         QString path = m.path();
+         if (m.isArchived()) m.archivePaths(&path);
+         QFileInfo info(path);
+         return info.lastModified();
+       }}
+
 
       /// TODO: attr(), VideoContext::metadata
   });
