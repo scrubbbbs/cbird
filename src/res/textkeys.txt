@@ -1,0 +1,5 @@
+Description
+fileSize
+format
+width
+height

@@ -274,9 +274,10 @@ int printCompletions(const char* argv0, const QStringList& args) {
   auto completeProp = [&]() {
     static constexpr struct {
       const char *prop, *propHash, *tagFile;
-    } metaTags[3] = {{"exif", "exif#", ":res/exif.txt"}, // FIXME: xmp tags
+    } metaTags[4] = {{"exif", "exif#", ":res/exif.txt"}, // FIXME: xmp tags
                      {"iptc", "iptc#", ":res/iptc.txt"},
-                     {"ffmeta", "ffmeta#", ":res/ffmeta.txt"}};
+                     {"ffmeta", "ffmeta#", ":res/ffmeta.txt"},
+                     {"text", "text#", ":res/textkeys.txt"}};
 
     for (const auto& p : Media::propertyList()) {
       QString sym(p.first);

@@ -603,42 +603,42 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
 }
 
 QList<QPair<const char*, const char*>> Media::propertyList() {
-  return {
-      {"id", "unique id"},
-      {"isValid", "1 if id != 0"},
-      {"md5", "checksum"},
-      {"type", "1=image,2=video,3=audio"},
-      {"path", "file path"},
-      {"parentPath", "archivePath if archive, or dirPath"},
-      {"dirPath", "parent directory path"},
-      {"relPath", "relative file path to cwd"},
-      {"name", "file name"},
-      {"modified", "date/time file was modified"},
-      {"created", "date/time file was created"},
-      {"completeBaseName", "file name w/o suffix"},
-      {"archive", "archive/zip path, or empty if non-archive"},
-      {"suffix", "file suffix"},
-      {"isArchived", "1 if archive member"},
-      {"archiveCount", "number of archive members"},
-      {"contentType", "mime content type"},
-      {"width", "pixel width"},
-      {"height", "pixel height"},
-      {"aspectRatio", "pixel width/height"},
-      {"resolution", "width*height"},
-      {"res", "max of width, height"},
-      {"compressionRatio", "resolution / file size"},
-      {"fileSize", "compressed file size (bytes)"},
-      {"isWeed", "1 if tagged as weed (after query)"},
-      {"score", "match score"},
-      {"matchFlags", "match flags (Media::matchFlags)"},
-      {"exif#<tag1[,tagN]>",
-       "comma-separated EXIF tags, first available tag is used (\"Exif.\" prefix optional)"},
-      {"iptc#<tag1[,tagN]>",
-       "comma-separated IPTC tags, first available tag is used (\"Iptc.\" prefix optional)"},
-      {"xmp#<tag1[,tagN]>",
-       "comma-separated XMP tags, first available tag is used (\"Xmp.\" prefix optional)"},
-      {"ffmeta#<tag1[,tagN]", "comma-separated ffmpeg metadata tags, first available tag is used"}
-  };
+  return {{"id", "unique id"},
+          {"isValid", "1 if id != 0"},
+          {"md5", "checksum"},
+          {"type", "1=image,2=video,3=audio"},
+          {"path", "file path"},
+          {"parentPath", "archivePath if archive, or dirPath"},
+          {"dirPath", "parent directory path"},
+          {"relPath", "relative file path to cwd"},
+          {"name", "file name"},
+          {"modified", "date/time file was modified"},
+          {"created", "date/time file was created"},
+          {"completeBaseName", "file name w/o suffix"},
+          {"archive", "archive/zip path, or empty if non-archive"},
+          {"suffix", "file suffix"},
+          {"isArchived", "1 if archive member"},
+          {"archiveCount", "number of archive members"},
+          {"contentType", "mime content type"},
+          {"width", "pixel width"},
+          {"height", "pixel height"},
+          {"aspectRatio", "pixel width/height"},
+          {"resolution", "width*height"},
+          {"res", "max of width, height"},
+          {"compressionRatio", "resolution / file size"},
+          {"fileSize", "compressed file size (bytes)"},
+          {"isWeed", "1 if tagged as weed (after query)"},
+          {"score", "match score"},
+          {"matchFlags", "match flags (Media::matchFlags)"},
+          {"exif#<tag1[,tagN]>",
+           "comma-separated EXIF tags, first available tag is used (\"Exif.\" prefix optional)"},
+          {"iptc#<tag1[,tagN]>",
+           "comma-separated IPTC tags, first available tag is used (\"Iptc.\" prefix optional)"},
+          {"xmp#<tag1[,tagN]>",
+           "comma-separated XMP tags, first available tag is used (\"Xmp.\" prefix optional)"},
+          {"ffmeta#<tag1[,tagN]",
+           "comma-separated ffmpeg metadata tags, first available tag is used"},
+          {"text#<key>", "loads image and returns QImage::text() value"}};
 }
 
 PropertyFunc Media::propertyFunc(const QString& expr) {
@@ -724,8 +724,8 @@ PropertyFunc Media::propertyFunc(const QString& expr) {
   auto it = props.find(field);
   if (it != props.end()) {
     select = *it;
-  } else if (field == "exif" || field == "iptc" || field == "xmp") {
-    if (args.count() == 0) qFatal("exif/iptc/xmp require tag name(s)");
+  } else if (field == "exif" || field == "iptc" || field == "xmp" || field=="text") {
+    if (args.count() == 0) qFatal("exif/iptc/xmp/text require tag name(s)");
     QStringList exifKeys = args.front().split(",");
     args.pop_front();
     bool useCache = true;
@@ -1605,6 +1605,18 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
 
   QVariantList values;
   for (int i = 0; i < keys.count(); ++i) values.append(QVariant());
+
+  if (type == "text") {
+    const QImage img = loadImage();
+    const QStringList qtKeys = img.textKeys();
+
+    for (int i = 0; i < keys.count(); ++i) {
+      const QString& key = keys[i];
+      if (qtKeys.contains(key))
+        values[i] = img.text(key);
+    }
+    return values;
+  }
 
   // initialize exif library
   static const struct Exiv2Init
