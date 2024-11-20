@@ -239,9 +239,12 @@ sudo apt-get install g++-10
 # make sure we can't use g++7/8...incompatible with qt6
 sudo apt-get autoremove g++-7 g++-8
 
-# force build tools to use clang
-export CXX=g++-10
-export CC=gcc-10
+# force build tools to use gcc 10
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
+sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
+
+# check gcc version is correct
+gcc -v; g++-v
 
 # (after qt-base compilation)
 export Qt6_DIR=/usr/local/Qt-6.5.1
