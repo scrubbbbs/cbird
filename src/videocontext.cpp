@@ -409,8 +409,15 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       _metadata.videoBitrate = int(codecParams->bit_rate);
 
       const AVCodec* vCodec = avcodec_find_decoder(codecParams->codec_id);
-      if (vCodec) _metadata.videoCodec = vCodec->name;
-
+      if (vCodec) {
+        _metadata.videoCodec = vCodec->name;
+        const char* profileName = av_get_profile_name(vCodec, codecParams->profile);
+        if (profileName) {
+          _metadata.videoProfile = profileName;
+          if (codecParams->level > 0)
+            _metadata.videoProfile += qq(", Level %1").arg(codecParams->level);
+        }
+      }
       stream->discard = AVDISCARD_NONE;
 
     } else if (codecParams->codec_type == AVMEDIA_TYPE_AUDIO) {
@@ -1167,10 +1174,10 @@ QString VideoContext::Metadata::toString(bool styled) const {
   if (styled)
     fmt =
         "<span class=\"time\">%1</span> "
-        "<span class=\"video\">%2fps %3 @ %4k</span> "
+        "<span class=\"video\">%2fps %3%9 @ %4k</span> "
         "<span class=\"audio\">%5khz %6ch %7 @ %8k</span>";
   else
-    fmt = "%1 %2fps %3 @ %4k / %5khz %6ch %7 @ %8k";
+    fmt = "%1 %2fps %3%9 @ %4k / %5khz %6ch %7 @ %8k";
 
   return QString(fmt)
       .arg(timeDuration().toString("mm:ss"))
@@ -1180,7 +1187,8 @@ QString VideoContext::Metadata::toString(bool styled) const {
       .arg(sampleRate / 1000)
       .arg(channels)
       .arg(audioCodec)
-      .arg(audioBitrate / 1000);
+      .arg(audioBitrate / 1000)
+      .arg(videoProfile.isEmpty() ? qq("") : qq(" (") + videoProfile + ")");
 }
 
 void VideoContext::Metadata::toMediaAttributes(Media& media) const {

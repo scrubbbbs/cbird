@@ -49,6 +49,7 @@ class VideoContext {
     int duration;
     QDateTime creationTime;
     QString pixelFormat; // only valid after nextFrame()
+    QString videoProfile;
 
     Metadata() {
       isEmpty = true;

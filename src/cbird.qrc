@@ -9,5 +9,6 @@
         <file>res/license.txt</file>
         <file>res/usage.txt</file>
         <file>res/cbird.svg</file>
+        <file>res/textkeys.txt</file>
     </qresource>
 </RCC>
