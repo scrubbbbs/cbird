@@ -21,7 +21,10 @@
 #pragma once
 #include "index.h"
 
-class HammingTree;
+template<typename T>
+class HammingTree_t;
+
+typedef HammingTree_t<uint64_t> HammingTree64; // 64-bit index, 64-bit hash
 
 /**
  * @class DctVideoIndex
@@ -54,13 +57,18 @@ class DctVideoIndex : public Index {
  private:
   QVector<Index::Match> findFrame(const Media& needle, const SearchParams& params);
   QVector<Index::Match> findVideo(const Media& needle, const SearchParams& params);
-  void insertHashes(int mediaIndex, HammingTree* tree, const SearchParams& params);
+  void insertHashes(int mediaIndex, HammingTree64* tree, const SearchParams& params);
   void buildTree(const SearchParams& params);
 
-  HammingTree* _tree;
+  HammingTree64* _tree;
   std::vector<uint32_t> _mediaId;
   QString _dataPath;
-  std::map<uint32_t, HammingTree*> _cachedIndex;
+  std::map<uint32_t, HammingTree64*> _cachedIndex;
   QMutex _mutex;
   bool _isLoaded;
+
+  // the 32-bit index is split between mediaId and frame number,
+  // which limits the number of items we can search
+  const uint32_t MAX_FRAMES = 0xFFFF;
+  const uint32_t MAX_VIDEOS = 0xFFFF;
 };

@@ -106,10 +106,25 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
     unload();
     _tree = new HammingTree;
 
+    bool invalid = false;
     if (!stale) {
       qInfo("reading cache file");
-      _tree->read(qUtf8Printable(path));
-    } else {
+      invalid = true;
+      QFile f(path);
+      if (!f.open(QFile::ReadOnly))
+        qWarning() << "open failed" << path << f.errorString();
+      else if (!_tree->read(f))
+        qWarning() << "read cache failed" << path << f.errorString();
+      else
+        invalid = false;
+
+      if (invalid) {
+        qWarning() << "invalid cache file, removing" << path;
+        if (!f.remove()) qWarning() << "failed to remove cache file:" << f.errorString();
+      }
+    }
+
+    if (stale || invalid) {
       QSqlQuery query(db);
       query.setForwardOnly(true);
 

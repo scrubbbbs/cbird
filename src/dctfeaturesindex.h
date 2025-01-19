@@ -22,7 +22,10 @@
 
 #include "index.h"
 
-class HammingTree;
+template<typename T>
+class HammingTree_t;
+
+typedef HammingTree_t<uint32_t> HammingTree; // 32-bit index, 64-bit hash
 
 /**
  * @class DctFeaturesIndex

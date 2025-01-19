@@ -52,13 +52,17 @@
  * The leaves of the tree are large chunks (CLUSTER_SIZE) which can be searched
  * very quickly and reduce the miss rate somewhat.
  */
-class HammingTree {
- public:
-  // minimum size in bytes of a leaf node
-  // on a full tree (depth 64) can grow indefinitely
-  enum { CLUSTER_SIZE = 64 * 1024 };
 
-  typedef uint32_t index_t;
+template<typename index_type = uint32_t>
+class HammingTree_t
+{
+ public:
+  enum {
+    FILE_VERSION = 2,         // v1 had no version header
+    CLUSTER_SIZE = 64 * 1024, // minimum size of a node before partitioning
+  };
+
+  typedef index_type index_t; // v2 optionally larger for video index
   typedef uint64_t hash_t;
   typedef int distance_t;
 
@@ -84,11 +88,16 @@ class HammingTree {
     int numNodes;
     int maxHeight;
     int numValues;
-    Stats() : memory(sizeof(HammingTree)), numNodes(0), maxHeight(0), numValues(0) {}
+    Stats()
+        : memory(sizeof(HammingTree_t<index_t>))
+        , numNodes(0)
+        , maxHeight(0)
+        , numValues(0) {}
   };
 
-  HammingTree() { init(); }
-  ~HammingTree() { clear(); }
+  HammingTree_t() { init(); }
+
+  ~HammingTree_t() { clear(); }
 
   /// Find hash with distance(hash, cand) < threshold
   void search(hash_t hash, distance_t threshold, std::vector<Match>& matches) const {
@@ -107,7 +116,7 @@ class HammingTree {
   void insert(std::vector<Value>& values) {
     _count += values.size();
 
-    if (!_root) _root = new Level;
+    if (!_root) _root = new Node;
 
     insert(_root, values, 0);
   }
@@ -118,10 +127,10 @@ class HammingTree {
   }
 
   /// Copy a subtree; method to multithread searches
-  HammingTree* slice(const std::unordered_set<index_t>& indexSet) {
-    HammingTree* tree = new HammingTree;
+  HammingTree_t<index_t>* slice(const std::unordered_set<index_t>& indexSet) {
+    auto* tree = new HammingTree_t<index_t>;
     if (_root) {
-      std::vector<HammingTree::Value> values;
+      std::vector<Value> values;
       tree->slice(_root, indexSet, tree, values);
       tree->insert(values);
     }
@@ -137,17 +146,51 @@ class HammingTree {
     return st;
   }
 
+  // header written to files
+  static QString fileHeader() {
+    return QStringLiteral("cbird hamming tree:%1:%2:%3:%4\n")
+        .arg(FILE_VERSION)
+        .arg(sizeof(index_t))
+        .arg(sizeof(hash_t))
+        .arg(CLUSTER_SIZE);
+  }
+
   /// Read tree from file
-  void read(const char* file) {
-    FILE* fp = fopen(file, "rb");
-    Q_ASSERT(fp);
-    _root = read(fp);
-    fclose(fp);
+  bool read(QFile& f) {
+    // use text file header,maxlen 128
+    if (FILE_VERSION > 1) {
+      QByteArray header = f.readLine(128);
+
+      if (header.length() > 0) header.resize(header.length() - 1); // drop '\n'
+
+      QList<QByteArray> fields = header.split(':');
+      if (fields.count() < 1 || fields[0] != "cbird hamming tree") {
+        qDebug() << "old file format?:" << QString(header);
+        qDebug() << "expected" << fileHeader();
+        return false;
+      }
+
+      if (fields.count() != 5 //
+          || fields[1] != QString::number(FILE_VERSION)
+          || fields[2] != QString::number(sizeof(index_t))
+          || fields[3] != QString::number(sizeof(hash_t))
+          || fields[4] != QString::number(CLUSTER_SIZE)) {
+        qDebug() << "incompatible format:" << QString(header);
+        qDebug() << "expected" << fileHeader();
+        return false;
+      }
+    }
+
+    _root = readNode(f);
+    return _root != nullptr;
   }
 
   /// Write tree to file
   void write(QFile& f) {
-    if (_root) write(_root, f);
+    QByteArray header = fileHeader().toLatin1();
+    Q_ASSERT(header.length() == f.write(header.data()));
+
+    if (_root) writeNode(_root, f);
   }
 
   /// Print the tree structure
@@ -162,17 +205,24 @@ class HammingTree {
   size_t size() const { return _count; }
 
  private:
-  struct Level {
-    Level* left;
-    Level* right;
+  struct Node
+  {
+    Node* left;
+    Node* right;
     int bit;
     hash_t* hashes;
     size_t count;
     index_t* indices;
 
-    Level() : left(nullptr), right(nullptr), bit(-1), hashes(nullptr), count(0), indices(nullptr){};
+    Node()
+        : left(nullptr)
+        , right(nullptr)
+        , bit(-1)
+        , hashes(nullptr)
+        , count(0)
+        , indices(nullptr){};
 
-    ~Level() {
+    ~Node() {
       delete left;
       delete right;
       if (indices) free(indices);
@@ -191,7 +241,9 @@ class HammingTree {
 
   static int getBit(int depth) { return depth; }
 
-  static void search(const Level* level, hash_t hash, distance_t threshold,
+  static void search(const Node* level,
+                     hash_t hash,
+                     distance_t threshold,
                      std::vector<Match>& matches) {
     if (level->left != nullptr) {
       if ((1 << level->bit) & hash)
@@ -213,7 +265,7 @@ class HammingTree {
     }
   }
 
-  static void findIndex(const Level* level, index_t index, std::vector<hash_t>& results) {
+  static void findIndex(const Node* level, index_t index, std::vector<hash_t>& results) {
     if (level->left) {
       findIndex(level->left, index, results);
       findIndex(level->right, index, results);
@@ -227,8 +279,10 @@ class HammingTree {
     }
   }
 
-  static void slice(const Level* level, const std::unordered_set<index_t>& indexSet,
-                    HammingTree* tree, std::vector<HammingTree::Value>& values) {
+  static void slice(const Node* level,
+                    const std::unordered_set<index_t>& indexSet,
+                    HammingTree_t<index_t>* tree,
+                    std::vector<Value>& values) {
     if (level->left) {
       slice(level->left, indexSet, tree, values);
       slice(level->right, indexSet, tree, values);
@@ -239,7 +293,7 @@ class HammingTree {
 
       for (size_t i = 0; i < count; i++)
         if (indexSet.find(indices[i]) != end)
-          values.push_back(HammingTree::Value(level->indices[i], level->hashes[i]));
+          values.push_back(Value(level->indices[i], level->hashes[i]));
 
       if (values.size() > 100000) {
         tree->insert(values);
@@ -248,7 +302,7 @@ class HammingTree {
     }
   }
 
-  static void remove(Level* level, const std::unordered_set<index_t>& indexSet) {
+  static void remove(Node* level, const std::unordered_set<index_t>& indexSet) {
     if (level->left) {
       remove(level->left, indexSet);
       remove(level->right, indexSet);
@@ -262,7 +316,7 @@ class HammingTree {
     }
   }
 
-  static void insert(Level* level, const std::vector<Value>& values, int depth) {
+  static void insert(Node* level, const std::vector<Value>& values, int depth) {
     Q_ASSERT(depth < 64);
     if (values.size() <= 0) return;
 
@@ -297,8 +351,8 @@ class HammingTree {
       level->hashes = nullptr;
       level->count = 0;
 
-      level->left = new Level;
-      level->right = new Level;
+      level->left = new Node;
+      level->right = new Node;
 
       insert(level->left, left, depth + 1);
       insert(level->right, right, depth + 1);
@@ -323,8 +377,8 @@ class HammingTree {
     }
   }
 
-  static Level* read(FILE* fp) {
-    Level* level = new Level;
+  static Node* read(FILE* fp) {
+    Node* level = new Node;
 
     bool isLeaf;
     Q_ASSERT(fread(&isLeaf, sizeof(isLeaf), 1, fp) == 1);
@@ -355,7 +409,46 @@ class HammingTree {
     return level;
   }
 
-  static void write(const Level* level, QFile& f) {
+  template<typename T>
+  static bool readScalar(QFile& f, T& x) {
+    return f.read((char*) &x, sizeof(T)) == sizeof(T);
+  }
+
+  template<typename T>
+  static bool readBuffer(QFile& f, T& x, size_t count) {
+    static_assert(std::is_pointer<T>(), "");
+    qint64 len = sizeof(std::remove_pointer_t<T>) * count;
+    x = (T) malloc(len);
+    return f.read((char*) x, len) == len;
+  }
+
+  static Node* readNode(QFile& f) {
+    Node* level = new Node;
+
+    bool isLeaf;
+    Q_ASSERT(readScalar(f, isLeaf));
+
+    if (f.atEnd())
+      ;
+    else if (!isLeaf) {
+      Q_ASSERT(readScalar(f, level->bit));
+
+      level->left = readNode(f);
+      level->right = readNode(f);
+    } else {
+      Q_ASSERT(readScalar(f, level->count));
+      if (level->count > 0) {
+        Q_ASSERT(readBuffer(f, level->indices, level->count));
+        Q_ASSERT(malloc_size(level->indices) >= level->count * sizeof(*level->indices));
+
+        Q_ASSERT(readBuffer(f, level->hashes, level->count));
+        Q_ASSERT(malloc_size(level->hashes) >= level->count * sizeof(*level->hashes));
+      }
+    }
+    return level;
+  }
+
+  static void writeNode(const Node* level, QFile& f) {
     bool isLeaf = level->left == nullptr;
     if (isLeaf) {
       // TODO: compact entries that have been "removed" (index == 0)
@@ -375,15 +468,15 @@ class HammingTree {
       data.append((char*)&level->bit, sizeof(level->bit));
       if (Q_UNLIKELY(data.length() != f.write(data))) throw f.errorString();
 
-      write(level->left, f);
-      write(level->right, f);
+      writeNode(level->left, f);
+      writeNode(level->right, f);
     }
   }
 
-  static void stats(const Level* level, Stats& st, int height) {
+  static void stats(const Node* level, Stats& st, int height) {
     st.numNodes++;
     st.maxHeight = std::max(st.maxHeight, height);
-    st.memory += sizeof(Level);
+    st.memory += sizeof(Node);
     st.memory += level->count * (sizeof(index_t) + sizeof(hash_t));
     st.numValues += level->count;
 
@@ -400,8 +493,8 @@ class HammingTree {
   }
   bool empty() const { return _root == nullptr; }
 
-  size_t printLevel(Level* level, int depth) {
-    size_t bytes = sizeof(*level) + sizeof(Value) * level->count + sizeof(Level*) * 2;
+  size_t printLevel(Node* level, int depth) {
+    size_t bytes = sizeof(*level) + sizeof(Value) * level->count + sizeof(Node*) * 2;
 
     qInfo("%-*s bit=%d nChildren=%d nHash=%d", depth, "", level->bit, level->left ? 2 : 0,
           (int)level->count);
@@ -414,6 +507,6 @@ class HammingTree {
     return bytes;
   }
 
-  Level* _root;
+  Node* _root;
   size_t _count;
 };
