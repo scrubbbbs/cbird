@@ -481,6 +481,7 @@ MediaGroupTableWidget::MediaGroupTableWidget(QWidget* parent) : QTableView(paren
   connect(this, &QTableView::doubleClicked, this, &self::expandRow);
 
   addAction("Download", Qt::Key_F, SLOT(downloadAction()));
+  addAction("Download Sequence", QKeySequence("Shift+F"), SLOT(downloadSequenceAction()));
   addAction("Search...", Qt::Key_S, SLOT(searchAction()));
   addAction("Alt Search...", QKeySequence("Shift+S"), SLOT(altSearchAction()));
   addAction("Open...", Qt::Key_V, SLOT(openAction()));
@@ -602,13 +603,25 @@ void MediaGroupTableWidget::downloadAction() {
 
   const QStringList paths = selectedPaths();
 
+  for (const QString& path : paths) {
+    emit downloadUrl(QUrl(path), "", -1, altText.first());
+    altText.removeFirst();
+  }
+}
+
+void MediaGroupTableWidget::downloadSequenceAction() {
+  QStringList altText;
+  for (const QModelIndex& index : selectionModel()->selectedRows(MediaGroupTableModel::ColAlt))
+    altText.append(index.model()->data(index).toString());
+
+  const QStringList paths = selectedPaths();
+
   // we only pass the sequence number if there
   // are multiple items selected
-  int i = paths.count() > 1 ? 1 : -1;
+  int i = 1;
 
   for (const QString& path : paths) {
-    emit downloadUrl(QUrl(path), "", i, altText.first());
-    if (i > 0) i++;
+    emit downloadUrl(QUrl(path), "", i++, altText.first());
     altText.removeFirst();
   }
 }

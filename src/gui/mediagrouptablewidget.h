@@ -107,7 +107,8 @@ class MediaGroupTableModel : public QAbstractTableModel {
  * displays the results which can be filtered, additional searches can be
  * performed, items downloaded etc.
  */
-class MediaGroupTableWidget : public QTableView {
+class MediaGroupTableWidget : public QTableView
+{
   Q_OBJECT
   NO_COPY_NO_DEFAULT(MediaGroupTableWidget, QTableView)
 
@@ -144,6 +145,7 @@ class MediaGroupTableWidget : public QTableView {
  private Q_SLOTS:
   void deleteAction();            /// remove from view
   void downloadAction();          /// => downloadUrl()
+  void downloadSequenceAction();  /// => downloadUrl()
   void downloadToFolderAction();  /// => downloadUrl()
   void moveToFolderAction();      /// => moveUrl()
   void openAction();              /// => openUrl()
