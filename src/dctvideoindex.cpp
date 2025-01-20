@@ -37,12 +37,14 @@ DctVideoIndex::~DctVideoIndex() {
 bool DctVideoIndex::isLoaded() const { return _isLoaded; }
 
 int DctVideoIndex::count() const {
-  return _tree ? int(_tree->size()) : 0;
+  // this returns 0 if isLoaded==true but we didn't buildTree()
+  // return _tree ? int(_tree->size()) : 0;
+  return _mediaId.size();
 }
 
 size_t DctVideoIndex::memoryUsage() const { return _tree ? _tree->stats().memory : 0; }
 
-void DctVideoIndex::insertHashes(int mediaIndex, HammingTree64* tree, const SearchParams& params) {
+void DctVideoIndex::insertHashes(int mediaIndex, VideoSearchTree* tree, const SearchParams& params) {
   QString indexPath = QString("%1/%2.vdx").arg(_dataPath).arg(_mediaId[uint32_t(mediaIndex)]);
   if (!QFileInfo(indexPath).exists()) {
     qWarning() << "index file missing:" << indexPath;
@@ -52,7 +54,7 @@ void DctVideoIndex::insertHashes(int mediaIndex, HammingTree64* tree, const Sear
   VideoIndex index;
   index.load(indexPath);
 
-  std::vector<HammingTree64::Value> values;
+  std::vector<VideoSearchTree::Value> values;
   for (size_t j = 0; j < index.hashes.size(); j++) {
     // drop hashes with < 5 0's or 1's (insufficient detail)
     // TODO: figure out what value is reasonable
@@ -62,18 +64,17 @@ void DctVideoIndex::insertHashes(int mediaIndex, HammingTree64* tree, const Sear
     if (hamm64(hash, 0) < 5 || hamm64(hash, 0xFFFFFFFFFFFFFFFF) < 5) continue;
 
     // drop begin/end frames if there are enough left over
-    int lastFrame = index.frames[index.frames.size() - 1];
-    if (lastFrame > (params.skipFrames * 2)) {
-      if (index.frames[j] < params.skipFrames || index.frames[j] > lastFrame - params.skipFrames)
-        continue;
+    uint32_t lastFrame = index.frames[index.frames.size() - 1];
+    uint32_t skip = params.skipFrames;
+    if (skip && lastFrame > skip) {
+      if (index.frames[j] < skip || index.frames[j] > lastFrame - skip) continue;
     }
 
-    // the index is a composite of the media index (not id) and
-    // the frame number corresponding to the stored hash. to get back
-    // to the mediaId use _mediaId array
-    uint32_t treeIndex = (uint32_t(mediaIndex) << 16) | index.frames[j];
+    VideoTreeIndex treeIndex;
+    treeIndex.idx = mediaIndex;
+    treeIndex.frame = index.frames[j];
 
-    values.push_back(HammingTree64::Value(treeIndex, index.hashes[j]));
+    values.push_back(VideoSearchTree::Value(treeIndex, index.hashes[j]));
   }
 
   tree->insert(values);
@@ -87,7 +88,7 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
   QMutexLocker locker(&_mutex);
 
   if (!_tree) {
-    auto* tree = new HammingTree64;
+    auto* tree = new VideoSearchTree;
     PROGRESS_LOGGER(pl, "<PL>%percent %bignum videos", _mediaId.size());
     for (size_t i = 0; i < _mediaId.size(); i++) {
       pl.step(i);
@@ -127,9 +128,9 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QStri
   int i = 0;
   while (query.next()) {
     _mediaId.push_back(query.value(0).toUInt());
-    if (_mediaId.size() == MAX_VIDEOS) {
+    if (_mediaId.size() == MAX_VIDEOS_PER_INDEX) {
       qCritical("maximum of %d videos can be searched, remaining videos will be ignored",
-                MAX_VIDEOS);
+                MAX_VIDEOS_PER_INDEX);
       break;
     }
 
@@ -186,7 +187,7 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
   Q_ASSERT(needle.type() == Media::TypeImage);
   qint64 start = QDateTime::currentMSecsSinceEpoch();
 
-  const HammingTree64* queryIndex = _tree;
+  const VideoSearchTree* queryIndex = _tree;
 
   // optimization to search only a particular video, (future, small subset)
   if (params.target != 0) {
@@ -203,7 +204,7 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
       if (it != _mediaId.end()) {
         int mediaIndex = int(it - _mediaId.begin());
 
-        auto* tree = new HammingTree64;
+        auto* tree = new VideoSearchTree;
         _cachedIndex[params.target] = tree;
         insertHashes(mediaIndex, tree, params);
         queryIndex = tree;
@@ -229,7 +230,7 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
     return results;
   }
 
-  std::vector<HammingTree64::Match> matches;
+  std::vector<VideoSearchTree::Match> matches;
 
   queryIndex->search(hash, params.dctThresh, matches);
 
@@ -243,11 +244,10 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
         qUtf8Printable(needle.path()));
 
   // get 1 nearest frame for each video matched
-  QMap<int, HammingTree64::Match> nearest;
+  QMap<int, VideoSearchTree::Match> nearest;
 
   for (const auto& match : matches) {
-    // int dstFrame   = match.index & 0xFFFF;
-    int mediaIndex = match.value.index >> 16;
+    int mediaIndex = match.value.index.idx;
 
     auto it = nearest.find(mediaIndex);
 
@@ -258,8 +258,8 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
   }
 
   for (const auto& match : nearest) {
-    uint32_t dstFrame = match.value.index & 0xFFFF;
-    uint32_t mediaIndex = match.value.index >> 16;
+    uint32_t mediaIndex = match.value.index.idx;
+    uint32_t dstFrame = match.value.index.frame;
 
     Index::Match result;
     result.mediaId = _mediaId[mediaIndex];
@@ -308,7 +308,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
   }
 
   buildTree(params);
-  const HammingTree64* queryIndex = _tree;
+  const VideoSearchTree* queryIndex = _tree;
 
   QMap<uint32_t, std::vector<MatchRange>> cand;
 
@@ -319,7 +319,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
 
     if (srcFrame < params.skipFrames || srcFrame > (lastFrame - params.skipFrames)) continue;
 
-    std::vector<HammingTree64::Match> matches;
+    std::vector<VideoSearchTree::Match> matches;
     queryIndex->search(srcHash, params.dctThresh, matches);
 
     // we really only need the one closest frame for each matching video,
@@ -328,9 +328,9 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
     struct ScoredMatch { int score; uint32_t frame; };
     std::unordered_map<int, ScoredMatch> closestMatch;
 
-    for (const HammingTree64::Match& match : matches) {
-      const uint32_t dstFrame = match.value.index & 0xFFFF;
-      const uint32_t dstIndex = match.value.index >> 16;
+    for (const VideoSearchTree::Match& match : matches) {
+      const uint32_t dstIndex = match.value.index.idx;
+      const uint32_t dstFrame = match.value.index.frame;
       const uint64_t dstHash = match.value.hash;
 
       const uint32_t id = _mediaId[dstIndex];

@@ -21,10 +21,39 @@
 #pragma once
 #include "index.h"
 
+// #define VINDEX_32BIT
+
+#ifdef VINDEX_32BIT
+// old 32-bit index, limited to 64k frames/video
+#define VINDEX_FRAME_BITS 16
+#define VINDEX_IDX_BITS 16
+#else
+// new 48-bit index, ~17% more RAM, 16.7 million frames/videos
+#define VINDEX_FRAME_BITS 24
+#define VINDEX_IDX_BITS 24
+#endif
+
+// must pack struct for 48-bit case,
+// put the idx first since it is needed more often
+#pragma pack(1)
+typedef struct
+{
+  uint32_t idx : VINDEX_IDX_BITS;     // index into _mediaId[]
+  uint32_t frame : VINDEX_FRAME_BITS; // frame number
+} VideoTreeIndex;
+#pragma pack()
+
+// check the packing actually worked
+#define VINDEX_BITS (VINDEX_FRAME_BITS + VINDEX_IDX_BITS)
+static_assert(sizeof(VideoTreeIndex) == VINDEX_BITS / 8);
+
+#define MAX_FRAMES_PER_VIDEO ((1 << VINDEX_FRAME_BITS) - 1)
+#define MAX_VIDEOS_PER_INDEX ((1 << VINDEX_IDX_BITS) - 1)
+
 template<typename T>
 class HammingTree_t;
 
-typedef HammingTree_t<uint64_t> HammingTree64; // 64-bit index, 64-bit hash
+typedef HammingTree_t<VideoTreeIndex> VideoSearchTree;
 
 /**
  * @class DctVideoIndex
@@ -57,18 +86,13 @@ class DctVideoIndex : public Index {
  private:
   QVector<Index::Match> findFrame(const Media& needle, const SearchParams& params);
   QVector<Index::Match> findVideo(const Media& needle, const SearchParams& params);
-  void insertHashes(int mediaIndex, HammingTree64* tree, const SearchParams& params);
+  void insertHashes(int mediaIndex, VideoSearchTree* tree, const SearchParams& params);
   void buildTree(const SearchParams& params);
 
-  HammingTree64* _tree;
+  VideoSearchTree* _tree;
   std::vector<uint32_t> _mediaId;
   QString _dataPath;
-  std::map<uint32_t, HammingTree64*> _cachedIndex;
+  std::map<uint32_t, VideoSearchTree*> _cachedIndex;
   QMutex _mutex;
   bool _isLoaded;
-
-  // the 32-bit index is split between mediaId and frame number,
-  // which limits the number of items we can search
-  const uint32_t MAX_FRAMES = 0xFFFF;
-  const uint32_t MAX_VIDEOS = 0xFFFF;
 };
