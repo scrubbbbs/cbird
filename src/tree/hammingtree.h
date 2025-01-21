@@ -84,15 +84,11 @@ class HammingTree_t
 
   /// Stats traversal type
   struct Stats {
-    size_t memory;
-    int numNodes;
-    int maxHeight;
-    int numValues;
-    Stats()
-        : memory(sizeof(HammingTree_t<index_t>))
-        , numNodes(0)
-        , maxHeight(0)
-        , numValues(0) {}
+    size_t memory = sizeof(HammingTree_t<index_t>);
+    int numNodes = 0;
+    int maxHeight = 0;
+    int numValues = 0;
+    int smallNodes = 0;
   };
 
   HammingTree_t() { init(); }
@@ -110,6 +106,12 @@ class HammingTree_t
   /// Find Value with index
   void findIndex(index_t index, std::vector<hash_t>& results) const {
     if (_root) findIndex(_root, index, results);
+  }
+
+  void findIf(const std::function<bool(index_t, hash_t)>& predicate,
+              std::vector<hash_t>* outHashes = nullptr,
+              std::vector<index_t>* outIndices = nullptr) const {
+    if (_root) findIf(_root, predicate, outHashes, outIndices);
   }
 
   /// Add more nodes
@@ -207,20 +209,14 @@ class HammingTree_t
  private:
   struct Node
   {
-    Node* left;
-    Node* right;
-    int bit;
-    hash_t* hashes;
-    size_t count;
-    index_t* indices;
+    Node* left = nullptr;
+    Node* right = nullptr;
+    int bit = -1;
+    uint32_t count = 0;
+    hash_t* hashes = nullptr;
+    index_t* indices = nullptr;
 
-    Node()
-        : left(nullptr)
-        , right(nullptr)
-        , bit(-1)
-        , hashes(nullptr)
-        , count(0)
-        , indices(nullptr){};
+    Node(){};
 
     ~Node() {
       delete left;
@@ -241,27 +237,54 @@ class HammingTree_t
 
   static int getBit(int depth) { return depth; }
 
-  static void search(const Node* level,
+  static void search(const Node* node,
                      hash_t hash,
                      distance_t threshold,
                      std::vector<Match>& matches) {
-    if (level->left != nullptr) {
-      if ((1 << level->bit) & hash)
-        search(level->left, hash, threshold, matches);
+    if (node->left != nullptr) {
+      if ((1 << node->bit) & hash)
+        search(node->left, hash, threshold, matches);
       else
-        search(level->right, hash, threshold, matches);
+        search(node->right, hash, threshold, matches);
     } else {
-      const hash_t* hashes = level->hashes;
-      const index_t* indices = level->indices;
-      const size_t count = level->count;
+      const hash_t* hashes = node->hashes;
+      const index_t* indices = node->indices;
+      const size_t count = node->count;
 
-      Q_ASSERT(malloc_size(hashes) >= count * sizeof(*hashes));
-      Q_ASSERT(malloc_size(indices) >= count * sizeof(*indices));
+      // Q_ASSERT(malloc_size(hashes) >= count * sizeof(*hashes));
+      // Q_ASSERT(malloc_size(indices) >= count * sizeof(*indices));
+#if 1
+      // manually unrolled version ~25% faster?!
+      // x8 unroll was slower
+      size_t i;
+      for (i = 0; i < count - 4; i += 4) {
+        distance_t d0 = hamm64(hash, hashes[i + 0]);
+        bool b0 = d0 < threshold;
+        distance_t d1 = hamm64(hash, hashes[i + 1]);
+        bool b1 = d1 < threshold;
+        distance_t d2 = hamm64(hash, hashes[i + 2]);
+        bool b2 = d2 < threshold;
+        distance_t d3 = hamm64(hash, hashes[i + 3]);
+        bool b3 = d3 < threshold;
 
-      for (size_t i = 0; i < count; i++) {
-        distance_t distance = hamm64(hash, hashes[i]);
-        if (distance < threshold) matches.push_back(Match(Value(indices[i], hashes[i]), distance));
+        if (Q_UNLIKELY(b0)) matches.push_back(Match(Value(indices[i + 0], hashes[i + 0]), d0));
+        if (Q_UNLIKELY(b1)) matches.push_back(Match(Value(indices[i + 1], hashes[i + 1]), d1));
+        if (Q_UNLIKELY(b2)) matches.push_back(Match(Value(indices[i + 2], hashes[i + 2]), d2));
+        if (Q_UNLIKELY(b3)) matches.push_back(Match(Value(indices[i + 3], hashes[i + 3]), d3));
       }
+
+      for (; i < count; ++i) {
+        distance_t distance = hamm64(hash, hashes[i]);
+        if (Q_UNLIKELY(distance < threshold))
+          matches.push_back(Match(Value(indices[i], hashes[i]), distance));
+      }
+#else
+      for (size_t i = 0; i < count; ++i) {
+        distance_t distance = hamm64(hash, hashes[i]);
+        if (Q_UNLIKELY(distance < threshold))
+          matches.push_back(Match(Value(indices[i], hashes[i]), distance));
+      }
+#endif
     }
   }
 
@@ -276,6 +299,26 @@ class HammingTree_t
 
       for (size_t i = 0; i < count; i++)
         if (indices[i] == index) results.push_back(hashes[i]);
+    }
+  }
+
+  static void findIf(const Node* level,
+                     const std::function<bool(index_t, hash_t)>& predicate,
+                     std::vector<hash_t>* outHashes = nullptr,
+                     std::vector<index_t>* outIndices = nullptr) {
+    if (level->left) {
+      findIf(level->left, predicate, outHashes, outIndices);
+      findIf(level->right, predicate, outHashes, outIndices);
+    } else {
+      const hash_t* hashes = level->hashes;
+      const index_t* indices = level->indices;
+      const size_t count = level->count;
+
+      for (size_t i = 0; i < count; i++)
+        if (predicate(indices[i], hashes[i])) {
+          if (outHashes) outHashes->push_back(hashes[i]);
+          if (outIndices) outIndices->push_back(indices[i]);
+        }
     }
   }
 
@@ -479,6 +522,7 @@ class HammingTree_t
     st.memory += sizeof(Node);
     st.memory += level->count * (sizeof(index_t) + sizeof(hash_t));
     st.numValues += level->count;
+    st.smallNodes += level->count < (CLUSTER_SIZE / sizeof(hash_t)) ? 1 : 0;
 
     if (level->left) {
       stats(level->left, st, height + 1);

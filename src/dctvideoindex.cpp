@@ -97,8 +97,12 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
     pl.end();
 
     auto stats = tree->stats();
-    qInfo("%d hashes, %.1f MB, %d nodes, depth %d, vtrim %d",
-          stats.numValues, stats.memory / 1024.0 / 1024.0, stats.numNodes, stats.maxHeight,
+    qInfo("%d hashes, %.1f MB, %d nodes, %d%% small, depth %d, vtrim %d",
+          stats.numValues,
+          stats.memory / 1024.0 / 1024.0,
+          stats.numNodes,
+          stats.smallNodes * 100 / stats.numNodes,
+          stats.maxHeight,
           params.skipFrames);
 
     _tree = tree;
@@ -293,40 +297,62 @@ Index* DctVideoIndex::slice(const QSet<uint32_t>& mediaIds) const {
 QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const SearchParams& params) {
   Q_ASSERT(needle.type() == Media::TypeVideo);
 
-  VideoIndex srcIndex;
   QVector<Index::Match> results;
-
-  // if id == 0, it doesn't exist in the db and was indexed separately
-  if (needle.id() == 0)
-    srcIndex = needle.videoIndex();
-  else
-    srcIndex.load(QString("%1/%2.vdx").arg(_dataPath).arg(needle.id()));
-
-  if (srcIndex.isEmpty()) {
-    qWarning() << "needle video index is empty:" << needle.path();
-    return results;
-  }
 
   buildTree(params);
   const VideoSearchTree* queryIndex = _tree;
 
+  std::vector<uint64_t> srcHashes;
+  std::vector<VideoSearchTree::index_t> srcIndices;
+
+  std::vector<uint32_t> srcFrames;
+  // if id == 0, it doesn't exist in the db and was indexed separately
+  {
+    VideoIndex srcIndex;
+    if (needle.id() == 0)
+      srcIndex = needle.videoIndex();
+    else {
+      srcIndex.load(QString("%1/%2.vdx").arg(_dataPath).arg(needle.id()));
+    }
+
+    if (srcIndex.isEmpty()) {
+      qWarning() << "needle video index is empty:" << needle.path();
+      return results;
+    }
+
+    srcHashes = std::move(srcIndex.hashes);
+    srcFrames = std::move(srcIndex.frames);
+  }
+
   QMap<uint32_t, std::vector<MatchRange>> cand;
 
-  const int lastFrame = srcIndex.frames[srcIndex.frames.size() - 1];
-  for (size_t i = 0; i < srcIndex.hashes.size(); i++) {
-    const int srcFrame = srcIndex.frames[i];
-    const uint64_t srcHash = srcIndex.hashes[i];
+  std::vector<VideoSearchTree::Match> matches;
+
+  struct ScoredMatch
+  {
+    int score;
+    uint32_t frame;
+  };
+  std::unordered_map<int, ScoredMatch> closestMatch;
+
+  //const int lastFrame = srcIndex.frames[srcIndex.frames.size() - 1];
+  // for (size_t i = 0; i < srcIndex.hashes.size(); i++) {
+  // const int srcFrame = srcIndex.frames[i];
+  // const uint64_t srcHash = srcIndex.hashes[i];
+  const int lastFrame = srcFrames[srcFrames.size() - 1];
+  for (size_t i = 0; i < srcHashes.size(); i++) {
+    const uint64_t srcHash = srcHashes[i];
+    const int srcFrame = srcFrames[i];
 
     if (srcFrame < params.skipFrames || srcFrame > (lastFrame - params.skipFrames)) continue;
 
-    std::vector<VideoSearchTree::Match> matches;
+    matches.clear();
     queryIndex->search(srcHash, params.dctThresh, matches);
 
     // we really only need the one closest frame for each matching video,
     // except in a corner-case where video repeats the same frame over and over (but this is rare)
     // FIXME: this implies there is a faster/better way to do this? (array of vptree?)
-    struct ScoredMatch { int score; uint32_t frame; };
-    std::unordered_map<int, ScoredMatch> closestMatch;
+    closestMatch.clear();
 
     for (const VideoSearchTree::Match& match : matches) {
       const uint32_t dstIndex = match.value.index.idx;
