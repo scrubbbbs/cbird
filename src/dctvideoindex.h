@@ -86,7 +86,13 @@ class DctVideoIndex : public Index {
  private:
   QVector<Index::Match> findFrame(const Media& needle, const SearchParams& params);
   QVector<Index::Match> findVideo(const Media& needle, const SearchParams& params);
-  void insertHashes(int mediaIndex, VideoSearchTree* tree, const SearchParams& params);
+
+  struct VStat
+  {
+    uint64_t videoFrames;
+    uint64_t usedFrames;
+  };
+  VStat insertHashes(int mediaIndex, VideoSearchTree* tree, const SearchParams& params);
   void buildTree(const SearchParams& params);
 
   VideoSearchTree* _tree;

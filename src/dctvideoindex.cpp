@@ -44,15 +44,20 @@ int DctVideoIndex::count() const {
 
 size_t DctVideoIndex::memoryUsage() const { return _tree ? _tree->stats().memory : 0; }
 
-void DctVideoIndex::insertHashes(int mediaIndex, VideoSearchTree* tree, const SearchParams& params) {
+DctVideoIndex::VStat DctVideoIndex::insertHashes(int mediaIndex,
+                                                 VideoSearchTree* tree,
+                                                 const SearchParams& params) {
   QString indexPath = QString("%1/%2.vdx").arg(_dataPath).arg(_mediaId[uint32_t(mediaIndex)]);
   if (!QFileInfo(indexPath).exists()) {
     qWarning() << "index file missing:" << indexPath;
-    return;
+    return {0, 0};
   }
 
   VideoIndex index;
   index.load(indexPath);
+
+  const uint32_t lastFrame = index.frames[index.frames.size() - 1];
+  const uint32_t skip = params.skipFrames;
 
   std::vector<VideoSearchTree::Value> values;
   for (size_t j = 0; j < index.hashes.size(); j++) {
@@ -64,8 +69,6 @@ void DctVideoIndex::insertHashes(int mediaIndex, VideoSearchTree* tree, const Se
     if (hamm64(hash, 0) < 5 || hamm64(hash, 0xFFFFFFFFFFFFFFFF) < 5) continue;
 
     // drop begin/end frames if there are enough left over
-    uint32_t lastFrame = index.frames[index.frames.size() - 1];
-    uint32_t skip = params.skipFrames;
     if (skip && lastFrame > skip) {
       if (index.frames[j] < skip || index.frames[j] > lastFrame - skip) continue;
     }
@@ -78,6 +81,8 @@ void DctVideoIndex::insertHashes(int mediaIndex, VideoSearchTree* tree, const Se
   }
 
   tree->insert(values);
+
+  return {lastFrame, values.size()};
 }
 
 void DctVideoIndex::buildTree(const SearchParams& params) {
@@ -88,20 +93,26 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
   QMutexLocker locker(&_mutex);
 
   if (!_tree) {
+    VStat sum{0, 0};
     auto* tree = new VideoSearchTree;
     PROGRESS_LOGGER(pl, "<PL>%percent %bignum videos", _mediaId.size());
     for (size_t i = 0; i < _mediaId.size(); i++) {
       pl.step(i);
-      insertHashes(int(i), tree, params);
+      VStat st = insertHashes(int(i), tree, params);
+      sum.videoFrames += st.videoFrames;
+      sum.usedFrames += st.usedFrames;
     }
     pl.end();
 
     auto stats = tree->stats();
-    qInfo("%d hashes, %.1f MB, %d nodes, %d%% small, depth %d, vtrim %d",
-          stats.numValues,
+    qInfo("%" PRIu64 " frames, %" PRIu64
+          " hashes, %d:1, %.1f MB, %d nodes, %d%% small, depth %d, vtrim %d",
+          sum.videoFrames,
+          sum.usedFrames,
+          sum.usedFrames > 0 ? int(sum.videoFrames / sum.usedFrames) : 1,
           stats.memory / 1024.0 / 1024.0,
           stats.numNodes,
-          stats.smallNodes * 100 / stats.numNodes,
+          stats.numNodes > 0 ? stats.smallNodes * 100 / stats.numNodes : 0,
           stats.maxHeight,
           params.skipFrames);
 

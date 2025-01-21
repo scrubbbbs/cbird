@@ -22,14 +22,14 @@
 #include "../hamm.h"
 
 #if defined(Q_OS_DARWIN)
-#  include <malloc/malloc.h>
-#  define malloc_size(x) malloc_size((const void*)(x))
+#include <malloc/malloc.h>
+#define malloc_size(x) malloc_size((const void*) (x))
 #elif defined(Q_OS_WIN)
-#  include <malloc.h>
-#  define malloc_size(x) _msize((void*)(x))
+#include <malloc.h>
+#define malloc_size(x) _msize((void*) (x))
 #else
-#  include <malloc.h>
-#  define malloc_size(x) malloc_usable_size((void*)(x))
+#include <malloc.h>
+#define malloc_size(x) malloc_usable_size((void*) (x))
 #endif
 #include <unordered_set>
 
@@ -51,6 +51,11 @@
  *
  * The leaves of the tree are large chunks (CLUSTER_SIZE) which can be searched
  * very quickly and reduce the miss rate somewhat.
+ * 
+ * FIXME: this seems like the same thing as a radix search on the LSB of the hash,
+ * just that the size of the radix is dynamic. For a given hash H, and tree depth 8,
+ * the leaf node ID is just (H & 0xF). If that's true then this implemenation can
+ * be greatly simplified...
  */
 
 template<typename index_type = uint32_t>
@@ -67,23 +72,32 @@ class HammingTree_t
   typedef int distance_t;
 
   /// Node value type
-  struct Value {
+  struct Value
+  {
     index_t index;
     hash_t hash;
-    Value(index_t index_, hash_t hash_) : index(index_), hash(hash_) {}
+    Value(index_t index_, hash_t hash_)
+        : index(index_)
+        , hash(hash_) {}
   };
 
   /// Search traversal type
-  struct Match {
+  struct Match
+  {
     Value value;
     distance_t distance;
-    Match() : value(-1, 0), distance(-1) {}
-    Match(const Value& value_, distance_t distance_) : value(value_), distance(distance_) {}
+    Match()
+        : value(-1, 0)
+        , distance(-1) {}
+    Match(const Value& value_, distance_t distance_)
+        : value(value_)
+        , distance(distance_) {}
     bool operator<(const Match& m) const { return distance < m.distance; }
   };
 
   /// Stats traversal type
-  struct Stats {
+  struct Stats
+  {
     size_t memory = sizeof(HammingTree_t<index_t>);
     int numNodes = 0;
     int maxHeight = 0;
@@ -437,11 +451,11 @@ class HammingTree_t
       Q_ASSERT(fread(&level->count, sizeof(level->count), 1, fp) == 1);
       if (level->count > 0) {
         size_t size = sizeof(*level->indices) * level->count;
-        level->indices = (index_t*)malloc(size);
+        level->indices = (index_t*) malloc(size);
         Q_ASSERT(fread(level->indices, size, 1, fp) == 1);
 
         size = sizeof(*level->hashes) * level->count;
-        level->hashes = (hash_t*)malloc(size);
+        level->hashes = (hash_t*) malloc(size);
         Q_ASSERT(fread(level->hashes, size, 1, fp) == 1);
 
         Q_ASSERT(malloc_size(level->hashes) >= level->count * sizeof(*level->hashes));
@@ -496,19 +510,19 @@ class HammingTree_t
     if (isLeaf) {
       // TODO: compact entries that have been "removed" (index == 0)
       QByteArray data;
-      data.append((char*)&isLeaf, sizeof(isLeaf));
-      data.append((char*)&level->count, sizeof(level->count));
+      data.append((char*) &isLeaf, sizeof(isLeaf));
+      data.append((char*) &level->count, sizeof(level->count));
 
       if (level->count > 0) {
-        data.append((char*)level->indices, sizeof(*level->indices) * level->count);
-        data.append((char*)level->hashes, sizeof(*level->hashes) * level->count);
+        data.append((char*) level->indices, sizeof(*level->indices) * level->count);
+        data.append((char*) level->hashes, sizeof(*level->hashes) * level->count);
       }
 
       if (Q_UNLIKELY(data.length() != f.write(data))) throw f.errorString();
     } else {
       QByteArray data;
-      data.append((char*)&isLeaf, sizeof(isLeaf));
-      data.append((char*)&level->bit, sizeof(level->bit));
+      data.append((char*) &isLeaf, sizeof(isLeaf));
+      data.append((char*) &level->bit, sizeof(level->bit));
       if (Q_UNLIKELY(data.length() != f.write(data))) throw f.errorString();
 
       writeNode(level->left, f);
@@ -540,8 +554,12 @@ class HammingTree_t
   size_t printLevel(Node* level, int depth) {
     size_t bytes = sizeof(*level) + sizeof(Value) * level->count + sizeof(Node*) * 2;
 
-    qInfo("%-*s bit=%d nChildren=%d nHash=%d", depth, "", level->bit, level->left ? 2 : 0,
-          (int)level->count);
+    qInfo("%-*s bit=%d nChildren=%d nHash=%d",
+          depth,
+          "",
+          level->bit,
+          level->left ? 2 : 0,
+          (int) level->count);
 
     if (level->left) {
       bytes += printLevel(level->left, depth + 1);
