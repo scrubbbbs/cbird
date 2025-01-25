@@ -33,7 +33,8 @@ void Params::print() const {
   keys.sort();
   for (auto& k : qAsConst(keys)) {
     const auto& p = _params.value(k);
-    qInfo().noquote() << qSetFieldWidth(6) << p.key << qSetFieldWidth(0) << p.toString();
+    qInfo().noquote() << qSetFieldWidth(6) << p.key << qSetFieldWidth(10) << p.toString()
+                      << p.label;
   }
 }
 
@@ -160,4 +161,20 @@ bool Params::Value::setFlags(const QVariant& v, const QVector<Params::NamedValue
   for (auto& v : nv) vals.append(QString("%1(%2)").arg(v.shortName).arg(v.value));
   qWarning() << "invalid flags for" << arg << ":" << symbols << ", options are" << vals;
   return false;
+}
+
+bool Params::Value::setInt(const QVariant& v, std::vector<int> range, const char* arg, int& member) {
+  bool ok;
+  int i = v.toInt(&ok);
+  bool inRange = false;
+  QString rangeDesc;
+  if (range.size() == 2 && (i < range[0] || i > range[1])) {
+    inRange = false;
+    rangeDesc = QString("between %1 and %2").arg(range[0]).arg(range[1]);
+  }
+  if (!ok || !inRange) {
+    qWarning().noquote() << "invalid value for" << arg << ": expected integer" << rangeDesc;
+    return false;
+  }
+  return true;
 }

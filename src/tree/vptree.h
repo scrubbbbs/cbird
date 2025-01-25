@@ -138,9 +138,9 @@ class VpTree {
         auto it = std::max_element(items.begin()+lower, items.begin()+upper,
                                    DistanceComparator(parent->value));
         std::swap(items[lower], *it);
-      }
-      else
+      } else
 #endif
+      // TODO: is this an oopsie?
       {
         // furthest from maximum value
         auto it = std::max_element(items.begin()+lower, items.begin()+upper,

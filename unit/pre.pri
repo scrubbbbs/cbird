@@ -20,7 +20,7 @@ include(../cbird.pri)
 
 QMAKE_CXXFLAGS -= -Werror
 
-INCLUDEPATH += . ../src
+INCLUDEPATH += . ../_build ../src
 
 QTCORE_PRIVATE_HEADERS="$$system(dirname $(dirname $$QMAKE_QMAKE))/include/QtCore/$$QT_VERSION"
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS

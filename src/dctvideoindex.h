@@ -38,8 +38,8 @@
 #pragma pack(1)
 typedef struct
 {
-  uint32_t idx : VINDEX_IDX_BITS;     // index into _mediaId[]
-  uint32_t frame : VINDEX_FRAME_BITS; // frame number
+  mediaid_t idx : VINDEX_IDX_BITS; // index into _mediaId[]
+  int frame : VINDEX_FRAME_BITS;   // frame number, compatible with MatchRange
 } VideoTreeIndex;
 #pragma pack()
 
@@ -50,10 +50,15 @@ static_assert(sizeof(VideoTreeIndex) == VINDEX_BITS / 8);
 #define MAX_FRAMES_PER_VIDEO ((1 << VINDEX_FRAME_BITS) - 1)
 #define MAX_VIDEOS_PER_INDEX ((1 << VINDEX_IDX_BITS) - 1)
 
+#ifdef USE_HAMMING
 template<typename T>
 class HammingTree_t;
-
 typedef HammingTree_t<VideoTreeIndex> VideoSearchTree;
+#else
+template<typename T>
+class RadixMap_t;
+typedef RadixMap_t<VideoTreeIndex> VideoSearchTree;
+#endif
 
 /**
  * @class DctVideoIndex
@@ -89,16 +94,17 @@ class DctVideoIndex : public Index {
 
   struct VStat
   {
-    uint64_t videoFrames;
-    uint64_t usedFrames;
+    uint64_t videoFrames; // # frames  in the video file
+    uint64_t usedFrames;  // # frames in the indexed file
   };
   VStat insertHashes(int mediaIndex, VideoSearchTree* tree, const SearchParams& params);
+
   void buildTree(const SearchParams& params);
 
   VideoSearchTree* _tree;
-  std::vector<uint32_t> _mediaId;
+  std::vector<mediaid_t> _mediaId;
   QString _dataPath;
-  std::map<uint32_t, VideoSearchTree*> _cachedIndex;
+  std::map<mediaid_t, VideoSearchTree*> _cachedIndex;
   QMutex _mutex;
   bool _isLoaded;
 };

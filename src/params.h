@@ -64,6 +64,8 @@ class Params {
                         int& member);
     static bool setFlags(const QVariant& v, const QVector<NamedValue>& namedValues, const char* arg,
                          int& member);
+
+    static bool setInt(const QVariant& v, std::vector<int> range, const char* arg, int& member);
   };
 
   QStringList keys() const;

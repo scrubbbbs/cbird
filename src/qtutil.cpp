@@ -1656,7 +1656,7 @@ void ProgressLogger::step(uint64_t step, const QVariantList& args) const {
 }
 
 void ProgressLogger::end(uint64_t step, const QVariantList& args) const {
-  if (_timer.elapsed() < 500) return;
+  if (_timer.elapsed() < 500 && !_showLast) return;
   QString out = _format;
   out +=  ", " + QString::number(_timer.elapsed()) + "ms";
   formatString(out, step > 0 ? step : _max, args);

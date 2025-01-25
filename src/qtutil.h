@@ -224,6 +224,7 @@ class ProgressLogger {
   const QLocale _locale;
 
   QElapsedTimer _timer;
+  bool _showLast = false;
 
   void formatString(QString& str, uint64_t step, const QVariantList& args={}) const;
 
@@ -236,6 +237,9 @@ class ProgressLogger {
   }
   void step(uint64_t step, const QVariantList& args={}) const;
   void end(uint64_t step = 0, const QVariantList& args={}) const;
+
+  /// always show final progress line
+  void showLast() { _showLast = true; }
 };
 
 #define PROGRESS_LOGGER(__name, __format, __max) \

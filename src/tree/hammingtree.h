@@ -35,29 +35,29 @@
 
 /**
  * @class HammingTree
- * @brief Clustered binary tree for 64-bit dct hash
+ * @brief Radix/Tree hybrid with big leaves for dct hashes
  *
  * Divides the search space using a binary tree. The division is by
- * the least-significant bit of the hash, which works pretty well since
- * they represent the lower spatial frequencies.
+ * the least-significant bit of the hash, which encodes the lower
+ * frequencies of the DCT, which as we know represent the structure 
+ * of the signal more than the detail.
  *
- * However, this means a search can go down the wrong path, so this is not
- * an ideal solution in the general case. It is best if there are multiple
- * hashes for each target (e.g. video). The probability of missing goes up as
- * the depth of the tree increases.
+ * However, this means a search will often go down the wrong path, especially
+ * as the division bit gets more significant. So it is a poor solution for
+ * very large indexes.
  *
  * Since each tree level tests a single bit (of a 64-bit hash), the depth of the tree
  * is limited to 64, in which case the leaves of tree can grow arbitrarily large.
  *
- * The leaves of the tree are large chunks (CLUSTER_SIZE) which can be searched
- * very quickly and reduce the miss rate somewhat.
+ * The leaves of the tree are large chunks (up to CLUSTER_SIZE) which can be
+ * scanned quickly as they fit in the cpu cache.
  * 
- * FIXME: this seems like the same thing as a radix search on the LSB of the hash,
- * just that the size of the radix is dynamic. For a given hash H, and tree depth 8,
- * the leaf node ID is just (H & 0xF). If that's true then this implemenation can
- * be greatly simplified...
+ * NOTE: this is effectively a direct-mapped RADIX search where the radix is 
+ * on the LSB and is dynamically sized. As more hashes are added, the radix 
+ * increases to satisfy the CLUSTER_SIZE constraint, while reducing the
+ * quality of matches. The plan now is to deprecate this and replace
+ * with a direct-mapped radix (see radix.h)
  */
-
 template<typename index_type = uint32_t>
 class HammingTree_t
 {

@@ -135,8 +135,26 @@ SearchParams::SearchParams() {
   add({"vtrim", "Number of frames to ignore at start/end (video)", Value::Int, counter++,
        SET_INT(skipFrames), GET(skipFrames), NO_NAMES, GET_CONST(positive)});
 
-  add({"vfm", "Minimum number of frames matched per video", Value::Int, counter++,
-       SET_INT(minFramesMatched), GET(minFramesMatched), NO_NAMES, GET_CONST(positive)});
+  {
+    static const QVector<int> range{1, 24};
+    add({"vradix",
+         "Divides the haystack by ~ 2^R but loses accuracy",
+         Value::Int,
+         counter++,
+         SET_INT(videoRadix),
+         GET(videoRadix),
+         NO_NAMES,
+         GET_CONST(range)});
+  }
+
+  add({"vfm",
+       "Minimum number of frames matched per video",
+       Value::Int,
+       counter++,
+       SET_INT(minFramesMatched),
+       GET(minFramesMatched),
+       NO_NAMES,
+       GET_CONST(positive)});
 
   add({"vfn", "Minimum percent of frames near each other", Value::Int, counter++,
        SET_INT(minFramesNear), GET(minFramesNear), NO_NAMES, GET_CONST(percent)});

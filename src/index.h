@@ -102,6 +102,7 @@ class SearchParams : public Params {
   int skipFrames = 300;       // video search: ignore first and last N frames of video
   int minFramesMatched = 30;  // video search: require >N frames match between videos
   int minFramesNear = 60;     // video search: require >N% of frames that matched are nearby
+  int videoRadix = 10;        // video search: radix of RadixSearch
 
   bool filterSelf = true;       // remove media that matched itself
   bool filterGroups = true;     // remove duplicate groups from results (a matches (b,c,d)

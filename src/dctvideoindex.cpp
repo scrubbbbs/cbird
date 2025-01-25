@@ -1,5 +1,5 @@
 /* Index for rescaled, clipped, recompressed videos
-   Copyright (C) 2021 scrubbbbs
+   Copyright (C) 2021-2025 scrubbbbs
    Contact: screubbbebs@gemeaile.com =~ s/e//g
    Project: https://github.com/scrubbbbs/cbird
 
@@ -21,7 +21,8 @@
 #include "dctvideoindex.h"
 
 #include "qtutil.h"
-#include "tree/hammingtree.h"
+// #include "tree/hammingtree.h"
+#include "tree/radix.h"
 
 DctVideoIndex::DctVideoIndex() {
   _id = SearchParams::AlgoVideo;
@@ -42,7 +43,9 @@ int DctVideoIndex::count() const {
   return _mediaId.size();
 }
 
-size_t DctVideoIndex::memoryUsage() const { return _tree ? _tree->stats().memory : 0; }
+size_t DctVideoIndex::memoryUsage() const {
+  return _tree ? _tree->stats().memory : 0;
+}
 
 DctVideoIndex::VStat DctVideoIndex::insertHashes(int mediaIndex,
                                                  VideoSearchTree* tree,
@@ -56,8 +59,8 @@ DctVideoIndex::VStat DctVideoIndex::insertHashes(int mediaIndex,
   VideoIndex index;
   index.load(indexPath);
 
-  const uint32_t lastFrame = index.frames[index.frames.size() - 1];
-  const uint32_t skip = params.skipFrames;
+  const int lastFrame = index.frames[index.frames.size() - 1];
+  const int skip = params.skipFrames;
 
   std::vector<VideoSearchTree::Value> values;
   for (size_t j = 0; j < index.hashes.size(); j++) {
@@ -65,7 +68,7 @@ DctVideoIndex::VStat DctVideoIndex::insertHashes(int mediaIndex,
     // TODO: figure out what value is reasonable
     // TODO: drop these when creating the index
     // TODO: params
-    uint64_t hash = index.hashes[j];
+    dcthash_t hash = index.hashes[j];
     if (hamm64(hash, 0) < 5 || hamm64(hash, 0xFFFFFFFFFFFFFFFF) < 5) continue;
 
     // drop begin/end frames if there are enough left over
@@ -82,7 +85,7 @@ DctVideoIndex::VStat DctVideoIndex::insertHashes(int mediaIndex,
 
   tree->insert(values);
 
-  return {lastFrame, values.size()};
+  return {uint64_t(lastFrame), values.size()};
 }
 
 void DctVideoIndex::buildTree(const SearchParams& params) {
@@ -94,7 +97,9 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
 
   if (!_tree) {
     VStat sum{0, 0};
-    auto* tree = new VideoSearchTree;
+    // auto* tree = new VideoSearchTree;
+    auto* tree = new VideoSearchTree(params.videoRadix);
+
     PROGRESS_LOGGER(pl, "<PL>%percent %bignum videos", _mediaId.size());
     for (size_t i = 0; i < _mediaId.size(); i++) {
       pl.step(i);
@@ -104,17 +109,35 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
     }
     pl.end();
 
+    // auto stats = tree->stats();
+    // qInfo("%" PRIu64 " frames, %" PRIu64
+    //       " hashes, %d:1, %.1f MB, %d nodes, %d%% small, depth %d, vtrim %d",
+    //       sum.videoFrames,
+    //       sum.usedFrames,
+    //       sum.usedFrames > 0 ? int(sum.videoFrames / sum.usedFrames) : 1,
+    //       stats.memory / 1024.0 / 1024.0,
+    //       stats.numNodes,
+    //       stats.numNodes > 0 ? stats.smallNodes * 100 / stats.numNodes : 0,
+    //       stats.maxHeight,
+    //       params.skipFrames);
+
+    auto toKb = [](size_t bytes) { return int(bytes + 1024) / 1024; };
+
     auto stats = tree->stats();
-    qInfo("%" PRIu64 " frames, %" PRIu64
-          " hashes, %d:1, %.1f MB, %d nodes, %d%% small, depth %d, vtrim %d",
+    qInfo("%'" PRIu64 " frames, %'" PRIu64 " hashes, %d:1, %.1f MB, vtrim %d",
           sum.videoFrames,
           sum.usedFrames,
           sum.usedFrames > 0 ? int(sum.videoFrames / sum.usedFrames) : 1,
           stats.memory / 1024.0 / 1024.0,
-          stats.numNodes,
-          stats.numNodes > 0 ? stats.smallNodes * 100 / stats.numNodes : 0,
-          stats.maxHeight,
           params.skipFrames);
+
+    qInfo("%'d buckets, %'d empty, sizes(KB): min:%'d max:%'d avg:%'d variance:%d%%",
+          stats.numBuckets,
+          stats.empty,
+          toKb(stats.min),
+          toKb(stats.max),
+          toKb(stats.mean),
+          stats.mean > 0 ? stats.sigma * 100 / stats.mean : 0);
 
     _tree = tree;
   }
@@ -219,7 +242,8 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
       if (it != _mediaId.end()) {
         int mediaIndex = int(it - _mediaId.begin());
 
-        auto* tree = new VideoSearchTree;
+        auto* tree = new VideoSearchTree(params.videoRadix);
+
         _cachedIndex[params.target] = tree;
         insertHashes(mediaIndex, tree, params);
         queryIndex = tree;
@@ -259,10 +283,10 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
         qUtf8Printable(needle.path()));
 
   // get 1 nearest frame for each video matched
-  QMap<int, VideoSearchTree::Match> nearest;
+  QMap<mediaid_t, VideoSearchTree::Match> nearest;
 
   for (const auto& match : matches) {
-    int mediaIndex = match.value.index.idx;
+    mediaid_t mediaIndex = match.value.index.idx;
 
     auto it = nearest.find(mediaIndex);
 
@@ -273,8 +297,8 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
   }
 
   for (const auto& match : nearest) {
-    uint32_t mediaIndex = match.value.index.idx;
-    uint32_t dstFrame = match.value.index.frame;
+    mediaid_t mediaIndex = match.value.index.idx;
+    int dstFrame = match.value.index.frame;
 
     Index::Match result;
     result.mediaId = _mediaId[mediaIndex];
@@ -311,132 +335,252 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
   QVector<Index::Match> results;
 
   buildTree(params);
-  const VideoSearchTree* queryIndex = _tree;
+  //const VideoSearchTree* queryIndex = _tree;
 
-  std::vector<uint64_t> srcHashes;
-  std::vector<VideoSearchTree::index_t> srcIndices;
+  std::vector<VideoSearchTree::Value> srcData;
 
-  std::vector<uint32_t> srcFrames;
-  // if id == 0, it doesn't exist in the db and was indexed separately
   {
     VideoIndex srcIndex;
+    // if id == 0, it doesn't exist in the db and was indexed separately
     if (needle.id() == 0)
       srcIndex = needle.videoIndex();
-    else {
+    else
       srcIndex.load(QString("%1/%2.vdx").arg(_dataPath).arg(needle.id()));
-    }
 
     if (srcIndex.isEmpty()) {
       qWarning() << "needle video index is empty:" << needle.path();
       return results;
     }
 
-    srcHashes = std::move(srcIndex.hashes);
-    srcFrames = std::move(srcIndex.frames);
+    Q_ASSERT(srcIndex.frames.size() == srcIndex.hashes.size());
+
+    srcData.reserve(srcIndex.frames.size());
+    auto lastFrame = srcIndex.frames[srcIndex.frames.size() - 1];
+    for (size_t i = 0; i < srcIndex.frames.size(); ++i) {
+      auto srcFrame = srcIndex.frames[i];
+      if (srcFrame < params.skipFrames || srcFrame > (lastFrame - params.skipFrames)) continue;
+
+      VideoTreeIndex index;
+      index.frame = srcFrame;
+
+      VideoSearchTree::Value v(index, srcIndex.hashes[i]);
+#if 1
+      // sort needles by bucket, this should improve cache utilization
+      // also required for vector search
+      if (srcData.size() > 0)
+        srcData.insert(std::upper_bound(srcData.begin(),
+                                        srcData.end(),
+                                        v,
+                                        [this](auto& a, auto& b) {
+                                          auto pa = _tree->indexOf(a.hash);
+                                          auto pb = _tree->indexOf(b.hash);
+                                          return pa < pb;
+                                        }),
+                       v);
+      else
+#endif
+        srcData.push_back(VideoSearchTree::Value(index, srcIndex.hashes[i]));
+    };
   }
 
-  QMap<uint32_t, std::vector<MatchRange>> cand;
+  // pull out some constants to help optimizer
+  const bool filterSelf = params.filterSelf;
+  mediaid_t needleId = needle.id();
 
-  std::vector<VideoSearchTree::Match> matches;
+  QMap<mediaid_t, std::vector<MatchRange>> cand; // potential matches before filtering
 
   struct ScoredMatch
   {
     int score;
-    uint32_t frame;
+    int frame;
   };
-  std::unordered_map<int, ScoredMatch> closestMatch;
+  std::unordered_map<mediaid_t, ScoredMatch> closestMatch; // mediaId to closest match
 
-  //const int lastFrame = srcIndex.frames[srcIndex.frames.size() - 1];
-  // for (size_t i = 0; i < srcIndex.hashes.size(); i++) {
-  // const int srcFrame = srcIndex.frames[i];
-  // const uint64_t srcHash = srcIndex.hashes[i];
-  const int lastFrame = srcFrames[srcFrames.size() - 1];
-  for (size_t i = 0; i < srcHashes.size(); i++) {
-    const uint64_t srcHash = srcHashes[i];
-    const int srcFrame = srcFrames[i];
-
-    if (srcFrame < params.skipFrames || srcFrame > (lastFrame - params.skipFrames)) continue;
-
-    matches.clear();
-    queryIndex->search(srcHash, params.dctThresh, matches);
-
-    // we really only need the one closest frame for each matching video,
-    // except in a corner-case where video repeats the same frame over and over (but this is rare)
-    // FIXME: this implies there is a faster/better way to do this? (array of vptree?)
+  // tree search returns all matches below threshold, we only need one per
+  // matching video
+  // NOTE: if the video matched the same frame many times, that would
+  // not improve the result score...like perhaps a slideshow or webcast
+  // with a mostly static frames
+  const auto reduceMatches = [&closestMatch,
+                              &filterSelf,
+                              &needleId,
+                              &cand,
+                              &params,
+                              this](VideoSearchTree::hash_t queryHash,
+                                    int queryFrame,
+                                    const std::vector<VideoSearchTree::Match>& matches) {
+    // reuse this to reduce allocations
     closestMatch.clear();
 
-    for (const VideoSearchTree::Match& match : matches) {
-      const uint32_t dstIndex = match.value.index.idx;
-      const uint32_t dstFrame = match.value.index.frame;
-      const uint64_t dstHash = match.value.hash;
+    for (const auto& match : std::as_const(matches)) {
+      mediaid_t matchIndex = match.value.index.idx;
+      int matchFrame = match.value.index.frame;
+      dcthash_t matchHash = match.value.hash;
 
-      const uint32_t id = _mediaId[dstIndex];
-      if (!params.filterSelf || id != uint32_t(needle.id())) {
-        const auto it = closestMatch.find(id);
-        const int score = hamm64(srcHash, dstHash);
-        if (it == closestMatch.end() || score < it->second.score)
-          closestMatch[id] = {score, dstFrame};
+      // we have this remapping since real mediaId can be much
+      // larger than VideoTreeIndex::idx which is 24-bit to save memory
+      mediaid_t id = std::as_const(_mediaId)[matchIndex];
+
+      if (Q_UNLIKELY(id == needleId) && filterSelf) {
+        // if (params.verbose) qInfo("reject id %d == myself", id);
+        continue;
       }
+
+      const auto it = closestMatch.find(id);
+      int matchScore = hamm64(queryHash, matchHash);
+      if (it == closestMatch.end() || matchScore < it->second.score)
+        closestMatch[id] = {matchScore, matchFrame};
     }
 
+    // add the closest match to the list of potential matches
+    const int matchLen = 1; // to be determined
     for (auto& closest : qAsConst(closestMatch))
-      cand[closest.first].push_back(MatchRange(srcFrame, int(closest.second.frame), 1));
-  }
+      cand[closest.first].push_back(MatchRange(queryFrame, int(closest.second.frame), matchLen));
+  };
 
-  int nearMargin = 15; // TODO: params
+//
+// Vector search experiment; each search query is fixed-length vector
+// known to map to the same bucket. Requires hashes to already be sorted
+// by bucket when loading above.
+//
+// In theory it performs better due to fewer cache misses. If the vector
+// is the right length, maybe it also fits in avx register. The trade-off
+// is that we have to compute hashes even if we don't have one to put
+// in the vector (must be filled with 0s).
+//
+// This implementation is slower than non-vector version,
+// even when bucket spills from L3, but it is probably needed for GPU version
+//
+#if 0
+  FIXME: this is broken when video searching for itself?
+
+  const int maxLen = VideoSearchTree::vectorSize;
+  VideoSearchTree::hash_t queryVector[maxLen]; // clump of hashes mapped to the same bucket
+  std::vector<VideoSearchTree::Match> matchVector[maxLen];
+  const auto& frames = srcData;
+
+  for (size_t i = 0; i < frames.size();) {
+    // fill the search vector with hashes from the same bucket,
+    // if there are not enough, pad with 0
+    auto hash = frames[i].hash;
+    auto nextBucket = _tree->indexOf(hash);
+    const auto queryBucket = nextBucket;
+
+    size_t queryLength = 0;
+    while (nextBucket == queryBucket && queryLength < maxLen) {
+      queryVector[queryLength] = hash;
+      matchVector[queryLength].clear();
+      queryLength++;
+
+      i++;
+      if (i >= frames.size()) break;
+
+      hash = frames[i].hash;
+      nextBucket = _tree->indexOf(hash);
+    }
+
+    for (size_t k = queryLength; k < maxLen; ++k) {
+      queryVector[k] = 0;
+      matchVector[k].clear();
+    }
+
+    _tree->search(queryVector, params.dctThresh, matchVector);
+
+    size_t j = 0;
+    for (auto& matches : std::as_const(matchVector)) {
+      const auto queryHash = queryVector[j];
+      const auto queryFrame = frames[i - queryLength + j].index.frame;
+      j++;
+      reduceMatches(queryHash, queryFrame, matches);
+    }
+  }
+#else
+  std::vector<VideoSearchTree::Match> matches;
+  for (const auto& frame : std::as_const(srcData)) {
+    const uint64_t queryHash = frame.hash;
+    const int queryFrame = frame.index.frame;
+    matches.clear();
+
+    // qInfo("0x%08x %d", (int) _tree->addressOf(queryHash), queryFrame);
+
+    _tree->search(queryHash, params.dctThresh, matches);
+
+    reduceMatches(queryHash, queryFrame, matches);
+  }
+#endif
+
+  //
+  // Try to form a contiguous match range
+  //
+  // Consider frames to be close enough within some margin,
+  // since we discard a lot of frames in the indexer
+  //
+  // NOTE: the indexer compresses frames with a variable-length
+  // window that has no upper bound. So for videos with that
+  // that are mostly static (with respect to dcthash) this "margin"
+  // approach will likely not be reliable.
+  //
+  const int frameMargin = 15; // TODO: params
 
   for (auto it = cand.begin(); it != cand.end(); ++it) {
-    auto ranges = it.value();
+    auto& ranges = it.value();
 
-    //std::sort(ranges.begin(), ranges.end()); already sorted by srcFrame
+    // query hashes are pre-sorted for optimal lookup,
+    // re-sort by query frame number
+    std::sort(ranges.begin(), ranges.end());
 
-    int num = int(ranges.size());  // number of frames that matched
-
-    // ranges are sorted by src frame, we would expect all matches
-    // to also be in ascending order, so score them based on how
-    // ascending they are
-    int numAscending = 0;
+    // If every match was perfect, and no frames were discarded,
+    // we would expect all matches to be in ascending order.
+    // However we discard a lot of frames, so score based on adjacency,
+    // which allows forgiving some amount of out-of-order and more
+    // distant frames.
+    int numAdjacent = 0;
     int lastFrame = 0;
     for (const MatchRange& range : qAsConst(ranges)) {
-      // some number of frames before and after are still "nearby" because
-      // the indexer removed similar consecutive frames
       int frame = range.dstIn;
-      if (abs(frame-lastFrame) < nearMargin) numAscending++;
+      if (abs(frame - lastFrame) < frameMargin) numAdjacent++;
       lastFrame = frame;
     }
 
-    int percentNear = numAscending * 100 / num;
+    int num = int(ranges.size());              // number of frames that matched
+    int percentNear = numAdjacent * 100 / num; // the scoring metric
 
-    float shortClipMatches=0.75;
-
+    // the size of the chunk matched is also a good indicator
     if (num < params.minFramesMatched) {
+      if (params.verbose)
+        qInfo() << "reject id" << it.key() << "too few matches" << num << "/"
+                << params.minFramesMatched;
+      continue;
+      // FIXME: this is extremely bad being inside the loop..need to retain
+      // this when building the tree
+      // for short videos, decrease minFramesMatched..but why 0.75??
+      float shortClipMatches = 0.75;
       VideoIndex dstIndex;
       dstIndex.load(QString("%1/%2.vdx").arg(_dataPath).arg(it.key()));
-      if (num < dstIndex.frames.size()*shortClipMatches) {
+      if (num < dstIndex.frames.size() * shortClipMatches) {
         if (params.verbose)
           qInfo() << "reject id" << it.key() << "too few matches" << num << "/" << dstIndex.frames.size();
         continue;
       }
     }
+
     if (percentNear < params.minFramesNear) {
       if (params.verbose)
         qInfo() << "reject id" << it.key() << "bad match locality" << percentNear;
       continue;
     }
 
-    {
-      Index::Match im;
-      im.mediaId = it.key();
-      im.score = 100 - percentNear;
-      im.range.srcIn = ranges.front().srcIn;
-      im.range.dstIn = it.value().front().dstIn;
+    Index::Match im;
+    im.mediaId = it.key();
+    im.score = 100 - percentNear;
+    im.range.srcIn = ranges.front().srcIn;
+    im.range.dstIn = ranges.front().dstIn;
 
-      int srcLen = ranges.back().srcIn - ranges.front().srcIn;
-      int dstLen = it.value().back().dstIn - it.value().front().dstIn;
-      im.range.len = std::max(srcLen, dstLen);
+    int srcLen = ranges.back().srcIn - im.range.srcIn;
+    int dstLen = ranges.back().dstIn - im.range.dstIn;
+    im.range.len = std::max(srcLen, dstLen);
 
-      results.append(im);
-    }
+    results.append(im);
   }
 
   return results;

@@ -1378,11 +1378,12 @@ MediaGroupList Database::similar(const SearchParams& params) {
   QMutex mutex;
 
   PROGRESS_LOGGER(pl, "<PL>%percent %bignum lookups", progressTotal);
+  pl.showLast();
 
-  QFuture<void> f =
-      QtConcurrent::map(haystack, [&idMap, &results, &progress, &tm, &pl, progressInterval,
-                                   params, index, this](const Media& m) {
-
+  QFuture<void> f = QtConcurrent::map(
+      haystack,
+      [&idMap, &results, &progress, &tm, &pl, progressInterval, params, index, this](
+          const Media& m) {
         MediaGroup result = this->searchIndex(index, m, params, idMap);
 
         // give each work item a (lockless) way to write results
@@ -1406,8 +1407,9 @@ MediaGroupList Database::similar(const SearchParams& params) {
           // we reserved the space so we can write without locks
           results[resultIndex] = result;
         }
-        if ((resultIndex % progressInterval) == 0)
-          pl.step(resultIndex);
+        // TODO: pass the actual lookup count so the display is
+        // x images, x videos, x lookups, x ms/lookup
+        if ((resultIndex % progressInterval) == 0) pl.step(resultIndex);
       });
 
   f.waitForFinished();
@@ -1553,6 +1555,11 @@ void Database::saveIndices() {
 
 MediaGroup Database::searchIndex(Index* index, const Media& needle, const SearchParams& params,
                                  const QHash<int, Media>& idMap) {
+  // TODO take an in/out parameter to pass back stats from the query
+  // - cache misses
+  // - number of actual tree lookups
+  // - etc etc
+  // This will make possible an accurate "time per hash" stat on progress line
   QReadLocker locker(&_rwLock);
 
   QVector<Index::Match> matches = index->find(needle, params);

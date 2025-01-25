@@ -246,7 +246,11 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle, const SearchPa
   if (hashes.size() <= 0) {
     // if we don't have hashes for the needle,
     // we can get them from tree
-    if (needle.id() > 0) _tree->findIndex(needle.id(), hashes);
+    if (needle.id() > 0) {
+      // FIXME: this is not great as it touches every index in the tree
+      qWarning() << "walking the tree to find needle hashes";
+      _tree->findIndex(needle.id(), hashes);
+    }
 
     if (hashes.size() <= 0) {
       qWarning() << "needle has no hashes" << needle.id() << needle.path();

@@ -808,9 +808,9 @@ int main(int argc, char** argv) {
       qInfo() << "OpenCV" << cv[0] << "compiled:" << cv[1];
       qInfo() << "Exiv2" << ev[0] << "compiled:" << ev[1];
       //            qInfo() << "Quazip" << qv[0] << "compiled:" << qv[1];
-      qInfo() << "max images:" << int32_t(INT32_MAX);
-      qInfo() << "max videos:" << MAX_VIDEOS_PER_INDEX;
-      qInfo() << "max frames/video:" << MAX_FRAMES_PER_VIDEO;
+      qInfo("max images: %'u", int32_t(INT32_MAX));
+      qInfo("max videos: %'u", MAX_VIDEOS_PER_INDEX);
+      qInfo("max frames/video: %'u", MAX_FRAMES_PER_VIDEO);
 
       qInfo() << "threads:" << QThread::idealThreadCount();
       auto imageExt = sc->imageTypes().values();
@@ -1059,6 +1059,7 @@ int main(int argc, char** argv) {
         }
 
       PROGRESS_LOGGER(pl, "similar-to:<PL> %percent %bignum lookups, %1 results", work.count());
+      pl.showLast();
 
       int i = 1;
       for (auto& w : work) {

@@ -38,7 +38,7 @@ Wish List
 - file/directory name filters for inclusion/exclusion
 - store date-modified,size for better updating
 - also store container md5 (.zip) for faster updating/verifying
-- \>64k frames per video
+- WIP \>64k frames per video
 - capture more common errors in indexer
   - unsupported ICC profile
   - colordescriptor on grayscale image

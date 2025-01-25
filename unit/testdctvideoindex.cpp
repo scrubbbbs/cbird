@@ -21,6 +21,7 @@ class TestDctVideoIndex : public TestIndexBase {
     _params.minFramesNear = 1;
     _params.verbose = true;
     _params.skipFrames = 0;
+    _params.videoRadix = 0;
     _params.queryTypes = Media::TypeVideo;
   }
   void cleanupTestCase() { baseCleanupTestCase(); }

@@ -73,3 +73,7 @@ using lc = QLatin1Char;
 
 #define strict_realloc(ptr, count) \
   reinterpret_cast<decltype(ptr)>(realloc(ptr, uint(count) * sizeof(*ptr)))
+
+// these types are used all over, make them available globally
+typedef uint64_t dcthash_t; // 64-bit dct hash
+typedef uint32_t mediaid_t; // item id in the database
