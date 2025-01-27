@@ -57,30 +57,21 @@ static double makeDiff(const uint h0, const uint h1, const img_t& __restrict img
   return sum;
 }
 
-/*
-static void makeBlur(const uint h0, const uint h1, const img_t& img, img_t& blur) {
+static void makeBlur(const uint h0, const uint h1, const img_t& __restrict img,
+                     img_t& __restrict blur) {
   // determine if a pixel x,y is blurred or not
-  //const uint h1 = uint(img.height() - 1);
   const uint w1 = uint(img.width() - 1);
-  for (uint y = h0; y < h1; y++)
-    for (uint x = 1; x < w1; x++) {
+  for (uint y = h0; y < h1; ++y)
+    for (uint x = 1; x < w1; ++x) {
       // blur measured by how far the center pixel
       // is from the mean of its two neighbors.
-      float d = fabsf(img(x - 1, y) - img(x + 1, y));
-      float a = d / 2.0f;
+      int mean = abs(img(x - 1, y) - img(x + 1, y)) / 2;
 
-      // difference w/o the divide
-      // float b = fabsf(img(x,y) - a);
+      int dist = abs(img(x, y) - mean);
 
-      // original calculation, has overflow problem when a==0
-      // float b = fabs(img(x,y) - a) / a;
-
-      float b = a > 0 ? fabs(img(x, y) - a) / a : 1;
-
-      blur(x, y) = b;
+      blur(x, y) = dist;
     }
 }
-*/
 
 /// find edges in y-direction
 static void makeEdge(const uint h0, const uint h1, const img_t& __restrict diff, const float mean,
@@ -132,18 +123,32 @@ static int longEdgeCount(const uint h0, const uint h1, const CImg<uint8_t>& edge
   auto w1 = w - 1;
 
   int count = 0;
-  const auto* srcPtr = edgeT.data() + h0 * w;
+  const auto* srcPtr = edgeT.data() + (h0+1) * w;
 
-  for (uint y = h0; y < h1; y++) {
-    int len = 0;
-    for (uint x = 1; x < w1; x++) {
-      if (srcPtr[x] != 0)
-        len++;
-      else {
-        if (len > 1) count++;
-        len = 0;
-      }
+  for (uint y = h0+1; y < h1-1; y++) {
+//    int len = 0;
+//    for (uint x = 1; x < w1; x++) {
+//      if (srcPtr[x] != 0)
+//        len++;
+//      else {
+//        if (len > 1) count++;
+//        len = 0;
+//      }
+//    }
+    for (uint x = 2; x < w1 - 1; ++x) {
+      const auto* prev = edgeT.data() + (y - 1) * w;
+      const auto* next = edgeT.data() + (y + 1) * w;
+
+      // { l0, *, r1 }
+      // { h0, x, h1 }
+      // { r0, *, l1 }
+      if (srcPtr[x] != 0 &&
+          ((srcPtr[x - 1] != 0 && srcPtr[x + 1] != 0) || // horizontal
+           (prev[x - 1] != 0 && next[x + 1] != 0) || // diagonal
+           (next[x - 1] != 0 && prev[x + 1] != 0)))  // diagonal
+        count++;
     }
+
     srcPtr += w;
   }
   return count;
@@ -214,7 +219,7 @@ static QVector<QVector<int>> workRanges(int begin, int end, int stride) {
   QVector<QVector<int>> ranges;
 
   int rowsPerJob = ((32 * 1024) / stride) + 1;  // target 32kb data per thread
-  qDebug() << "rowsPerThread" << rowsPerJob << rowsPerJob * stride / 1024 << "kb";
+  //qDebug() << "rowsPerThread" << rowsPerJob << rowsPerJob * stride / 1024 << "kb";
 
   for (int h0 = begin; h0 < end; h0 += rowsPerJob) {
     int h1 = std::min(h0 + rowsPerJob, end);
@@ -225,7 +230,7 @@ static QVector<QVector<int>> workRanges(int begin, int end, int stride) {
 
 /// run the qualityscore filter pipeline using multiple threads
 static void filterHorizontalMT(const img_t& img, img_t& diff, CImg<uint8_t>& edge, float& mean,
-                               int& edgeCount) {
+                               img_t& blur,int& edgeCount) {
   // cache-aware work ranges for normal order and transpose
   auto ranges = workRanges(0, img.height(), sizeof(pixel_t) * img.width());
   auto rangesT = workRanges(0, img.width(), sizeof(pixel_t) * img.height());
@@ -247,11 +252,12 @@ static void filterHorizontalMT(const img_t& img, img_t& diff, CImg<uint8_t>& edg
     sum += w.result();
   }
   workF.clear();
-  mean = sum / ((img.width() - 1) * (img.height() - 1));
+  mean = sum / (img.width()* img.height());
 
   for (auto& range : ranges) {
     int h0 = range[0];
     int h1 = range[1];
+    workV.append(QtConcurrent::run([h0,h1,&img,&blur]() { return makeBlur(h0, h1, img, blur);}));
     workV.append(QtConcurrent::run(
         [h0, h1, &diff, mean, &edge]() { return makeEdge(h0, h1, diff, mean, edge); }));
   }
@@ -304,27 +310,31 @@ static void addVisual(const img_t& img, const char* label, bool normalize,
  * @note it seems to generally be OK but it definitely fails some cases and
  *       the scores are usually closer than they should be
  *
- * todo: convert to use cvimage and evaluate how good
+ * TODO: convert to use cvimage and evaluate how good
  * it is against various degradations (rescale, noise, blur,
  * dct noise, blocking, sharpening)
  */
 int qualityScore(const Media& m, QVector<QImage>* visuals) {
-  CImg<uint8_t> src;
+  class Profiler {
+   public:
+    uint64_t start = nanoTime();
+    uint64_t then = start;
+    void step(const char* msg) {
+      uint64_t now = nanoTime();
+      uint64_t micros = (now - then) / 1000;
+      then = now;
+      //qDebug() << msg << micros;
+    }
+  } profiler;
 
-  uint64_t start = nanoTime();
-  uint64_t then = start;
-  uint64_t now;
-  int micros;
+  CImg<uint8_t> src;
 
   if (!m.image().isNull())
     qImageToCImg(m.image(), src);
   else
     src.load(qUtf8Printable(m.path()));
 
-  now = nanoTime();
-  micros = (now - then) / 1000;
-  then = now;
-  qDebug() << "t0" << micros;
+  profiler.step("load");
 
   // some cropping usually a good idea
   // note: 0 width crop cimg bug creates blank pixels on the right edge, leads to false edges
@@ -336,21 +346,15 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
   // meaningful must be much larger
   if (src.width() < 64 || src.height() < 64) {
     qWarning() << "cropped image must be at least 64x64 px";
+    return -1;
   }
 
   // convert to grayscale float (0-255)
   img_t img = src.get_norm(1);
-  // qDebug("irange=(%.2f,%.2f)", double(img.min()), double(img.max()));
-
-  // float (0-1)
-  // img.normalize(0, 1);
   auto imgT = img;
   imgT.transpose();
 
-  now = nanoTime();
-  micros = (now - then) / 1000;
-  then = now;
-  qDebug() << "t1" << micros;
+  profiler.step("normalize");
 
   addVisual(img, "Normalized & Cropped", true, visuals);
 
@@ -359,21 +363,29 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
   const uint w1 = uint(w - 1);
   const uint h1 = uint(h - 1);
 
-  // float sumBlur = 0;
-  // int numBlur = 0;
+  const int blurThreshold = 26; // paper says 0.1 for normalized(0-1) intensities
+
   int numEdges = 0;
-  float edgeLengthRatio = 0;
+  int numBlur = 0;  // count of blurred edges
+  float sumBlur = 0;// sum of blur of the blurred edges
+
+
+  float longEdgeRatio = 0;
+  int goodEdgeCount = 0;
+  int numCorners = 0;
+  int numSpeckle = 0;
   {
     // run in horizontal direction
 
 #ifdef MT_QUALITYSCORE
     img_t hDiff(w, h);
+    img_t hBlur(w, h);
     CImg<uint8_t> hEdge(w, h);
     int hEdgeCount = 0;
     float hMean = 0;
 
     auto h0 =
-        QtConcurrent::run([&]() { filterHorizontalMT(img, hDiff, hEdge, hMean, hEdgeCount); });
+        QtConcurrent::run([&]() { filterHorizontalMT(img, hDiff, hEdge, hMean, hBlur, hEdgeCount); });
 
     //    now = nanoTime();
     //    micros = (now - then) / 1000;
@@ -381,21 +393,25 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
     //    qDebug() << "t2" << micros;
 
     img_t vDiff(h, w);
-    // img_t vBlur(h, w);
+    img_t vBlur(h, w);
     CImg<uint8_t> vEdge(h, w);
     float vMean = 0;
     int vEdgeCount = 0;
 
     auto v0 =
-        QtConcurrent::run([&]() { filterHorizontalMT(imgT, vDiff, vEdge, vMean, vEdgeCount); });
+        QtConcurrent::run([&]() { filterHorizontalMT(imgT, vDiff, vEdge, vMean, vBlur, vEdgeCount); });
 
     v0.waitForFinished();
     auto v1 = QtConcurrent::run([&]() { vEdge.transpose(); });
     auto v2 = QtConcurrent::run([&]() { vDiff.transpose(); });
+    auto v3 = QtConcurrent::run([&]() { vBlur.transpose(); });
     v1.waitForFinished();
     v2.waitForFinished();
+    v3.waitForFinished();
 
     h0.waitForFinished();
+
+    goodEdgeCount = hEdgeCount + vEdgeCount;
 
 #else  // no concurrency
     img_t hDiff(w, h);  // difference of each pixel's two neighbors
@@ -420,10 +436,7 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
     vDiff.transpose();
 #endif
 
-    now = nanoTime();
-    micros = (now - then) / 1000;
-    then = now;
-    qDebug() << "t3" << micros;
+    profiler.step("filter");
 
     addVisual(hEdge | vEdge, "Edge", false, visuals);
     addVisual(hDiff, "H Diff", true, visuals);
@@ -437,115 +450,105 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
       kernel.fill(1.0f / (3 * 3));
       img_t cBlur = img;
       cBlur.convolve(kernel);  // slow
-      qDebug("cblur=%.2f", double(cBlur.mean()));
+      //qDebug("cblur=%.2f", double(cBlur.mean()));
     }
 
-    qDebug("mean=(%.4f,%.4f)", double(hMean), double(vMean));
-    qDebug("edge=(%d,%d)", hEdgeCount, vEdgeCount);
-
-    // qDebug("blur=(%.2f,%.2f)", double(hBlur.mean()), double(vBlur.mean()));
-
-    // const float blurThresh = 0.13; // paper suggested 0.1
-    // float blurThresh = 0.3f;  // 0.005f;
-    // numBlur = 0;
-    numEdges = 0;
-    // sumBlur = 0;
+    goodEdgeCount=0;
 
     const auto edge = vEdge | hEdge;
-    for (uint y = 1; y < h1; y++)
-      for (uint x = 1; x < w1; x++) {
-        // const float cb = cBlur(x,y);
-        // const float pix = img(x,y);
+    for (uint y = 1; y < h1-1; y++)
+      for (uint x = 1; x < w1-1; x++) {
+        if (edge(x, y)) {
+          numEdges++;
+          auto hb = hBlur(x,y);
+          auto vb = vBlur(x,y);
+          int blur = std::max(hb,vb);
 
-        // float blur = hBlur(x, y);  // std::max(hBlur(x,y),vBlur(x,y)); //fabs(pix*pix-cb*cb);
-        // hDiff(x, y) = 0;
-        if (edge(x, y)) numEdges++;
-        /*
-        if (vEdge(x, y)) {
-          numEdges++;
-          //if (blur < blurThresh) {
-            //hDiff(x, y) = 1;
-          //  numBlur++;
-          //  sumBlur += blur;
-          //}
-        } else if (hEdge(x, y)) {
-          // blur = vBlur(x,y);
-          numEdges++;
-          // if (blur < blurThresh)
-          // {
-          //     hDiff(x,y)=1;
-          //     numBlur++;
-          //     sumBlur+=blur;
-          // }
+          if (blur < blurThreshold) {
+            sumBlur += blur/255.0;
+            numBlur++;
+          }
+
+          // a b c
+          // d * e
+          // f g h
+          int a = 1 & edge(x-1,y-1);
+          int b = 1 & edge(x, y-1);
+          int c = 1 & edge(x+1,y-1);
+          int d = 1 & edge(x-1, y);
+          int e = 1 & edge(x+1, y);
+          int f = 1 & edge(x-1,y+1);
+          int g = 1 & edge(x,y+1);
+          int h = 1 & edge(x+1,y+1);
+
+          int sum = a + b + c + d + e + f + g + h;
+          if (sum == 0)  // spot/speckle
+            numSpeckle++;
+
+          if (sum-3 == 0)
+            if ((b + c + g) == 3 || // top-left corner
+                (a + b + g) == 3 || // top-right corner
+                (b + g + h) == 3 || // bottom-right
+                (b + g + f) == 3 )  // bottom-left
+            numCorners++;
         }
-        //vDiff(x, y) = blur;
-        */
       }
 
-    now = nanoTime();
-    micros = (now - then) / 1000;
-    qDebug() << "t4" << micros;
+    profiler.step("reduce");
 
     // float blurRatio = numBlur / (float)numEdges;
     // printf("thresh=%.6f ratio=%.6f (%d/%d)\n",
     //  blurThresh, blurRatio, numBlur, numEdges);
 
-    edgeLengthRatio = float(vEdgeCount + hEdgeCount) / numEdges;
-    qDebug("elr=%.2f", double(edgeLengthRatio));
+    longEdgeRatio = float(goodEdgeCount) / numEdges;
+
+    //longEdgeRatio = float(vEdgeCount + hEdgeCount) / ((w-2)*(h-2));
+
+    //qDebug("lr=%.2f", double(longEdgeRatio));
 
   }  /// edge+blur
 
-  float edgeRatio = float(numEdges) / ((w - 2) * (h - 2));
-  qDebug("er=%.2f", double(edgeRatio));
+  float edgeDensity = float(numEdges) / (w*h);
+  //qDebug("ed=%.2f", double(edgeDensity));
 
-  // float blurMean = numBlur > 0 ? sumBlur / numBlur : 0;
-  // float blurRatio = float(numBlur) / numEdges;
 
   // qDebug("nEdge=%d nBlur=%d", numEdges, numBlur);
   // qDebug("blur: m=%.2f r=%.2f", double(blurMean), double(blurRatio));
 
-  if (0) {  // noise experiment
+  float sumNoise = 0;
+  int noiseCount = 0;
+  if (1) {  // noise experiment
     // average filter, blur image somewhat
-    const int kSize = 3;  // paper said use 3x3
-    img_t kernel(kSize, kSize);
-    kernel.fill(1.0f / (kSize * kSize));
-    // src.convolve(kernel);
-    // src.equalize(256);
-    // src.convolve(kernel);
-    // img=src.get_norm(1);
-    img.convolve(kernel);
-    // img.normalize(0,1);
-    // printf("irange=(%.2f,%.2f) ", img.min(), img.max());
-    // img.normalize(0, (1<<16) - 1);
+//    const int kSize = 3;  // paper said use 3x3
+//    img_t kernel(kSize, kSize);
+//    kernel.fill(255 / (kSize * kSize));
+//    img.convolve(kernel);
 
-    float sumNoise = 0;
-    int noiseCount = 0;
     {
       img_t hDiff(w, h);
       hDiff.fill(0);
-      float hMean = makeDiff(1, img.height() - 1, img, hDiff);
-      hMean /= (img.width() - 1) * (img.height() - 1);
+      int hMean = makeDiff(0, img.height(), img, hDiff);
+      hMean /= img.width() * img.height();
 
       img_t vDiff(h, w);
       vDiff.fill(0);
       img.transpose();
-      float vMean = makeDiff(1, img.height() - 1, img, vDiff);
-      vMean /= (img.width() - 1) * (img.height() - 1);
+      int vMean = makeDiff(0, img.height(), img, vDiff);
+      vMean /= img.width() * img.height();
 
       vDiff.transpose();
 
-      qDebug("mean2=(%.2f,%.2f) ", double(hMean), double(vMean));
+      qDebug("mean2=(%d,%d) ", hMean, vMean);
       img_t cand(w, h);
       cand.fill(0);
       float sum = 0;
       int num = 0;
       for (uint y = 1; y < h1; y++)
         for (uint x = 1; x < w1; x++) {
-          float dh = hDiff(x, y);
-          float dv = vDiff(x, y);
-          float val;
+          int dh = hDiff(x, y);
+          int dv = vDiff(x, y);
           if (dh <= hMean && dv <= vMean) {
-            val = std::max(dh, dv);
+            int val = std::max(dh, dv);
             sum += val;
             num++;
             cand(x, y) = val;
@@ -565,7 +568,7 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
         for (uint x = 1; x < w1; x++) {
           float n = cand(x, y);
           if (n > candMean) {
-            sumNoise += n;
+            sumNoise += n/255.0;
             // sumNoise += fabs(n-candMean)/n;
             noiseCount++;
             cand(x, y) = 1;
@@ -579,16 +582,17 @@ int qualityScore(const Media& m, QVector<QImage>* visuals) {
       //     tmp.save("noise.png");
       // }
     }
-
-    float noiseMean = sumNoise / noiseCount;
-    float noiseRatio = float(noiseCount) / ((w - 2) * (h - 2));
-    qDebug("noise: n=%d m=%.2f r=%.2f ", noiseCount, double(noiseMean), double(noiseRatio));
   }
+  float blurMean = sumBlur / numBlur;
+  float blurRatio = numBlur / (float)numEdges;
 
-  // float score = 1 - (1*blurMean + 1*blurRatio); // + 0.3*noiseMean +
-  // 0.75*noiseRatio);
-  int score = 100 * edgeRatio + 100 * edgeLengthRatio;
-  qDebug("score: %d, time=%dms", score, int((nanoTime() - start) / 1000000));
+  float noiseMean = sumNoise / noiseCount;
+  float noiseRatio = float(noiseCount) / (w*h);
+
+  //qDebug() << m.name() << "corners:" << numCorners << "speckles:" << numSpeckle;
+  int score =  1000 * ( 1.0f - (1*blurMean +0.95*blurRatio + 0.3*noiseMean + 0.75*noiseRatio));
+
+  qDebug() << score << blurMean << blurRatio << noiseMean << noiseRatio;
 
   return score;
 }
