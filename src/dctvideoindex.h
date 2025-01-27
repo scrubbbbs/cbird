@@ -97,7 +97,7 @@ class DctVideoIndex : public Index {
     uint64_t videoFrames; // # frames  in the video file
     uint64_t usedFrames;  // # frames in the indexed file
   };
-  VStat insertHashes(int mediaIndex, VideoSearchTree* tree, const SearchParams& params);
+  VStat insertHashes(mediaid_t mediaIndex, VideoSearchTree* tree, const SearchParams& params);
 
   void buildTree(const SearchParams& params);
 

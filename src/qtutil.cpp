@@ -1650,6 +1650,8 @@ void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantLis
 
 void ProgressLogger::step(uint64_t step, const QVariantList& args) const {
   if (_timer.elapsed() < 500) return;
+  // one print per percent output
+  // if (_max > 0 && ((step - 1) * 100) / _max == (step * 100) / _max) return;
   QString out = _format;
   formatString(out, step, args);
   qColorMessageOutput(QtInfoMsg, _context, out);

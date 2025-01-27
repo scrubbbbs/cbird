@@ -47,7 +47,7 @@ size_t DctVideoIndex::memoryUsage() const {
   return _tree ? _tree->stats().memory : 0;
 }
 
-DctVideoIndex::VStat DctVideoIndex::insertHashes(int mediaIndex,
+DctVideoIndex::VStat DctVideoIndex::insertHashes(mediaid_t mediaIndex,
                                                  VideoSearchTree* tree,
                                                  const SearchParams& params) {
   QString indexPath = QString("%1/%2.vdx").arg(_dataPath).arg(_mediaId[uint32_t(mediaIndex)]);
@@ -59,11 +59,17 @@ DctVideoIndex::VStat DctVideoIndex::insertHashes(int mediaIndex,
   VideoIndex index;
   index.load(indexPath);
 
+  if (index.frames.size() == 0) {
+    return {0, 0};
+  }
+
   const int lastFrame = index.frames[index.frames.size() - 1];
   const int skip = params.skipFrames;
 
   std::vector<VideoSearchTree::Value> values;
-  for (size_t j = 0; j < index.hashes.size(); j++) {
+  values.reserve(index.hashes.size());
+
+  for (size_t j = 0; j < index.hashes.size(); ++j) {
     // drop hashes with < 5 0's or 1's (insufficient detail)
     // TODO: figure out what value is reasonable
     // TODO: drop these when creating the index
@@ -72,16 +78,21 @@ DctVideoIndex::VStat DctVideoIndex::insertHashes(int mediaIndex,
     if (hamm64(hash, 0) < 5 || hamm64(hash, 0xFFFFFFFFFFFFFFFF) < 5) continue;
 
     // drop begin/end frames if there are enough left over
-    if (skip && lastFrame > skip) {
-      if (index.frames[j] < skip || index.frames[j] > lastFrame - skip) continue;
+    int frame = index.frames[j];
+    if (skip && lastFrame / 2 > skip) {
+      if (frame < skip || frame > lastFrame - skip) continue;
     }
 
     VideoTreeIndex treeIndex;
     treeIndex.idx = mediaIndex;
-    treeIndex.frame = index.frames[j];
+    treeIndex.frame = frame;
 
     values.push_back(VideoSearchTree::Value(treeIndex, index.hashes[j]));
   }
+
+  // std::sort(values.begin(), values.end(), [tree](auto& a, auto& b) {
+  //   return tree->indexOf(a.hash) < tree->indexOf(b.hash);
+  // });
 
   tree->insert(values);
 
@@ -99,11 +110,15 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
     VStat sum{0, 0};
     // auto* tree = new VideoSearchTree;
     auto* tree = new VideoSearchTree(params.videoRadix);
-
+    QElapsedTimer timer; // don't spam progress prints
+    timer.start();
     PROGRESS_LOGGER(pl, "<PL>%percent %bignum videos", _mediaId.size());
-    for (size_t i = 0; i < _mediaId.size(); i++) {
-      pl.step(i);
-      VStat st = insertHashes(int(i), tree, params);
+    for (size_t i = 0; i < _mediaId.size(); ++i) {
+      if (timer.elapsed() > 100) {
+        pl.step(i);
+        timer.start();
+      }
+      VStat st = insertHashes(mediaid_t(i), tree, params);
       sum.videoFrames += st.videoFrames;
       sum.usedFrames += st.usedFrames;
     }

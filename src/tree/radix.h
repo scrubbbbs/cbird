@@ -36,6 +36,8 @@
 template<typename index_type = uint32_t>
 class RadixMap_t
 {
+  Q_DISABLE_COPY_MOVE(RadixMap_t);
+
  public:
   typedef index_type index_t;
   typedef dcthash_t hash_t;
@@ -66,26 +68,21 @@ class RadixMap_t
 
   struct Bucket
   {
-    Q_DISABLE_COPY_MOVE(Bucket); // we are not copyable
+    Q_DISABLE_COPY_MOVE(Bucket); // try not to copy/move
 
-    std::vector<hash_t>* hashes; // using pointers to save memory here
-    std::vector<index_t>* indices;
+    std::vector<hash_t> hashes; // using pointers to save memory here
+    std::vector<index_t> indices;
 
-    Bucket() {
-      hashes = new std::vector<hash_t>;
-      indices = new std::vector<index_t>;
-    }
-    ~Bucket() {
-      delete hashes;
-      delete indices;
-    }
+    Bucket(){
+        // hashes.reserve(4096 / sizeof(hash_t));
+        // indices.reserve(4096 / sizeof(hash_t));
+    };
 
     size_t size() const {
-      return sizeof(*this) + hashes->capacity() * sizeof(hash_t)
-             + indices->capacity() * sizeof(index_t);
+      return sizeof(*this) + hashes.capacity() * sizeof(hash_t)
+             + indices.capacity() * sizeof(index_t);
     }
   };
-  static_assert(sizeof(Bucket) == 2 * sizeof(uintptr_t));
 
   struct Stats
   {
@@ -98,11 +95,20 @@ class RadixMap_t
     uint empty = 0; // if radix is too big, lots of empty buckets
   };
 
+ private:
+  uint _radix = 1;
+  hash_t _radixMask = 1;
+  std::vector<Bucket*> _buckets;
+  Bucket _emptyBucket;
+
+ public:
   RadixMap_t(uint radix) {
-    // @16 bytes per bucket, limit to 1GB
-    if (radix > 26) {
-      radix = 26;
-      qFatal("radix too large, limiting memory usage to 1GB");
+    // limit buckets minimum memory usage to ~1GB
+    uint maxRadix = 30 - std::ceil(log2(sizeof(Bucket) + sizeof(Bucket*)));
+
+    if (radix > maxRadix) {
+      radix = maxRadix;
+      qWarning("radix too large, limiting to 2^%u buckets", radix);
     }
 
     _radix = radix;
@@ -110,10 +116,15 @@ class RadixMap_t
     for (uint i = 0; i < radix; ++i)
       _radixMask |= 1 << i;
 
-    _buckets = new Bucket[1U << _radix];
+    _buckets.resize(1U << _radix);
+    for (uint i = 0; i < 1U << _radix; ++i)
+      _buckets[i] = &_emptyBucket;
   }
 
-  ~RadixMap_t() { delete[] _buckets; }
+  ~RadixMap_t() {
+    for (auto* b : _buckets)
+      if (b != &_emptyBucket) delete b;
+  }
 
   uintptr_t addressOf(hash_t hash) const {
     auto& hashes = _buckets[indexOf(hash)].hashes;
@@ -122,18 +133,24 @@ class RadixMap_t
   }
 
   size_t indexOf(hash_t hash) const {
-    Q_ASSERT((hash & 1) == 0); // FIXME: wasting a bit in dct hashes
+    //Q_ASSERT((hash & 1) == 0); // FIXME: wasting a bit in dct hashes
     size_t i = (hash >> 1) & _radixMask;
-    if (i >= (1U << _radix))
-      qFatal("index oob: %u %u 0x%u", (uint) i, (uint) 1 << _radix, (uint) _radixMask);
+    //if (i >= (1U << _radix))
+    //  qFatal("index oob: %u %u 0x%u", (uint) i, (uint) 1 << _radix, (uint) _radixMask);
     return i;
   }
 
   void insert(const std::vector<Value>& values) {
     for (auto& v : values) {
-      auto& bucket = _buckets[indexOf(v.hash)];
-      bucket.hashes->push_back(v.hash);
-      bucket.indices->push_back(v.index);
+      size_t index = indexOf(v.hash);
+      Bucket* bucket = _buckets[index];
+      if (Q_UNLIKELY(bucket == &_emptyBucket)) {
+        bucket = new Bucket;
+        _buckets[index] = bucket;
+      }
+
+      bucket->hashes.push_back(v.hash);
+      bucket->indices.push_back(v.index);
     }
   }
 
@@ -141,18 +158,18 @@ class RadixMap_t
     uint64_t sum = 0;
     uint min = UINT_MAX, max = 0, empty = 0;
     for (size_t i = 0; i < (1U << _radix); ++i) {
-      uint bytes = _buckets[i].size();
+      uint bytes = _buckets[i] != &_emptyBucket ? _buckets[i]->size() : 0;
       sum += bytes;
       min = std::min(min, bytes);
       max = std::max(max, bytes);
-      if (_buckets[i].hashes->size() == 0) empty++;
+      if (_buckets[i]->hashes.size() == 0) empty++;
     }
-    uint64_t memory = sum;
+    uint64_t memory = sum + sizeof(Bucket*) * (1U << _radix);
 
     const uint mean = sum / (1U << _radix);
     sum = 0;
     for (size_t i = 0; i < (1U << _radix); ++i) {
-      size_t bytes = _buckets[i].size();
+      size_t bytes = _buckets[i]->size();
       int64_t x = (bytes - mean);
       sum += x * x;
     }
@@ -168,9 +185,9 @@ class RadixMap_t
   }
 
   void search(hash_t hash, distance_t threshold, std::vector<Match>& matches) const {
-    const Bucket& bucket = _buckets[indexOf(hash)];
-    const auto& hashes = *(bucket.hashes);
-    const auto& indices = *(bucket.indices);
+    const Bucket* bucket = _buckets[indexOf(hash)];
+    const std::vector<hash_t>& hashes = bucket->hashes;
+    const std::vector<index_t>& indices = bucket->indices;
     const size_t count = hashes.size();
 
     // gcc doesn't want to unroll this, but it helps a lot
@@ -197,10 +214,10 @@ class RadixMap_t
   void search(const hash_t* __restrict queryHashes,
               distance_t threshold,
               std::vector<Match>* matches) const {
-    const auto& bucket = _buckets[indexOf(queryHashes[0])];
-    const hash_t* __restrict hashes = bucket.hashes.data();
-    const index_t* indices = bucket.indices.data();
-    size_t count = bucket.hashes.size();
+    const Bucket* bucket = _buckets[indexOf(queryHashes[0])];
+    const hash_t* __restrict hashes = bucket->hashes.data();
+    const index_t* indices = bucket->indices.data();
+    size_t count = bucket->hashes.size();
 
     for (size_t i = 0; i < count; ++i) {
       hash_t hash = hashes[i];
@@ -211,9 +228,4 @@ class RadixMap_t
       }
     }
   }
-
- private:
-  uint _radix = 1;
-  hash_t _radixMask = 1;
-  Bucket* _buckets = nullptr;
 };
