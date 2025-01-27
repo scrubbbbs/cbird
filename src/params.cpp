@@ -176,5 +176,6 @@ bool Params::Value::setInt(const QVariant& v, std::vector<int> range, const char
     qWarning().noquote() << "invalid value for" << arg << ": expected integer" << rangeDesc;
     return false;
   }
+  member = i;
   return true;
 }
