@@ -86,7 +86,8 @@ void Engine::commit() {
 }
 
 void Engine::update(bool wait) {
-  QSet<QString> skip = db->indexedFiles();
+  // when we see a file is still present, remove from the set
+  QSet<QString> removed = db->indexedFiles();
 
   if (false) {
     // if the stored database paths are not canonical there
@@ -94,7 +95,7 @@ void Engine::update(bool wait) {
     // updating correctly
     // FIXME: this can take a long time, figure out where
     //        the invalid paths actually come from
-    QStringList paths = skip.values();  // sort to reduce random access
+    QStringList paths = removed.values(); // sort to reduce random access
     paths.sort();
     QSet<QString> checked;
     int progress = 0;
@@ -126,12 +127,15 @@ void Engine::update(bool wait) {
     }
   }
 
-  scanner->scanDirectory(db->path(), skip, db->lastAdded());
+  scanner->scanDirectory(db->path(), removed, db->lastAdded());
 
+  // we need a list of ids for fast removals, also we may want
+  // to remove files that have issues (missing indexes etc)
   QVector<int> toRemove;
-  if (skip.count() > 0) {
-    qDebug("removing %lld files from index", skip.count());
-    QList<QString> sorted = skip.values();
+
+  if (removed.count() > 0) {
+    qDebug("removing %lld files from index", removed.count());
+    QList<QString> sorted = removed.values();
     std::sort(sorted.begin(), sorted.end());
     int i = 0;
     // TODO: this takes a long time for big removals...could be threaded
@@ -150,25 +154,29 @@ void Engine::update(bool wait) {
   }
 
   // check for missing external index data, (currently only video index)
-  // TODO: should be implemented by specific index
   if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo)) {
     const MediaGroup videos = db->mediaWithType(Media::TypeVideo);
     PROGRESS_LOGGER(pl, "verifying video index:<PL> %percent %bignum", videos.count());
     int i = 0;
+    QElapsedTimer timer;
+    timer.start();
     for (const Media& m : videos) {
       QString vIndexPath = QString("%1/%2.vdx").arg(db->videoPath()).arg(m.id());
       if (!QFileInfo(vIndexPath).exists()) {
-        qWarning() << "video index missing, rerun -update" << m.path();
+        qWarning() << "mising index for" << m.path() << "run -update again";
         toRemove.append(m.id());
       } else {
         VideoIndex idx;
-        idx.load(vIndexPath);
-        if (idx.isEmpty()) {
-          qWarning() << "video index is corrupt, rerun -update" << m.path();
+        if (!idx.isValid(vIndexPath)) {
+          qWarning() << "invalid index for" << m.path() << "run -update again";
           toRemove.append(m.id());
         }
       }
-      pl.step(++i);
+      ++i;
+      if (timer.elapsed() > 100) {
+        pl.step(i);
+        timer.start();
+      }
     }
     pl.end();
   }

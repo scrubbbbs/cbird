@@ -44,7 +44,6 @@ typedef cv::Mat KeyPointDescriptors;
 typedef std::vector<cv::Rect> KeyPointRectList;
 typedef std::vector<uint64_t> KeyPointHashList;
 typedef std::vector<cv::DMatch> MatchList;
-typedef std::vector<uint64_t> VideoHashList;
 typedef QHash<QString, QString> QStringHash;
 
 typedef std::function<QVariant(const Media&)> PropertyFunc;
@@ -57,21 +56,30 @@ typedef std::function<QVariant(const Media&)> PropertyFunc;
  * @brief Container for index of a single video file
  *
  * Index is compressed by omitting nearby frames,
- * therefore there is also list of frame numbers;
+ * therefore there is also list of frame numbers
+ * 
+ * Stored in a .vdx file, loaded/unloaded when building search tree
  *
- * @note uint16_t limits video to < 2^16-1 frames indexed
- *
- * FIXME: increase this by storing the offset from previous frame (maybe uint8)
- */
+ * @note VideoTreeIndex::frame sets the upper limit on frames per video
+ *       VideoTreeIndex::idx sets the upper limit on videos per index
+ **/
 class VideoIndex {
  public:
-  std::vector<uint16_t> frames;  // frame number
-  VideoHashList hashes;          // dct hash
+  std::vector<int> frames; // compatible with MatchRange
+  std::vector<dcthash_t> hashes;
 
   size_t memSize() const { return sizeof(*this) + VECTOR_SIZE(frames) + VECTOR_SIZE(hashes); }
   bool isEmpty() const { return frames.size() == 0 || hashes.size() == 0; }
   void save(const QString& file) const;
   void load(const QString& file);
+  bool isValid(const QString& file) const;
+
+ private:
+  void save_v2(const QString& file) const;
+
+  bool verify_v1(const QString& file) const;
+  void save_v1(const QString& file) const;
+  void load_v1(const QString& file);
 };
 
 /**
