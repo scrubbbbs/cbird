@@ -30,7 +30,7 @@ QT += widgets
 LIBS_PHASH = -lpHash -lpng -ljpeg
 
 # deps for core 
-FILES_INDEX = index ioutil media videocontext cvutil qtutil database scanner templatematcher params
+FILES_INDEX = index ioutil media videoindex videocontext cvutil qtutil database scanner templatematcher params
 
 # deps for gui
 FILES_GUI = gui/mediagrouplistwidget gui/mediafolderlistwidget env \

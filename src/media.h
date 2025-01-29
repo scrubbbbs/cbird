@@ -22,6 +22,7 @@
 
 // minimize includes since this is used everywhere
 #include "cvutil.h" // ColorDescriptor
+#include "videoindex.h"
 
 namespace cv {
 class Mat;
@@ -47,40 +48,6 @@ typedef std::vector<cv::DMatch> MatchList;
 typedef QHash<QString, QString> QStringHash;
 
 typedef std::function<QVariant(const Media&)> PropertyFunc;
-
-#define CVMAT_SIZE(x) (x.total() * x.elemSize())
-#define VECTOR_SIZE(x) (x.capacity() * sizeof(decltype(x)::value_type))
-
-/**
- * @class VideoIndex
- * @brief Container for index of a single video file
- *
- * Index is compressed by omitting nearby frames,
- * therefore there is also list of frame numbers
- * 
- * Stored in a .vdx file, loaded/unloaded when building search tree
- *
- * @note VideoTreeIndex::frame sets the upper limit on frames per video
- *       VideoTreeIndex::idx sets the upper limit on videos per index
- **/
-class VideoIndex {
- public:
-  std::vector<int> frames; // compatible with MatchRange
-  std::vector<dcthash_t> hashes;
-
-  size_t memSize() const { return sizeof(*this) + VECTOR_SIZE(frames) + VECTOR_SIZE(hashes); }
-  bool isEmpty() const { return frames.size() == 0 || hashes.size() == 0; }
-  void save(const QString& file) const;
-  void load(const QString& file);
-  bool isValid(const QString& file) const;
-
- private:
-  void save_v2(const QString& file) const;
-
-  bool verify_v1(const QString& file) const;
-  void save_v1(const QString& file) const;
-  void load_v1(const QString& file);
-};
 
 /**
  * Describes a matching interval

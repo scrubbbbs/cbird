@@ -20,8 +20,73 @@
    <https://www.gnu.org/licenses/>.  */
 #pragma once
 
+/**
+ * File I/O wrapper w/error reporting/handling 
+ */
+class SimpleIO
+{
+  Q_DISABLE_COPY_MOVE(SimpleIO);
+
+ private:
+  std::unique_ptr<QIODevice> _file;
+  QByteArray _buffer;
+
+ public:
+  SimpleIO() {}
+
+  // close the current file and open another
+  bool open(const QString& path, bool forReading);
+
+  // close w/o destruction
+  void close() { _file->close(); }
+
+ private:
+  bool readBytes(char* into, qint64 size, const char* msg);
+
+  bool writeBytes(const char* from, qint64 size, const char* msg);
+
+ public:
+  // read <count> records of size sizeof(*into)
+  template<typename T>
+  bool read(T* into, uint count, const char* msg) {
+    return readBytes((char*) into, sizeof(*into) * count, msg);
+  }
+
+  // write <count> records of size sizeof(*into)
+  template<typename T>
+  bool write(const T* from, uint count, const char* msg) {
+    return writeBytes((char*) from, sizeof(*from) * count, msg);
+  }
+
+  // read line including the newline, always null-terminated
+  // if successful the file position is just after the '\n',
+  // otherwise the position is undefined
+  bool readline(char* into, uint maxLen, const char* msg);
+
+  // read <count> records from the end of file
+  template<typename T>
+  bool readEnd(T* into, uint count, const char* msg) {
+    qint64 size = sizeof(*into) * count;
+    if (!_file->seek(_file->size() - size)) {
+      qCritical() << "seek end" << msg << ":" << _file->errorString();
+      return false;
+    }
+    return readBytes((char*) into, size, msg);
+  }
+
+  // set file position back to the start
+  bool rewind();
+
+  // buffer remainder of the file for reading
+  bool bufferAll();
+
+  // size of file in bytes
+  size_t fileSize() const { return _file->size(); }
+};
+
 /// QIODevice wrapper that can fake an EOF error to halt the consumer
-class QCancelableIODevice : public QIODevice {
+class QCancelableIODevice : public QIODevice
+{
   NO_COPY_NO_DEFAULT(QCancelableIODevice, QIODevice)
  public:
   QCancelableIODevice(QIODevice* io, const QFuture<void>* future);
@@ -63,7 +128,7 @@ void loadBinaryData(const QString& path, void** data, uint64_t* len, bool compre
 void saveBinaryData(const void* data, uint64_t len, const QString& path, bool compress);
 
 /// write std::map (assuming A,B are POD types)
-template <typename A, typename B>
+template<typename A, typename B>
 static void saveMap(const std::map<A, B>& map, const QString& path) {
   writeFileAtomically(path, [&map](QFile& f) {
     for (const auto& it : map) {
@@ -78,7 +143,7 @@ static void saveMap(const std::map<A, B>& map, const QString& path) {
 }
 
 /// read std::map
-template <typename A, typename B>
+template<typename A, typename B>
 static void loadMap(std::map<A, B>& map, const QString& file) {
   QFile f(file);
   if (!f.open(QFile::ReadOnly))

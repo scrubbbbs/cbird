@@ -22,7 +22,6 @@
 #include "cvutil.h"
 
 #include "dctvideoindex.h"
-#include "git.h"
 #include "hamm.h"
 #include "ioutil.h"
 #include "qtutil.h"
@@ -34,7 +33,8 @@
 
 #include "opencv2/features2d/features2d.hpp"
 
-class PropertyCompare {
+class PropertyCompare
+{
   QVector<PropertyFunc> _functions;
   QVector<bool> _reverse;
   QCollator _collator;
@@ -986,199 +986,6 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
   progressCb(100);
 }
 
-void VideoIndex::save(const QString& file) const {
-  MessageContext ctx(file);
-  save_v1(file);
-}
-
-void VideoIndex::load(const QString& file) {
-  MessageContext ctx(file);
-  load_v1(file);
-}
-
-bool VideoIndex::isValid(const QString& file) const {
-  MessageContext ctx(file);
-  return verify_v1(file);
-}
-
-bool VideoIndex::verify_v1(const QString& file) const {
-  QFile f(file);
-  if (!f.open(QFile::ReadOnly)) {
-    qWarning() << "failed to open:" << f.errorString();
-    return true; // don't remove if there is a permissions issue
-  }
-
-  uint16_t numFrames = 0;
-  qint64 size = sizeof(numFrames);
-  if (size != f.read((char*) &numFrames, size)) {
-    qWarning() << "empty file or no header:" << f.errorString();
-    return false;
-  }
-  f.close();
-
-  size += sizeof(uint16_t) * numFrames + sizeof(uint64_t) * numFrames;
-  if (QFileInfo(file).size() != size) {
-    qWarning() << "invalid file size";
-    return false;
-  }
-
-  return true;
-}
-
-void VideoIndex::save_v2(const QString& file) const {
-  // write header
-  auto header = QStringLiteral("cbird video index:%1:%2:%3:%4\n")
-                    .arg(CBIRD_VERSION)
-                    .arg(2)
-                    .arg(sizeof(int))
-                    .arg(sizeof(dcthash_t));
-  QFile f(file);
-  if (!f.open(QFile::WriteOnly | QFile::Truncate))
-    qFatal("failed to open: %s", qPrintable(f.errorString()));
-
-  // store uint8_t frame offsets; uses less space than old uint16_t and
-  // has no upper bound
-  //
-  // use lsb to encode big jumps (>127)
-  /* frame_num=0
-   * while(offset=readNext())
-   *   frame_num += offset>>1;
-   *   if (!(offset & 1))
-   *     frames.append(frame_num);
-   */
-
-  // TODO: align hashes to page size for memory mapping support
-  f.write((const char*) hashes.data(), hashes.size() * sizeof(dcthash_t));
-
-  // eof marker for fast verification
-}
-
-void VideoIndex::save_v1(const QString& file) const {
-  // alarm for changes to hash size
-  static_assert(sizeof(dcthash_t) == 8, "v1 format used 64-bit hashes");
-
-  // we used to use C stdio, I kept it in here since
-  // it could perform better for big indexes
-  // #define USE_STDIO
-
-#ifdef USE_STDIO
-#ifdef Q_OS_WIN
-  FILE* fp = _wfopen(qUtf16Printable(file), "wb");
-#else
-  FILE* fp = fopen(qUtf8Printable(file), "wb");
-#endif
-  if (!fp) {
-    qCritical() << "failed to open:" << strerror(errno);
-    return;
-  }
-
-  // clang-format off
-  #define WRITE(x, n, msg) { \
-    size_t size = sizeof(*x) * n; \
-    if (1 != fwrite(x, size, 1, fp)) { \
-      qCritical() << msg ":" << strerror(errno); \
-			fclose(fp); \
-    }} 
-  //clang-format on
-#else
-	QFile f(file);
-  if (!f.open(QFile::WriteOnly)) {
-    qCritical()  << "failed to open:"  << f.errorString();
-    return;
-  }
-
-  // clang-format off
-  #define WRITE(x, n, msg) { \
-    qint64 size=sizeof(*x)*n; \
-    if (size != f.write((char*)x, size)) { \
- 			qCritical() << msg << f.errorString(); \
-			return; \
-  }}
-  // clang-format on
-#endif
-  
-  uint16_t numFrames = frames.size() & 0xFFFF;
-  WRITE(&numFrames, 1, "failed to write header");
-
-  std::vector<uint16_t> int16Frames;
-  for (auto frame : frames)
-  	int16Frames.push_back(frame);
-
-  WRITE(int16Frames.data(), numFrames, "failed to write frame numbers");
-
-  WRITE(hashes.data(), hashes.size(), "failed to write hashes");
-#ifdef USE_STDIO
-  fclose(fp);
-#endif
-}
-
-void VideoIndex::load_v1(const QString& file) {
-#ifdef USE_STDIO
-#ifdef Q_OS_WIN
-  FILE* fp = _wfopen(qUtf16Printable(file), "rb");
-#else
-  FILE* fp = fopen(qUtf8Printable(file), "rb");
-#endif
-  if (!fp) {
-    qWarning() << "failed to open:" << strerror(errno);
-    return;
-  }
-  // clang-format off
-  #define READ(x, n, msg) { \
-    size_t size = sizeof(*x) * n; \
-    if (1 != fread(x, size, 1, fp)) { \
-      qWarning() << msg ":" << strerror(errno); \
-      hashes.clear(); \
-      frames.clear(); \
-      fclose(fp); \
-      return; \
-  }}
-  // clang-format on
-#else
-  QFile indexFile(file);
-  if (!indexFile.open(QFile::ReadOnly)) {
-    qWarning() << "failed to open:" << indexFile.errorString();
-    return;
-  }
-
-  // clang-format off
-  #define READ(x, n, msg) { \
-    qint64 size = n * sizeof(*x); \
-    if (size != indexFile.read((char*) x, size)) { \
-      qWarning() << msg ":" << indexFile.errorString(); \
-      hashes.clear(); \
-      frames.clear(); \
-      return; \
-  }}
-  #endif
-  // clang-format on
-
-  uint16_t numFrames = 0;
-  READ(&numFrames, 1, "failed to read index header");
-
-  // we do not need zeroed memory, but std::vector won't allow it
-  // TODO: use std::span (c++ 20) instead which works with mmap too
-  frames.resize(numFrames);
-  hashes.resize(numFrames);
-
-  {
-    std::vector<uint16_t> int16Frames;
-    int16Frames.resize(numFrames);
-
-    READ(int16Frames.data(), numFrames, "failed to read frame numbers");
-
-    for (int i = 0; i < numFrames; ++i)
-      frames[i] = int16Frames[i];
-  }
-
-  READ(hashes.data(), numFrames, "failed to read hashes");
-
-#undef READ
-#ifdef USE_STDIO
-  fclose(fp);
-#endif
-}
-
 void Media::playSideBySide(const Media& left, float seekLeft, const Media& right, float seekRight) {
   DesktopHelper::playSideBySide(left.path(), double(seekLeft), right.path(), double(seekRight));
 }
@@ -1854,4 +1661,3 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
 
   return values;
 }
-

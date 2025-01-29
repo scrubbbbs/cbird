@@ -256,3 +256,59 @@ void writeFileAtomically(const QString& path, const std::function<void(QFile&)>&
     qFatal("file system error writing %s: %s", qUtf8Printable(path), qUtf8Printable(error));
   }
 }
+
+bool SimpleIO::open(const QString& path, bool forReading) {
+  _file.reset(new QFile(path));
+  _buffer.clear();
+  if (!_file->open(forReading ? QFile::ReadOnly : QFile::WriteOnly)) {
+    qCritical() << _file->errorString();
+    return false;
+  }
+  return true;
+}
+
+bool SimpleIO::readBytes(char* into, qint64 size, const char* msg) {
+  qint64 readLen = _file->read(into, size);
+  if (readLen < size) {
+    qCritical().noquote() << "reading" << msg << ":"
+                          << (readLen > 0 ? "truncated file" : _file->errorString());
+    return false;
+  }
+  return true;
+}
+
+bool SimpleIO::writeBytes(const char* from, qint64 size, const char* msg) {
+  if (size != _file->write(from, size)) {
+    qCritical() << "writing" << msg << ":" << _file->errorString();
+    return false;
+  }
+  return true;
+}
+
+bool SimpleIO::readline(char* into, uint maxLen, const char* msg) {
+  const QByteArray bytes = _file->readLine(maxLen);
+  if (bytes.length() == 0) {
+    qCritical() << "readline" << msg << ":" << _file->errorString();
+    return false;
+  }
+  memcpy(into, bytes.data(), bytes.length());
+  return true;
+}
+
+bool SimpleIO::rewind() {
+  if (!_file->seek(0)) {
+    qCritical() << "rewind" << _file->errorString();
+    return false;
+  }
+  return true;
+}
+
+bool SimpleIO::bufferAll() {
+  _buffer = _file->readAll();
+  _file.reset(new QBuffer(&_buffer));
+  if (!_file->open(QFile::ReadOnly)) {
+    qCritical() << "open failed" << _file->errorString();
+    return false;
+  }
+  return true;
+}

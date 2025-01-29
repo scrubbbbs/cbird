@@ -77,3 +77,9 @@ using lc = QLatin1Char;
 // these types are used all over, make them available globally
 typedef uint64_t dcthash_t; // 64-bit dct hash
 typedef uint32_t mediaid_t; // item id in the database
+
+// sizeof cv::Mat
+#define CVMAT_SIZE(x) (x.total() * x.elemSize())
+
+// sizeof std::vector
+#define VECTOR_SIZE(x) (x.capacity() * sizeof(decltype(x)::value_type))
