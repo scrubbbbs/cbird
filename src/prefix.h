@@ -83,3 +83,10 @@ typedef uint32_t mediaid_t; // item id in the database
 
 // sizeof std::vector
 #define VECTOR_SIZE(x) (x.capacity() * sizeof(decltype(x)::value_type))
+
+// experimenting with different file i/o implementations
+class SimpleIO_Stdio;
+typedef class SimpleIO_Stdio SimpleIO;
+
+//class SimpleIO_QFile;
+//typedef class SimpleIO_QFile SimpleIO;

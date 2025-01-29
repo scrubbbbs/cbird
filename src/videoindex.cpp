@@ -317,8 +317,7 @@ bool VideoIndex::save_v1(SimpleIO& io) const {
 }
 
 bool VideoIndex::load_v1(SimpleIO& io) {
-  // with 64k frame limit v1 files can't get very big,
-  // just read the entire file to memory
+  // with 64k frame limit v1 files can't get very big
   if (!io.bufferAll()) return false;
 
   uint16_t numFrames = 0;

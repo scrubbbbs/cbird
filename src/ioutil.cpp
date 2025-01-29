@@ -257,7 +257,7 @@ void writeFileAtomically(const QString& path, const std::function<void(QFile&)>&
   }
 }
 
-bool SimpleIO::open(const QString& path, bool forReading) {
+bool SimpleIO_QFile::open(const QString& path, bool forReading) {
   _file.reset(new QFile(path));
   _buffer.clear();
   if (!_file->open(forReading ? QFile::ReadOnly : QFile::WriteOnly)) {
@@ -267,7 +267,7 @@ bool SimpleIO::open(const QString& path, bool forReading) {
   return true;
 }
 
-bool SimpleIO::readBytes(char* into, qint64 size, const char* msg) {
+bool SimpleIO_QFile::readBytes(char* into, qint64 size, const char* msg) {
   qint64 readLen = _file->read(into, size);
   if (readLen < size) {
     qCritical().noquote() << "reading" << msg << ":"
@@ -277,7 +277,7 @@ bool SimpleIO::readBytes(char* into, qint64 size, const char* msg) {
   return true;
 }
 
-bool SimpleIO::writeBytes(const char* from, qint64 size, const char* msg) {
+bool SimpleIO_QFile::writeBytes(const char* from, qint64 size, const char* msg) {
   if (size != _file->write(from, size)) {
     qCritical() << "writing" << msg << ":" << _file->errorString();
     return false;
@@ -285,7 +285,7 @@ bool SimpleIO::writeBytes(const char* from, qint64 size, const char* msg) {
   return true;
 }
 
-bool SimpleIO::readline(char* into, uint maxLen, const char* msg) {
+bool SimpleIO_QFile::readline(char* into, uint maxLen, const char* msg) {
   const QByteArray bytes = _file->readLine(maxLen);
   if (bytes.length() == 0) {
     qCritical() << "readline" << msg << ":" << _file->errorString();
@@ -295,7 +295,7 @@ bool SimpleIO::readline(char* into, uint maxLen, const char* msg) {
   return true;
 }
 
-bool SimpleIO::rewind() {
+bool SimpleIO_QFile::rewind() {
   if (!_file->seek(0)) {
     qCritical() << "rewind" << _file->errorString();
     return false;
@@ -303,7 +303,7 @@ bool SimpleIO::rewind() {
   return true;
 }
 
-bool SimpleIO::bufferAll() {
+bool SimpleIO_QFile::bufferAll() {
   _buffer = _file->readAll();
   _file.reset(new QBuffer(&_buffer));
   if (!_file->open(QFile::ReadOnly)) {
@@ -311,4 +311,65 @@ bool SimpleIO::bufferAll() {
     return false;
   }
   return true;
+}
+
+bool SimpleIO_Stdio::open(const QString& path, bool forReading) {
+  close();
+#ifdef Q_OS_WIN
+  _file = _wfopen(qUtf16Printable(path), forReading ? "rb" : "wb");
+#else
+  _file = fopen(qUtf8Printable(path), forReading ? "rb" : "wb");
+#endif
+  if (!_file) {
+    qCritical() << "open failed:" << strerror(errno);
+    return false;
+  }
+
+  return true;
+}
+
+bool SimpleIO_Stdio::readBytes(char* into, size_t size, const char* msg) {
+  if (1 != fread(into, size, 1, _file)) {
+    qCritical() << msg << ":" << strerror(errno);
+    return false;
+  }
+  return true;
+}
+
+bool SimpleIO_Stdio::writeBytes(const char* from, size_t size, const char* msg) {
+  if (1 != fwrite(from, size, 1, _file)) {
+    qCritical() << msg << ":" << strerror(errno);
+    return false;
+  }
+  return true;
+}
+
+bool SimpleIO_Stdio::readline(char* into, uint maxLen, const char* msg) {
+  maxLen--;
+  into[maxLen] = '\0';
+  for (uint i = 0; i < maxLen; ++i) {
+    int ch = fgetc(_file);
+    if (ch == EOF) {
+      qCritical() << msg << ":"
+                  << "eof";
+      return false;
+    }
+    into[i] = ch;
+    if (ch == '\n') return true;
+  }
+  return false;
+}
+
+size_t SimpleIO_Stdio::fileSize() const {
+  auto pos = ftell(_file);
+  if (0 != fseek(_file, 0, SEEK_END)) {
+    qCritical() << "seek end failed:" << strerror(errno);
+    return 0;
+  }
+  auto len = ftell(_file);
+  if (0 != fseek(_file, pos, SEEK_SET)) {
+    qCritical() << "seek backward failed:" << strerror(errno);
+    return 0;
+  }
+  return len;
 }

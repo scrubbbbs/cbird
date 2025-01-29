@@ -32,6 +32,7 @@
 #include "gui/theme.h"
 #include "gui/videocomparewidget.h"
 #include "hamm.h"
+#include "ioutil.h"
 #include "media.h"
 #include "opencv2/core.hpp"
 #include "qtutil.h"
@@ -813,6 +814,8 @@ int main(int argc, char** argv) {
       qInfo("max frames/video: %'u", MAX_FRAMES_PER_VIDEO);
 
       qInfo() << "threads:" << QThread::idealThreadCount();
+      qInfo() << "simpleio:" << SimpleIO::name();
+
       auto imageExt = sc->imageTypes().values();
       imageExt.sort();
       auto videoExt = sc->videoTypes().values();

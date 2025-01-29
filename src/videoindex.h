@@ -20,8 +20,6 @@
    <https://www.gnu.org/licenses/>.  */
 #pragma once
 
-class SimpleIO;
-
 /**
  * @class VideoIndex
  * @brief Container for index of a single video file

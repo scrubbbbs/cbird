@@ -23,16 +23,17 @@
 /**
  * File I/O wrapper w/error reporting/handling 
  */
-class SimpleIO
+class SimpleIO_QFile
 {
-  Q_DISABLE_COPY_MOVE(SimpleIO);
+  Q_DISABLE_COPY_MOVE(SimpleIO_QFile);
 
  private:
   std::unique_ptr<QIODevice> _file;
   QByteArray _buffer;
 
  public:
-  SimpleIO() {}
+  static const char* name() { return "qfile"; }
+  SimpleIO_QFile() {}
 
   // close the current file and open another
   bool open(const QString& path, bool forReading);
@@ -42,7 +43,6 @@ class SimpleIO
 
  private:
   bool readBytes(char* into, qint64 size, const char* msg);
-
   bool writeBytes(const char* from, qint64 size, const char* msg);
 
  public:
@@ -82,6 +82,66 @@ class SimpleIO
 
   // size of file in bytes
   size_t fileSize() const { return _file->size(); }
+};
+
+class SimpleIO_Stdio
+{
+  Q_DISABLE_COPY_MOVE(SimpleIO_Stdio);
+
+ private:
+  FILE* _file = nullptr;
+  char _buffer[256 * 1024];
+
+ public:
+  static const char* name() { return "stdio"; }
+
+  SimpleIO_Stdio() {}
+  ~SimpleIO_Stdio() { close(); }
+
+  bool open(const QString& path, bool forReading);
+
+  void close() {
+    if (_file) fclose(_file);
+    _file = nullptr;
+  }
+
+ private:
+  bool readBytes(char* into, size_t size, const char* msg);
+  bool writeBytes(const char* from, size_t size, const char* msg);
+
+ public:
+  template<typename T>
+  bool read(T* into, uint count, const char* msg) {
+    return readBytes((char*) into, sizeof(*into) * count, msg);
+  }
+
+  template<typename T>
+  bool write(const T* from, uint count, const char* msg) {
+    return writeBytes((char*) from, sizeof(*from) * count, msg);
+  }
+
+  bool readline(char* into, uint maxLen, const char* msg);
+
+  template<typename T>
+  bool readEnd(T* into, uint count, const char* msg) {
+    int64_t size = sizeof(*into) * count;
+    if (0 != fseek(_file, -size, SEEK_END)) {
+      qCritical() << "seek end" << msg << ":" << strerror(errno);
+      return false;
+    }
+    return readBytes((char*) into, size, msg);
+  }
+
+  bool rewind() { return 0 == fseek(_file, 0, SEEK_SET); }
+
+  bool bufferAll() {
+    // linux seems to do pretty well without this
+    //setvbuf(_file, _buffer, _IOFBF, sizeof(_buffer));
+    return true;
+  }
+
+  // size of file in bytes
+  size_t fileSize() const;
 };
 
 /// QIODevice wrapper that can fake an EOF error to halt the consumer
