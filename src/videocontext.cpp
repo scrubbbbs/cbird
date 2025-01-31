@@ -186,7 +186,7 @@ void VideoContext::listFormats() {
   const AVInputFormat* fmt;
 
   qInfo("----------------------------------------");
-  qInfo("Name \"Description\" (Known Extensions)]");
+  qInfo("Name \"Description\" (Known Extensions)");
   qInfo("----------------------------------------");
   while (nullptr != (fmt = av_demuxer_iterate(&opaque)))
     qInfo("%s \"%s\" (%s)", fmt->name, fmt->long_name, fmt->extensions);
@@ -199,7 +199,7 @@ void VideoContext::listCodecs() {
   void* opaque = nullptr;
   const AVCodec* codec;
   qInfo("------------------------------");
-  qInfo("Threads Type Name Description]");
+  qInfo("Threads Type Name Description");
   qInfo("------------------------------");
   while (nullptr != (codec = av_codec_iterate(&opaque))) {
     if (codec->type == AVMEDIA_TYPE_VIDEO)
@@ -314,7 +314,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
   // set context to log source of errors
   const QString fileName = QFileInfo(_path).fileName();
-  avLoggerSetFileName(_p->format, fileName);
+  avLoggerSetFileName(_p->format, fileName); // TODO: use .opaque field instead
 
   int err = 0;
   if ((err = avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, nullptr)) < 0) {
@@ -611,9 +611,11 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   //    frames
 
   _numThreads = 1;
-  if (!_isHardware &&
-      _p->codec->capabilities & (AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS))
+  if (!_isHardware
+      && _p->codec->capabilities & (AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS)) {
     _numThreads = opt.threads;
+    _metadata.supportsThreads = true;
+  }
 
   // note: no need to set thread_type, let ffmpeg choose the best options
   if (_numThreads > 0)
@@ -794,7 +796,7 @@ bool VideoContext::seek(int frame, QVector<QImage>* decoded, int* maxDecoded) {
 
       tries++;
       if (!isKeyframe || _p->packet.pts > target) {
-        AV_WARNING("try:") << tries << "key:" << isKeyframe << "dist:" << seekTime - _p->packet.pts;
+        AV_DEBUG("try:") << tries << "key:" << isKeyframe << "dist:" << seekTime - _p->packet.pts;
 
         // guess the next time try; if we back up too much we pay the price
         // of decoding a lot of frames; not enough and we never get there...
@@ -919,7 +921,7 @@ bool VideoContext::decodeFrame() {
       Q_ASSERT(_p->packet.stream_index == _p->videoStream->index);
 
       err = avcodec_send_packet(_p->context, &_p->packet);
-      if (err != 0) AV_CRITICAL("avcodec_send_packet");
+      if (err != 0) AV_CRITICAL("avcodec_send_packet"); // TODO: limit number of errors logged
     } else {
       // attempt to prevent hang when seeking near the eof
       AV_WARNING("resending null packet, might hang here");
@@ -1069,9 +1071,12 @@ void VideoContext::avLogger(void* ptr, int level, const char* fmt, va_list vl) {
 
   // nothing found, cwd might be helpful
   if (msgContext.isEmpty()) {
-    char path[PATH_MAX + 1] = {0};
-    if (getcwd(path, sizeof(path))) msgContext = QString("cwd={") + path + "}";
+    //char path[PATH_MAX + 1] = {0};
+    //if (getcwd(path, sizeof(path))) msgContext = QString("cwd={") + path + "}";
+    msgContext += "unknown file";
   }
+
+  if (ptr) msgContext += QString("(") + av_default_item_name(ptr) + ")";
 
   MessageContext context(msgContext);
 
@@ -1086,7 +1091,7 @@ void VideoContext::avLogger(void* ptr, int level, const char* fmt, va_list vl) {
   if (level >= AV_LOG_VERBOSE)
     qDebug() << msg;
   else if (level >= AV_LOG_INFO)
-    qInfo() << msg;
+    qDebug() << msg;
   else if (level >= AV_LOG_WARNING)
     qWarning() << msg;
   // else if (level >= AV_LOG_ERROR);

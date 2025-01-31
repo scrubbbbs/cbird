@@ -38,24 +38,19 @@ class VideoContext {
 
  public:
   struct Metadata {
-    bool isEmpty;
+    bool isEmpty = false;
+    bool supportsThreads = false;
     QSize frameSize;
-    float frameRate;
+    float frameRate = 0.0f;
     QString title;
     QString videoCodec;
     QString audioCodec;
-    int videoBitrate, audioBitrate;
-    int sampleRate, channels;
-    int duration;
+    int videoBitrate = 0, audioBitrate = 0;
+    int sampleRate = 0, channels = 0;
+    int duration = 0;
     QDateTime creationTime;
     QString pixelFormat; // only valid after nextFrame()
     QString videoProfile;
-
-    Metadata() {
-      isEmpty = true;
-      frameRate = 0.0f;
-      videoBitrate = audioBitrate = sampleRate = channels = duration = 0;
-    }
 
     /// @return if styled, return html for WidgetHelper::drawRichText
     QString toString(bool styled = false) const;

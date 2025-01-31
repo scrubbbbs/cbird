@@ -22,7 +22,11 @@
 #include "dctvideoindex.h"
 #include "git.h"
 #include "ioutil.h"
+#include "media.h"
 #include "qtutil.h"
+#include "scanner.h"
+
+bool VideoIndex::upgradeMessageShown = false;
 
 void VideoIndex::save(const QString& file) const {
   MessageContext ctx(file);
@@ -41,6 +45,14 @@ int VideoIndex::getVersion(SimpleIO& io) {
 
     if (buffer == QString("cbird")) version = 2;
   }
+
+  if (version == 1) {
+    if (!upgradeMessageShown) {
+      upgradeMessageShown = true;
+      qWarning() << "<NC>old video index format in use, run -migrate to update files";
+    }
+  }
+
   return version;
 }
 
@@ -76,6 +88,126 @@ bool VideoIndex::isValid(const QString& file) {
   if (version == 1) ok = verify_v1(io);
   if (version == 2) ok = verify_v2(io);
   return ok;
+}
+
+void VideoIndex::migrate(const MediaGroup& media, const QString& root, const IndexParams& params) {
+  upgradeMessageShown = true; // don't need to see that here
+
+  if (params.dryRun) qInfo("dry run, checking conversion with temp file");
+
+  const QString fmt = qq("<PL>%percent %bignum files, %1 updated, %2 removed");
+  PROGRESS_LOGGER(pl, fmt, media.count());
+  int i = 0, updated = 0, removed = 0;
+
+  pl.showLast();
+  QElapsedTimer timer;
+  timer.start();
+  for (auto& m : media) {
+    Q_ASSERT(m.type() == Media::TypeVideo);
+
+    if (timer.elapsed() > 100) {
+      pl.step(i, {updated, removed});
+      timer.start();
+    }
+    i++;
+
+    const QString path = qq("%1/%2.vdx").arg(root).arg(m.id());
+    if (!QFile::exists(path)) {
+      // this is fine; it just means vindex was disabled
+      continue;
+    }
+
+    MessageContext ctx(QFileInfo(path).fileName());
+
+    SimpleIO io;
+    if (!io.open(path, true)) continue;
+
+    int version = getVersion(io);
+    io.rewind();
+    if (version != 1) continue;
+
+    if (!verify_v1(io)) {
+      qInfo() << "removing invalid file:" << path;
+      if (!params.dryRun && QFile::remove(path)) removed++;
+      continue;
+    }
+    io.rewind();
+
+    VideoIndex v1;
+    if (!v1.load_v1(io)) {
+      qInfo() << "removing file with errors:" << path;
+      if (!params.dryRun && QFile::remove(path)) removed++;
+      removed++;
+      continue;
+    }
+
+    if (v1.frames.size() && v1.frames[v1.frames.size() - 1] == UINT16_MAX) {
+      qInfo() << "re-indexing for >65k frames:" << m.name();
+      io.close();
+
+      // copy old index to file that can be picked up by scanner
+      QString resumePath = qq("%1/resume-%2.vdx").arg(root).arg(m.md5());
+
+      qDebug() << "copying to:" << resumePath;
+      if (params.dryRun) continue;
+
+      QFile::remove(resumePath);
+      if (QFile::copy(path, resumePath))
+        if (QFile::remove(path)) removed++;
+
+      continue;
+    }
+
+    QString tmpPath = QDir::tempPath() + "/cbird-dryrun.vdx";
+    if (!params.dryRun) tmpPath = root + "/migrate-" + QString::number(m.id()) + ".vdx";
+
+    qDebug() << "writing to" << tmpPath;
+
+    if (!io.open(tmpPath, false)) return;
+
+    if (!v1.save_v2(io)) return;
+
+    io.close();
+
+    VideoIndex v2;
+    if (!isValid(tmpPath)) {
+      qCritical() << "aborting: invalid file after conversion";
+      return;
+    }
+
+    v2.load(tmpPath);
+    if (v1.frames.size() != v2.frames.size() || v1.hashes.size() != v2.hashes.size()) {
+      qCritical() << "aborting: count mismatch";
+      return;
+    }
+    for (size_t i = 0; i < v1.hashes.size(); ++i)
+      if (v1.frames[i] != v2.frames[i] || v1.hashes[i] != v2.hashes[i]) {
+        qCritical() << "aborting: data mismatch";
+        return;
+      }
+
+    if (!params.dryRun) {
+      QString backup = path + ".bak";
+      if (QFile::rename(path, backup)) {
+        if (QFile::rename(tmpPath, path)) {
+          qDebug() << "update successful";
+          QFile::remove(backup);
+          updated++;
+        } else {
+          qCritical() << "aborting: failed to rename file";
+          QFile::rename(backup, path);
+          return;
+        }
+      }
+    } else
+      qDebug() << "dry run: upgrade successful";
+
+    QFile::remove(tmpPath);
+  }
+
+  pl.end(0, {updated, removed});
+  if (updated > 0 || removed > 0) qInfo() << "index was updated";
+  if (removed > 0) qInfo() << "run -update to refresh index";
 }
 
 bool VideoIndex::checkHeader_v2(const QList<QByteArray>& header) {
@@ -142,26 +274,31 @@ bool VideoIndex::save_v2(SimpleIO& io) const {
 
   // write frame offsets instead of frame numbers, so we use
   // less space than v1 and there is no upper bound on number of frames
+
+  // use 7-bit offsets, the 8th bit tells if the offset was
+  // shifted from a larger value. e.g. a 14-bit offset would
+  // take 2 bytes in the output, while a 15-bit offset would require 3.
   std::vector<uint8_t> packed;
   packed.reserve(frames.size());
 
-  // most jumps will be small, use the lsb to encode bigger jumps
-  // 0x0: add value to the current jump
-  // 0x1: this is a frame, could be end of a jump
-  Q_ASSERT(frames[0] == 0);
+  if (frames[0] != 0) {
+    qCritical() << "first frame must be 0"; // required for encoding
+    return false;
+  }
+
   int prevFrame = frames[0];
   int nextByte = prevFrame;
 
   for (size_t i = 1; i < frames.size(); ++i) {
     int offset = frames[i] - prevFrame;
     prevFrame = frames[i];
-    Q_ASSERT(offset > 0);
-
-    if (offset < 0x80) {
-      packed.push_back(nextByte);
-      nextByte = offset;
-      continue;
+    if (offset < 1) {
+      qCritical() << "non-sequential frame number, corrupt file?" << offset << i << frames[i - 1]
+                  << frames[i];
+      qDebug() << frames;
+      return false;
     }
+
     while (offset > 0) {
       packed.push_back(nextByte);
       int lsb = offset & 0x7F;
@@ -302,16 +439,28 @@ bool VideoIndex::save_v1(SimpleIO& io) const {
   // alarm for changes to hash size
   static_assert(sizeof(dcthash_t) == 8, "v1 format used 64-bit hashes");
 
-  uint16_t numFrames = frames.size() & 0xFFFF;
-  if (!io.write(&numFrames, 1, "header")) return false;
+  uint16_t numFrames = qMin((size_t) INT16_MAX, frames.size());
+  if (numFrames < frames.size())
+    qWarning() << "maximum 65k frames stored per video, dropping the rest";
 
   std::vector<uint16_t> int16Frames;
-  for (auto frame : frames)
-    int16Frames.push_back(frame);
+  int16Frames.reserve(numFrames);
+
+  for (int i = 0; i < numFrames; ++i) {
+    if (frames[i] > UINT16_MAX) {
+      qWarning() << "maximum video frame number exceeded, dropping the rest" << int16Frames.back();
+      numFrames = int16Frames.size();
+      break;
+    }
+
+    int16Frames.push_back(frames[i]);
+  }
+
+  if (!io.write(&numFrames, 1, "header")) return false;
 
   if (!io.write(int16Frames.data(), numFrames, "frame numbers")) return false;
 
-  if (!io.write(hashes.data(), hashes.size(), "hashes")) return false;
+  if (!io.write(hashes.data(), numFrames, "hashes")) return false;
 
   return true;
 }
@@ -336,11 +485,47 @@ bool VideoIndex::load_v1(SimpleIO& io) {
 
     if (!io.read(int16Frames.data(), numFrames, "frame numbers")) return false;
 
-    for (int i = 0; i < numFrames; ++i)
-      frames[i] = int16Frames[i];
+    uint16_t last = 0;
+    for (int i = 0; i < numFrames; ++i) {
+      // an old version wrote frames past 65k and wrapped,
+      // prevent those from going through successfully
+      uint16_t frame = int16Frames[i];
+      if (frame < last) {
+        qDebug() << i << last << frame;
+        if (last > 65000) {
+          // probably wrapped due to having too many frames
+          // if it ends on max frame we assume it needs re-indexing
+          qDebug() << "fixing 65k wrapping bug:" << numFrames << i << last;
+          if (last != UINT16_MAX) {
+            frames[i] = UINT16_MAX;
+            i++;
+          }
+
+          numFrames = i;
+          frames.resize(numFrames);
+          hashes.resize(numFrames);
+          break;
+        } else {
+          qWarning() << "non-sequential frame number (corrupt file?)";
+          return false;
+        }
+      }
+      last = frame;
+      frames[i] = frame;
+    }
   }
 
   if (!io.read(hashes.data(), numFrames, "hashes")) return false;
+
+  // v2 requires first frame is 0, old version didn't always do that
+  if (frames.size() && frames[0] != 0) {
+    qDebug() << "fixing non-zero first frame bug";
+    frames.insert(frames.begin(), 0);
+    hashes.insert(hashes.begin(), 0);
+  }
+
+  if (frames.size() != hashes.size())
+    qWarning() << "frames/hashes size mismatch:" << frames.size() << hashes.size();
 
   return true;
 }

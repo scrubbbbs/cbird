@@ -74,8 +74,8 @@ void TestVideoIndex::testV1Save() {
 
   {
     VideoIndex a;
-    a.frames = {10, 30};
-    a.hashes = {10101010, 30303030};
+    a.frames = {0, 10, 30};
+    a.hashes = {40404040, 10101010, 30303030};
     SimpleIO io;
     QVERIFY(io.open(path, false));
     QVERIFY(a.save_v1(io));

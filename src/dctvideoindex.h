@@ -47,8 +47,8 @@ typedef struct
 #define VINDEX_BITS (VINDEX_FRAME_BITS + VINDEX_IDX_BITS)
 static_assert(sizeof(VideoTreeIndex) == VINDEX_BITS / 8);
 
-#define MAX_FRAMES_PER_VIDEO ((1 << VINDEX_FRAME_BITS) - 1)
-#define MAX_VIDEOS_PER_INDEX ((1 << VINDEX_IDX_BITS) - 1)
+#define MAX_FRAMES_PER_VIDEO (1 << VINDEX_FRAME_BITS)
+#define MAX_VIDEOS_PER_INDEX (1 << VINDEX_IDX_BITS)
 
 #ifdef USE_HAMMING
 template<typename T>

@@ -148,6 +148,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
     exit(0);
   }
 
+  // clang-format off
   QSet<QString> cmds{/* no arguments */
                      "-update", "-headless", "-dups", "-similar", "-select-none", "-select-all",
                      "-select-errors", "-first", "-chop", "-first-sibling", "-sort-similar",
@@ -156,9 +157,10 @@ int printCompletions(const char* argv0, const QStringList& args) {
                      "-license", "-cwd", "-init", "-list-search-params", "-list-index-params",
                      "-weeds", /*"-track-weeds",*/ "-nuke-weeds", "-dump", "-list-formats",
                      "-focus-first", "-no-delete", "-v", "-verbose", "-q", "-quiet", "-list-codecs",
-                     /* one argument */
+                     "-migrate",
+										 /* one argument */
                      "-select-id", "-select-sql", "-max-per-page", "-head", "-tail", "-theme"};
-
+  // clang-format on
   const QSet<QString> twoArg{"-rename", "-compare-videos", "-merge", "-video-thumbnail"};
   cmds += twoArg;
 
@@ -792,6 +794,13 @@ int main(int argc, char** argv) {
 
       QThreadPool::globalInstance()->setMaxThreadCount(QThread::idealThreadCount());
 
+    } else if (arg == "-migrate") {
+      Env::setIdleProcessPriority();
+      auto& eng = engine();
+
+      MediaGroup media = eng.db->mediaWithType(Media::TypeVideo);
+      QString root = eng.db->videoPath();
+      VideoIndex::migrate(media, root, indexParams);
     } else if (arg == "-about") {
       Scanner* sc = engine().scanner;
       Database* db = engine().db;

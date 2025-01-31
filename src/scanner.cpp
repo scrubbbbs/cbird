@@ -105,29 +105,48 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   // - this is slow; so try to avoid it
   // - pointless if codecs are all multithreaded
   // - little difference if there are a lot of jobs
-  if (_params.estimateCost && _params.algos & SearchParams::AlgoVideo &&
-      _videoQueue.count() <= _params.indexThreads) {
-    QMap<QString, float> cost;
+  if (_params.estimateCost && _params.algos & SearchParams::AlgoVideo) {
+    qDebug() << "using slower but more accurate job scheduling";
+    QMap<QString, bool> threads;
     for (auto& path : qAsConst(_videoQueue)) {
-      cost[path] = -1.0f;
+      threads[path] = false;
 
       const QString context = path.mid(_topDirPath.length() + 1);
       const MessageContext mc(context);
 
-      // TODO: cost could be better by considering codec/decoder
       VideoContext v;
       if (v.open(path) < 0) continue;
 
-      VideoContext::Metadata d = v.metadata();
-      cost[path] = d.frameRate * d.duration * d.frameSize.width() * d.frameSize.height();
+      threads[path] = v.metadata().supportsThreads;
     }
 
-    std::sort(_videoQueue.begin(), _videoQueue.end(),
-              [&cost](const QString& a, const QString& b) { return cost[a] > cost[b]; });
+    std::sort(_videoQueue.begin(),
+              _videoQueue.end(),
+              [&threads](const QString& a, const QString& b) {
+                QFileInfo infoA(a);
+                QFileInfo infoB(b);
+                bool mtA = threads[a];
+                bool mtB = threads[b];
+                if (mtA == mtB) return infoA.size() > infoB.size();
 
-    for (auto path : _videoQueue)
-      qDebug("estimate cost=%.2f path=%s", double(cost[path]), qUtf8Printable(path));
+                return mtA > mtB;
+              });
+  } else {
+    // sort likely multi-threaded extensions first
+    static QStringList mtFormats = {"mp4", "mkv", "mpg", "webm"};
+    std::sort(_videoQueue.begin(), _videoQueue.end(), [](const QString& a, const QString& b) {
+      QFileInfo infoA(a);
+      QFileInfo infoB(b);
+      bool mtA = mtFormats.contains(infoA.suffix().toLower());
+      bool mtB = mtFormats.contains(infoB.suffix().toLower());
+      if (mtA == mtB) return infoA.size() > infoB.size();
+
+      return mtA > mtB;
+    });
   }
+
+  for (auto& p : _videoQueue)
+    qDebug() << "job:" << QFileInfo(p).size() / 1024.0 / 1024.0 << QFileInfo(p).fileName();
 
   if (_params.dryRun) {
     qInfo() << "dry run, flushing queues";
@@ -199,8 +218,7 @@ void Scanner::setError(const QString& path, const QString& error, bool print) {
   QMutexLocker locker(staticMutex());
   QStringList& list = (*errors())[path];
   if (!list.contains(error)) list.append(error);
-  if (print)
-    qWarning() << path << error;
+  if (print) qWarning() << QDir().relativeFilePath(path) << error;
 }
 
 QMap<QString, QStringList>* Scanner::errors() {
@@ -255,8 +273,8 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
         auto it = hash.find(id);
         if (it != hash.end()) {
           if (_params.showIgnored) {
-            qWarning() << "ignoring dup inode:" << path;
-            qWarning() << "    first instance:" << it.value();
+            qWarning() << "ignoring dup inode:" << QDir().relativeFilePath(path);
+            qWarning() << "    first instance:" << QDir().relativeFilePath(it.value());
           }
           _ignoredFiles++;
           setError(path, ErrorDupInode, _params.showIgnored);
@@ -297,7 +315,7 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
 
        // files with invalid modtimes will always be re-indexed
       if (entry.lastModified() > _startTime)
-        qWarning() << "future modtime:" << path;
+        qWarning() << "future modtime:" << QDir().relativeFilePath(path);
     }
 
     if (entry.isFile()) {
@@ -306,7 +324,7 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
       //                   qPrintable(path));
       //            fflush(stdout);
       if (_activeWork.contains(path)) {
-        qDebug() << "skipping active work" << path;
+        qDebug() << "skipping active work" << QDir().relativeFilePath(path);
         continue;
       }
 
@@ -918,8 +936,19 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
       });
     };
     VideoIndex index;
+
+    // v1->v2 65k upgrade: look for index to resume from VideoIndex::upgrade()
+    QString resumePath = qq("%1/_index/video/resume-%2.vdx").arg(_topDirPath).arg(m.md5());
+    bool resuming = false;
+    if (QFileInfo(resumePath).exists()) {
+      index.load(resumePath);
+      resuming = true;
+    }
+
     m.makeVideoIndex(*video, _params.videoThreshold, index, progressCb);
     m.setVideoIndex(index);
+
+    if (resuming) QFile::remove(resumePath);
 
     int64_t end = QDateTime::currentMSecsSinceEpoch();
 

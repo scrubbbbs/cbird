@@ -891,10 +891,17 @@ void Media::makeKeyPointHashes(const cv::Mat& cvImg, const KeyPointList& keyPoin
 void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIndex,
                            const std::function<void(int)>& progressCb) const {
   auto& index = outIndex;
-  index.hashes.clear();
-  index.frames.clear();
+  int frameNumber = 0;
 
-  int numFrames = 0;
+  if (index.frames.size() > 0 && index.frames.size() == index.hashes.size()
+      && video.seek(index.frames.back() + 1)) {
+    frameNumber = index.frames.back() + 1;
+    qDebug() << "resuming index from frame:" << frameNumber;
+  } else {
+    index.hashes.clear();
+    index.frames.clear();
+  }
+
   int curFrames = 0;
 
   int corruptFrames = 0;
@@ -908,6 +915,8 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
   cv::Mat img;
 
   const int totalFrames = int(video.metadata().frameRate * video.metadata().duration);
+  if (totalFrames > MAX_FRAMES_PER_VIDEO)
+    qWarning() << "too many frames, will be dropped after frame:" << (MAX_FRAMES_PER_VIDEO - 1);
 
   const QString cwd = QFileInfo(QDir::current().absolutePath()).absoluteFilePath();
   QString path = video.path();
@@ -921,18 +930,29 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
     autocrop(img, 20); // FIXME: index settings
     uint64_t hash = dctHash64(img, true);
     index.hashes.push_back(hash);
-    index.frames.push_back(numFrames & 0xFFFF); // TODO: check frame# limit here, don't mask
-    numFrames++;
+    index.frames.push_back(frameNumber);
+    frameNumber++;
   }
+  qDebug("%dx%d %dpx %s threads:%d",
+         _width,
+         _height,
+         qMax(img.cols, img.rows),
+         (video.isHardware() ? "GPU" : "CPU"),
+         video.threadCount());
 
   while (video.nextFrame(cvFrame)) {
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (now - then > 1000) {
-      int percent = numFrames * 100 / std::max(totalFrames, 1);
-      qDebug("%dx%d %dpx %d:1 %s(%d) %dfps %d%% ", _width, _height, qMax(img.cols, img.rows),
-             numFrames / std::max(numFrames - nearFrames, 1), (video.isHardware() ? "GPU" : "CPU"),
-             video.threadCount(), int(curFrames * 1000 / (now - then)),
-             percent);
+      int percent = frameNumber * 100 / std::max(totalFrames, 1);
+      // qDebug("%dx%d %dpx %d:1 %s(%d) %dfps %d%% ",
+      //        _width,
+      //        _height,
+      //        qMax(img.cols, img.rows),
+      //        frameNumber / std::max(frameNumber - nearFrames, 1),
+      //        (video.isHardware() ? "GPU" : "CPU"),
+      //        video.threadCount(),
+      //        int(curFrames * 1000 / (now - then)),
+      //        percent);
       curFrames = 0;
       then = now;
       progressCb(percent);
@@ -955,33 +975,38 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
       if (close != window.size()) {
         window.clear();
         index.hashes.push_back(hash);
-        index.frames.push_back(numFrames & 0xFFFF); // don't mask
+        index.frames.push_back(frameNumber);
       } else
         nearFrames++;
 
       window.push_back(hash);
     } else {
       index.hashes.push_back(hash);
-      index.frames.push_back(numFrames & 0xFFFF); // don't mask
+      index.frames.push_back(frameNumber);
     }
 
-    numFrames++;
+    frameNumber++;
     curFrames++;
 
-    if (numFrames > 0xFFFF) {
+    if (frameNumber == MAX_FRAMES_PER_VIDEO) {
       qWarning() << "too many frames, skipping the rest";
       break;
     }
   }
+  frameNumber--;
 
   // always include the last frame so it can be used as a reference
-  if (index.frames.size() > 0 && index.frames.back() != numFrames - 1) {
+  if (index.frames.size() > 0 && index.frames.back() != frameNumber) {
     index.hashes.push_back(window.back());
-    index.frames.push_back((numFrames - 1) & 0xFFFF);
+    index.frames.push_back(frameNumber);
   }
 
-  qDebug("%s nframes=%d near=%d filt=%d corrupt=%d", qUtf8Printable(video.path()), numFrames,
-         nearFrames, filteredFrames, corruptFrames);
+  qDebug("%s nframes=%d near=%d filt=%d corrupt=%d",
+         qUtf8Printable(video.path()),
+         frameNumber,
+         nearFrames,
+         filteredFrames,
+         corruptFrames);
 
   progressCb(100);
 }

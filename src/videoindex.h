@@ -20,6 +20,11 @@
    <https://www.gnu.org/licenses/>.  */
 #pragma once
 
+class Media;
+typedef QVector<Media> MediaGroup;
+
+class IndexParams;
+
 /**
  * @class VideoIndex
  * @brief Container for index of a single video file
@@ -45,8 +50,10 @@ class VideoIndex
   void save(const QString& file) const;
   void load(const QString& file);
   static bool isValid(const QString& file);
+  static void migrate(const MediaGroup& media, const QString& root, const IndexParams& params);
 
  private:
+  static bool upgradeMessageShown;
   static int getVersion(SimpleIO& io);
 
   static bool checkHeader_v2(const QList<QByteArray>& header);

@@ -270,7 +270,7 @@ bool SimpleIO_QFile::open(const QString& path, bool forReading) {
 bool SimpleIO_QFile::readBytes(char* into, qint64 size, const char* msg) {
   qint64 readLen = _file->read(into, size);
   if (readLen < size) {
-    qCritical().noquote() << "reading" << msg << ":"
+    qCritical().noquote() << "reading" << msg << ":" << size << readLen << _file->pos()
                           << (readLen > 0 ? "truncated file" : _file->errorString());
     return false;
   }

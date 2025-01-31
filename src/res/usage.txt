@@ -15,9 +15,11 @@ Usage: %1 [args...]
 Setup
 ==============================================================================
   -use <dir>                       set index location, in <dir>/_index, default current directory,
-                                   use "@" to search in the parent tree
+                                   - use "@" to search in the parent tree
   -create                          create index if there is not one already, otherwise prompt
   -update                          create/refresh index
+  -migrate                         convert index files to new format(s)
+                                   - use "-i.dryrun true" to test the migration before applying
   -headless                        run without a window manager
   -about                           system information
   -h|-help                         help page

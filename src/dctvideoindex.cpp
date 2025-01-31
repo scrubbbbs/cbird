@@ -367,7 +367,10 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
       return results;
     }
 
-    Q_ASSERT(srcIndex.frames.size() == srcIndex.hashes.size());
+    if (srcIndex.frames.size() != srcIndex.hashes.size()) {
+      qWarning() << "ignoring corrupt video index:" << needle.id();
+      return results;
+    }
 
     srcData.reserve(srcIndex.frames.size());
     auto lastFrame = srcIndex.frames[srcIndex.frames.size() - 1];
