@@ -141,11 +141,12 @@ void Engine::update(bool wait) {
     // TODO: this takes a long time for big removals...could be threaded
     // NOTE: use db->indexedFiles() instead of querying each file
     for (const auto& path : qAsConst(sorted)) {
+      QString relPath = QDir().relativeFilePath(path);
       i++;
-      if (i % 100 == 0) qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << path;
+      if (i % 100 == 0) qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << relPath;
       const Media m = db->mediaWithPath(path);
       if (!m.isValid()) {
-        qWarning() << "invalid removal, non-indexed path:" << path;
+        qWarning() << "invalid removal, non-indexed path:" << relPath;
         continue;
       }
       // qDebug() << "removing id:" << m.id() << path;
@@ -153,37 +154,15 @@ void Engine::update(bool wait) {
     }
   }
 
-  // check for missing external index data, (currently only video index)
-  if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo)) {
-    const MediaGroup videos = db->mediaWithType(Media::TypeVideo);
-    PROGRESS_LOGGER(pl, "verifying video index:<PL> %percent %bignum", videos.count());
-    int i = 0;
-    QElapsedTimer timer;
-    timer.start();
-    for (const Media& m : videos) {
-      QString vIndexPath = QString("%1/%2.vdx").arg(db->videoPath()).arg(m.id());
-      if (!QFileInfo(vIndexPath).exists()) {
-        qWarning() << "mising index for" << m.path() << "run -update again";
-        toRemove.append(m.id());
-      } else {
-        VideoIndex idx;
-        if (!idx.isValid(vIndexPath)) {
-          qWarning() << "invalid index for" << m.path() << "run -update again";
-          toRemove.append(m.id());
-        }
-      }
-      ++i;
-      if (timer.elapsed() > 100) {
-        pl.step(i);
-        timer.start();
-      }
-    }
-    pl.end();
-  }
-
   if (!scanner->indexParams().dryRun && !toRemove.isEmpty()) db->remove(toRemove);
 
-  if (wait) scanner->finish();
+  if (wait) {
+    scanner->finish();
+    // at this point, we should be done writing stuff
+    // in case we did not add anything, go ahead and write timestamp once more,
+    // to get rid of the warning message
+    db->writeTimestamp();
+  }
 }
 
 void Engine::stopUpdate(bool wait) {

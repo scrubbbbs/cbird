@@ -57,6 +57,9 @@ class Database {
   ///         after this date are re-indexed
   QDateTime lastAdded();
 
+  /// write timestamp for modification detection
+  void writeTimestamp();
+
   /**
    * Add processed media (typically from Scanner) to the index
    * @note all-or-nothing operation, using sql transactions
@@ -259,9 +262,6 @@ private:
 
   /// @return the new path after renaming file
   QString renameFile(const QString& path, const QString& newName);
-
-  /// write timestamp for modification detection
-  void writeTimestamp();
 
   /// modify paths in database and update the group
   bool updatePaths(const MediaGroup& group, const QStringList& newPaths);
