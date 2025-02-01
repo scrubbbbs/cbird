@@ -1234,7 +1234,7 @@ void MessageLog::outputThread() {
   static constexpr QChar charCR('\r'), charLF('\n'), charSpace(' ');
   static constexpr QLatin1String tokenProgress("<PL>"), tokenElide("<EL>");
 
-  QString lastInput, lastOutput, lastProgressLine;
+  QString lastMsg, lastInput, lastOutput, lastProgressLine;
   int numRepeats = 0;
   QMutexLocker locker(&_mutex);
   while (!_stop && _logCond.wait(&_mutex)) {
@@ -1251,11 +1251,12 @@ void MessageLog::outputThread() {
 
       // compress repeats while we hold the lock
       int pl = msg.msg.indexOf(tokenProgress);  // do not compress progress lines
-      if (pl <= 0 && lastInput == msg.msg) {
+      if (pl <= 0 && lastMsg == msg.msg) {
         numRepeats++;
         continue;
       }
       locker.unlock();
+      lastMsg = msg.msg;
 
       // repeats end, print one more with the total count
       if (numRepeats > 0) {
