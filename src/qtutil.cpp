@@ -690,7 +690,17 @@ void WidgetHelper::setWindowCloak(QWidget* window, bool enable) {
 #endif
 
 void WidgetHelper::saveGeometry(const QWidget* w, const char* id) {
-  if (!id) id = w->staticMetaObject.className();
+  QByteArray tmp;
+  if (!id) {
+    if (!w->objectName().isEmpty()) {
+      tmp = w->objectName().toUtf8();
+      id = tmp.data();
+    } else if (w->metaObject())
+      id = w->metaObject()->className();
+    else
+      id = w->staticMetaObject.className();
+  }
+
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(id);
 
@@ -706,11 +716,21 @@ void WidgetHelper::saveGeometry(const QWidget* w, const char* id) {
   // known to be broken: xfwm4 - maximized window->normalGeometry==geometry
   auto geom = w->normalGeometry();
   settings.setValue("normalGeometry", geom);
-  qDebug() << "normalGeometry:" << geom << "maximized:" << maximized;
+  qDebug() << id << "normalGeometry:" << geom << "maximized:" << maximized;
 }
 
 bool WidgetHelper::restoreGeometry(QWidget* w, const char* id) {
-  if (!id) id = w->staticMetaObject.className();
+  QByteArray tmp;
+  if (!id) {
+    if (!w->objectName().isEmpty()) {
+      tmp = w->objectName().toUtf8();
+      id = tmp.data();
+    } else if (w->metaObject())
+      id = w->metaObject()->className();
+    else
+      id = w->staticMetaObject.className();
+  }
+
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(id);
 
