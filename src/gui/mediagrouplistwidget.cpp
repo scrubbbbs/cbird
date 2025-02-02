@@ -2123,11 +2123,11 @@ void MediaGroupListWidget::waitLoaders() {
   for (auto* w : _loaders)
     w->cancel();
 
-  int i = 0;
-  PROGRESS_LOGGER(pl, "waiting for threads...<PL> %bignum", _loaders.count());
+  PROGRESS_LOGGER(pl, "waiting for image loaders...<PL> %bignum", _loaders.count());
   while (_loaders.count() > 0) {
+    QThread::msleep(100);
     qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
-    pl.step(i++);
+    pl.step(_loaders.count());
   }
   pl.end();
 

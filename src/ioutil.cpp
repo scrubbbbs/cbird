@@ -316,7 +316,7 @@ bool SimpleIO_QFile::bufferAll() {
 bool SimpleIO_Stdio::open(const QString& path, bool forReading) {
   close();
 #ifdef Q_OS_WIN
-  _file = _wfopen(qUtf16Printable(path), forReading ? "rb" : "wb");
+  _file = _wfopen(qUtf16Printable(path), forReading ? L"rb" : L"wb");
 #else
   _file = fopen(qUtf8Printable(path), forReading ? "rb" : "wb");
 #endif

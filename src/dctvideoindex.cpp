@@ -23,6 +23,7 @@
 #include "qtutil.h"
 // #include "tree/hammingtree.h"
 #include "tree/radix.h"
+#include <cinttypes>
 
 DctVideoIndex::DctVideoIndex() {
   _id = SearchParams::AlgoVideo;

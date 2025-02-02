@@ -45,7 +45,7 @@ for exe in cbird.exe; do
         echo "collecting dlls for $exe (pass $PASS) ..."
         LAST=$PASS
         PASS=0
-        DLLS=`wine64 "$PKG_DIR/$exe" -about 2>&1 | grep :err:module:import_dll | cut -d' ' -f3`
+        DLLS=`wine "$PKG_DIR/$exe" -about 2>&1 | grep :err:module:import_dll | cut -d' ' -f3`
         for x in $DLLS; do
             if   [ -e "$MXE_BIN/$x"    ]; then cp -au "$MXE_BIN/$x" "$PKG_DIR/"
             elif [ -e "$QT_BIN/$x"     ]; then cp -au "$QT_BIN/$x" "$PKG_DIR/"

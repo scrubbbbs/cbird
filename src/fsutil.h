@@ -21,7 +21,10 @@
 #pragma once
 
 #ifdef Q_OS_WIN
+// clang-format off
+#include <windows.h>
 #include <fileapi.h>
+// clang-format on
 class FileId {
  public:
   bool valid = false;

@@ -29,7 +29,10 @@
 
 #ifdef Q_OS_WIN
 
-#  include <psapi.h>
+// clang-format off
+#include <windows.h>
+#include <psapi.h>
+// clang-format on
 
 void Env::systemMemory(float& totalKb, float& freeKb) {
   totalKb = freeKb = 0;

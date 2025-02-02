@@ -285,6 +285,70 @@ Arguments | Note | Time (s)
 Release Notes
 =============
 
+#### v0.8
+
+- Command Line
+	+ Simplified logging
+		* progress logs hidden for fast operations
+		* use `-v` to see verbose logging
+	+ Handle TTY resize signal
+	+ Add `-list-formats` `-list-codecs` to check FFmpeg configuration
+	+ `-move` supports .zip
+	+ `-select-grid` accepts multiple file arguments
+	+ Add syntax to find the nearest index from a subfolder
+		* `cbird -use @ ...`
+- Indexing
+	+ New file format removes the 65,535 frames-per-video limit (now 16.7 million), without increasing file size.
+	+ use `-migrate` to convert existing files, and `-update` to index any files that had over 65k frames.
+- Searching
+	+ Much faster and tuneable video search
+	+ use `-p.vradix <num>` to speed up searches, higher `n` is faster but less accurate
+	+ `-similar-to` works for more files/algos
+	+ features search (fdct) about 25% faster
+- Sorting/Filtering
+	+ Sort by the needle in results with `-sort-result`
+	+ Sort by multiple properties
+		* `-sort-by exif#Photo#DateTimeOriginal#year -sort parentPath` => sort by year taken, then by directory path
+	+ Boolean operators on properties
+		* `-with name '~foo || ~bar'` => name contains foo or bar
+	+ Type conversions on properties, sometimes needed for correct filtering
+		* `-with exif#Photo.DateTimeOriginal#todate` => "convert string date/time to a date/time object"
+	+ Comparison with the needle
+    		* `-with res '==%needle' -with
+    compressionRatio '>%needle'` => only show more-compressed duplicates with the same pixel size
+    	+ Comparison with the needle (absolute difference)
+    		* `-with fileSize '%<4096'` => only show results if the difference between their sizes less than 4KB.
+
+- Viewing
+	+ Refactored and much improved memory management
+	+ Add folder-lock feature to mark folders locked for modification
+	+ Add position indicator/progress bar to top of viewer
+	+ Add `-no-delete` to disable all file deletion
+	+ Add `-focus-first` to select the first item (needle) by default
+	+ When deleting, update all other affected rows, not just the visible one
+		* Remove any rows remaining with <2 items
+	+ Fix rename folder using the wrong name
+	+ Disable move shortcut for zips
+	+ Fix menu dir shortcut for zips
+	+ Fix preloader non-functional when going backwards
+	+ Use elide-middle for long filenames
+	+ Save scale mode and diff image setting
+	+ Use correct color indicator on 0% size/compression
+	+ Improved item info display
+	+ Video compare: add codec profile
+	
+- Bug Fixes
+	+ Fix potental file handle leak in video decoder
+	+ Fix sometimes incorrect numeric/natural sort
+	+ Fix potentially incorrect dir selection (`-select-path` etc)
+	+ Fix potential crash and speedup theme parser
+	+ Intialize exiv2, may prevent crashes
+	+ Prevent certain database corruption from aborting
+	+ Fix template matcher bugs
+	+ Fix maximized window restore on GNOME
+	+ Fix `-dups-in` modifying search parameters
+	+ Fix Linux icon install location
+
 #### v0.7
 
 - Mac OS X port and x86 binary package

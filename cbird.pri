@@ -151,17 +151,21 @@ contains(DEFINES, DEBUG) {
     warning("DEBUG BUILD")
     warning("******************************")
     contains(DEFINES, DEBUG_OPTIMIZED) {
-      QMAKE_CXXFLAGS_RELEASE = -g -Ofast -march=native
+      QMAKE_CXXFLAGS_RELEASE = -g -O3 -march=native
     }
     else {
       QMAKE_CXXFLAGS_RELEASE = -g -O0
     }
 }
 else {
-    # westmere is latest that I can run in qemu, and
-    # it has popcnt (population count) which is nice for hamm64()
-    win32: QMAKE_CXXFLAGS_RELEASE = -Ofast -march=westmere
-
-    unix: QMAKE_CXXFLAGS_RELEASE = -Ofast -march=native
+    # -westmere is latest that I can run in qemu, and
+    #  it has popcnt (population count) which is nice for hamm64()
+    win32: QMAKE_CXXFLAGS_RELEASE = -O3 -march=westmere
+    unix: QMAKE_CXXFLAGS_RELEASE = -O3 -march=native
 }
+
+# -no-ms-bitfields fixes struct packing problem for 24-bit video index,
+# however it will break windows APIs if we're not careful
+win32: QMAKE_CXXFLAGS_RELEASE += -mno-ms-bitfields
+
 

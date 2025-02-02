@@ -38,7 +38,7 @@ Wish List
 - file/directory name filters for inclusion/exclusion
 - store date-modified,size for better updating
 - also store container md5 (.zip) for faster updating/verifying
-- WIP \>64k frames per video
+- ~\>64k frames per video~
 - capture more common errors in indexer
   - unsupported ICC profile
   - colordescriptor on grayscale image
@@ -101,8 +101,8 @@ Major Bugs
 - sws_scale buffer overflow (264x480 yuv420p)
 - ~~MBW move folder option broken~~ removed in v0.5.1
 - control-c during database write will usually corrupt sqlite database, most likely when the filesystem doesn't support locking
-- gui video decode potentially broken (unconfirmed)
-- video index may be leaking file handle (#xyz)
+- gpu video decode potentially broken (unconfirmed)
+- ~video index may be leaking file handle~
 
 Minor Bugs
 =========================

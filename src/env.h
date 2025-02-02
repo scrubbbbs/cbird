@@ -20,6 +20,17 @@
    <https://www.gnu.org/licenses/>.  */
 #pragma once
 
+#if defined(Q_OS_DARWIN)
+#include <malloc/malloc.h>
+#define malloc_size(x) malloc_size((const void*) (x))
+#elif defined(Q_OS_WIN)
+#include <malloc.h>
+#define malloc_size(x) _msize((void*) (x))
+#else
+#include <malloc.h>
+#define malloc_size(x) malloc_usable_size((void*) (x))
+#endif
+
 /// Get information about the operating system / environment
 class Env {
   Env() = delete;

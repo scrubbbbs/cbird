@@ -36,7 +36,7 @@
 // must pack struct for 48-bit case,
 // put the idx first since it is needed more often
 #pragma pack(1)
-typedef struct
+typedef struct __attribute__((packed))
 {
   mediaid_t idx : VINDEX_IDX_BITS; // index into _mediaId[]
   int frame : VINDEX_FRAME_BITS;   // frame number, compatible with MatchRange

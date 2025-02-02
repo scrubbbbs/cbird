@@ -19,18 +19,8 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #pragma once
+#include "../env.h"
 #include "../hamm.h"
-
-#if defined(Q_OS_DARWIN)
-#include <malloc/malloc.h>
-#define malloc_size(x) malloc_size((const void*) (x))
-#elif defined(Q_OS_WIN)
-#include <malloc.h>
-#define malloc_size(x) _msize((void*) (x))
-#else
-#include <malloc.h>
-#define malloc_size(x) malloc_usable_size((void*) (x))
-#endif
 #include <unordered_set>
 
 /**

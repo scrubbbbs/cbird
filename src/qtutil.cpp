@@ -23,6 +23,10 @@
 #include "gui/theme.h"  // TODO: I don't like this dependency
 #include "profile.h"
 
+#ifdef Q_OS_WIN
+#include <windows.h> // ShQueryRecycleBin
+#endif
+
 // qttools/src/qdbus/qdbus/qdbus.cpp
 #ifndef Q_OS_WIN
 #  include <QtDBus/QtDBus>
@@ -1179,7 +1183,7 @@ MessageLog::MessageLog() {
   auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD mode = 0;
   if (GetConsoleMode(handle, &mode)) {  // windows terminal, but not msys/mingw/cygwin
-    printf("win32 console detected mode=0x%x\n", (int)mode);
+    // printf("win32 console detected mode=0x%x\n", (int)mode);
     _isTerm = true;
     _termColors = mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     if (getenv("CBIRD_COLOR_CONSOLE")) _termColors = true;

@@ -73,11 +73,21 @@ uchar* PooledImageAllocator::alloc(const QSize& size, QImage::Format fmt) {
 
     } while (true);
 
+    // qimage wants at least 32-bits alignment, since we only support
+    // x86-64 I guess we don't need posix_memalign
+    dataPtr = (uchar*) malloc(dataSz);
+    if (uintptr_t(dataPtr) % sizeof(void*) != 0) {
+      qCritical() << "could not allocate aligned memory";
+      return nullptr;
+    }
+    /*
     int err = posix_memalign((void**) &dataPtr, qMax(sizeof(void*), (size_t) 4), dataSz);
     if (err != 0) {
       qCritical() << err << strerror(err);
       return nullptr;
     }
+	*/
+
     _pool[dataSz].append(dataPtr);
 
     qDebug() << size << fmt;
@@ -96,7 +106,6 @@ void PooledImageAllocator::free(void* ptr) {
 }
 
 size_t PooledImageAllocator::compactInternal() {
-
   // remove from the pool
   for (auto& list : _pool)
     list.removeIf([this](uchar* ptr) { return _free.contains(ptr); });
@@ -106,14 +115,22 @@ size_t PooledImageAllocator::compactInternal() {
   auto ptrList = _free.values();
   std::sort(ptrList.begin(), ptrList.end(), [](uchar* a, uchar* b) { return b < a; });
   for (uchar* ptr : qAsConst(ptrList)) {
-    bytesFreed += malloc_usable_size(ptr);
+    bytesFreed += malloc_size(ptr);
     ::free(ptr);
   }
 
   qDebug() << "freed" << _free.count() << "blocks," << bytesFreed / 1024 << "kb";
   _free.clear();
 
+#if defined(Q_OS_LINUX)
   malloc_trim(64 * 1024);
+#elif defined(Q_OS_WIN)
+  _heapmin();
+#elif defined(Q_OS_MAC)
+  malloc_zone_pressure_relief(NULL, 0);
+#else
+#warning heap compaction unsupported
+#endif
 
   return bytesFreed;
 }

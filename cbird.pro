@@ -8,6 +8,7 @@ QT *= widgets
 # disable default debug/release behavior
 # use DEFINES += DEBUG for debugging
 #DEFINES += DEBUG
+#DEFINES += DEBUG_OPTIMIZED
 
 CONFIG -= debug_and_release
 CONFIG -= debug_and_release_target
