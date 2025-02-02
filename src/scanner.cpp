@@ -353,8 +353,7 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
         // skip deep scan of zip files
         // use metadataChangeTime() since lastModified() will not detect the case
         // where a zip is replaced with an older zip with the same name
-        // FIXME: metadataChangeTime() may not be available on all filesystems, must validate!
-        if (entry.metadataChangeTime() < _modifiedSince) {
+        if (_params.modTime && entry.metadataChangeTime() < _modifiedSince) {
           int removed = 0;
           const auto it = zipFiles.find(path);
           if (it != zipFiles.end())
@@ -1026,6 +1025,9 @@ IndexParams::IndexParams() {
 
   add({"dups", "Follow duplicate inodes (hard links, soft links etc)", Value::Bool, counter++,
        SET_BOOL(dupInodes), GET(dupInodes), NO_NAMES, NO_RANGE});
+
+  add({"modtime", "Force using possibly unreliable file modification time checks", Value::Bool,
+       counter++, SET_BOOL(modTime), GET(modTime), NO_NAMES, NO_RANGE});
 
   add({"ljf", "Estimate job cost and process longest jobs first", Value::Bool, counter++,
        SET_BOOL(estimateCost), GET(estimateCost), NO_NAMES, NO_RANGE});

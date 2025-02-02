@@ -32,30 +32,32 @@ class IndexParams : public Params {
   /// @note to speed up scanning, types can be disabled
   enum { TypeImage = 1, TypeVideo = 2, TypeAudio = 4, TypeAll = 7 };
 
-  int algos = 31;               // enabled search algorithms
-  int types = TypeAll;          // enabled media types
-  bool recursive = true;        // scan subdirs
-  bool autocrop = true;         // detect and crop borders prior to processing
-  int minFileSize = 1024;       // ignore files < x bytes
-  int numFeatures = 400;        // max number of features to store
-  int resizeLongestSide = 400;  // dimension for rescale prior to processing
-  bool retainImage = false;     // retain the decompressed image
-  bool retainData = false;      // retain the compressed image data
-  bool useHardwareDec = false;  // try hardware decoder for supported formats
-  int decoderThreads = 0;       // threads per item decoder (hardwaredec always == 1)
-  int indexThreads = 0;         // total max threads (cpu) <=0 means auto detect
-  int gpuThreads = 1;           // number of parallel hardware decoders
-  int videoThreshold = 8;       // dct threshold for skipping similar nearby frames
-  int writeBatchSize = 1024;    // size of item batch when writing to database
-  bool estimateCost = true;     // estimate indexing cost to schedule jobs better
-  bool showIgnored = false;     // show all ignored files/dirs
-  bool dryRun = false;          // scan for changes but do not process
-  bool followSymlinks = false;  // follow symlinks to files/dirs
-  bool resolveLinks = false;    // index the resolved symlink instead of link
+  int algos = 31;              // enabled search algorithms
+  int types = TypeAll;         // enabled media types
+  bool recursive = true;       // scan subdirs
+  bool autocrop = true;        // detect and crop borders prior to processing
+  int minFileSize = 1024;      // ignore files < x bytes
+  int numFeatures = 400;       // max number of features to store
+  int resizeLongestSide = 400; // dimension for rescale prior to processing
+  bool retainImage = false;    // retain the decompressed image
+  bool retainData = false;     // retain the compressed image data
+  bool useHardwareDec = false; // try hardware decoder for supported formats
+  int decoderThreads = 0;      // threads per item decoder (hardwaredec always == 1)
+  int indexThreads = 0;        // total max threads (cpu) <=0 means auto detect
+  int gpuThreads = 1;          // number of parallel hardware decoders
+  int videoThreshold = 8;      // dct threshold for skipping similar nearby frames
+  int writeBatchSize = 1024;   // size of item batch when writing to database
+  bool estimateCost = true;    // estimate indexing cost to schedule jobs better
+  bool showIgnored = false;    // show all ignored files/dirs
+  bool dryRun = false;         // scan for changes but do not process
+  bool followSymlinks = false; // follow symlinks to files/dirs
+  bool resolveLinks = false;   // index the resolved symlink instead of link
 #ifdef Q_OS_WIN
-  bool dupInodes = true;  // symlinks are rarely used; potentially huge performance drop
+  bool dupInodes = true;       // symlinks are rarely used; potentially huge performance drop
+  bool modTime = true;         // ntfs doesn't support metadataChangeTime
 #else
   bool dupInodes = false; // do not ignore duplicate inodes
+  bool modTime = false;   // force using possibly unreliable modtime checks
 #endif
   IndexParams();
 };

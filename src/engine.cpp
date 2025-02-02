@@ -86,6 +86,23 @@ void Engine::commit() {
 }
 
 void Engine::update(bool wait) {
+  QElapsedTimer timer;
+  timer.start();
+
+  // metadataChangeTime might not work on this filesystem
+  bool useMetadataTime = scanner->indexParams().modTime;
+  QDateTime timeBefore;
+  if (!useMetadataTime) do {
+      QString oldName = db->indexPath() + "/modtime-check-before.txt";
+      QFile testFile(oldName);
+      if (!testFile.open(QFile::WriteOnly)) {
+        qWarning() << "cannot verify that modtime works" << testFile.errorString();
+        break;
+      }
+      testFile.close();
+      timeBefore = QFileInfo(oldName).metadataChangeTime();
+    } while (false);
+
   // check for missing data for already indexed items
   if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo)) {
     QVector<int> missingVideos;
@@ -156,6 +173,32 @@ void Engine::update(bool wait) {
       }
     }
   }
+
+  if (!useMetadataTime && timeBefore.isValid()) do {
+      QThread::msleep(qMax(500 - timer.elapsed(), 0));
+      QString oldName = db->indexPath() + "/modtime-check-before.txt";
+      QFile testFile(oldName);
+      QString newName = db->indexPath() + "/modtime-check-after.txt";
+      if (!testFile.rename(newName)) {
+        qWarning() << "cannot verify that modtime works:" << testFile.errorString();
+        testFile.remove();
+        break;
+      }
+      QDateTime timeAfter = QFileInfo(newName).metadataChangeTime();
+      testFile.remove();
+
+      if (timeBefore >= timeAfter) {
+        qWarning() << "metadataChangeTime does not work on this filesystem, zip scans will be slow";
+        qWarning() << "you can force using it anyways with '-i.modtime true', however changes";
+        qWarning() << "to zip files won't always be noticed";
+        break;
+      }
+
+      auto params = scanner->indexParams();
+      params.modTime = true;
+      scanner->setIndexParams(params);
+
+    } while (false);
 
   scanner->scanDirectory(db->path(), removed, db->lastAdded());
 
