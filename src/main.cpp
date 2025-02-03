@@ -368,17 +368,21 @@ static void install(const QString& argv0, const QString& prefix) {
   }
 
   const char* bashCompletionScript =
-      R"bash(
-##### <cbird-completions> #####
+      R"bash(##### <cbird-completions> #####
 function _cbird {
   OIFS=$IFS
   IFS='|'
-  COMPREPLY=($(cbird -complete $COMP_CWORD ${COMP_WORDS[*]}))
+  COMPREPLY=()
+  for word in $(cbird -complete $COMP_CWORD ${COMP_WORDS[*]}); do
+    COMPREPLY+=( "$word" )
+    if [[ "$word" == *"#" ]]; then # no space after hash
+      compopt -o nospace
+    fi
+  done
   IFS=$OIFS
 }
 complete -o filenames -F _cbird cbird
-##### </cbird-completions> #####
-)bash";
+##### </cbird-completions> #####)bash";
 
   printf("install: Install cbird into %s ? [y/N]: ", qUtf8Printable(prefix));
   char ch = inputChar('N');
@@ -432,17 +436,39 @@ complete -o filenames -F _cbird cbird
         printf("install: .bashrc does not exist\n");
         return;
       }
+
+      if (bashrc.copy(bashrc.fileName() + ".bak"))
+        printf("install: .bashrc backed up\n");
+      else
+        printf("install: .bashrc was not backed up: %s\n", qUtf8Printable(bashrc.errorString()));
+
       Q_ASSERT(bashrc.open(QFile::ReadOnly));
       QString bashContents = bashrc.readAll();
-      if (bashContents.contains("<cbird-completions>")) {
-        printf("install: .bashrc seems to contain completions, I'm not going to modify it\n");
-        printf("install: here is the current completions script:\n");
-        printf("%s", bashCompletionScript);
-        return;
-      }
       bashrc.close();
-      Q_ASSERT(bashrc.open(QFile::ReadWrite | QFile::Append));
-      bashrc.write(bashCompletionScript);
+
+      const QStringList lines = bashContents.split('\n');
+      QStringList newLines;
+      bool dropLine = false;
+      bool inserted = false;
+      for (auto& line : lines) {
+        if (line.contains("<cbird-completions>")) {
+          dropLine = true;
+          continue;
+        }
+        if (line.contains("</cbird-completions>")) {
+          dropLine = false;
+          inserted = true;
+          newLines += bashCompletionScript;
+          continue;
+        }
+        if (!dropLine) newLines += line;
+      }
+
+      QString newContents = newLines.join('\n');
+      if (!inserted) newContents += QString('\n') + bashCompletionScript;
+
+      Q_ASSERT(bashrc.open(QFile::WriteOnly));
+      bashrc.write(newContents.toUtf8());
       printf("install: .bashrc updated, run \"source ~/.bashrc\" or start a new shell\n");
     }
   }
