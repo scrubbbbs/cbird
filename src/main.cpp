@@ -360,6 +360,52 @@ static char inputChar(char defaultOption) {
 
 #ifndef Q_OS_WIN
 
+static void installCompletions(const char* name, const char* file, const char* script) {
+  printf("install: You seem to be using %s, install completions in ~/%s? [y/N]: ", name, file);
+  char ch = inputChar('N');
+  if ((ch == 'Y' || ch == 'y')) {
+    QFile bashrc(QDir::home().filePath(file));
+    if (!bashrc.exists()) {
+      printf("install: ~/%s does not exist\n", file);
+      return;
+    }
+
+    if (bashrc.copy(bashrc.fileName() + ".bak"))
+      printf("install: ~/%s backed up\n", file);
+    else
+      printf("install: ~/%s was not backed up: %s\n", file, qUtf8Printable(bashrc.errorString()));
+
+    Q_ASSERT(bashrc.open(QFile::ReadOnly));
+    QString bashContents = bashrc.readAll();
+    bashrc.close();
+
+    const QStringList lines = bashContents.split('\n');
+    QStringList newLines;
+    bool dropLine = false;
+    bool inserted = false;
+    for (auto& line : lines) {
+      if (line.contains("<cbird-completions>")) {
+        dropLine = true;
+        continue;
+      }
+      if (line.contains("</cbird-completions>")) {
+        dropLine = false;
+        inserted = true;
+        newLines += script;
+        continue;
+      }
+      if (!dropLine) newLines += line;
+    }
+
+    QString newContents = newLines.join('\n');
+    if (!inserted) newContents += QString("\n\n") + script + "\n\n";
+
+    Q_ASSERT(bashrc.open(QFile::WriteOnly));
+    bashrc.write(newContents.toUtf8());
+    printf("install: ~/%s updated, run \"source ~/%s\" or start a new shell\n", file, file);
+  }
+}
+
 static void install(const QString& argv0, const QString& prefix) {
   QFileInfo dir(prefix);
   if (!dir.isDir()) {
@@ -383,6 +429,33 @@ function _cbird {
 }
 complete -o filenames -F _cbird cbird
 ##### </cbird-completions> #####)bash";
+
+  const char* zshCompletionScript =
+      R"zsh(##### <cbird-completions> #####
+_cbird_completion() {
+  local curword=$((CURRENT - 1))
+  local word="${words[CURRENT]}"
+  local output=$(cbird -complete "$curword" "${words[@]}")
+  local completions=(${(s[|])output})
+
+  for comp in "${completions[@]}"; do
+    if [[ "$word" =~ "^[']" ]]; then
+      comp=("${comp//'/'\''}") # starts with ', escape '
+    elif [[ "$word" =~ "^[\"]" ]]; then
+      comp=("${comp//\"/\\\"}") # starts with ", escape "
+    elif [[ "$comp" =~ "[ \"'<>=\?\*\;]" ]]; then
+      comp=("${(q)comp}") # escape unquoted stuff
+    fi
+
+    if [[ "$comp" =~ "#$" ]]; then
+      compadd -Q -S '' --  "$comp" # no space after #
+    else
+      compadd -Q -- "$comp"
+    fi
+  done
+}
+compdef _cbird_completion cbird
+##### </cbird-completions> #####)zsh";
 
   printf("install: Install cbird into %s ? [y/N]: ", qUtf8Printable(prefix));
   char ch = inputChar('N');
@@ -426,52 +499,12 @@ complete -o filenames -F _cbird cbird
   // if (0 != system("ffplay -version >/dev/null 2>&1"))
   //  printf("install: ffplay is not installed, recommended for video compare tool\n");
 
-  const QString shell = getenv("SHELL");
-  if (shell == "/bin/bash") {
-    printf("install: You seem to be using bash, install completions in ~/.bashrc? [y/N]: ");
-    char ch = inputChar('N');
-    if ((ch == 'Y' || ch == 'y')) {
-      QFile bashrc(QDir::home().filePath(".bashrc"));
-      if (!bashrc.exists()) {
-        printf("install: .bashrc does not exist\n");
-        return;
-      }
+  // $SHELL is only for the login shell; ps T will detect any process in this terminal
+  bool isBash = 0 == system("x=$(ps -T); echo $x | grep -q bash");
+  bool isZsh = 0 == system("x=$(ps -T); echo $x | grep -q zsh");
 
-      if (bashrc.copy(bashrc.fileName() + ".bak"))
-        printf("install: .bashrc backed up\n");
-      else
-        printf("install: .bashrc was not backed up: %s\n", qUtf8Printable(bashrc.errorString()));
-
-      Q_ASSERT(bashrc.open(QFile::ReadOnly));
-      QString bashContents = bashrc.readAll();
-      bashrc.close();
-
-      const QStringList lines = bashContents.split('\n');
-      QStringList newLines;
-      bool dropLine = false;
-      bool inserted = false;
-      for (auto& line : lines) {
-        if (line.contains("<cbird-completions>")) {
-          dropLine = true;
-          continue;
-        }
-        if (line.contains("</cbird-completions>")) {
-          dropLine = false;
-          inserted = true;
-          newLines += bashCompletionScript;
-          continue;
-        }
-        if (!dropLine) newLines += line;
-      }
-
-      QString newContents = newLines.join('\n');
-      if (!inserted) newContents += QString('\n') + bashCompletionScript;
-
-      Q_ASSERT(bashrc.open(QFile::WriteOnly));
-      bashrc.write(newContents.toUtf8());
-      printf("install: .bashrc updated, run \"source ~/.bashrc\" or start a new shell\n");
-    }
-  }
+  if (isBash) installCompletions("bash", ".bashrc", bashCompletionScript);
+  if (isZsh) installCompletions("zsh", ".zshrc", zshCompletionScript);
 }
 #endif  // !Q_OS_WIN
 
