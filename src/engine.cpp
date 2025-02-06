@@ -214,7 +214,7 @@ void Engine::update(bool wait) {
     // TODO: this takes a long time for big removals...could be threaded
     // NOTE: use db->indexedFiles() instead of querying each file
     for (const auto& path : qAsConst(sorted)) {
-      QString relPath = QDir().relativeFilePath(path);
+      QString relPath = QDir(db->path()).relativeFilePath(path);
       i++;
       if (i % 100 == 0) qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << relPath;
       const Media m = db->mediaWithPath(path);
