@@ -1037,11 +1037,9 @@ MediaGroup Database::mediaWithSql(const QString& sql, const QString& placeholder
 }
 
 Media Database::mediaWithId(int id) {
-  MediaGroup media = mediaWithSql(
-      "select * from media "
-      "where id=:id "
-      "order by path",
-      ":id", id);
+  MediaGroup media = mediaWithSql("select * from media "
+                                  "where id=:id",
+                                  ":id", id);
   if (media.count() == 1)
     return media[0];
   else
@@ -1484,8 +1482,13 @@ MediaGroup Database::similarTo(const Media& needle, const SearchParams& params) 
 
   // set match flags
   // TODO: seems like this should this be moved to filterMatch
+  // we don't normally use matchFlags so don't do this here unless
+  // maybe a search param is set
+  // readMetadata can be very slow over the network.. defer this
+  // until originalSize() or  compressionRatio() is used
+  /*
   for (Media& m : result) {
-    m.readMetadata();
+    m.readMetadata(); // only needed for originalSize()/compressionRatio
 
     int flags = m.matchFlags();
 
@@ -1499,6 +1502,7 @@ MediaGroup Database::similarTo(const Media& needle, const SearchParams& params) 
 
     m.setMatchFlags(flags);
   }
+  */
 
   return result;
 }
