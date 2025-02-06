@@ -1381,7 +1381,6 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
   if (options.alloc && outSize.isValid() && fmt != QImage::Format_Invalid) {
     uchar* dataPtr = options.alloc->alloc(outSize, fmt);
     if (dataPtr == nullptr) {
-      qCritical("memory allocation failed");
       img = QImage(1, 1, fmt); // setText() requires valid image
       img.setText("oom", "true");
     }
@@ -1442,7 +1441,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
 
   // setAutoTransform() will pull orientation from thumbnail IFD if it is not present in the image
   // IFD, resulting in incorrect rotation
-  long exifOrientation = 0;
+  int exifOrientation = 0;
   if (format == "jpeg" && reader.transformation() != 0) {
     auto exif = Exiv2::ImageFactory::open(reinterpret_cast<const Exiv2::byte*>(data.constData()),
                                           data.size());
@@ -1450,7 +1449,11 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
       exif->readMetadata();
       auto& exifData = exif->exifData();
       auto it = exifData.findKey(Exiv2::ExifKey("Exif.Image.Orientation"));
-      if (it != exifData.end()) exifOrientation = it->value().toLong();
+#if EXIV2_VERSION < EXIV2_MAKE_VERSION(0, 28, 0)
+      if (it != exifData.end()) exifOrientation = (int) it->value().toLong();
+#else
+      if (it != exifData.end()) exifOrientation = (int) it->value().toInt64();
+#endif
     }
   }
 
