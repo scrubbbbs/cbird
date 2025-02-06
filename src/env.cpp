@@ -155,7 +155,7 @@ void Env::systemMemory(float& totalKb, float& freeKb) {
     // but the api doesn't report them.
     //
     // So it might be ok to guess that we can have a chunk of the inactive pages.
-    auto freePages = vm.free_count + vm.inactive_count / 2;
+    auto freePages = vm.free_count + vm.inactive_count * 0.75;
     // auto usedPages = vm.active_count + vm.wire_count + vm.inactive_count/2;
     freeKb = freePages * pageSize / 1024.0;
   }
