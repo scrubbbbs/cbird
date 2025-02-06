@@ -23,6 +23,7 @@
 #include "qtutil.h"
 // #include "tree/hammingtree.h"
 #include "tree/radix.h"
+#include <unordered_map>
 #include <cinttypes>
 
 DctVideoIndex::DctVideoIndex() {

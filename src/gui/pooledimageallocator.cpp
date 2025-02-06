@@ -21,8 +21,6 @@ License along with cbird; if not, see
 #include "pooledimageallocator.h"
 #include "../env.h"
 
-#include <malloc.h> // aligned malloc, etc
-
 uchar* PooledImageAllocator::alloc(const QSize& size, QImage::Format fmt) {
   QPixelFormat pFmt = QImage::toPixelFormat(fmt);
   int bytesPerPixel = pFmt.bitsPerPixel() / 8;
@@ -67,8 +65,8 @@ uchar* PooledImageAllocator::alloc(const QSize& size, QImage::Format fmt) {
         continue;
       }
 
-      qWarning() << "out of memory, avail:" << (size_t)freeKb << "minFree:" << _minSysFreeKb
-                 << "required:" << dataSz / 1024;
+      qDebug() << "out of memory, avail:" << (size_t) freeKb << "minFree:" << _minSysFreeKb
+               << "required:" << dataSz / 1024;
       return nullptr;
 
     } while (true);
@@ -77,7 +75,7 @@ uchar* PooledImageAllocator::alloc(const QSize& size, QImage::Format fmt) {
     // x86-64 I guess we don't need posix_memalign
     dataPtr = (uchar*) malloc(dataSz);
     if (uintptr_t(dataPtr) % sizeof(void*) != 0) {
-      qCritical() << "could not allocate aligned memory";
+      qCritical() << "malloc() failed";
       return nullptr;
     }
     /*
