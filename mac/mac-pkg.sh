@@ -26,6 +26,8 @@ echo -e '[Paths]\nPlugins = lib/plugins\n' > $PKG_DIR/qt.conf
 rsync -u $EXTRAS $PKG_DIR/
 
 
+# modify library imports in every exe/dylib so they can find the library
+# in the portable version (cbird/lib/)
 fix_imports()
 {
   local DYLIB=$1
@@ -42,11 +44,13 @@ fix_imports()
     args="$args -delete_rpath $RPATH"
   done
 
+  # change the library path to @rpath/library.dylib so linker can find it
   for OLDNAME in $DYLIB_DEPS; do
     local oldLibName=$(basename $OLDNAME)
     if [ $(echo $OLDNAME | grep '.framework') ]; then
       oldLibName=$(echo $OLDNAME | sed -re 's#.*/(.*.framework/.*)#\1#')
     fi
+
     local newName="@rpath/$oldLibName"
     echo "$libName: $OLDNAME => $newName"
     args="$args -change $OLDNAME $newName"
@@ -56,6 +60,8 @@ fix_imports()
   fi
 }
 
+# add an executable to the package, copy all of its dependencies,
+# and fixup all library references
 add_exe()
 {
   local SRC_EXE=$1
@@ -63,36 +69,45 @@ add_exe()
 
   if [ $SRC_EXE -nt $DST_EXE ]; then
     cp -v $SRC_EXE $DST_EXE
+    chmod 755 $DST_EXE
     fix_imports $DST_EXE
     install_name_tool -add_rpath "@executable_path/lib/" $DST_EXE
   fi
 
   echo "mac-pkg: probing $SRC_EXE"
-  DYLD_PRINT_LIBRARIES_POST_LAUNCH=1 DYLD_PRINT_LIBRARIES=1 DYLD_PRINT_RPATHS=1 \
-      $SRC_EXE -about > $TMP 2>&1
 
-  local DYLIBS=$(cat $TMP | grep ^dyld | grep "/usr/local/.*\.dylib" | grep -v "/plugins/" | cut -d' ' -f4)
-
-  for DYLIB in $DYLIBS; do
-    local libName=$(basename $DYLIB)
-    #echo "mac-pkg: check dylib $libName"
-    if [ $DYLIB -nt $PKG_DIR/lib/$libName ]; then
-      echo "mac-pkg: adding $DYLIB"
-      cp -v $DYLIB  $PKG_DIR/lib/
-      fix_imports   $PKG_DIR/lib/$libName
+  # get all libraries loaded by the program with dyld logging
+  # this gets both the imported library path and resolved path;
+  # we need both to create symlinks
+  DYLD_PRINT_LIBRARIES_POST_LAUNCH=1 DYLD_PRINT_LIBRARIES=1 DYLD_PRINT_RPATHS=1 DYLD_PRINT_SEARCHING=1 $SRC_EXE 2>&1 | grep -A1 'found: dylib-from-disk:' | grep -v '^--' | sed -n 'N;s/\n/ /p' | sed 's/"//g' >$TMP 2>&1
+  
+  cat $TMP | grep ^dyld | grep "/usr/local/.*\.dylib" | grep -v "/plugins/" | cut -d' ' -f6 -f9 | while read -r LINE; do
+    local import=$(echo $LINE | cut -d' ' -f1)
+    local resolved=$(echo $LINE | cut -d' ' -f2)
+    local libName=$(basename $import)
+    local resName=$(basename $resolved)
+    #echo "mac-pkg: check dylib $libName $resName"
+    if [ $resolved -nt $PKG_DIR/lib/$resName ]; then
+      echo "mac-pkg: adding $import"
+      cp -av $resolved $PKG_DIR/lib/
+      chmod 755 $PKG_DIR/lib/$resName
+      if [ "$libName" != "$resName" ]; then
+        ln -sv $resName $PKG_DIR/lib/$libName
+      fi
+      fix_imports $PKG_DIR/lib/$resName
     fi
   done
 
-  local FRAMEWORKS=$(cat $TMP | grep ^dyld | grep "/usr/local/.*\.framework.*" | cut -d' ' -f4)
-
-  for FRAMEWORK in $FRAMEWORKS; do
+  cat $TMP | grep ^dyld | grep "/usr/local/.*\.framework.*" | cut -d' ' -f6 -f9 | while read -r LINE; do
+      #echo $LINE
       # resolve framework symlinks and get the .framework bundle path
-      local bundle=$(grealpath $FRAMEWORK | cut -d/ -f1-8)
+      local framework=$(echo $LINE | cut -d' ' -f2)
+      local bundle=$(readlink -f $framework | cut -d/ -f1-8)
       local dirName=$(basename $bundle)
       local libName=$(echo $dirName | cut -d. -f1)
 
       #echo "mac-pkg: check framework $libName"
-      if [ $FRAMEWORK -nt $PKG_DIR/lib/$dirName ]; then
+      if [ $framework -nt $PKG_DIR/lib/$dirName ]; then
         echo "mac-pkg: adding $bundle $libName"
         rsync -auv --no-owner --no-group --exclude "Headers" --exclude "*.prl" $bundle $PKG_DIR/lib/
         fix_imports $PKG_DIR/lib/$dirName/$libName
@@ -109,7 +124,7 @@ add_exe ./$CBIRD
 # we can detect a smaller set of plugins with DYLD logging trick, but this is easier
 PLUGINS_DST=$PKG_DIR/lib/plugins
 if [ $PLUGINS_DIR -nt $PLUGINS_DST ]; then
-  rsync -auv --no-owner --no-group $PLUGINS_DIR/imageformats $PLUGINS_DIR/platforms \
+  rsync -auv --no-owner --no-group --copy-links $PLUGINS_DIR/imageformats $PLUGINS_DIR/platforms \
       $PLUGINS_DIR/styles $PLUGINS_DIR/iconengines $PLUGINS_DIR/generic \
       $PLUGINS_DIR/sqldrivers $PLUGINS_DST/
   PLUGINS=$(find $PLUGINS_DST -name '*.dylib')
@@ -124,9 +139,9 @@ test_exe()
   echo "mac-pkg: testing exe: $CMD"
 
   DYLD_PRINT_LIBRARIES_POST_LAUNCH=1 DYLD_PRINT_LIBRARIES=1 DYLD_PRINT_RPATHS=1 \
-      BENCHMARK_LISTWIDGET_LOAD=1 $CMD > $TMP 2>&1
+      DYLD_LIBRARY_PATH= BENCHMARK_LISTWIDGET_LOAD=1 $CMD > $TMP 2>&1
 
-  local DYLIBS=$(cat $TMP | grep ^dyld | grep "/usr/local/" | cut -d' ' -f4)
+  local DYLIBS=$(cat $TMP | grep ^dyld | grep "/usr/local/" | cut -d' ' -f3)
 
   for DYLIB in $DYLIBS; do
     echo "!! unpackaged lib !! $DYLIB"
@@ -137,4 +152,4 @@ test_exe "$PKG_DIR/trash -v"
 test_exe "$PKG_DIR/ffmpeg -version"
 test_exe "$PKG_DIR/ffprobe -version"
 test_exe "$PKG_DIR/ffplay -autoexit screenshot.png"
-test_exe "$PKG_DIR/$CBIRD -about -update -select-all -show"
+test_exe "$PKG_DIR/$CBIRD -use ~/Pictures -about -update -select-all -show"
