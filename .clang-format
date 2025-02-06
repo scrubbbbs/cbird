@@ -1,5 +1,5 @@
 ---
-BasedOnStyle: LLVM
+BasedOnStyle: LLVM 
 AccessModifierOffset: -1
 AlignAfterOpenBracket: Align
 AlignArrayOfStructures: None
@@ -36,7 +36,7 @@ AlignEscapedNewlines: DontAlign
 AlignOperands: Align
 AlignTrailingComments: 
   Kind: Always
-  OverEmptyLines: 0
+  OverEmptyLines: 1 
 AllowAllArgumentsOnNextLine: true
 AllowShortBlocksOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: false
@@ -51,18 +51,19 @@ AlwaysBreakTemplateDeclarations: Yes
 AttributeMacros: 
   - __capability
   
-BinPackArguments: false
-BinPackParameters: false
+BinPackArguments: true 
+BinPackParameters: false 
 BitFieldColonSpacing: Both
+BreakBeforeBraces: Custom 
 BraceWrapping: 
   AfterCaseLabel: false
-  AfterClass: true
+  AfterClass: false 
   AfterControlStatement: Never
   AfterEnum: false
   AfterFunction: false
-  AfterNamespace: false
+  AfterNamespace: true 
   AfterObjCDeclaration: false
-  AfterStruct: true
+  AfterStruct: false 
   AfterUnion: false
   AfterExternBlock: false
   BeforeCatch: false
@@ -76,7 +77,6 @@ BraceWrapping:
 BreakAfterAttributes: Never
 BreakArrays: true
 BreakBeforeBinaryOperators: All
-BreakBeforeBraces: Custom
 BreakBeforeConceptDeclarations: Always
 BreakBeforeInlineASMColon: OnlyMultiline
 BreakBeforeTernaryOperators: true
