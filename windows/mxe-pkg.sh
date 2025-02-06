@@ -37,7 +37,11 @@ cp -au cbird.exe "$PKG_DIR/"
 # for some reason loop below won't pickup zlib
 cp -au "$MXE_DIR/usr/$MXE_TARGET/bin/zlib1.dll" "$PKG_DIR/"
 
-for exe in cbird.exe; do
+for exe in sqlite3.exe; do
+    cp -au "$MXE_DIR/usr/$MXE_TARGET/bin/$exe" "$PKG_DIR/"
+done
+
+for exe in cbird.exe sqlite3.exe; do
 #for exe in cbird.exe ffmpeg.exe ffplay.exe ffprobe.exe; do
     
     PASS=1
