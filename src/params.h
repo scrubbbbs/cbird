@@ -44,7 +44,7 @@ class Params {
     QString key;    /// property name
     QString label;  /// ui label
 
-    enum { Bool = 1, Int, Enum, Flags } type;  /// data type
+    enum { Bool = 1, Int, Enum, Flags, Glob } type; /// data type
 
     int sort;  /// sort order for ui
 

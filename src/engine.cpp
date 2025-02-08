@@ -85,7 +85,7 @@ void Engine::commit() {
   }
 }
 
-void Engine::update(bool wait) {
+void Engine::update(bool wait, const QString& dirPath) {
   QElapsedTimer timer;
   timer.start();
 
@@ -133,7 +133,7 @@ void Engine::update(bool wait) {
     db->remove(missingVideos);
   }
 
-  // when we see a file is still present, remove from the set
+  // if path is still present after scanning, remove from the index
   QSet<QString> removed = db->indexedFiles();
 
   if (false) {
@@ -200,7 +200,33 @@ void Engine::update(bool wait) {
 
     } while (false);
 
-  scanner->scanDirectory(db->path(), removed, db->lastAdded());
+  QString path = db->path();
+  if (!dirPath.isEmpty()) {
+    // note: path must be clean, absolute, and not ending in '/' to
+    // work with scanDirectory. It may contain links or be a link itself
+    QFileInfo info(dirPath);
+    if (!info.isDir()) {
+      qCritical("given path is not a directory");
+      return;
+    }
+    path = QDir(dirPath).absolutePath();
+    if (!path.startsWith(db->path())) {
+      qCritical("given path: \"%s\" is not a subdirectory of \"%s\"", qUtf8Printable(path),
+                qUtf8Printable(db->path()));
+      return;
+    }
+
+    qDebug() << "clean subdir path" << path;
+    Q_ASSERT(!path.endsWith(lc('/')));
+
+    QSet<QString> included;
+    for (auto& p : std::as_const(removed))
+      if (p.startsWith(path)) included.insert(p);
+
+    removed = included;
+  }
+
+  scanner->scanDirectory(path, removed, db->lastAdded());
 
   // we need a list of ids for fast removals, also we may want
   // to remove files that have issues (missing indexes etc)

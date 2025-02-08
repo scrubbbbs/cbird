@@ -74,8 +74,41 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   if (_params.indexThreads % _params.decoderThreads != 0)
     qWarning() << "index threads are not a multiple of decoder threads, expect underutilization";
 
-  // TODO: subdirectory limiter for large indexes
-  // if (!_params.subdir.isEmpty())
+  const auto parsePattern = [](const QString& pattern) {
+    QString exp = pattern;
+    QRegularExpression re;
+    if (!exp.startsWith(':'))
+      re = QRegularExpression::fromWildcard(exp, Qt::CaseSensitive,
+                                            QRegularExpression::UnanchoredWildcardConversion);
+    else
+      re = QRegularExpression(exp.mid(1));
+    return re;
+  };
+
+  if (!_params.excludePatterns.empty())
+    for (auto& pattern : _params.excludePatterns) {
+      QRegularExpression re = parsePattern(pattern);
+      if (!re.isValid()) {
+        qWarning() << "invalid exclusion pattern" << pattern << re.errorString();
+        continue;
+      }
+      _excludePatterns.append(re);
+      qDebug() << "exclude:" << re.pattern();
+    }
+
+  if (!_params.includePatterns.empty())
+    for (auto& pattern : _params.includePatterns) {
+      QRegularExpression re = parsePattern(pattern);
+      if (!re.isValid()) {
+        qWarning() << "invalid inclusion pattern" << pattern << re.errorString();
+        continue;
+      }
+      _includePatterns.append(re);
+      qDebug() << "include:" << re.pattern();
+    }
+
+  if (!_includePatterns.empty() && !_excludePatterns.empty())
+    qDebug() << "note: -exclude applied after -include";
 
   _gpuPool.setMaxThreadCount(_params.gpuThreads);
 
@@ -97,6 +130,20 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
     Media::archivePaths(path, &zipFile);
     zipFiles[zipFile].append(path);
   }
+
+  // we have to remove expected paths matching patterns,
+  // or else they will be treated as missing files and
+  // get removed from the index
+  {
+    QSet<QString> filtered;
+    for (auto& path : std::as_const(expected))
+      if (includePath(path)) filtered.insert(path);
+
+    expected = filtered;
+  }
+
+  // TODO: remove any expected path that doesn't start with path
+  // we are wanting to index
 
   readDirectory(path, zipFiles, expected);
   scanProgress(path);
@@ -120,8 +167,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
       threads[path] = v.metadata().supportsThreads;
     }
 
-    std::sort(_videoQueue.begin(),
-              _videoQueue.end(),
+    std::sort(_videoQueue.begin(), _videoQueue.end(),
               [&threads](const QString& a, const QString& b) {
                 QFileInfo infoA(a);
                 QFileInfo infoB(b);
@@ -211,7 +257,8 @@ void Scanner::readArchive(const QString& path, QSet<QString>& expected) {
     }
   }
 
-  for (const auto& zipPath : skipped) expected.remove(zipPath);
+  for (const auto& zipPath : skipped)
+    expected.remove(zipPath);
 }
 
 void Scanner::setError(const QString& path, const QString& error, bool print) {
@@ -234,14 +281,16 @@ QMutex* Scanner::staticMutex() {
 void Scanner::scanProgress(const QString& path) const {
   const QString elided = qElide(path.mid(_topDirPath.length() + 1), 80);
 
-  QString status =
-      QString::asprintf("<NC>checking %s$<PL> new{i:%lld v:%lld} ignored:%d modified:%d ok:%d <EL>%s",
-                        qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(),
-                        _ignoredFiles, _modifiedFiles, _existingFiles, qUtf8Printable(elided));
+  QString status = QString::asprintf(
+      "<NC>checking %s$<PL> new{i:%lld v:%lld} ignored:%d modified:%d ok:%d <EL>%s",
+      qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(), _ignoredFiles,
+      _modifiedFiles, _existingFiles, qUtf8Printable(elided));
   qInfo().noquote() << status;
 }
 
-void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringList> zipFiles, QSet<QString>& expected) {
+void Scanner::readDirectory(const QString& dirPath,
+                            const QMap<QString, QStringList> zipFiles,
+                            QSet<QString>& expected) {
   const QDir dir(dirPath);
   if (!dir.exists()) {
     qWarning("%s does not exist", qUtf8Printable(dirPath));
@@ -256,6 +305,12 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
   for (const QString& name : dir.entryList(filters)) {
     QString path = dirPath + "/" + name;
     const QFileInfo entry(path);
+
+    if (entry.isFile() && !includePath(path)) {
+      _ignoredFiles++;
+      setError(path, ErrorUserFilter, _params.showIgnored);
+      continue;
+    }
 
     // junctions are effectively symlinks
     if (!_params.followSymlinks && (entry.isSymLink() || entry.isJunction())) {
@@ -273,8 +328,8 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
         auto it = hash.find(id);
         if (it != hash.end()) {
           if (_params.showIgnored) {
-            qWarning() << "ignoring dup inode:" << QDir().relativeFilePath(path);
-            qWarning() << "    first instance:" << QDir().relativeFilePath(it.value());
+            qWarning() << "ignoring dup inode:" << QDir(_topDirPath).relativeFilePath(path);
+            qWarning() << "    first instance:" << QDir(_topDirPath).relativeFilePath(it.value());
           }
           _ignoredFiles++;
           setError(path, ErrorDupInode, _params.showIgnored);
@@ -312,8 +367,7 @@ void Scanner::readDirectory(const QString& dirPath, const QMap<QString,QStringLi
         continue;
       }
       _modifiedFiles++;
-
-       // files with invalid modtimes will always be re-indexed
+      // files with invalid modtimes will always be re-indexed
       if (entry.lastModified() > _startTime)
         qWarning() << "future modtime:" << QDir().relativeFilePath(path);
     }
@@ -963,6 +1017,41 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
   return result;
 }
 
+bool Scanner::includePath(const QString& path) const {
+  const QString relPath = path.mid(_topDirPath.length() + 1);
+  if (!_includePatterns.empty()) {
+    // only included, but allow exclusions to override
+    bool hasMatch = false;
+    for (auto& exp : std::as_const(_includePatterns))
+      if (exp.match(relPath).hasMatch()) {
+        hasMatch = true;
+        break;
+      }
+
+    if (hasMatch) {
+      for (auto& exp : std::as_const(_excludePatterns))
+        if (exp.match(relPath).hasMatch()) {
+          hasMatch = false;
+          break;
+        }
+    }
+    return hasMatch;
+
+  } else if (!_excludePatterns.empty()) {
+    // include everything except excluded
+    bool hasMatch = false;
+    for (auto& exp : std::as_const(_excludePatterns))
+      if (exp.match(relPath).hasMatch()) {
+        hasMatch = true;
+        break;
+      }
+
+    return !hasMatch;
+  }
+
+  return true;
+}
+
 IndexResult Scanner::processVideoFile(const QString& path) const {
   VideoContext* video = initVideoProcess(path, _params.useHardwareDec, _params.decoderThreads);
 
@@ -1019,6 +1108,12 @@ IndexParams::IndexParams() {
 
   add({"links", "Follow symlinks to files and directories", Value::Bool, counter++,
        SET_BOOL(followSymlinks), GET(followSymlinks), NO_NAMES, NO_RANGE});
+
+  add({"exclude", "Add glob/pattern to exclude matching paths", Value::Glob, counter++,
+       ADD_GLOB(excludePatterns), GET(excludePatterns), NO_NAMES, NO_RANGE});
+
+  add({"include", "Add glob/pattern to include matching paths", Value::Glob, counter++,
+       ADD_GLOB(includePatterns), GET(includePatterns), NO_NAMES, NO_RANGE});
 
   add({"resolve", "Resolve symlinks, store canonical path if possible", Value::Bool, counter++,
        SET_BOOL(resolveLinks), GET(resolveLinks), NO_NAMES, NO_RANGE});

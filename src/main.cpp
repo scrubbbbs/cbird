@@ -150,7 +150,7 @@ int printCompletions(const char* argv0, const QStringList& args) {
 
   // clang-format off
   QSet<QString> cmds{/* no arguments */
-                     "-update", "-headless", "-dups", "-similar", "-select-none", "-select-all",
+                     "-headless", "-dups", "-similar", "-select-none", "-select-all",
                      "-select-errors", "-first", "-chop", "-first-sibling", "-sort-similar",
                      "-remove", "-nuke", "-rename", "-sets", "-folders", "-exit-on-select", "-show",
                      "-help", "-version", "-about", "-verify", "-vacuum", "-select-result",
@@ -176,7 +176,8 @@ int printCompletions(const char* argv0, const QStringList& args) {
                               "-test-image-loader",  "-video-thumbnail"};
   cmds += fileArg;
 
-  const QSet<QString> dirArg{"-use", "-dups-in", "-nuke-dups-in", "-similar-in", "-move"};
+  const QSet<QString> dirArg{"-use",          "-update",     "-dups-in",
+                             "-nuke-dups-in", "-similar-in", "-move"};
   cmds += dirArg;
 
   const QSet<QString> fileOrDirArg{"-similar-to", "-select-path", "-select-files", "-merge", "-select-grid"};
@@ -690,6 +691,7 @@ int main(int argc, char** argv) {
       qInfo().nospace() << "select {path ~= " << path << "}: " << selection.count() << " items";
       return selection;
     } else {
+      // TODO: QRegularExpression::fromWildcard() would probably be OK here
       QFileInfo info(path);
       if (info.exists()) {
         path = info.absoluteFilePath();
@@ -848,8 +850,12 @@ int main(int argc, char** argv) {
 
       Env::setIdleProcessPriority();
       auto& eng = engine();
+
+      QString path;
+      if (args.count() && !args.first().startsWith(lc('-'))) path = nextArg();
+
       eng.scanner->setIndexParams(indexParams);
-      eng.update(true);
+      eng.update(true, path);
 
       QThreadPool::globalInstance()->setMaxThreadCount(QThread::idealThreadCount());
 

@@ -33,7 +33,7 @@ void Params::print() const {
   keys.sort();
   for (auto& k : qAsConst(keys)) {
     const auto& p = _params.value(k);
-    qInfo().noquote() << qSetFieldWidth(6) << p.key << qSetFieldWidth(10) << p.toString()
+    qInfo().noquote() << qSetFieldWidth(7) << p.key << qSetFieldWidth(10) << p.toString()
                       << p.label;
   }
 }
@@ -77,6 +77,8 @@ QString Params::Value::toString() const {
       if (bits) qWarning() << "invalid flags in" << key;
       return QString("%1(%2)").arg(set.join("+")).arg(value);
     }
+    case Glob:
+      return get().toStringList().join(';');
     default:
       return get().toString();
   }
@@ -96,6 +98,9 @@ const char* Params::Value::typeName() const {
       break;
     case Flags:
       name = "flags";
+      break;
+    case Glob:
+      name = "glob";
       break;
     default:
       Q_UNREACHABLE();

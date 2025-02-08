@@ -57,12 +57,13 @@ class Engine : public QObject {
   /**
    * Search for newly added or removed files
    * @param wait block until scan is complete
+   * @param dirPath path to subdirectory of database to scan
    *
    * If wait=false, destruct of Engine will discard pending items
    *
    * Emits fileAdded when a new file was added or modified
    */
-  void update(bool wait = false);
+  void update(bool wait = false, const QString& dirPath = QString());
 
   /**
    * Stop updating

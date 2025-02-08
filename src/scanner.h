@@ -59,6 +59,10 @@ class IndexParams : public Params {
   bool dupInodes = false; // do not ignore duplicate inodes
   bool modTime = false;   // force using possibly unreliable modtime checks
 #endif
+
+  QStringList excludePatterns; // exclude matching paths
+  QStringList includePatterns; // include matching paths
+
   IndexParams();
 };
 
@@ -88,6 +92,7 @@ class Scanner : public QObject {
   static constexpr const char* ErrorNoLinks = "link following disabled";
   static constexpr const char* ErrorZipFilter = "skipped by zip filter";
   static constexpr const char* ErrorZipUnsupported = "unsupported in zip container";
+  static constexpr const char* ErrorUserFilter = "skipped by user filter";
 
   /**
    * error list writable by worker threads
@@ -122,7 +127,7 @@ class Scanner : public QObject {
 
   /**
    * search directory and subdirectories for newly added or removed media
-   * @param dir Directory to scan
+   * @param dir Directory to scan (absolute path)
    * @param [in] expected files to see (from a previous scan),
    *        [out] list of what the scanner did not see (removed files)
    * @param modifiedSince file is "removed" if modified after this
@@ -217,7 +222,9 @@ class Scanner : public QObject {
   // number of running thread pool and extra threads
   int totalThreadCount() const;
 
-  static void setError(const QString& path, const QString& error, bool print=true);
+  bool includePath(const QString& path) const;
+
+  static void setError(const QString& path, const QString& error, bool print = true);
 
   IndexParams _params;
 
@@ -226,7 +233,7 @@ class Scanner : public QObject {
   QStringList _jpegTypes;
   QStringList _archiveTypes;
 
-  QHash<FileId, QString> _inodes;  // unique files (inodes) seen during scan (link tracking)
+  QHash<FileId, QString> _inodes; // unique files (inodes) seen during scan (link tracking)
 
   // jobs exist in (only) one of these 3 lists managed by the main thread
   QSet<QString> _activeWork;  // scheduled on thread pool
@@ -235,11 +242,11 @@ class Scanner : public QObject {
 
   QList<QFutureWatcher<IndexResult>*> _work; // scheduled work
 
-  QSet<QString> _queuedWork;  // all jobs; for fast lookup
+  QSet<QString> _queuedWork;                 // all jobs; for fast lookup
 
-  QThreadPool _gpuPool;       // separate pool since cpu doesn't do much
+  QThreadPool _gpuPool;                      // separate pool since cpu doesn't do much
 
-  QString _topDirPath;        // relative path for logging
+  QString _topDirPath;                       // relative path for logging
   int _existingFiles = 0, _ignoredFiles = 0, _modifiedFiles = 0, _queuedFiles = 0, _processedFiles = 0;
 
   QDateTime _modifiedSince;   // date index was last updated, to re-index modified files
@@ -247,6 +254,9 @@ class Scanner : public QObject {
 
   int _extraThreads = 0;      // count threads not managed by thread pool
 
-  QMutex _progressMutex;      // track video progress for display purposes
+  QVector<QRegularExpression> _excludePatterns;
+  QVector<QRegularExpression> _includePatterns;
+
+  QMutex _progressMutex; // track video progress for display purposes
   QHash<QString, int> _videoProgress;
 };

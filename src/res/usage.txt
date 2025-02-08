@@ -17,7 +17,9 @@ Setup
   -use <dir>                       set index location, in <dir>/_index, default current directory,
                                    - use "@" to search in the parent tree
   -create                          create index if there is not one already, otherwise prompt
-  -update                          create/refresh index
+  -update [<dir>]                  create/refresh index, optionally only scan subdirectory <dir>
+                                   - index is created in -use <dir>, not the subdirectory
+                                   - use -i.include -i.exclude to filter paths considered by the indexer
   -migrate                         convert index files to new format(s)
                                    - use "-i.dryrun true" to test the migration before applying
   -headless                        run without a window manager
@@ -166,7 +168,7 @@ Definitions
   <selection>                     list of items for further operations
   <selector>                      defines a set of (indexed) items by path, matching expression
       :<regular-expression>       - pcre, prefixed with colon
-      <grok pattern>              - path in the index with grok-style [*|?] wildcards (escape with \\*|\\?)
+      <glob pattern>              - path in the index with [*|?] wildcards (escape with \\*|\\?)
       <dir>|<file>                - existing file or directory
       @                           - use the current selection
   <type>                          item media type (1=image,2=video,3=audio)
@@ -180,6 +182,9 @@ Definitions
       %n                          - special: the sequence number, with automatic zero-padding
       {arg:<func>}                - special: transform arg (after capture/special expansion) with function(s)
       {<prop>[#<func>]}           - special: insert property
+  <glob>                          Pattern for file path/name matching
+      :<regular-expression>       - not a glob, but a pcre, prefixed by colon
+      path glob                   - case-sensitive path glob (see QRegularExpression::wildcardToRegularExpression())
   <binop>                         operator for <expr>
       ==, =                       - equal to
       !=                          - not equal to

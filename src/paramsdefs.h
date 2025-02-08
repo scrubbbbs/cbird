@@ -49,3 +49,9 @@ License along with cbird; if not, see
 #define NO_NAMES GET_CONST(emptyValues)
 
 #define NO_RANGE GET_CONST(emptyRange)
+
+#define ADD_GLOB(member) \
+  [this](const QVariant& v) { \
+    this->member.append(v.toString()); \
+    return true; \
+  }
