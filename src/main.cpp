@@ -523,9 +523,8 @@ Engine& engine() {
   QDir dir(indexPath());
   if (!_engine && checkIndexPathExists && !dir.exists(INDEX_DIRNAME)) {
     qFlushMessageLog();
-    printf(
-        "cbird: No index found. Pass -use <dir> to a valid location,\n"
-        "       or pass -create/-update to skip this prompt.\n\n");
+    printf("cbird: No index found. Pass -use <dir> to a valid location,\n"
+           "       or pass -create to skip this prompt.\n\n");
     printf("cbird: Create index in {%s} ? [Y/n] : ", qUtf8Printable(dir.absolutePath()));
     char choice = inputChar('Y');
     if (choice != 'Y' && choice != 'y') exit(0);
@@ -842,7 +841,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-create") {
       checkIndexPathExists = false;
     } else if (arg == "-update") {
-      checkIndexPathExists = false;
+      //checkIndexPathExists = false;
       int threads = indexParams.indexThreads;
       if (threads <= 0) threads = QThread::idealThreadCount();
 
@@ -1179,7 +1178,9 @@ int main(int argc, char** argv) {
     } else if (arg == "-select-none") {
       selection.clear();
     } else if (arg == "-select-all") {
-      selection.append(engine().db->mediaWithSql("select * from media"));
+      MediaGroup group = engine().db->mediaWithSql("select * from media");
+      if (group.isEmpty()) qWarning("select-all: nothing found; did you use -update?");
+      selection.append(group);
     } else if (arg == "-select-id") {
       int id = intArg(nextArg());
       Media m = engine().db->mediaWithId(id);
