@@ -52,6 +52,10 @@ class DctFeaturesIndex : public Index {
   void load(QSqlDatabase& db, const QString& cachePath, const QString& dataPath) override;
   void save(QSqlDatabase& db, const QString& cachePath) override;
 
+  QSet<mediaid_t> mediaIds(QSqlDatabase& db,
+                           const QString& cachePath,
+                           const QString& dataPath) const override;
+
   void add(const MediaGroup& media) override;
   void remove(const QVector<int>& id) override;
 

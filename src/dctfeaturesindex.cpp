@@ -129,24 +129,16 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
       query.setForwardOnly(true);
 
       // progress bar
-      if (!query.exec("select count(0) from kphash")) SQL_FATAL(exec);
-      if (!query.next()) SQL_FATAL(next);
-
-      const uint64_t rowCount = query.value(0).toLongLong();
-      uint64_t currentRow = 0;
-      const QLocale locale;
-      uint64_t numHashes = 0;  // total hashes seen
-
-      std::vector<HammingTree::Value> chunk;  // build tree in chunks to reduce temp memory
-      const int minChunkSize = 100000;
-
+      size_t rowCount = DBHelper::rowCount(query, "kphash");
       PROGRESS_LOGGER(pl, "<PL>%percent %bignum images", rowCount);
+
+      std::vector<HammingTree::Value> chunk; // build tree in chunks to reduce temp memory
+      const int minChunkSize = 100000;       // TODO: this size seems to have some small effect
+      size_t currentRow = 0;
 
       if (!query.exec("select media_id,hashes from kphash")) SQL_FATAL(exec);
 
       while (query.next()) {
-        currentRow++;
-
         const uint32_t mediaId = query.value(0).toUInt();
         const QByteArray hashes = query.value(1).toByteArray();
 
@@ -161,13 +153,11 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
         for (int j = 0; j < len; ++j)
           chunk.push_back(HammingTree::Value(mediaId, ptr[j]));
 
-        numHashes += len;
-
-        if (chunk.size() >= minChunkSize) {  // TODO: this size seems to have some small effect
+        if (chunk.size() >= minChunkSize) {
           _tree->insert(chunk);
           chunk.clear();  // no reallocation
-          pl.step(currentRow);
         }
+        pl.stepRateLimited(currentRow++);
       }
       pl.end();
       _tree->insert(chunk);
@@ -194,12 +184,44 @@ void DctFeaturesIndex::save(QSqlDatabase& db, const QString& cachePath) {
   writeFileAtomically(path, [this](QFile& f) { _tree->write(f); });
 }
 
+QSet<mediaid_t> DctFeaturesIndex::mediaIds(QSqlDatabase& db,
+                                           const QString& cachePath,
+                                           const QString& dataPath) const {
+  (void) cachePath;
+  (void) dataPath;
+
+  QSet<mediaid_t> result;
+  // if (isLoaded()) {
+  // TODO: _tree->traverse([&result](Value& v){ result.insert(v.index); });
+  // return result;
+  // }
+
+  QSqlQuery query(db);
+  query.setForwardOnly(true);
+
+  // progress bar
+  size_t rowCount = DBHelper::rowCount(query, "kphash");
+  PROGRESS_LOGGER(pl, "<PL>%percent %bignum images", rowCount);
+
+  if (!query.exec("select media_id,hashes from kphash")) SQL_FATAL(exec);
+
+  uint64_t currentRow = 0;
+  while (query.next()) {
+    const uint32_t mediaId = query.value(0).toUInt();
+    result.insert(mediaId);
+    pl.stepRateLimited(currentRow++);
+  }
+  pl.end();
+  return result;
+}
+
 void DctFeaturesIndex::add(const MediaGroup& media) {
   if (media.count() <= 0) return;
 
   std::vector<HammingTree::Value> values;
   for (const Media& m : media)
-    for (uint64_t hash : m.keyPointHashes()) values.push_back(HammingTree::Value(m.id(), hash));
+    for (uint64_t hash : m.keyPointHashes())
+      values.push_back(HammingTree::Value(m.id(), hash));
 
   _tree->insert(values);
 }
@@ -208,7 +230,8 @@ void DctFeaturesIndex::remove(const QVector<int>& ids) {
   if (ids.count() <= 0 || !isLoaded()) return;
 
   std::unordered_set<HammingTree::index_t> indices;
-  for (int id : ids) indices.insert(uint32_t(id));
+  for (int id : ids)
+    indices.insert(uint32_t(id));
 
   _tree->remove(indices);
 }
@@ -220,15 +243,16 @@ Index* DctFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
 
   // note: probably faster to slice from cache if it's available
   std::unordered_set<HammingTree::index_t> ids;
-  for (uint32_t id : mediaIds.values()) ids.insert(id);
+  for (uint32_t id : mediaIds.values())
+    ids.insert(id);
 
   chunk->_tree = _tree->slice(ids);
 
   HammingTree::Stats stats = chunk->_tree->stats();
 
   qDebug("%dKhash, height=%d nodes=%d %dMB %dms", stats.numValues / 1000, stats.maxHeight,
-        stats.numNodes, int(stats.memory / 1000000),
-        int(QDateTime::currentMSecsSinceEpoch() - then));
+         stats.numNodes, int(stats.memory / 1000000),
+         int(QDateTime::currentMSecsSinceEpoch() - then));
 
   return chunk;
 }
@@ -261,20 +285,22 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle, const SearchPa
   const int numNeedleHashes = hashes.size();
   uint64_t nHash[numNeedleHashes];
 
-  for (int j = 0; j < numNeedleHashes; j++) nHash[j] = hashes[j];
+  for (int j = 0; j < numNeedleHashes; j++)
+    nHash[j] = hashes[j];
 
   // TODO: investigate if it may be possible to prune the search
   // - if a hash has no matches, nearby hashes probably also have no matches
   std::vector<HammingTree::Match> cand[numNeedleHashes];
-  for (int j = 0; j < numNeedleHashes; j++) _tree->search(nHash[j], params.dctThresh, cand[j]);
+  for (int j = 0; j < numNeedleHashes; j++)
+    _tree->search(nHash[j], params.dctThresh, cand[j]);
 
-  QMap<uint32_t, uint32_t> matches;  // map
+  QMap<uint32_t, uint32_t> matches; // map
   QMap<uint32_t, int> scores;
   uint32_t maxMatches = 0;
 
   for (int j = 0; j < numNeedleHashes; j++) {
     // take the first 10, which gives us the 10 best matches
-    int len = std::min(10, (int)cand[j].size());
+    int len = std::min(10, (int) cand[j].size());
     for (int k = 0; k < len; k++) {
       const HammingTree::Match& match = cand[j][k];
       int index = match.value.index;
@@ -313,7 +339,7 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle, const SearchPa
       match.mediaId = mediaId;
       match.score = 0;
 
-      float avgScore = (float)scores[mediaId] / matches[mediaId];
+      float avgScore = (float) scores[mediaId] / matches[mediaId];
 
       // qDebug("score=%.2f matches=%d maxMatches=%d", avgScore, matches[mediaId], maxMatches);
       if (mediaId == uint32_t(needle.id()))

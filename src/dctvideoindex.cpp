@@ -167,10 +167,14 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QStri
   QSqlQuery query(db);
   query.setForwardOnly(true);
 
-  if (!query.prepare("select id from media where type=:type order by id")) SQL_FATAL(prepare);
-
+  if (!query.prepare("select count(0) from media where type=:type")) SQL_FATAL(exec);
   query.bindValue(":type", Media::TypeVideo);
+  if (!query.exec()) SQL_FATAL(exec);
+  if (!query.next()) SQL_FATAL(next);
+  const uint64_t rowCount = query.value(0).toLongLong();
 
+  if (!query.prepare("select id from media where type=:type order by id")) SQL_FATAL(prepare);
+  query.bindValue(":type", Media::TypeVideo);
   if (!query.exec()) SQL_FATAL(exec);
 
   delete _tree;
@@ -178,9 +182,9 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QStri
   _mediaId.clear();
   _isLoaded = false;
 
-  PROGRESS_LOGGER(pl, "<PL>sql query: %bignum videos", 0);
+  PROGRESS_LOGGER(pl, "<PL>sql query: %bignum videos", rowCount);
 
-  int i = 0;
+  size_t i = 0;
   while (query.next()) {
     _mediaId.push_back(query.value(0).toUInt());
     if (_mediaId.size() == MAX_VIDEOS_PER_INDEX) {
@@ -188,8 +192,7 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QStri
                 MAX_VIDEOS_PER_INDEX);
       break;
     }
-
-    if (++i % 1000 == 0) pl.step(i);
+    pl.stepRateLimited(i++);
   }
 
   // lazy load the tree since findFrame may not need it
@@ -200,7 +203,44 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QStri
 
 void DctVideoIndex::save(QSqlDatabase& db, const QString& cachePath) {
   (void)db;
-  (void)cachePath;
+  (void) cachePath;
+}
+
+QSet<mediaid_t> DctVideoIndex::mediaIds(QSqlDatabase& db,
+                                        const QString& cachePath,
+                                        const QString& dataPath) const {
+  (void) cachePath;
+  (void) dataPath;
+
+  QSet<mediaid_t> result;
+  if (isLoaded()) {
+    for (auto& id : _mediaId)
+      result.insert(id);
+    return result;
+  }
+
+  QSqlQuery query(db);
+  query.setForwardOnly(true);
+
+  if (!query.prepare("select count(0) from media where type=:type")) SQL_FATAL(exec);
+  query.bindValue(":type", Media::TypeVideo);
+  if (!query.next()) SQL_FATAL(next);
+  const uint64_t rowCount = query.value(0).toLongLong();
+
+  if (!query.prepare("select id from media where type=:type")) SQL_FATAL(prepare);
+  query.bindValue(":type", Media::TypeVideo);
+
+  if (!query.exec()) SQL_FATAL(exec);
+
+  PROGRESS_LOGGER(pl, "<PL>sql query: %bignum videos", rowCount);
+  size_t i = 0;
+  while (query.next()) {
+    uint32_t id = query.value(0).toUInt();
+    result.insert(id);
+    pl.stepRateLimited(i++);
+  }
+  pl.end();
+  return result;
 }
 
 void DctVideoIndex::add(const MediaGroup& media) {

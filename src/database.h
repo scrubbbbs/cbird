@@ -110,6 +110,9 @@ class Database {
   /// @return all files in the index
   QSet<QString> indexedFiles();
 
+  /// @return files in the index which are indexed for algos
+  QSet<QString> indexedForAlgos(int algos);
+
   /// @return duplicate Media via md5 hash
   MediaGroupList dupsByMd5(const SearchParams& params);
 

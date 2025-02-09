@@ -77,3 +77,6 @@ typedef uint32_t mediaid_t; // item id in the database
 
 class SimpleIO_QFile;
 typedef class SimpleIO_QFile SimpleIO;
+
+/// report sql error with context & detail
+#define SQL_FATAL(x) qFatal("QSqlQuery." #x ": %s", qPrintable(query.lastError().text()));

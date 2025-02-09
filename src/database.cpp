@@ -1524,6 +1524,38 @@ QSet<QString> Database::indexedFiles() {
   return paths;
 }
 
+QSet<QString> Database::indexedForAlgos(int algos) {
+  QReadLocker locker(&_rwLock);
+  QSet<QString> paths;
+  QHash<int, QSet<mediaid_t>> indexedIds; // index id=> media id list
+  for (const Index* i : std::as_const(_algos))
+    if (algos & (1 << i->id())) {
+      QString dataPath = "";
+      if (i->id() == SearchParams::AlgoVideo) dataPath = videoPath();
+
+      QSqlDatabase db = connect(i->databaseId());
+      indexedIds.insert(i->id(), i->mediaIds(db, cachePath(), dataPath));
+    }
+
+  QSqlQuery query(connect());
+
+  if (!query.prepare("select id,path from media")) SQL_FATAL(prepare);
+  if (!query.exec()) SQL_FATAL(exec);
+
+  while (query.next()) {
+    const int32_t id = query.value(0).toInt();
+    const QString relPath = query.value(1).toString();
+
+    for (const Index* i : std::as_const(_algos))
+      if (!indexedIds[i->id()].contains(id)) continue;
+
+    Q_ASSERT(!relPath.isEmpty());
+    paths.insert(path() + "/" + relPath);
+  }
+
+  return paths;
+}
+
 void Database::addIndex(Index* index) { _algos.append(index); }
 
 Index* Database::chooseIndex(const SearchParams& params) const {

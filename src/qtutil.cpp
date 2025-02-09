@@ -828,6 +828,12 @@ QAction* WidgetHelper::addSeparatorAction(QWidget* parent) {
   return sep;
 }
 
+size_t DBHelper::rowCount(QSqlQuery& query, const QString& tableName) {
+  if (!query.exec("select count(0) from " + tableName)) SQL_FATAL(exec);
+  if (!query.next()) SQL_FATAL(next);
+  return query.value(0).toULongLong();
+}
+
 QDateTime DBHelper::lastModified(const QSqlDatabase& db) {
   // this only works with local file database drivers, like sqlite
   QString dbPath = db.databaseName();
@@ -1674,7 +1680,7 @@ void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantLis
 }
 
 void ProgressLogger::step(uint64_t step, const QVariantList& args) const {
-  if (_timer.elapsed() < 500) return;
+  if (_hideTimer.elapsed() < 500) return;
   // one print per percent output
   // if (_max > 0 && ((step - 1) * 100) / _max == (step * 100) / _max) return;
   QString out = _format;
@@ -1682,10 +1688,21 @@ void ProgressLogger::step(uint64_t step, const QVariantList& args) const {
   qColorMessageOutput(QtInfoMsg, _context, out);
 }
 
-void ProgressLogger::end(uint64_t step, const QVariantList& args) const {
-  if (_timer.elapsed() < 500 && !_showLast) return;
+void ProgressLogger::stepRateLimited(uint64_t step, const QVariantList& args) {
+  if (_hideTimer.elapsed() < 500) return;
+  // one print per percent output
+  // if (_max > 0 && ((step - 1) * 100) / _max == (step * 100) / _max) return;
+  if (_rateLimitTimer.elapsed() < 100) return;
   QString out = _format;
-  out +=  ", " + QString::number(_timer.elapsed()) + "ms";
+  formatString(out, step, args);
+  qColorMessageOutput(QtInfoMsg, _context, out);
+  _rateLimitTimer.start();
+}
+
+void ProgressLogger::end(uint64_t step, const QVariantList& args) const {
+  if (_hideTimer.elapsed() < 500 && !_showLast) return;
+  QString out = _format;
+  out += ", " + QString::number(_hideTimer.elapsed()) + "ms";
   formatString(out, step > 0 ? step : _max, args);
   qColorMessageOutput(QtInfoMsg, _context, out);
 }

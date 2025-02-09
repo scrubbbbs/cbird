@@ -23,9 +23,6 @@
 #include "media.h"
 #include "params.h"
 
-/// report sql error with context & detail
-#define SQL_FATAL(x) qFatal("QSqlQuery." #x ": %s", qPrintable(query.lastError().text()));
-
 /**
  * @class SearchParams
  * @brief Parameters passed to search functions
@@ -210,6 +207,13 @@ class Index {
    * file.
    */
   virtual void save(QSqlDatabase& db, const QString& cachePath) = 0;
+
+  /**
+   * Return all media ids represented in the index
+   */
+  virtual QSet<mediaid_t> mediaIds(QSqlDatabase& db,
+                                   const QString& cachePath,
+                                   const QString& dataPath) const;
 
   /**
    * Add processed media to the in-memory representation without touching the database

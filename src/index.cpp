@@ -182,3 +182,13 @@ SearchParams::SearchParams() {
     link("alg", i, "types", types);
   }
 }
+
+QSet<mediaid_t> Index::mediaIds(QSqlDatabase& db,
+                                const QString& cachePath,
+                                const QString& dataPath) const {
+  (void) db;
+  (void) cachePath;
+  (void) dataPath;
+  qWarning() << "not implemented";
+  return {};
+}

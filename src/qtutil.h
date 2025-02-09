@@ -116,6 +116,8 @@ class DBHelper {
     return !cacheInfo.exists() || lastModified(db) > cacheInfo.lastModified();
   }
 
+  static size_t rowCount(QSqlQuery& query, const QString& tableName);
+
   static QDateTime lastModified(const QSqlDatabase& db);
 };
 
@@ -223,7 +225,7 @@ class ProgressLogger {
   const QMessageLogContext _context;
   const QLocale _locale;
 
-  QElapsedTimer _timer;
+  QElapsedTimer _hideTimer, _rateLimitTimer;
   bool _showLast = false;
 
   void formatString(QString& str, uint64_t step, const QVariantList& args={}) const;
@@ -233,10 +235,18 @@ class ProgressLogger {
       : _format(format)
       , _max(maxStep)
       , _context("", 0, contextFunc, "") {
-    _timer.start();
+    _hideTimer.start();
+    _rateLimitTimer.start();
   }
+
+  // thread-safe version
   void step(uint64_t step, const QVariantList& args={}) const;
-  void end(uint64_t step = 0, const QVariantList& args={}) const;
+
+  // not thread-safe, limits logs to 10 per second
+  void stepRateLimited(uint64_t step, const QVariantList& args = {});
+
+  // final log (100% if step==0)
+  void end(uint64_t step = 0, const QVariantList& args = {}) const;
 
   /// always show final progress line
   void showLast() { _showLast = true; }

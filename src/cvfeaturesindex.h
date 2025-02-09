@@ -45,6 +45,10 @@ class CvFeaturesIndex : public Index {
   void addRecords(QSqlDatabase& db, const MediaGroup& media) const override;
   void removeRecords(QSqlDatabase& db, const QVector<int>& mediaIds) const override;
 
+  QSet<mediaid_t> mediaIds(QSqlDatabase& db,
+                           const QString& cachePath,
+                           const QString& dataPath) const override;
+
   bool isLoaded() const override;
   int count() const override;
   size_t memoryUsage() const override;
@@ -70,10 +74,10 @@ class CvFeaturesIndex : public Index {
   cv::flann::Index* _index;  // index of the cv::Mat
 
   // map of first descriptor index to media Id, in ascending order,
-  // INTMAX,0 as last item
+  // _descriptors.rows,0 as last item
   std::map<uint32_t, uint32_t> _indexMap;
 
   // map of media id to first _descriptors[] index, in ascending order,
-  // INTMAX,_descriptors.rows as last item
+  // UINT32_MAX,_descriptors.rows as last item
   std::map<uint32_t, uint32_t> _idMap;
 };

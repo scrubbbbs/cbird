@@ -117,10 +117,7 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath, const QStr
   QSqlQuery query(db);
 
   // item count for memory allocation
-  if (!query.exec("select count(0) from color")) SQL_FATAL(exec);
-  if (!query.next()) SQL_FATAL(next);
-
-  _count = query.value(0).toInt();
+  _count = (int) DBHelper::rowCount(query, "color"); // FIXME: use size_t _count
   if (_count == 0) return;
 
   PROGRESS_LOGGER(pl, "<PL>%percent %bignum descriptors", _count);
@@ -152,10 +149,8 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath, const QStr
       _descriptors[i].clear();
       qWarning("no color desc for id %d, correct by re-indexing", _mediaId[i]);
     }
-    i++;
 
-    if (i % 20000 == 0)
-      pl.step(i);
+    pl.stepRateLimited(i++);
 
   } while (query.next());
   pl.end();
@@ -165,6 +160,37 @@ void ColorDescIndex::save(QSqlDatabase& db, const QString& cachePath) {
   // no caching
   (void)db;
   (void)cachePath;
+}
+
+QSet<mediaid_t> ColorDescIndex::mediaIds(QSqlDatabase& db,
+                                         const QString& cachePath,
+                                         const QString& dataPath) const {
+  (void) cachePath;
+  (void) dataPath;
+
+  QSet<mediaid_t> result;
+  if (isLoaded()) {
+    for (int i = 0; i < _count; ++i)
+      result.insert(_mediaId[i]);
+    return result;
+  }
+
+  QSqlQuery query(db);
+
+  size_t rowCount = DBHelper::rowCount(query, "color");
+  PROGRESS_LOGGER(pl, "<PL>%percent %bignum descriptors", rowCount);
+
+  query.exec("select media_id from color");
+
+  size_t i = 0;
+  while (query.next()) {
+    uint32_t id = query.value(0).toInt();
+    result.insert(id);
+    pl.stepRateLimited(i++);
+  }
+  pl.end();
+
+  return result;
 }
 
 void ColorDescIndex::add(const MediaGroup& media) {

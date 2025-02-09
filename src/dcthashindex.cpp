@@ -77,35 +77,29 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath, const QStrin
     query.setForwardOnly(true);
 
     // progress bar
-    if (!query.exec("select count(0) from media")) SQL_FATAL(exec);
-    if (!query.next()) SQL_FATAL(next);
-
-    const uint64_t rowCount = query.value(0).toLongLong();
+    size_t rowCount = DBHelper::rowCount(query, "media");
+    PROGRESS_LOGGER(pl, "<PL>%percent %bignum hashes", rowCount);
 
     if (!query.exec(hashQuery())) SQL_FATAL(exec);
 
     int chunkSize = 1024;
     int capacity = 0;
-    int i = 0;
-
-    PROGRESS_LOGGER(pl, "<PL>%percent %bignum hashes", rowCount);
+    size_t currentRow = 0;
 
     while (query.next()) {
-      if (i % chunkSize == 0) {
+      if (currentRow % chunkSize == 0) {
         capacity += chunkSize;
-
         _hashes = strict_realloc(_hashes, capacity);
         _mediaId = strict_realloc(_mediaId, capacity);
-
-        pl.step(i);
       }
 
-      _mediaId[i] = query.value(0).toUInt();
-      _hashes[i] = uint64_t(query.value(1).toLongLong());
-      i++;
+      _mediaId[currentRow] = query.value(0).toUInt();
+      _hashes[currentRow] = uint64_t(query.value(1).toLongLong());
+
+      pl.stepRateLimited(currentRow++);
     }
 
-    _numHashes = i;
+    _numHashes = currentRow;
 
     buildTree();
 
@@ -117,6 +111,37 @@ void DctHashIndex::save(QSqlDatabase& db, const QString& cachePath) {
   (void)db;
   (void)cachePath;
   // TODO: _tree->save()
+}
+
+QSet<mediaid_t> DctHashIndex::mediaIds(QSqlDatabase& db,
+                                       const QString& cachePath,
+                                       const QString& dataPath) const {
+  (void) cachePath;
+  (void) dataPath;
+  QSet<mediaid_t> set;
+
+  if (_isLoaded) {
+    for (int i = 0; i < _numHashes; ++i)
+      set.insert(_mediaId[i]);
+    return set;
+  }
+
+  QSqlQuery query(db);
+  query.setForwardOnly(true);
+
+  size_t rowCount = DBHelper::rowCount(query, "media");
+  PROGRESS_LOGGER(pl, "<PL>%percent %bignum hashes", rowCount);
+
+  if (!query.exec(hashQuery())) SQL_FATAL(exec);
+
+  size_t currentRow = 0;
+  while (query.next()) {
+    set.insert(query.value(0).toUInt());
+    pl.stepRateLimited(currentRow++);
+  }
+  pl.end();
+
+  return set;
 }
 
 void DctHashIndex::add(const MediaGroup& media) {

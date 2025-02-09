@@ -44,6 +44,10 @@ class DctHashIndex : public Index {
   void load(QSqlDatabase& db, const QString& cacheFile, const QString& dataPath) override;
   void save(QSqlDatabase& db, const QString& cachePath) override;
 
+  QSet<mediaid_t> mediaIds(QSqlDatabase& db,
+                           const QString& cachePath,
+                           const QString& dataPath) const override;
+
   QVector<Index::Match> find(const Media& m, const SearchParams& p) override;
 
   Index* slice(const QSet<uint32_t>& mediaIds) const override;

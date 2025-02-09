@@ -179,27 +179,17 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
       QSqlQuery query(db);
       query.setForwardOnly(true);
 
-      if (!query.exec("select count(0) from matrix")) SQL_FATAL(exec);
-      if (!query.next()) SQL_FATAL(next);
-
-      const uint64_t rowCount = query.value(0).toLongLong();
-      uint64_t currentRow = 0;
-      const QLocale locale;
-
+      size_t rowCount = DBHelper::rowCount(query, "matrix");
       PROGRESS_LOGGER(pl, "sql query:<PL> %percent %bignum images", rowCount);
 
       if (!query.exec("select media_id,rows,cols,type,stride,data from matrix order by media_id"))
         SQL_FATAL(exec)
 
-      const int progressStep = 50000;  // descriptors
-      uint64_t nextProgress = progressStep;
-
       uint32_t numDesc = 0;  // descriptor position of id
       uint32_t lastId = 0;   // verify sequential and unique id
+      size_t currentRow = 0;
 
       while (query.next()) {
-        currentRow++;
-
         uint32_t id;
         int rows, cols, type, stride;
         QByteArray data;
@@ -231,10 +221,7 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
         numDesc += desc.rows;
         lastId = id;
 
-        if (numDesc > nextProgress) {
-          pl.step(currentRow);
-          nextProgress = numDesc + progressStep;
-        }
+        pl.stepRateLimited(currentRow++);
       }
       pl.end();
       Q_ASSERT(_descriptors.rows == int(numDesc));
@@ -252,6 +239,37 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
 
   qInfo("%d descriptors %dMB %dms", _descriptors.rows, int(memoryUsage() / 1000000),
         int(QDateTime::currentMSecsSinceEpoch() - then));
+}
+
+QSet<mediaid_t> CvFeaturesIndex::mediaIds(QSqlDatabase& db,
+                                          const QString& cachePath,
+                                          const QString& dataPath) const {
+  (void) cachePath;
+  (void) dataPath;
+  QSet<mediaid_t> result;
+  if (isLoaded()) {
+    for (auto& it : _idMap)
+      if (it.first != UINT32_MAX) result.insert(it.first);
+    return result;
+  }
+
+  QSqlQuery query(db);
+  query.setForwardOnly(true);
+
+  size_t rowCount = DBHelper::rowCount(query, "matrix");
+  PROGRESS_LOGGER(pl, "sql query:<PL> %percent %bignum images", rowCount);
+
+  if (!query.exec("select media_id from matrix")) SQL_FATAL(exec)
+
+  size_t currentRow = 0;
+  while (query.next()) {
+    uint32_t id = query.value(0).toUInt();
+    result.insert(id);
+    pl.stepRateLimited(currentRow++);
+  }
+  pl.end();
+
+  return result;
 }
 
 Index* CvFeaturesIndex::slice(const QSet<uint32_t>& mediaIds) const {
