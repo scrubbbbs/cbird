@@ -1,5 +1,6 @@
 #include "index.h"
 
+#define PARAMS_CLASS SearchParams
 #include "paramsdefs.h"
 
 #include "opencv2/core.hpp"

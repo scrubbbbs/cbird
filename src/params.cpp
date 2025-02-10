@@ -18,14 +18,18 @@ void Params::setValue(const QString& key, const QVariant& val) {
   auto it = _params.find(key);
   if (it == _params.end())
     qWarning() << "invalid param:" << key;
-  else if (!it->set(val))
+  else if (!it->set(this, val))
     qWarning() << "failed to set:" << key << "to:" << val;
   else {
     _wasSet.insert(key);
     for (const auto& l : it->link)
-      if (l.value == it->get() && !_wasSet.contains(l.target))
+      if (l.value == it->get(this) && !_wasSet.contains(l.target))
         setValue(l.target, l.targetValue);
   }
+}
+
+QString Params::toString(const QString& key) const {
+  return getValue(key).toString(this);
 }
 
 void Params::print() const {
@@ -33,7 +37,7 @@ void Params::print() const {
   keys.sort();
   for (auto& k : qAsConst(keys)) {
     const auto& p = _params.value(k);
-    qInfo().noquote() << qSetFieldWidth(7) << p.key << qSetFieldWidth(10) << p.toString()
+    qInfo().noquote() << qSetFieldWidth(7) << p.key << qSetFieldWidth(10) << p.toString(this)
                       << p.label;
   }
 }
@@ -51,11 +55,11 @@ void Params::link(const QString& keyA, const QVariant& valueA, const QString& ke
   a.value().link.append({valueA, keyB, valueB});
 }
 
-QString Params::Value::toString() const {
+QString Params::Value::toString(const Params* p) const {
   switch (type) {
     case Enum: {
       const auto& nv = namedValues();
-      int currentValue = get().toInt();
+      int currentValue = get(p).toInt();
       auto it = std::find_if(nv.begin(), nv.end(),
                              [=](const NamedValue& v) { return v.value == currentValue; });
       if (it == nv.end())
@@ -65,7 +69,7 @@ QString Params::Value::toString() const {
     }
     case Flags: {
       const auto& nv = namedValues();
-      const int value = get().toInt();
+      const int value = get(p).toInt();
       int bits = value;
       QStringList set;
       for (auto& v : nv) {
@@ -75,12 +79,12 @@ QString Params::Value::toString() const {
         }
       }
       if (bits) qWarning() << "invalid flags in" << key;
-      return QString("%1(%2)").arg(set.join("+")).arg(value);
+      return QString("%1").arg(set.join("+"));
     }
     case Glob:
-      return get().toStringList().join(';');
+      return get(p).toStringList().join(';');
     default:
-      return get().toString();
+      return get(p).toString();
   }
 }
 
@@ -140,9 +144,10 @@ bool Params::Value::setFlags(const QVariant& v, const QVector<Params::NamedValue
   const int intVal = v.toInt(&ok);
   QStringList symbols;
   if (ok) {
-    int flags = intVal;
-    for (auto& n : nv) flags &= ~n.value;
-    if (!flags) {
+    int mask = 0;
+    for (auto& n : nv)
+      mask |= n.value;
+    if ((intVal & mask) == intVal) {
       member = intVal;
       return true;
     }
@@ -156,7 +161,7 @@ bool Params::Value::setFlags(const QVariant& v, const QVector<Params::NamedValue
         flags |= n.value;
         symbols.removeAll(n.shortName);
       }
-    if (symbols.count() == 0) {
+    if (symbols.count() == 0) { // we consumed all flags
       member = flags;
       return true;
     }

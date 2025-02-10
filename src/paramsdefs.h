@@ -20,29 +20,34 @@ License along with cbird; if not, see
 <https://www.gnu.org/licenses/>.  */
 #pragma once
 
-#define SET_ENUM(arg, member, values)                    \
-  [this](const QVariant& v) {                            \
-    return Value::setEnum(v, values, arg, this->member); \
+// macros to return functions to read/write directly into struct members,
+// I guess because I like the idea of referencing struct members directly
+
+// TODO: if we give up on accessing struct members directly,
+// Q_PROPERTY might be a decent replacement
+#define SET_ENUM(arg, member, values) \
+  [](Params* p, const QVariant& v) { \
+    return Value::setEnum(v, values, arg, ((PARAMS_CLASS*) p)->member); \
   }
 
-#define SET_FLAGS(arg, member, values)                    \
-  [this](const QVariant& v) {                             \
-    return Value::setFlags(v, values, arg, this->member); \
+#define SET_FLAGS(arg, member, values) \
+  [](Params* p, const QVariant& v) { \
+    return Value::setFlags(v, values, arg, ((PARAMS_CLASS*) p)->member); \
   }
 
-#define SET_INT(member)       \
-  [this](const QVariant& v) { \
-    this->member = v.toInt(); \
-    return true;              \
+#define SET_INT(member) \
+  [](Params* p, const QVariant& v) { \
+    ((PARAMS_CLASS*) p)->member = v.toInt(); \
+    return true; \
   }
 
-#define SET_BOOL(member)       \
-  [this](const QVariant& v) {  \
-    this->member = v.toBool(); \
-    return true;               \
+#define SET_BOOL(member) \
+  [](Params* p, const QVariant& v) { \
+    ((PARAMS_CLASS*) p)->member = v.toBool(); \
+    return true; \
   }
 
-#define GET(member) [this]() { return this->member; }
+#define GET(member) [](const Params* p) { return ((const PARAMS_CLASS*) p)->member; }
 
 #define GET_CONST(global) []() -> const decltype(global)& { return global; }
 
@@ -51,7 +56,7 @@ License along with cbird; if not, see
 #define NO_RANGE GET_CONST(emptyRange)
 
 #define ADD_GLOB(member) \
-  [this](const QVariant& v) { \
-    this->member.append(v.toString()); \
+  [](Params* p, const QVariant& v) { \
+    ((PARAMS_CLASS*) p)->member.append(v.toString()); \
     return true; \
   }

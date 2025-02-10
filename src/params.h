@@ -38,7 +38,7 @@ class Params {
     QVariant targetValue;
   };
 
-  /// parameter
+  /// Binds a struct member to a getter/setter and other useful things
   class Value {
    public:
     QString key;    /// property name
@@ -48,15 +48,15 @@ class Params {
 
     int sort;  /// sort order for ui
 
-    std::function<bool(const QVariant&)> set;
-    std::function<QVariant(void)> get;
+    std::function<bool(Params*, const QVariant&)> set;
+    std::function<QVariant(const Params*)> get;
 
     std::function<const QVector<NamedValue>&()> namedValues;
     std::function<const QVector<int>&()> range;
 
     QList<Link> link = {};
 
-    QString toString() const;
+    QString toString(const Params* p) const;
     const char* typeName() const;
     bool operator<(const Value& other) const { return sort < other.sort; }
 
@@ -72,6 +72,7 @@ class Params {
 
   Value getValue(const QString& key) const;
   void setValue(const QString& key, const QVariant& val);
+  QString toString(const QString& key) const;
 
   void print() const;
 

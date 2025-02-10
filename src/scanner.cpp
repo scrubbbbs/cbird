@@ -1070,6 +1070,7 @@ IndexResult Scanner::processVideoFile(const QString& path) const {
   return result;
 }
 
+#define PARAMS_CLASS IndexParams
 #include "paramsdefs.h"
 
 IndexParams::IndexParams() {
