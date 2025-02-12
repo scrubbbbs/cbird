@@ -180,7 +180,7 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
       query.setForwardOnly(true);
 
       size_t rowCount = DBHelper::rowCount(query, "matrix");
-      PROGRESS_LOGGER(pl, "sql query:<PL> %percent %bignum images", rowCount);
+      PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
 
       if (!query.exec("select media_id,rows,cols,type,stride,data from matrix order by media_id"))
         SQL_FATAL(exec)
@@ -257,7 +257,7 @@ QSet<mediaid_t> CvFeaturesIndex::mediaIds(QSqlDatabase& db,
   query.setForwardOnly(true);
 
   size_t rowCount = DBHelper::rowCount(query, "matrix");
-  PROGRESS_LOGGER(pl, "sql query:<PL> %percent %bignum images", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
 
   if (!query.exec("select media_id from matrix")) SQL_FATAL(exec)
 

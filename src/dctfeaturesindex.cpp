@@ -130,7 +130,7 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
 
       // progress bar
       size_t rowCount = DBHelper::rowCount(query, "kphash");
-      PROGRESS_LOGGER(pl, "<PL>%percent %bignum images", rowCount);
+      PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
 
       std::vector<HammingTree::Value> chunk; // build tree in chunks to reduce temp memory
       const int minChunkSize = 100000;       // TODO: this size seems to have some small effect

@@ -111,7 +111,7 @@ static int printUsage(int argc, char** argv) {
                    .arg(key, -8)
                    .arg(QString("<") + v.typeName() + ">", -8)
                    .arg(v.label)
-                   .arg(v.toString());
+                   .arg(v.toString(&params));
       const auto& nv = v.namedValues();
       if (nv.count() > 0)
         for (auto& n : nv)
@@ -583,14 +583,27 @@ int main(int argc, char** argv) {
 
   (void)qInstallMessageHandler(qColorMessageOutput);
 
-  do {
-    const char* logFilter = "*.debug=false";
-    if (args.contains("-v") || args.contains("-verbose"))
-      break; // use the default filtering (QT_LOGGING_RULES etc)
+  if (args.contains("-v") || args.contains("-verbose")) {
+    // don't filter any logging, show possibly hidden logging
+    ProgressLogger::setAlwaysShow(true);
+  } else {
+    // filter logging the Qt way
+    const char* logFilter = "*.debug=false\n"
+                            "exiv2.*=false\n"
+                            "FFmpeg.debug=false\n"
+                            "FFmpeg.info=false\n";
+
     if (args.contains("-q") || args.contains("-quiet"))
-      logFilter="*.debug=false\n*.info=false\n*.warning=false";
+      logFilter = "*.debug=false\n"
+                  "*.info=false\n"
+                  "*.warning=false\n"
+                  "exiv2.*=false\n"
+                  "FFmpeg.debug=false\n"
+                  "FFmpeg.info=false\n"
+                  "FFmpeg.warning=false\n";
+
     QLoggingCategory::setFilterRules(logFilter);
-  } while(0);
+  }
 
   // if we are pretty sure there is no display connected we can
   // enable headless mode
@@ -796,14 +809,22 @@ int main(int argc, char** argv) {
 
     if (arg.startsWith("-p.")) {
       const QString val = nextArg();
+      if (val.startsWith(lc('-'))) {
+        qCritical() << arg << "must be followed by a value";
+        return 1;
+      }
       const QChar sep = arg[2];
       const QString key = arg.split(sep)[1];
-      params.setValue(key, val);
+      if (!params.setValue(key, val)) return 1;
     } else if (arg.startsWith("-i.")) {
       const QString val = nextArg();
+      if (val.startsWith(lc('-'))) {
+        qCritical() << arg << "must be followed by a value";
+        return 1;
+      }
       const QChar sep = arg[2];
       const QString key = arg.split(sep)[1];
-      indexParams.setValue(key, val);
+      if (!indexParams.setValue(key, val)) return 1;
     } else if (arg == "-list-search-params") {
       MessageContext mc("SearchParams");
       params.print();
@@ -872,8 +893,9 @@ int main(int argc, char** argv) {
       const QStringList cv = cvVersion();
       const QStringList ev = Media::exifVersion();
       //            const QStringList qv = {"??", "??"};
-      qInfo() << CBIRD_PROGNAME << CBIRD_VERSION << "[" << CBIRD_GITVERSION << "]"
-              << CBIRD_HOMEPAGE;
+      qInfo() << "<CYN>" CBIRD_PROGNAME << "<MAG>" CBIRD_VERSION << "<RESET>[<GRN>"
+              << CBIRD_GITVERSION << "<RESET>]"
+              << "<UNDERL><BLU>" CBIRD_HOMEPAGE;
       qInfo() << "build:" << buildFlags();
       qInfo() << "settings:" << DesktopHelper::settingsFile();
       qInfo() << "Qt" << qVersion() << "compiled:" << QT_VERSION_STR;
@@ -1719,7 +1741,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-test-update") {
       _commands.testUpdate(engine());
     } else {
-      qCritical("invalid argument=%s", qUtf8Printable(arg));
+      qCritical("invalid argument \"%s\"", qUtf8Printable(arg));
 #ifdef Q_OS_WIN
       if (arg == "-p" || arg == "-i") qWarning() << "in PowerShell you must use -p: / -i: ";
 #endif

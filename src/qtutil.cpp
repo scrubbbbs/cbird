@@ -986,13 +986,32 @@ bool DebugEventFilter::eventFilter(QObject* object, QEvent* event) {
 
 #include "exiv2/error.hpp"  // capture exif library logs
 
-static void exifLogHandler(int level, const char* msg) {
+static void exiv2(int level, const char* msg) {
   const int nLevels = 4;
   static constexpr QtMsgType levelToType[nLevels] = {QtDebugMsg, QtInfoMsg, QtWarningMsg,
                                                      QtCriticalMsg};
-  static constexpr QMessageLogContext context("", 0, "exif()", "");
-  if (level < nLevels && level > 0)
-    qColorMessageOutput(levelToType[level], context, QString(msg).trimmed());
+  // static constexpr QMessageLogContext context("", 0, "exif()", "exif");
+  static QLoggingCategory category("exiv2");
+
+  if (level >= nLevels || level < 0) return;
+
+  //   qColorMessageOutput(levelToType[level], context, QString(msg).trimmed());
+  QString str = QString(msg).trimmed();
+  switch (levelToType[level]) {
+    case QtDebugMsg:
+      qCDebug(category) << str;
+      break;
+    case QtInfoMsg:
+      qCInfo(category) << str;
+      break;
+    case QtWarningMsg:
+      qCWarning(category) << str;
+      break;
+    case QtCriticalMsg:
+    case QtFatalMsg:
+      qCCritical(category) << str;
+      break;
+  }
 }
 
 // headers for terminal detection
@@ -1064,7 +1083,7 @@ class MessageLog {
   ~MessageLog();
 
   void outputThread();
-  QString format(const LogMsg& msg) const;
+  QString format(const LogMsg& msg, int& outUnprintable) const;
 
  public:
   static MessageLog& instance() {
@@ -1089,6 +1108,7 @@ class MessageLog {
       _categoryFilters.removeOne(category);
     }
   }
+
 #ifndef Q_OS_WIN
   static int getTTYColumns() {
     // https://stackoverflow.com/questions/1022957/getting-terminal-width-in-c
@@ -1183,7 +1203,7 @@ void MessageContext::reset(const QString& context) { MessageLog::context().setLo
 
 MessageLog::MessageLog() {
   std::set_terminate(qFlushMessageLog);
-  Exiv2::LogMsg::setHandler(exifLogHandler);
+  Exiv2::LogMsg::setHandler(exiv2);
 
 #ifdef Q_OS_WIN
   auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -1192,7 +1212,6 @@ MessageLog::MessageLog() {
     // printf("win32 console detected mode=0x%x\n", (int)mode);
     _isTerm = true;
     _termColors = mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    if (getenv("CBIRD_COLOR_CONSOLE")) _termColors = true;
 
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     if (GetConsoleScreenBufferInfo(handle, &csbi))
@@ -1303,7 +1322,8 @@ void MessageLog::outputThread() {
         numRepeats = 0;
       }
 
-      const QString formatted = format(msg);
+      int unprintableChars = 0;   // we need this for accurate eliding
+      const QString formatted = format(msg, unprintableChars);
       if (formatted.isEmpty()) {  // possible with filters
         locker.relock();
         continue;
@@ -1322,9 +1342,9 @@ void MessageLog::outputThread() {
       if (elide > 0 && elide > pl) {
         if (_termColumns > 0) {
           auto toElide = output.mid(elide + tokenElide.size());
-          auto elided = qElide(toElide, _termColumns - elide);
+          auto elided = qElide(toElide, _termColumns + unprintableChars - elide);
           output = output.mid(0, elide) + elided;
-          output += QString().fill(charSpace, _termColumns - output.length());
+          output += QString().fill(charSpace, _termColumns + unprintableChars - output.length());
         } else
           output.remove(elide, tokenElide.size());
       }
@@ -1369,19 +1389,31 @@ void MessageLog::outputThread() {
   }    // !_stop
 }
 
-QString MessageLog::format(const LogMsg& msg) const {
+QString MessageLog::format(const LogMsg& msg, int& outUnprintable) const {
   struct MessageFormat {
     QLatin1String label;
     const char* color;
   };
 
   // table index is QtDebugMsg ... QtInfoMsg
-  static constexpr MessageFormat formats[QtInfoMsg + 1] = {
-      {QLatin1String("D"), VT_WHT},
-      {QLatin1String("W"), VT_YEL},
-      {QLatin1String("C"), (VT_BRIGHT VT_RED)},
-      {QLatin1String("F"), (VT_UNDERL VT_BRIGHT VT_RED)},
-      {QLatin1String("I"), VT_GRN}};
+  static constexpr MessageFormat formats[QtInfoMsg + 1] = {{QLatin1String("D"), ""},
+                                                           {QLatin1String("W"), "<YEL>"},
+                                                           {QLatin1String("C"), "<BRIGHT><RED>"},
+                                                           {QLatin1String("F"),
+                                                            "<UNDERL><BRIGHT><RED>"},
+                                                           {QLatin1String("I"), ""}};
+
+  // note: everything in this table should be unprintable (colors, etc)
+  static constexpr struct {
+    const char* name;
+    const char* replacement;
+  } tags[] = {
+      {"<RED>", VT_RED},         {"<GRN>", VT_GRN},       {"<YEL>", VT_YEL},
+      {"<BLU>", VT_BLU},         {"<MAG>", VT_MAG},       {"<CYN>", VT_CYN},
+      {"<WHT>", VT_WHT},         {"<RESET>", VT_RESET},   {"<BRIGHT>", VT_BRIGHT},
+      {"<DIM>", VT_DIM},         {"<UNDERL>", VT_UNDERL}, {"<BLINK>", VT_BLINK},
+      {"<REVERSE>", VT_REVERSE}, {"<HIDDEN>", VT_HIDDEN},
+  };
 
   // table could become invalid, enum is unnumbered in qlogging.h
   static_assert(QtDebugMsg == 0 && QtInfoMsg == 4);
@@ -1394,8 +1426,8 @@ QString MessageLog::format(const LogMsg& msg) const {
 
   // don't change colors unless we have to (maybe faster)
   if (_termColors && _lastColor != fmt.color) {
-    fprintf(stdout, "%s%s", VT_RESET, fmt.color);
-    _lastColor = fmt.color;
+    // fprintf(stdout, "%s%s", VT_RESET, fmt.color);
+    // _lastColor = fmt.color;
   }
 
   // shortened function name provides sufficient context
@@ -1436,21 +1468,25 @@ QString MessageLog::format(const LogMsg& msg) const {
     //    }
   }
 
-  _formatStr.resize(0);  // no more allocs after a few calls
+  _formatStr.resize(0);             // no more allocs after a few calls
 
-  if (_formatStr.capacity() > 1024)  // don't take too much
+  if (_formatStr.capacity() > 1024) // don't take too much
     _formatStr.squeeze();
 
   if (_showTimestamp) {
     auto currTime = nanoTime();
     int micros = (currTime - _lastTime) / 1000;
-    _formatStr += QString::asprintf("%06d ", micros);
     _lastTime = currTime;
+    _formatStr += "<RESET><DIM><MAG>";
+    _formatStr += QString::asprintf("%06d ", micros);
   }
 
-  if (msg.msg.startsWith(QLatin1String("<NC>")))  // no context
+  if (msg.msg.startsWith(QLatin1String("<NC>"))) { // no context
+    _formatStr += "<RESET>";
+    _formatStr += fmt.color;
     _formatStr += QStringView(msg.msg).mid(4);
-  else {
+  } else {
+    _formatStr += "<RESET><DIM><WHT>";
     //_formatStr += fmt.label;
     //_formatStr += QLatin1Char(' ');
     _formatStr += QLatin1Char('@');
@@ -1463,11 +1499,26 @@ QString MessageLog::format(const LogMsg& msg) const {
     }
     _formatStr += QLatin1Char('$');
     _formatStr += QLatin1Char(' ');
+
+    _formatStr += "<RESET>";
+    _formatStr += fmt.color;
+
     _formatStr += msg.msg;
   }
 
   _formatStr.replace(_homePath, QLatin1String("~"));
 
+  outUnprintable = 0;
+  for (auto& tag : tags) {
+    qsizetype pos = 0;
+    while (0 <= (pos = _formatStr.indexOf(tag.name, pos))) {
+      if (_termColors) {
+        _formatStr.replace(pos, strlen(tag.name), tag.replacement);
+        outUnprintable += strlen(tag.replacement);
+      } else
+        _formatStr.replace(pos, strlen(tag.name), qq(""));
+    }
+  }
   return _formatStr;
 }
 
@@ -1487,7 +1538,8 @@ void MessageLog::append(const LogMsg& msg) {
   } else {
     // if fatal, flush logger, since abort() comes next
     qFlushMessageLog();
-    fprintf(stdout, "\n%s%s\n\n", qUtf8Printable(format(msg)),
+    int unprintable = 0;
+    fprintf(stdout, "\n%s%s\n\n", qUtf8Printable(format(msg, unprintable)),
             _termColors ? VT_RESET : "");
     fflush(stdout);
   }
@@ -1508,7 +1560,8 @@ void MessageLog::flush() {
     QByteArray utf8("\n");
 
     while (_log.count() > 0) {
-      utf8 += format(_log.takeFirst()).toUtf8();
+      int unprintable = 0;
+      utf8 += format(_log.takeFirst(), unprintable).toUtf8();
       utf8 += "\n";
     }
     fwrite(utf8.constData(), utf8.length(), 1, stdout);
@@ -1649,11 +1702,12 @@ int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const Q
   }
 }
 
-void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantList& args) const {
-  if (_max > 0)
-    str.replace("%percent", QString::number(step * 100 / _max) + '%');
+bool ProgressLogger::_alwaysShow = false;
 
-  str.replace("%bignum", _locale.toString(step));
+void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantList& args) const {
+  str.replace("%percent",
+              "<GRN>" + (_max > 0 ? QString::number(step * 100 / _max) : "100") + "%<RESET>");
+  str.replace("%bignum", "<CYN>" + _locale.toString(step) + "<RESET>");
 
   for (int i = 0; i < args.size(); ++i) {
     const QVariant& val = args.at(i);
@@ -1683,7 +1737,7 @@ void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantLis
 }
 
 void ProgressLogger::step(uint64_t step, const QVariantList& args) const {
-  if (_hideTimer.elapsed() < 500) return;
+  if (!_alwaysShow && _hideTimer.elapsed() < 500) return;
   // one print per percent output
   // if (_max > 0 && ((step - 1) * 100) / _max == (step * 100) / _max) return;
   QString out = _format;
@@ -1692,7 +1746,7 @@ void ProgressLogger::step(uint64_t step, const QVariantList& args) const {
 }
 
 void ProgressLogger::stepRateLimited(uint64_t step, const QVariantList& args) {
-  if (_hideTimer.elapsed() < 500) return;
+  if (!_alwaysShow && _hideTimer.elapsed() < 500) return;
   // one print per percent output
   // if (_max > 0 && ((step - 1) * 100) / _max == (step * 100) / _max) return;
   if (_rateLimitTimer.elapsed() < 100) return;
@@ -1703,9 +1757,9 @@ void ProgressLogger::stepRateLimited(uint64_t step, const QVariantList& args) {
 }
 
 void ProgressLogger::end(uint64_t step, const QVariantList& args) const {
-  if (_hideTimer.elapsed() < 500 && !_showLast) return;
+  if (!_alwaysShow && !_showLast && _hideTimer.elapsed() < 500) return;
   QString out = _format;
-  out += ", " + QString::number(_hideTimer.elapsed()) + "ms";
+  out += ", <DIM><WHT>" + _locale.toString(_hideTimer.elapsed()) + "ms";
   formatString(out, step > 0 ? step : _max, args);
   qColorMessageOutput(QtInfoMsg, _context, out);
 }

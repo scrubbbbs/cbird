@@ -182,7 +182,7 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QStri
   _mediaId.clear();
   _isLoaded = false;
 
-  PROGRESS_LOGGER(pl, "<PL>sql query: %bignum videos", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
 
   size_t i = 0;
   while (query.next()) {
@@ -210,7 +210,6 @@ QSet<mediaid_t> DctVideoIndex::mediaIds(QSqlDatabase& db,
                                         const QString& cachePath,
                                         const QString& dataPath) const {
   (void) cachePath;
-  (void) dataPath;
 
   QSet<mediaid_t> result;
   if (isLoaded()) {
@@ -233,7 +232,7 @@ QSet<mediaid_t> DctVideoIndex::mediaIds(QSqlDatabase& db,
 
   if (!query.exec()) SQL_FATAL(exec);
 
-  PROGRESS_LOGGER(pl, "<PL>sql query: %bignum videos", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
   size_t i = 0;
   while (query.next()) {
     uint32_t id = query.value(0).toUInt();

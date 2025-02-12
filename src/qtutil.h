@@ -220,6 +220,8 @@ class ProgressLogger {
   Q_DISABLE_COPY_MOVE(ProgressLogger);
   ProgressLogger() = delete;
 
+  static bool _alwaysShow;
+
   const QString _format;
   const uint64_t _max;
   const QMessageLogContext _context;
@@ -231,6 +233,8 @@ class ProgressLogger {
   void formatString(QString& str, uint64_t step, const QVariantList& args={}) const;
 
  public:
+  static void setAlwaysShow(bool show) { _alwaysShow = show; }
+
   ProgressLogger(const QString& format, uint64_t maxStep, const char* contextFunc)
       : _format(format)
       , _max(maxStep)

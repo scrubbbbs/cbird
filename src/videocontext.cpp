@@ -162,7 +162,54 @@ static void avFrameToCvImg(const AVFrame& frame, cv::Mat& dst) {
   }
 }
 
-void VideoContext::loadLibrary() { av_log_set_callback(&avLogger); }
+static void FFmpeg(void* ptr, int level, const char* fmt, va_list vl) {
+  if (level > av_log_get_level()) return;
+
+  QString msgContext;
+
+  // use the current context if there is one
+  auto& threadCtx = qMessageContext();
+  if (threadCtx.hasLocalData()) msgContext = threadCtx.localData();
+
+  // use file name associated with ptr
+  if (msgContext.isEmpty()) msgContext = VideoContext::avLoggerGetFileName(ptr);
+
+  // nothing found, cwd might be helpful
+  if (msgContext.isEmpty()) {
+    //char path[PATH_MAX + 1] = {0};
+    //if (getcwd(path, sizeof(path))) msgContext = QString("cwd={") + path + "}";
+    msgContext += "unknown file";
+  }
+
+  if (ptr) msgContext += QString("(") + av_default_item_name(ptr) + ")";
+
+  MessageContext context(msgContext);
+
+  char buf[1024] = {0};
+  vsnprintf(buf, sizeof(buf) - 1, fmt, vl);
+  QString str = buf;
+  QByteArray bytes = str.trimmed().toUtf8();
+  const char* msg = bytes.data();
+
+  //     if (level >= AV_LOG_TRACE) ;
+  // else if (level >= AV_LOG_DEBUG) ;
+  static const QLoggingCategory category("FFmpeg");
+  if (level >= AV_LOG_VERBOSE)
+    qCDebug(category) << msg;
+  else if (level >= AV_LOG_INFO)
+    qCInfo(category) << msg;
+  else if (level >= AV_LOG_WARNING)
+    qCWarning(category) << msg;
+  // else if (level >= AV_LOG_ERROR);
+  else if (level >= AV_LOG_FATAL)
+    qCCritical(category) << msg;
+  else if (level >= AV_LOG_PANIC)
+    qCFatal(category, "%s", msg);
+}
+
+void VideoContext::loadLibrary() {
+  av_log_set_callback(&FFmpeg);
+}
 
 QStringList VideoContext::ffVersions() {
   QStringList list;
@@ -289,6 +336,7 @@ VideoContext::~VideoContext() {
   if (_p->context) close();
   delete _p;
 }
+
 // static QMutex* ffGlobalMutex() {
 //   static QMutex mutex;
 //   return &mutex;
@@ -1054,51 +1102,6 @@ QHash<void*, QString>& VideoContext::pointerToFileName() {
 QMutex* VideoContext::avLogMutex() {
   static QMutex mutex;
   return &mutex;
-}
-
-void VideoContext::avLogger(void* ptr, int level, const char* fmt, va_list vl) {
-  if (level > av_log_get_level()) return;
-
-  QString msgContext;
-
-  // use the current context if there is one
-  auto& threadCtx = qMessageContext();
-  if (threadCtx.hasLocalData()) msgContext = threadCtx.localData();
-
-  // use file name associated with ptr
-  if (msgContext.isEmpty())
-    msgContext = avLoggerGetFileName(ptr);
-
-  // nothing found, cwd might be helpful
-  if (msgContext.isEmpty()) {
-    //char path[PATH_MAX + 1] = {0};
-    //if (getcwd(path, sizeof(path))) msgContext = QString("cwd={") + path + "}";
-    msgContext += "unknown file";
-  }
-
-  if (ptr) msgContext += QString("(") + av_default_item_name(ptr) + ")";
-
-  MessageContext context(msgContext);
-
-  char buf[1024] = {0};
-  vsnprintf(buf, sizeof(buf) - 1, fmt, vl);
-  QString str = buf;
-  QByteArray bytes = str.trimmed().toUtf8();
-  const char* msg = bytes.data();
-
-  //     if (level >= AV_LOG_TRACE) ;
-  // else if (level >= AV_LOG_DEBUG) ;
-  if (level >= AV_LOG_VERBOSE)
-    qDebug() << msg;
-  else if (level >= AV_LOG_INFO)
-    qDebug() << msg;
-  else if (level >= AV_LOG_WARNING)
-    qWarning() << msg;
-  // else if (level >= AV_LOG_ERROR);
-  else if (level >= AV_LOG_FATAL)
-    qCritical() << msg;
-  else if (level >= AV_LOG_PANIC)
-    qFatal("%s", msg);
 }
 
 void VideoContext::avLoggerSetFileName(void* ptr, const QString& name) {

@@ -162,6 +162,8 @@ class VideoContext {
   /// @note only useful in iframes-only mode
   int lastFrameNumber() const { return _lastFrameNumber; }
 
+  static QString avLoggerGetFileName(void* ptr);
+
  private:
   bool readPacket();
   bool convertFrame(int& w, int& h, int& fmt);
@@ -174,7 +176,6 @@ class VideoContext {
   static void avLogger(void* ptr, int level, const char* fmt, va_list vl);
   static void avLoggerSetFileName(void* ptr, const QString& name);
   static void avLoggerUnsetFileName(void* ptr);
-  static QString avLoggerGetFileName(void* ptr);
 
   QString _path;
   VideoContextPrivate* _p;

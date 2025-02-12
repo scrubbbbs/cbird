@@ -449,8 +449,8 @@ uint64_t dctHash64(const cv::Mat& cvImg, bool inPlace) {
     cv::Mat blur;
     if (isCopy || inPlace)
       blur = gray;
-    else
-      qDebug() << "blur() taking a copy"; // expected iif input is grayscale
+    else if (inPlace)
+      qDebug() << "blur() taking a copy"; // warn if we expected in-place operation
     cv::blur(gray, blur, cv::Size(kernelSize, kernelSize));
     gray = blur;
   }

@@ -107,7 +107,7 @@ void Engine::update(bool wait, const QString& dirPath) {
   if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo)) {
     QVector<int> missingVideos;
     const MediaGroup videos = db->mediaWithType(Media::TypeVideo);
-    PROGRESS_LOGGER(pl, "verifying video index:<PL> %percent %bignum", videos.count());
+    PROGRESS_LOGGER(pl, "verifying video index:<PL> %percent %bignum videos", videos.count());
     int i = 0;
     QElapsedTimer timer;
     timer.start();

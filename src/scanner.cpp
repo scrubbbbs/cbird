@@ -296,10 +296,15 @@ QMutex* Scanner::staticMutex() {
 void Scanner::scanProgress(const QString& path) const {
   const QString elided = qElide(path.mid(_topDirPath.length() + 1), 80);
 
-  QString status = QString::asprintf(
-      "<NC>checking %s$<PL> new{i:%lld v:%lld} ignored:%d modified:%d ok:%d <EL>%s",
-      qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(), _ignoredFiles,
-      _modifiedFiles, _existingFiles, qUtf8Printable(elided));
+  QString status = QString::asprintf("<NC>checking <BLU>%s<RESET>$<PL> "
+                                     "images:<CYN>%'lld<RESET> "
+                                     "videos:<CYN>%'lld<RESET> "
+                                     "ign:<CYN>%'d<RESET> "
+                                     "mod:<CYN>%'d<RESET> "
+                                     "unch:<CYN>%'d<RESET> <EL><BLU>%s",
+                                     qUtf8Printable(_topDirPath), _imageQueue.count(),
+                                     _videoQueue.count(), _ignoredFiles, _modifiedFiles,
+                                     _existingFiles, qUtf8Printable(elided));
   qInfo().noquote() << status;
 }
 

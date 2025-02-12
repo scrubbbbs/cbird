@@ -80,7 +80,7 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath, const QStrin
     if (!query.exec("select count(0) from media where type=1")) SQL_FATAL(exec);
     if (!query.next()) SQL_FATAL(next);
     size_t rowCount = query.value(0).toULongLong();
-    PROGRESS_LOGGER(pl, "<PL>%percent %bignum hashes", rowCount);
+    PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
 
     if (!query.exec("select id,phash_dct from media where type=1")) SQL_FATAL(exec);
 
@@ -135,7 +135,7 @@ QSet<mediaid_t> DctHashIndex::mediaIds(QSqlDatabase& db,
   if (!query.exec("select count(0) from media where type=1")) SQL_FATAL(exec);
   if (!query.next()) SQL_FATAL(next);
   size_t rowCount = query.value(0).toULongLong();
-  PROGRESS_LOGGER(pl, "<PL>%percent %bignum hashes", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
 
   if (!query.exec("select id,phash_dct from media where type=1")) SQL_FATAL(exec);
 

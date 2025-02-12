@@ -81,7 +81,7 @@ QSqlDatabase Database::connect(int id) {
 
   const QString name = QString("sqlite_%1_%2").arg(id).arg(connId);
   const QString path = dbPath(id);
-  qDebug("thread:%p %s %s", reinterpret_cast<void*>(thread), qPrintable(name), qPrintable(path));
+  qDebug() << thread << name << QDir(this->path()).relativeFilePath(path);
 
   QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", name);
   db.setDatabaseName(path);
@@ -263,7 +263,6 @@ void Database::createTables() {
 }
 
 Database::Database(const QString& path_) {
-  qDebug() << path_;
   QDir dir = QDir::current();
   if (path_ != "") dir = QDir(path_);
 
@@ -850,8 +849,8 @@ bool Database::moveDir(const QString& dirPath, const QString& newName) {
 }
 
 void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
-  int i = 1;
-  PROGRESS_LOGGER(pl, "sql query:<PL> %bignum rows", -1);
+  PROGRESS_LOGGER(pl, "querying:<PL> %bignum rows", -1);
+  int i = 0;
 
   while (query.next()) {
     /*
@@ -885,16 +884,17 @@ void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
     // qDebug("%s %d %dx%d", qUtf8Printable(mediaPath), (int)m.phashDct(),
     // m.width(), m.height());
 
-    if (m.width() <= 0 || m.height() <= 0) qWarning() << "no dimensions: %s" << m.path();
+    if (m.width() <= 0 || m.height() <= 0) qWarning() << "no dimensions: %s" << relPath;
 
     m.setId(id);
     media.append(m);
 
     if (maxLen > 0 && i >= maxLen) break;
-    if (i % 1000 == 0) pl.step(i);
+
+    if (i > 0) pl.stepRateLimited(i); // do not log single-item
     i++;
   }
-  pl.end(i-1);
+  if (i > 1) pl.end(i); // do not log single-item, assume something else is logging
 }
 
 /*
@@ -1340,7 +1340,9 @@ MediaGroupList Database::similar(const SearchParams& params) {
         return m.type() & resultTypes;
     });
     if (count <= 0) {
-      qWarning()  << "invalid search space, no media with type(s)" << Media::typeFlagsString(resultTypes);
+      qWarning() << "empty search space, no indexed media with type(s)"
+                 << Media::typeFlagsString(resultTypes);
+      qWarning() << "perhaps you need to add the algo (-i.algos) or adjust filters";
       return MediaGroupList();
     }
   }
