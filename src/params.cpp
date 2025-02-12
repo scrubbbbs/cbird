@@ -18,7 +18,32 @@ bool Params::setValue(const QString& key, const QVariant& val) {
   auto it = _params.find(key);
   if (it == _params.end())
     qWarning() << "invalid name:" << key;
-  else if (!it->set(this, val))
+  else if (val.toString() == "?" || val.toString() == "/?" || val.toString() == "help") {
+    auto v = *it;
+    QString desc = "<NC>";
+    desc += qq("\n    ") + _valueLabel + " [" + v.key + "]";
+    desc += "\n";
+    desc += qq("\n    ") + v.label;
+    desc += "\n";
+    desc += qq("\n    default:   [") + v.toString(this) + "]";
+    desc += qq("\n    type:      <") + v.typeName() + ">";
+
+    desc += qq("\n    range:     [");
+    if (v.range().empty())
+      desc += "n/a";
+    else
+      desc += QString("%1 to %2").arg(v.range()[0]).arg(v.range()[1]);
+    desc += "]";
+
+    const auto& nv = v.namedValues();
+    if (nv.count() > 0) {
+      desc += QString("\n\n    options:");
+      for (auto& n : nv)
+        desc += QString("\n      %1 (%2) %3").arg(n.shortName, -6).arg(n.value).arg(n.description);
+    }
+    qInfo().noquote().nospace() << desc;
+    return false;
+  } else if (!it->set(this, val))
     qWarning() << "failed to set:" << key << "to:" << val;
   else {
     _wasSet.insert(key);

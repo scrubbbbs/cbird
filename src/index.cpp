@@ -58,6 +58,8 @@ SearchParams::SearchParams() {
   static const QVector<int> positive{0, INT_MAX};
   static const QVector<int> nonzero{1, INT_MAX};
 
+  _valueLabel = "Search Parameter";
+
   int counter = 0;
 
   {

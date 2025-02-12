@@ -1110,6 +1110,8 @@ IndexParams::IndexParams() {
   static const QVector<int> positive{0, INT_MAX};
   static const QVector<int> nonzero{1, INT_MAX};
 
+  _valueLabel = "Index Parameter";
+
   int counter = 0;
   {
     // note: identical to SearchParams::algo except bit shift

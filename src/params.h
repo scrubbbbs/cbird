@@ -77,6 +77,7 @@ class Params {
   void print() const;
 
  protected:
+  QString _valueLabel; // what a param is for, e.g. "Search Parameter"
   QHash<QString, Value> _params;
   Value _invalid;
   QSet<QString> _wasSet; // keys successful in setValue()
