@@ -110,8 +110,21 @@ class Database {
   /// @return all files in the index
   QSet<QString> indexedFiles();
 
-  /// @return files in the index which are indexed for algos
-  QSet<QString> indexedForAlgos(int algos);
+  /// @return all files in the index with its id and indexed algorithms
+  struct Item {
+    mediaid_t id = 0;
+    int type = 0;
+    int algos = 0;
+  };
+  QHash<QString, Item> indexedItems();
+
+  /**
+   * get indexed media
+   * @param algos algos flags / indexes to check
+   * @param missing if true, return if *not* indexed for all algos
+   * @return media indexed for all algos
+   */
+  QHash<QString, mediaid_t> indexedForAlgos(int algos, bool missing);
 
   /// @return duplicate Media via md5 hash
   MediaGroupList dupsByMd5(const SearchParams& params);
@@ -201,7 +214,7 @@ class Database {
   /// when called there must not be any live instances of Database
   static void disconnectAll();
 
-private:
+ private:
   /**
    * Thread-safe database connection
    * @return per-thread instance

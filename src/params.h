@@ -71,7 +71,7 @@ class Params {
   QStringList keys() const;
 
   Value getValue(const QString& key) const;
-  void setValue(const QString& key, const QVariant& val);
+  bool setValue(const QString& key, const QVariant& val);
   QString toString(const QString& key) const;
 
   void print() const;

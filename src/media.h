@@ -249,6 +249,7 @@ class Media {
    */
   int type() const { return _type; }
   void setType(int type) { _type = type; }
+  static int typeFlag(int mediaType) { return 1 << (mediaType - 1); }
   static QString typeString(int mediaType);
   static QStringList typeFlagsString(int typeFlags);
 

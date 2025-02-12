@@ -255,6 +255,12 @@ class Index {
     return nullptr;
   }
 
+  /**
+   * Get media types returned
+   * @return Media::Type flags
+   */
+  virtual int resultTypes() const { return Media::typeFlag(Media::TypeImage); }
+
  protected:
   int _id;
   Index() { _id = -1; }

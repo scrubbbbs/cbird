@@ -49,15 +49,6 @@ void ColorDescIndex::createTables(QSqlDatabase& db) const {
 }
 
 void ColorDescIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) const {
-  bool isValid = false;
-  for (const Media& m : media)
-    if (m.colorDescriptor().numColors > 0) {
-      isValid = true;
-      break;
-    }
-
-  if (!isValid) return;
-
   QSqlQuery query(db);
 
   if (!query.prepare("insert into color "
@@ -66,17 +57,16 @@ void ColorDescIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) const
     SQL_FATAL(prepare);
 
   for (const Media& m : media) {
-    const ColorDescriptor& desc = m.colorDescriptor();
-    if (desc.numColors > 0) {
-      auto bytes =
-          QByteArray(reinterpret_cast<const char*>(&m.colorDescriptor()), sizeof(ColorDescriptor));
-      query.bindValue(":media_id", m.id());
-      query.bindValue(":color_desc", bytes);
+    // store descriptor even if it has no color information (grayscale),
+    // this is fine as we will ignore it when searching
+    auto bytes = QByteArray(reinterpret_cast<const char*>(&m.colorDescriptor()),
+                            sizeof(ColorDescriptor));
+    query.bindValue(":media_id", m.id());
+    query.bindValue(":color_desc", bytes);
 
-      if (!query.exec()) {
-        qDebug() << "id=" << m.id() << m.path();
-        SQL_FATAL(exec);
-      }
+    if (!query.exec()) {
+      qDebug() << "id=" << m.id() << m.path();
+      SQL_FATAL(exec);
     }
   }
 }
@@ -265,6 +255,8 @@ QVector<Index::Match> ColorDescIndex::find(const Media& m, const SearchParams& p
       target = tmp.colorDescriptor();
     else
       qWarning() << "needle has no color descriptor" << m.id() << m.path();
+
+    if (target.numColors <= 0) return results;
   }
 
   for (int i = 0; i < _count; i++) {

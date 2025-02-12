@@ -49,6 +49,7 @@ class IndexParams : public Params {
   int writeBatchSize = 1024;   // size of item batch when writing to database
   bool estimateCost = true;    // estimate indexing cost to schedule jobs better
   bool showIgnored = false;    // show all ignored files/dirs
+  bool verbose = false;        // log all files queued for processing and other stuff
   bool dryRun = false;         // scan for changes but do not process
   bool followSymlinks = false; // follow symlinks to files/dirs
   bool resolveLinks = false;   // index the resolved symlink instead of link
@@ -64,6 +65,16 @@ class IndexParams : public Params {
   QStringList includePatterns; // include matching paths
 
   IndexParams();
+
+  /// @return type flags for types supported by given algos
+  static int supportedTypes(int algos);
+
+  /// @return type flags for types supported by .algos
+  int supportedTypes() const { return supportedTypes(this->algos); };
+
+  static int supportedAlgos(int types);
+
+  int supportedAlgos() const { return supportedAlgos(this->types); };
 };
 
 /// Result of image/video processing, prior to saving

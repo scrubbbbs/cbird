@@ -92,6 +92,8 @@ class DctVideoIndex : public Index {
   // video index does not use sql, but we need media ids
   int databaseId() const override { return 0; }
 
+  int resultTypes() const override { return Media::typeFlag(Media::TypeVideo); }
+
  private:
   QVector<Index::Match> findFrame(const Media& needle, const SearchParams& params);
   QVector<Index::Match> findVideo(const Media& needle, const SearchParams& params);

@@ -14,18 +14,21 @@ Params::Value Params::getValue(const QString& key) const {
   return _invalid;
 }
 
-void Params::setValue(const QString& key, const QVariant& val) {
+bool Params::setValue(const QString& key, const QVariant& val) {
   auto it = _params.find(key);
   if (it == _params.end())
-    qWarning() << "invalid param:" << key;
+    qWarning() << "invalid name:" << key;
   else if (!it->set(this, val))
     qWarning() << "failed to set:" << key << "to:" << val;
   else {
     _wasSet.insert(key);
     for (const auto& l : it->link)
       if (l.value == it->get(this) && !_wasSet.contains(l.target))
-        setValue(l.target, l.targetValue);
+        if (!setValue(l.target, l.targetValue)) return false;
+
+    return true;
   }
+  return false;
 }
 
 QString Params::toString(const QString& key) const {

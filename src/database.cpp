@@ -1355,6 +1355,21 @@ MediaGroupList Database::similar(const SearchParams& params) {
     return MediaGroupList();
   }
 
+  // check for empty index and provide some help
+  {
+    size_t numMissing = 0;
+    QHash<QString, mediaid_t> missing = indexedForAlgos(1 << params.algo, true);
+    for (auto& m : std::as_const(haystack))
+      if (missing.contains(m.path())) numMissing++;
+
+    // 90% check here because it is likely not all haystack files were successfully indexed
+    if (numMissing > 0.90 * haystack.size()) {
+      qWarning() << "the haystack does not seem to be indexed for the selected algo,";
+      qWarning() << "it can be added with -i.algos -update";
+      QThread::msleep(5000);
+    }
+  }
+
   qInfo("index loaded in %dms", int(QDateTime::currentMSecsSinceEpoch() - start));
   start = QDateTime::currentMSecsSinceEpoch();
 
@@ -1524,36 +1539,107 @@ QSet<QString> Database::indexedFiles() {
   return paths;
 }
 
-QSet<QString> Database::indexedForAlgos(int algos) {
-  QReadLocker locker(&_rwLock);
-  QSet<QString> paths;
+QHash<QString, Database::Item> Database::indexedItems() {
+  QWriteLocker locker(&_rwLock);          // using write lock since we might need to fix orphans
+  QHash<QString, Item> result;
   QHash<int, QSet<mediaid_t>> indexedIds; // index id=> media id list
-  for (const Index* i : std::as_const(_algos))
-    if (algos & (1 << i->id())) {
-      QString dataPath = "";
-      if (i->id() == SearchParams::AlgoVideo) dataPath = videoPath();
+  for (const Index* i : std::as_const(_algos)) {
+    QString dataPath = "";
+    if (i->id() == SearchParams::AlgoVideo) dataPath = videoPath();
 
-      QSqlDatabase db = connect(i->databaseId());
-      indexedIds.insert(i->id(), i->mediaIds(db, cachePath(), dataPath));
-    }
+    QSqlDatabase db = connect(i->databaseId());
+    auto ids = i->mediaIds(db, cachePath(), dataPath);
+    indexedIds.insert(i->id(), ids);
+  }
 
   QSqlQuery query(connect());
 
-  if (!query.prepare("select id,path from media")) SQL_FATAL(prepare);
+  if (!query.prepare("select id,type,path from media")) SQL_FATAL(prepare);
   if (!query.exec()) SQL_FATAL(exec);
 
   while (query.next()) {
-    const int32_t id = query.value(0).toInt();
-    const QString relPath = query.value(1).toString();
+    const mediaid_t mediaId = query.value(0).toUInt();
+    const int type = query.value(1).toInt();
+    const QString relPath = query.value(2).toString();
+    const QString absPath = path() + lc('/') + relPath;
 
-    for (const Index* i : std::as_const(_algos))
-      if (!indexedIds[i->id()].contains(id)) continue;
+    int algos = 0;
+    for (const Index* i : std::as_const(_algos)) {
+      auto& set = indexedIds[i->id()];
+      if (set.contains(mediaId)) {
+        if (type == Media::TypeVideo && (i->id() == SearchParams::AlgoColor))
+          continue; // bug in older version
 
-    Q_ASSERT(!relPath.isEmpty());
-    paths.insert(path() + "/" + relPath);
+        algos |= (1 << i->id());
+        set.remove(mediaId); // if we have extra id's they are "orphaned" and must be removed
+      }
+    }
+    result.insert(absPath, {mediaId, type, algos});
   }
 
-  return paths;
+  for (Index* i : std::as_const(_algos)) {
+    auto& set = std::as_const(indexedIds)[i->id()];
+    if (!set.isEmpty()) {
+      QVector<int> toRemove; // TODO: use mediaid_t
+      for (auto& item : set)
+        toRemove.append(item);
+
+      qWarning() << "removing" << toRemove.count() << "orphaned items from algo" << i->id();
+
+      QSqlDatabase db = connect(i->databaseId());
+      if (!db.transaction()) qFatal("create transaction failed");
+      i->removeRecords(db, toRemove);
+      if (!db.commit()) qFatal("commit transaction failed");
+      i->remove(toRemove);
+    }
+  }
+
+  return result;
+}
+
+QHash<QString, mediaid_t> Database::indexedForAlgos(int algos, bool missing) {
+  QReadLocker locker(&_rwLock);
+  QHash<QString, mediaid_t> result;
+  QHash<int, QSet<mediaid_t>> indexedIds; // index id=> media id list
+  for (const Index* i : std::as_const(_algos)) {
+    int algoFlag = (1 << i->id());
+    if (!(algos & algoFlag)) continue;
+
+    QString dataPath = "";
+    if (i->id() == SearchParams::AlgoVideo) dataPath = videoPath();
+
+    QSqlDatabase db = connect(i->databaseId());
+    auto ids = i->mediaIds(db, cachePath(), dataPath);
+    indexedIds.insert(i->id(), ids);
+  }
+
+  QSqlQuery query(connect());
+
+  if (!query.prepare("select id,path,type from media")) SQL_FATAL(prepare);
+  if (!query.exec()) SQL_FATAL(exec);
+
+  while (query.next()) {
+    const int32_t mediaId = query.value(0).toInt();
+    const QString relPath = query.value(1).toString();
+    int type = query.value(2).toInt();
+
+    bool isIndexed = true;
+    for (const Index* i : std::as_const(_algos)) {
+      if (algos & (1 << i->id()))
+        if (i->resultTypes() & Media::typeFlag(type))
+          if (!indexedIds[i->id()].contains(mediaId)) {
+            isIndexed = false;
+            break;
+          }
+    }
+
+    if ((isIndexed && !missing) || (!isIndexed && missing)) {
+      Q_ASSERT(!relPath.isEmpty());
+      result.insert(path() + "/" + relPath, mediaId);
+    }
+  }
+
+  return result;
 }
 
 void Database::addIndex(Index* index) { _algos.append(index); }

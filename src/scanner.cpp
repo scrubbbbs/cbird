@@ -144,55 +144,70 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
 
   // TODO: remove any expected path that doesn't start with path
   // we are wanting to index
-
+  qInfo("<NC>"); // empty log line
   readDirectory(path, zipFiles, expected);
   scanProgress(path);
+  qInfo("<NC>"); // empty log line
 
   // estimate the cost of each video, to process longest-job-first (LJF),
   // - this is slow; so try to avoid it
   // - pointless if codecs are all multithreaded
   // - little difference if there are a lot of jobs
-  if (_params.estimateCost && _params.algos & SearchParams::AlgoVideo) {
-    qDebug() << "using slower but more accurate job scheduling";
-    QMap<QString, bool> threads;
-    for (auto& path : qAsConst(_videoQueue)) {
-      threads[path] = false;
+  if (_params.algos & (1 << SearchParams::AlgoVideo)) {
+    if (_params.estimateCost) {
+      qDebug() << "using slower but more accurate video job scheduling (-i.ljf)";
+      QMap<QString, bool> threads;
+      for (auto& path : qAsConst(_videoQueue)) {
+        threads[path] = false;
 
-      const QString context = path.mid(_topDirPath.length() + 1);
-      const MessageContext mc(context);
+        const QString context = path.mid(_topDirPath.length() + 1);
+        const MessageContext mc(context);
 
-      VideoContext v;
-      if (v.open(path) < 0) continue;
+        VideoContext v;
+        if (v.open(path) < 0) continue;
 
-      threads[path] = v.metadata().supportsThreads;
+        threads[path] = v.metadata().supportsThreads;
+      }
+
+      std::sort(_videoQueue.begin(), _videoQueue.end(),
+                [&threads](const QString& a, const QString& b) {
+                  QFileInfo infoA(a);
+                  QFileInfo infoB(b);
+                  bool mtA = threads[a];
+                  bool mtB = threads[b];
+                  if (mtA == mtB) return infoA.size() > infoB.size();
+
+                  return mtA > mtB;
+                });
+    } else {
+      // sort likely multi-threaded extensions first
+      static QStringList mtFormats = {"mp4", "mkv", "mpg", "webm"};
+      std::sort(_videoQueue.begin(), _videoQueue.end(), [](const QString& a, const QString& b) {
+        QFileInfo infoA(a);
+        QFileInfo infoB(b);
+        bool mtA = mtFormats.contains(infoA.suffix().toLower());
+        bool mtB = mtFormats.contains(infoB.suffix().toLower());
+        if (mtA == mtB) return infoA.size() > infoB.size();
+
+        return mtA > mtB;
+      });
     }
 
-    std::sort(_videoQueue.begin(), _videoQueue.end(),
-              [&threads](const QString& a, const QString& b) {
-                QFileInfo infoA(a);
-                QFileInfo infoB(b);
-                bool mtA = threads[a];
-                bool mtB = threads[b];
-                if (mtA == mtB) return infoA.size() > infoB.size();
+    if (_params.verbose) {
+      QDir d(_topDirPath);
+      for (auto& p : std::as_const(_videoQueue))
+        qDebug() << "video job:" << QFileInfo(p).size() / 1024.0 / 1024.0 << d.relativeFilePath(p);
+    }
 
-                return mtA > mtB;
-              });
-  } else {
-    // sort likely multi-threaded extensions first
-    static QStringList mtFormats = {"mp4", "mkv", "mpg", "webm"};
-    std::sort(_videoQueue.begin(), _videoQueue.end(), [](const QString& a, const QString& b) {
-      QFileInfo infoA(a);
-      QFileInfo infoB(b);
-      bool mtA = mtFormats.contains(infoA.suffix().toLower());
-      bool mtB = mtFormats.contains(infoB.suffix().toLower());
-      if (mtA == mtB) return infoA.size() > infoB.size();
-
-      return mtA > mtB;
-    });
+  } else if (_params.types & IndexParams::TypeVideo) {
+    qWarning() << "videos will be checksummed unless \"-i.types i\" is used";
   }
 
-  for (auto& p : _videoQueue)
-    qDebug() << "job:" << QFileInfo(p).size() / 1024.0 / 1024.0 << QFileInfo(p).fileName();
+  if (_params.verbose) {
+    QDir d(_topDirPath);
+    for (auto& p : std::as_const(_imageQueue))
+      qDebug() << "image job:" << d.relativeFilePath(p);
+  }
 
   if (_params.dryRun) {
     qInfo() << "dry run, flushing queues";
@@ -313,10 +328,15 @@ void Scanner::readDirectory(const QString& dirPath,
     }
 
     // junctions are effectively symlinks
-    if (!_params.followSymlinks && (entry.isSymLink() || entry.isJunction())) {
-      _ignoredFiles++;
-      setError(path, ErrorNoLinks, _params.showIgnored);
-      continue;
+    if (entry.isSymLink() || entry.isJunction()) {
+      if (!_params.followSymlinks) {
+        _ignoredFiles++;
+        setError(path, ErrorNoLinks, _params.showIgnored);
+        continue;
+      } else if (_params.verbose) {
+        // TODO: check for broken symlinks?
+        qDebug() << "following link:" << QDir(_topDirPath).relativeFilePath(path);
+      }
     }
 
     if (!_params.dupInodes) {
@@ -350,7 +370,12 @@ void Scanner::readDirectory(const QString& dirPath,
       else
 #endif
         canonical = entry.canonicalFilePath();
+
+      // if link resolves within root we can automatically remove
+      // potential duplicates; otherwise we just follow it as normal
       if (canonical.startsWith(_topDirPath)) {
+        if (_params.verbose)
+          qDebug() << "using resolved link:" << QDir(_topDirPath).relativeFilePath(canonical);
         path = canonical;
         _imageQueue.removeOne(path);
         _videoQueue.removeOne(path);
@@ -1107,6 +1132,9 @@ IndexParams::IndexParams() {
   add({"ignored", "Log all ignored files", Value::Bool, counter++, SET_BOOL(showIgnored),
        GET(showIgnored), NO_NAMES, NO_RANGE});
 
+  add({"verbose", "Log all links followed and files queued for processing", Value::Bool, counter++,
+       SET_BOOL(verbose), GET(verbose), NO_NAMES, NO_RANGE});
+
   add({"links", "Follow symlinks to files and directories", Value::Bool, counter++,
        SET_BOOL(followSymlinks), GET(followSymlinks), NO_NAMES, NO_RANGE});
 
@@ -1160,4 +1188,20 @@ IndexParams::IndexParams() {
 
   add({"gputhr", "Max decoders per gpu", Value::Int, counter++, SET_INT(gpuThreads),
        GET(gpuThreads), NO_NAMES, GET_CONST(nonzero)});
+}
+
+int IndexParams::supportedTypes(int algos) {
+  static_assert(SearchParams::NumAlgos == 5);
+  int types = 0;
+  if (algos & (1 << SearchParams::AlgoVideo)) types |= TypeVideo;
+  if (algos & ~(1 << SearchParams::AlgoVideo)) types |= TypeImage;
+  return types;
+}
+
+int IndexParams::supportedAlgos(int types) {
+  static_assert(SearchParams::NumAlgos == 5);
+  int algos = 0;
+  if (types & TypeImage) algos |= 31 ^ (1 << SearchParams::AlgoVideo);
+  if (types & TypeVideo) algos |= (1 << SearchParams::AlgoVideo);
+  return algos;
 }

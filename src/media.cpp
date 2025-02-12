@@ -179,8 +179,7 @@ QString Media::typeString(int mediaType) {
 QStringList Media::typeFlagsString(int typeFlags) {
   QStringList types;
   for (int type = TypeImage; type <= TypeAudio; ++type)
-    if (typeFlags & (1 << (type-1)))
-      types.append(typeString(type));
+    if (typeFlags & typeFlag(type)) types.append(typeString(type));
   return types;
 }
 

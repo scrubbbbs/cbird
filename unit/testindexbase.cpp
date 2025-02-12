@@ -106,17 +106,17 @@ void TestIndexBase::baseTestEmpty(Index* index) {
   m = db.mediaWithPath(path);
   QVERIFY(m.id() == 0);
 
-  QCOMPARE(db.indexedForAlgos(1 << params.algo).count(), 0);
+  QCOMPARE(db.indexedForAlgos(1 << params.algo, false).count(), 0);
 }
 
 void TestIndexBase::baseTestLoad(const SearchParams& params) {
   QVERIFY(!_index->isLoaded());
-  QSet<QString> indexedByAlgoBefore = _database->indexedForAlgos(1 << params.algo);
+  auto indexedByAlgoBefore = _database->indexedForAlgos(1 << params.algo, false);
 
   MediaGroupList results = _database->similar(params);
 
   QVERIFY(_index->isLoaded());
-  QSet<QString> indexedByAlgoAfter = _database->indexedForAlgos(1 << params.algo);
+  auto indexedByAlgoAfter = _database->indexedForAlgos(1 << params.algo, false);
 
   // 5 sizes of 40 images means I should get at least 40 results here,
   // there could be more if any image didn't match all 4 of it's copies
@@ -129,12 +129,18 @@ void TestIndexBase::baseTestLoad(const SearchParams& params) {
   // that includes matching itself. much slower since we
   // are processing the file as the scanner would
   for (const QString& path : _database->indexedFiles()) {
+    Media needle = _scanner->processImageFile(path).media;
+    bool ok = params.mediaReady(needle);
+
+    if (!ok) QEXPECT_FAIL("", qUtf8Printable(path), Continue);
+
     QVERIFY(indexedByAlgoBefore.contains(path));
+
+    if (!ok) QEXPECT_FAIL("", qUtf8Printable(path), Continue);
+
     QVERIFY(indexedByAlgoAfter.contains(path));
 
-    Media needle = _scanner->processImageFile(path).media;
-    if (!params.mediaReady(needle))
-      QEXPECT_FAIL("", qUtf8Printable(path), Continue);
+    if (!ok) QEXPECT_FAIL("", qUtf8Printable(path), Continue);
 
     MediaGroup group = _database->similarTo(needle, params);
     QVERIFY(group.count() > 1);

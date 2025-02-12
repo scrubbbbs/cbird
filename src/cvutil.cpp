@@ -528,6 +528,10 @@ uint64_t dctHash64(const cv::Mat& cvImg, bool inPlace) {
   for (int i = 1; i < 64; i++)
     if (row[i] > thresh) hash |= 1ULL << i;
 
+  // we need a non-zero value so 0 represents a "null" hash value
+  // note the ones-place is not set above; we can use it to represent empty hash value
+  if (hash == 0) hash = 1;
+
   return hash;
 }
 

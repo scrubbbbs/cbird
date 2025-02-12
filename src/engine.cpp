@@ -134,7 +134,7 @@ void Engine::update(bool wait, const QString& dirPath) {
   }
 
   // if path is still present after scanning, remove from the index
-  QSet<QString> removed = db->indexedFiles();
+  QSet<QString> indexedFiles = db->indexedFiles();
 
   if (false) {
     // if the stored database paths are not canonical there
@@ -142,7 +142,7 @@ void Engine::update(bool wait, const QString& dirPath) {
     // updating correctly
     // FIXME: this can take a long time, figure out where
     //        the invalid paths actually come from
-    QStringList paths = removed.values(); // sort to reduce random access
+    QStringList paths = indexedFiles.values(); // sort to reduce random access
     paths.sort();
     QSet<QString> checked;
     int progress = 0;
@@ -174,6 +174,91 @@ void Engine::update(bool wait, const QString& dirPath) {
     }
   }
 
+  // if we want to can a subdir, we have to remove other files
+  QString path = db->path();
+  if (!dirPath.isEmpty()) {
+    // note: path must be clean, absolute, and not ending in '/' to
+    // work with scanDirectory. It may contain links or be a link itself
+    QFileInfo info(dirPath);
+    if (!info.isDir()) {
+      qCritical("given path is not a directory");
+      return;
+    }
+    path = QDir(dirPath).absolutePath();
+    if (!path.startsWith(db->path())) {
+      qCritical("given path: \"%s\" is not a subdirectory of \"%s\"", qUtf8Printable(path),
+                qUtf8Printable(db->path()));
+      return;
+    }
+
+    qDebug() << "clean subdir path" << path;
+    Q_ASSERT(!path.endsWith(lc('/')));
+
+    QSet<QString> included;
+    for (auto& p : std::as_const(indexedFiles))
+      if (p.startsWith(path)) included.insert(p);
+
+    indexedFiles = included;
+  }
+
+  // if -i.algos changed try to manage the situation, prior to v0.8 there
+  // was no management and -remove or rm -rf _index was needed
+  // TODO: option to enable/disable this
+  if (true) {
+    qDebug() << "checking for algos changes... (disable with -i.sync false)";
+    const auto indexedItems = db->indexedItems();
+
+    const IndexParams& requestParams = scanner->indexParams();
+    const int requestAlgos = requestParams.algos;
+    // const int algoTypes = requestParams.supportedTypes() & requestParams.types;
+
+    QSet<QString> keep;   // files we do not have to re-index
+    QVector<int> reindex; // files we have to remove from database & re-index
+    int indexedAlgos = 0;
+    for (auto& p : std::as_const(indexedFiles))
+      if (indexedItems.contains(p)) {
+        auto& item = indexedItems[p];
+        indexedAlgos |= item.algos;
+        // qDebug() << "item" << item.algos << requestAlgos << p;
+        bool isIndexed = (item.algos & requestAlgos)
+                         == (requestAlgos & IndexParams::supportedAlgos(item.type));
+        if (isIndexed) // || !(algoTypes & (1 << (item.type - 1))))
+          keep.insert(p);
+        else {
+          if (requestParams.verbose) {
+            IndexParams tmp;
+            tmp.setValue("algos", item.algos);
+            qDebug() << "re-indexing id:" << item.id << "algos:" << tmp.toString("algos")
+                     << QDir(path).relativeFilePath(p);
+          }
+
+          reindex.append(item.id);
+        }
+      }
+
+    qDebug() << "requested algos" << requestParams.toString("algos");
+
+    IndexParams newParams = scanner->indexParams();
+    newParams.setValue("algos", indexedAlgos);
+    qDebug() << "indexed algos" << newParams.toString("algos");
+
+    indexedAlgos |= requestParams.algos;
+    newParams.setValue("algos", indexedAlgos);
+
+    if (newParams.algos != requestParams.algos) {
+      scanner->setIndexParams(newParams);
+      qInfo() << "I cannot remove algos, using -i.algos" << newParams.toString("algos");
+    }
+
+    if (reindex.count()) {
+      qWarning() << "re-indexing" << reindex.count() << "file(s) due to -i.algos change";
+      if (!scanner->indexParams().dryRun) db->remove(reindex);
+    }
+
+    indexedFiles = keep;
+  }
+
+  // finish modtime check, hopefully enough time elapsed
   if (!useMetadataTime && timeBefore.isValid()) do {
       QThread::msleep(qMax(500 - timer.elapsed(), 0));
       QString oldName = db->indexPath() + "/modtime-check-before.txt";
@@ -200,60 +285,45 @@ void Engine::update(bool wait, const QString& dirPath) {
 
     } while (false);
 
-  QString path = db->path();
-  if (!dirPath.isEmpty()) {
-    // note: path must be clean, absolute, and not ending in '/' to
-    // work with scanDirectory. It may contain links or be a link itself
-    QFileInfo info(dirPath);
-    if (!info.isDir()) {
-      qCritical("given path is not a directory");
-      return;
-    }
-    path = QDir(dirPath).absolutePath();
-    if (!path.startsWith(db->path())) {
-      qCritical("given path: \"%s\" is not a subdirectory of \"%s\"", qUtf8Printable(path),
-                qUtf8Printable(db->path()));
-      return;
-    }
-
-    qDebug() << "clean subdir path" << path;
-    Q_ASSERT(!path.endsWith(lc('/')));
-
-    QSet<QString> included;
-    for (auto& p : std::as_const(removed))
-      if (p.startsWith(path)) included.insert(p);
-
-    removed = included;
-  }
-
-  scanner->scanDirectory(path, removed, db->lastAdded());
+  scanner->scanDirectory(path, indexedFiles, db->lastAdded());
 
   // we need a list of ids for fast removals, also we may want
   // to remove files that have issues (missing indexes etc)
+  // FIXME: indexedItems() provides this now so it doesn't have to happen again
   QVector<int> toRemove;
 
-  if (removed.count() > 0) {
-    qDebug("removing %lld files from index", removed.count());
-    QList<QString> sorted = removed.values();
+  if (indexedFiles.count() > 0) {
+    qDebug("removing %lld files from index", indexedFiles.count());
+    QList<QString> sorted = indexedFiles.values();
     std::sort(sorted.begin(), sorted.end());
-    int i = 0;
+
+    PROGRESS_LOGGER(pl, "preparing for removal <PL>%percent %bignum <EL>%1", indexedFiles.count());
+    size_t i = 0;
     // TODO: this takes a long time for big removals...could be threaded
     // NOTE: use db->indexedFiles() instead of querying each file
     for (const auto& path : qAsConst(sorted)) {
       QString relPath = QDir(db->path()).relativeFilePath(path);
-      i++;
-      if (i % 100 == 0) qInfo() << "preparing for removal <PL>[" << i << "]<EL>" << relPath;
+      pl.stepRateLimited(i++, {relPath});
+
       const Media m = db->mediaWithPath(path);
       if (!m.isValid()) {
         qWarning() << "invalid removal, non-indexed path:" << relPath;
         continue;
       }
-      // qDebug() << "removing id:" << m.id() << path;
+
+      if (scanner->indexParams().verbose) qDebug() << "removing id:" << m.id() << relPath;
+
       toRemove.append(m.id());
     }
+    pl.end();
   }
 
-  if (!scanner->indexParams().dryRun && !toRemove.isEmpty()) db->remove(toRemove);
+  if (!toRemove.isEmpty()) {
+    if (scanner->indexParams().dryRun)
+      qInfo() << "dry run, skipping removals";
+    else
+      db->remove(toRemove);
+  }
 
   if (wait) {
     scanner->finish();
@@ -261,6 +331,8 @@ void Engine::update(bool wait, const QString& dirPath) {
     // in case we did not add anything, go ahead and write timestamp once more,
     // to get rid of the warning message
     db->writeTimestamp();
+
+    qInfo() << "update complete";
   }
 }
 
