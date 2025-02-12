@@ -25,6 +25,9 @@ EXE_SUFFIX=
 # test name, if empty run all tests
 TEST=
 
+export CBIRD_NO_COLORS=1
+export QT_MESSAGE_PATTERN="%{function} $ %{message}"
+
 testArgs=()
 while [ ! -z $option ]; do 
   shift 1

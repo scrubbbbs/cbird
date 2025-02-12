@@ -1229,6 +1229,9 @@ MessageLog::MessageLog() {
   // detection is buggy, provide overrides
   if (getenv("CBIRD_FORCE_COLORS")) _termColors = 1;
 
+  // useful for unit tests
+  if (getenv("CBIRD_NO_COLORS")) _termColors = 0;
+
   QString tc = getenv("CBIRD_CONSOLE_WIDTH");
   if (!tc.isEmpty()) _termColumns = tc.toInt();
 
