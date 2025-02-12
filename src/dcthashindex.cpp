@@ -77,10 +77,12 @@ void DctHashIndex::load(QSqlDatabase& db, const QString& cachePath, const QStrin
     query.setForwardOnly(true);
 
     // progress bar
-    size_t rowCount = DBHelper::rowCount(query, "media");
+    if (!query.exec("select count(0) from media where type=1")) SQL_FATAL(exec);
+    if (!query.next()) SQL_FATAL(next);
+    size_t rowCount = query.value(0).toULongLong();
     PROGRESS_LOGGER(pl, "<PL>%percent %bignum hashes", rowCount);
 
-    if (!query.exec(hashQuery())) SQL_FATAL(exec);
+    if (!query.exec("select id,phash_dct from media where type=1")) SQL_FATAL(exec);
 
     int chunkSize = 1024;
     int capacity = 0;
@@ -120,23 +122,28 @@ QSet<mediaid_t> DctHashIndex::mediaIds(QSqlDatabase& db,
   (void) dataPath;
   QSet<mediaid_t> set;
 
+  // note: hash is stored as 0 if we did not compute one
   if (_isLoaded) {
     for (int i = 0; i < _numHashes; ++i)
-      set.insert(_mediaId[i]);
+      if (_hashes[i] != 0) set.insert(_mediaId[i]);
     return set;
   }
 
   QSqlQuery query(db);
   query.setForwardOnly(true);
 
-  size_t rowCount = DBHelper::rowCount(query, "media");
+  if (!query.exec("select count(0) from media where type=1")) SQL_FATAL(exec);
+  if (!query.next()) SQL_FATAL(next);
+  size_t rowCount = query.value(0).toULongLong();
   PROGRESS_LOGGER(pl, "<PL>%percent %bignum hashes", rowCount);
 
-  if (!query.exec(hashQuery())) SQL_FATAL(exec);
+  if (!query.exec("select id,phash_dct from media where type=1")) SQL_FATAL(exec);
 
   size_t currentRow = 0;
   while (query.next()) {
-    set.insert(query.value(0).toUInt());
+    mediaid_t id = query.value(0).toUInt();
+    uint64_t hash = uint64_t(query.value(1).toLongLong());
+    if (hash != 0) set.insert(id);
     pl.stepRateLimited(currentRow++);
   }
   pl.end();

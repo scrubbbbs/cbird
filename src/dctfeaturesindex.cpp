@@ -201,9 +201,9 @@ QSet<mediaid_t> DctFeaturesIndex::mediaIds(QSqlDatabase& db,
 
   // progress bar
   size_t rowCount = DBHelper::rowCount(query, "kphash");
-  PROGRESS_LOGGER(pl, "<PL>%percent %bignum images", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
 
-  if (!query.exec("select media_id,hashes from kphash")) SQL_FATAL(exec);
+  if (!query.exec("select media_id from kphash")) SQL_FATAL(exec);
 
   uint64_t currentRow = 0;
   while (query.next()) {

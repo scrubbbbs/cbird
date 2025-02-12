@@ -224,6 +224,7 @@ QSet<mediaid_t> DctVideoIndex::mediaIds(QSqlDatabase& db,
 
   if (!query.prepare("select count(0) from media where type=:type")) SQL_FATAL(exec);
   query.bindValue(":type", Media::TypeVideo);
+  if (!query.exec()) SQL_FATAL(exec);
   if (!query.next()) SQL_FATAL(next);
   const uint64_t rowCount = query.value(0).toLongLong();
 
@@ -236,7 +237,8 @@ QSet<mediaid_t> DctVideoIndex::mediaIds(QSqlDatabase& db,
   size_t i = 0;
   while (query.next()) {
     uint32_t id = query.value(0).toUInt();
-    result.insert(id);
+    QString indexPath = QString("%1/%2.vdx").arg(dataPath).arg(id);
+    if (QFile::exists(indexPath)) result.insert(id);
     pl.stepRateLimited(i++);
   }
   pl.end();
