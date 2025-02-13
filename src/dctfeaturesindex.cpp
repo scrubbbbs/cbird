@@ -45,15 +45,6 @@ void DctFeaturesIndex::createTables(QSqlDatabase& db) const {
 }
 
 void DctFeaturesIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) const {
-  bool isValid = false;
-  for (const Media& m : media)
-    if (m.keyPointHashes().size() > 0) {
-      isValid = true;
-      break;
-    }
-
-  if (!isValid) return;
-
   QSqlQuery query(db);
 
   QString sql = "insert into kphash (media_id, hashes) values (:media_id, :hashes)";
@@ -62,13 +53,14 @@ void DctFeaturesIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) con
 
   for (const Media& m : media) {
     const KeyPointHashList& hashes = m.keyPointHashes();
-    if (hashes.size() > 0) {
-      query.bindValue(":media_id", m.id());
-      query.bindValue(":hashes", QByteArray(reinterpret_cast<const char*>(hashes.data()),
-                                            int(hashes.size() * sizeof(uint64_t))));
+    QByteArray bytes = "";
+    if (hashes.size() > 0)
+      bytes = QByteArray(reinterpret_cast<const char*>(hashes.data()),
+                         int(hashes.size() * sizeof(uint64_t)));
+    query.bindValue(":media_id", m.id());
+    query.bindValue(":hashes", bytes);
 
-      if (!query.exec()) SQL_FATAL(exec);
-    }
+    if (!query.exec()) SQL_FATAL(exec);
   }
 }
 

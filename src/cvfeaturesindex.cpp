@@ -61,15 +61,6 @@ void CvFeaturesIndex::createTables(QSqlDatabase& db) const {
 }
 
 void CvFeaturesIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) const {
-  bool isValid = false;
-  for (const Media& m : media)
-    if (m.keyPointDescriptors().total() > 0) {
-      isValid = true;
-      break;
-    }
-
-  if (!isValid) return;
-
   QSqlQuery query(db);
 
   if (!query.prepare("insert into matrix "
@@ -77,24 +68,35 @@ void CvFeaturesIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) cons
                      "(:media_id, :rows, :cols, :type, :stride, :data)"))
     SQL_FATAL(prepare);
 
-  for (const Media& m : media)
-    if (m.keyPointDescriptors().total() > 0) {
-      const KeyPointDescriptors& d = m.keyPointDescriptors();
+  for (const Media& m : media) {
+    const KeyPointDescriptors& d = m.keyPointDescriptors();
 
-      query.bindValue(":media_id", m.id());
-      query.bindValue(":rows", d.size().height);
-      query.bindValue(":cols", d.size().width);
-      query.bindValue(":type", d.type());
-      query.bindValue(":stride", int(uint(d.size().width) * d.elemSize()));
-      query.bindValue(":data", qCompress(matrixData(d)));
-      if (!query.exec()) SQL_FATAL(exec);
-    }
+    QByteArray data = "";
+    if (d.rows > 0) data = qCompress(matrixData(d));
+
+    query.bindValue(":media_id", m.id());
+    query.bindValue(":rows", d.size().height);
+    query.bindValue(":cols", d.size().width);
+    query.bindValue(":type", d.type());
+    query.bindValue(":stride", int(uint(d.size().width) * d.elemSize()));
+    query.bindValue(":data", data);
+
+    if (!query.exec()) SQL_FATAL(exec);
+  }
 }
 
 void CvFeaturesIndex::removeRecords(QSqlDatabase& db, const QVector<int>& mediaIds) const {
   QSqlQuery query(db);
+  // for (auto id : mediaIds)
+  // if (!query.exec("delete from matrix where media_id=" + QString::number(id))) SQL_FATAL(exec);
+  qDebug() << "exec batch";
+  QVariantList ids;
   for (auto id : mediaIds)
-    if (!query.exec("delete from matrix where media_id=" + QString::number(id))) SQL_FATAL(exec);
+    ids.append(id);
+
+  if (!query.prepare("delete from matrix where media_id=:id")) SQL_FATAL(prepare);
+  query.bindValue(":id", ids);
+  if (!query.execBatch()) SQL_FATAL(execBatch);
 }
 
 bool CvFeaturesIndex::isLoaded() const { return _index != nullptr; }
@@ -123,6 +125,8 @@ void CvFeaturesIndex::add(const MediaGroup& media) {
   for (const Media& m : media) {
     const KeyPointDescriptors& desc = m.keyPointDescriptors();
     if (desc.rows <= 0) {
+      // FIXME: this is a problem since we need to add empty descriptors in order
+      // to track that the item has been indexed
       qWarning() << "no descriptors for" << m.path();
       continue;
     }
@@ -201,26 +205,30 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
         type = query.value(3).toInt();
         stride = query.value(4).toInt();
         data = query.value(5).toByteArray();
-        data = qUncompress(data);
 
-        loadMatrix(rows, cols, type, stride, data, desc);
+        // skip empty descriptors as they would violate
+        // the requirements on _idMap;
+        if (rows > 0) {
+          data = qUncompress(data);
+          loadMatrix(rows, cols, type, stride, data, desc);
 
-        if (lastId >= id ||  // must be true for _idMap to work
-            desc.type() != type || desc.size().width != cols || desc.size().height != rows) {
-          qCritical() << "sql: ignoring invalid data @ media_id=" << id;
-          continue;
+          if (lastId >= id || // must be true for _idMap to work
+              desc.type() != type || desc.size().width != cols || desc.size().height != rows) {
+            qCritical() << "sql: ignoring invalid data @ media_id=" << id;
+            continue;
+          }
+
+          // smoosh all features into one big cv::Mat
+          for (int j = 0; j < desc.rows; j++)
+            _descriptors.push_back(desc.row(j));
+
+          // maps to get back to the media or descriptors associated with media
+          _idMap[id] = numDesc;
+          _indexMap[numDesc] = id;
+
+          numDesc += desc.rows;
+          lastId = id;
         }
-
-        // smoosh all features into one big cv::Mat
-        for (int j = 0; j < desc.rows; j++) _descriptors.push_back(desc.row(j));
-
-        // maps to get back to the media or descriptors associated with media
-        _idMap[id] = numDesc;
-        _indexMap[numDesc] = id;
-
-        numDesc += desc.rows;
-        lastId = id;
-
         pl.stepRateLimited(currentRow++);
       }
       pl.end();
@@ -247,17 +255,19 @@ QSet<mediaid_t> CvFeaturesIndex::mediaIds(QSqlDatabase& db,
   (void) cachePath;
   (void) dataPath;
   QSet<mediaid_t> result;
-  if (isLoaded()) {
-    for (auto& it : _idMap)
-      if (it.first != UINT32_MAX) result.insert(it.first);
-    return result;
-  }
+
+  // FIXME: cannot pull from _idMap as it doesn't contain items with empty descriptors
+  // if (isLoaded()) {
+  //   for (auto& it : _idMap)
+  //     if (it.first != UINT32_MAX) result.insert(it.first);
+  //   return result;
+  // }
 
   QSqlQuery query(db);
   query.setForwardOnly(true);
 
   size_t rowCount = DBHelper::rowCount(query, "matrix");
-  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %step rows", rowCount);
 
   if (!query.exec("select media_id from matrix")) SQL_FATAL(exec)
 
