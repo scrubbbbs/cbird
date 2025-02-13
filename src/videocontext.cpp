@@ -1067,19 +1067,42 @@ bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
           break;
       }
 
-      qDebug() << av_get_pix_fmt_name(AVPixelFormat(_p->frame->format))
+      // all of this to supress a warning:
+      // "deprecated pixel format..."
+      // which requires us to use a different one and set the color range to full
+      int srcFmt = _p->frame->format;
+      static constexpr struct {
+        int deprecated;
+        int compatible;
+      } deprecatedFormats[] = {
+          {AV_PIX_FMT_YUVJ411P, AV_PIX_FMT_YUV411P}, {AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUV420P},
+          {AV_PIX_FMT_YUVJ422P, AV_PIX_FMT_YUV422P}, {AV_PIX_FMT_YUVJ440P, AV_PIX_FMT_YUV440P},
+          {AV_PIX_FMT_YUVJ444P, AV_PIX_FMT_YUV444P},
+      };
+      for (auto& d : deprecatedFormats)
+        if (d.deprecated == srcFmt) {
+          srcFmt = d.compatible;
+          break;
+        }
+
+      qDebug() << av_get_pix_fmt_name(AVPixelFormat(srcFmt))
                << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height) << "=>"
                << av_get_pix_fmt_name(AVPixelFormat(fmt)) << QString("@%1x%2").arg(w).arg(h)
                << filterName << (_opt.fast ? "fast" : "");
 
-      {
-        // QMutexLocker locker(ffGlobalMutex());
-
-        _p->scaler =
-            sws_getContext(_p->frame->width, _p->frame->height, AVPixelFormat(_p->frame->format), w,
-                           h, AVPixelFormat(fmt), filter, nullptr, nullptr, nullptr);
-      }
+      _p->scaler = sws_getContext(_p->frame->width, _p->frame->height, AVPixelFormat(srcFmt), w, h,
+                                  AVPixelFormat(fmt), filter, nullptr, nullptr, nullptr);
       avLoggerSetFileName(_p->scaler, QFileInfo(_path).fileName());
+
+      if (srcFmt != _p->frame->format) {
+        if (_p->context->color_range != AVCOL_RANGE_JPEG)
+          qWarning() << "full-range colorspace is not enabled in codec";
+
+        const int* srcTable = sws_getCoefficients(_p->context->colorspace);
+        const int* dstTable = sws_getCoefficients(AVCOL_SPC_RGB);
+        if (0 > sws_setColorspaceDetails(_p->scaler, srcTable, 1, dstTable, 1, 0, 1 << 16, 1 << 16))
+          qWarning() << "full-range colorspace could not be enabled in scaler";
+      }
 
       int size = av_image_alloc(_p->scaled.data, _p->scaled.linesize, w, h, AVPixelFormat(fmt), 16);
       if (size < 0) qFatal("av_image_alloc failed: %d", size);
