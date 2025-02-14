@@ -145,6 +145,7 @@ Search Parameters (for -similar*)
   * alternate value in ( )
   * flag names are combined with +, e.g. -p.refl h+v+b == -p.refl 7
   * must appear before -similar or other queries to take effect
+  * special value "help" or "?" can be passed to get help
 
   * keys:
   %2
@@ -156,6 +157,7 @@ Index Parameters (for -update)
   * alternate value in ( )
   * flag names are combined with +, e.g. -p.types i+v == -p.types 3
   * must appear before -update to take effect
+  * special value "help" or "?" can be passed to get help
   %3
 
 Definitions
