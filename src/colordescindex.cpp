@@ -57,6 +57,8 @@ void ColorDescIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) const
     SQL_FATAL(prepare);
 
   for (const Media& m : media) {
+    if (m.type() != Media::TypeImage) continue;
+
     // store descriptor even if it has no color information (grayscale),
     // this is fine as we will ignore it when searching
     auto bytes = QByteArray(reinterpret_cast<const char*>(&m.colorDescriptor()),

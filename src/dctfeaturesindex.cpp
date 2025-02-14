@@ -52,6 +52,8 @@ void DctFeaturesIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) con
   if (!query.prepare(sql)) SQL_FATAL(prepare);
 
   for (const Media& m : media) {
+    if (m.type() != Media::TypeImage) continue;
+
     const KeyPointHashList& hashes = m.keyPointHashes();
     QByteArray bytes = "";
     if (hashes.size() > 0)

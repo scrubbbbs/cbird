@@ -69,6 +69,8 @@ void CvFeaturesIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) cons
     SQL_FATAL(prepare);
 
   for (const Media& m : media) {
+    if (m.type() != Media::TypeImage) continue;
+
     const KeyPointDescriptors& d = m.keyPointDescriptors();
 
     QByteArray data = "";
