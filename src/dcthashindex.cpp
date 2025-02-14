@@ -160,7 +160,7 @@ void DctHashIndex::add(const MediaGroup& media) {
 
   for (int i = 0; i < media.count(); i++) {
     const Media& m = media[i];
-    _hashes[i + end] = hashForMedia(m);
+    _hashes[i + end] = m.dctHash();
     _mediaId[i + end] = uint32_t(m.id());
   }
 
@@ -189,7 +189,7 @@ void DctHashIndex::remove(const QVector<int>& removed) {
 QVector<Index::Match> DctHashIndex::find(const Media& m, const SearchParams& p) {
   QVector<Index::Match> results;
 
-  uint64_t target = hashForMedia(m);
+  uint64_t target = m.dctHash();
   if (!target) {
     qWarning() << "no hash for needle:" << m.path();
     return results;
