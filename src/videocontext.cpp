@@ -364,8 +364,11 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   const QString fileName = QFileInfo(_path).fileName();
   avLoggerSetFileName(_p->format, fileName); // TODO: use .opaque field instead
 
+  AVDictionary* formatOptions = nullptr;
+  av_dict_set(&formatOptions, "ignore_editlist", "1", 0);
+
   int err = 0;
-  if ((err = avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, nullptr)) < 0) {
+  if ((err = avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, &formatOptions)) < 0) {
     AV_CRITICAL("cannot open input");
     avLoggerUnsetFileName(_p->format);
     avformat_free_context(_p->format);
@@ -414,7 +417,10 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   Q_ASSERT(_p->format);
   avLoggerSetFileName(_p->format, fileName);
 
-  if ((err = avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, nullptr)) < 0) {
+  formatOptions = nullptr;
+  av_dict_set(&formatOptions, "ignore_editlist", "1", 0);
+
+  if ((err = avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, &formatOptions)) < 0) {
     AV_CRITICAL("cannot reopen input");
     avLoggerUnsetFileName(_p->format);
     avformat_free_context(_p->format);
@@ -991,15 +997,19 @@ QVariantList VideoContext::readMetaData(const QString& _path, const QStringList&
 
   const QString fileName = QFileInfo(_path).fileName();
   avLoggerSetFileName(format, fileName);
+
+  AVDictionary* formatOptions = nullptr;
+  av_dict_set(&formatOptions, "ignore_editlist", "1", 0);
+
   int err = 0;
-  if ((err = avformat_open_input(&format, qUtf8Printable(_path), nullptr, nullptr)) < 0) {
+  if ((err = avformat_open_input(&format, qUtf8Printable(_path), nullptr, &formatOptions)) < 0) {
     AV_CRITICAL("cannot open input");
     avLoggerUnsetFileName(format);
     return values;
   }
 
   if (!format->metadata) {
-    AV_WARNING("no metadata");
+    AV_DEBUG("no metadata");
     avLoggerUnsetFileName(format);
     return values;
   }
