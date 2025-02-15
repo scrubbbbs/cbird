@@ -235,13 +235,7 @@ class ProgressLogger {
  public:
   static void setAlwaysShow(bool show) { _alwaysShow = show; }
 
-  ProgressLogger(const QString& format, uint64_t maxStep, const char* contextFunc)
-      : _format(format)
-      , _max(maxStep)
-      , _context("", 0, contextFunc, "") {
-    _hideTimer.start();
-    _rateLimitTimer.start();
-  }
+  ProgressLogger(const QString& format, uint64_t maxStep, const char* contextFunc);
 
   // thread-safe version
   void step(uint64_t step, const QVariantList& args={}) const;

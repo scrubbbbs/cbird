@@ -88,6 +88,9 @@ MediaBrowser::MediaBrowser(const MediaWidgetOptions& options) : _options(options
 int MediaBrowser::showList(const MediaGroupList& list, const MediaWidgetOptions& options) {
   MediaBrowser browser(options);
   browser.show(list);
+  // FIXME: we cannot call exec if we did already; it returns immediately
+  // this should return void; if the caller wants the exit code, they can
+  // use qApp->exec() to get it.
   return qApp->exec();
 }
 
@@ -169,7 +172,7 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
     m.readMetadata();
   });
 
-  PROGRESS_LOGGER(pl, "loading thumbnails... <PL>%percent %bignum folders", f.progressMaximum());
+  PROGRESS_LOGGER(pl, "loading thumbnails:<PL> %percent %step folders", f.progressMaximum());
   while (f.isRunning()) {
     pl.step(f.progressValue());
     QThread::msleep(100);
@@ -253,7 +256,7 @@ int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions&
     m.readMetadata();
   });
 
-  PROGRESS_LOGGER(pl, "loading thumbnails... <PL>%percent %bignum sets", f.progressMaximum());
+  PROGRESS_LOGGER(pl, "loading thumbnails:<PL> %percent %step sets", f.progressMaximum());
   while (f.isRunning()) {
     QThread::msleep(100);
     pl.step(f.progressValue());

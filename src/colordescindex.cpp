@@ -112,7 +112,7 @@ void ColorDescIndex::load(QSqlDatabase& db, const QString& cachePath, const QStr
   _count = (int) DBHelper::rowCount(query, "color"); // FIXME: use size_t _count
   if (_count == 0) return;
 
-  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", _count);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %step rows", _count);
 
   // allocate using malloc so we can use realloc() later
   _descriptors = strict_malloc(_descriptors, _count);
@@ -170,7 +170,7 @@ QSet<mediaid_t> ColorDescIndex::mediaIds(QSqlDatabase& db,
   QSqlQuery query(db);
 
   size_t rowCount = DBHelper::rowCount(query, "color");
-  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %step rows", rowCount);
 
   query.exec("select media_id from color");
 

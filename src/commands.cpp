@@ -271,7 +271,7 @@ void Commands::filter(const std::vector<Filter>& filters) const {
 
     if (_selection.count() > 0) {
       if (op.rhsIsNeedle())
-        qFatal("compare with %%needle is only supported in group lists (-similar*,-dups*,-group-by)");
+        qFatal("compare with %%needle is only supported in results (-similar*,-dups*,-group-by)");
 
       QAtomicInteger<int> count;
       auto future = QtConcurrent::map(_selection, [&](Media& m) {
@@ -286,8 +286,9 @@ void Commands::filter(const std::vector<Filter>& filters) const {
       });
 
       PROGRESS_LOGGER(pl,
-                      qq("{%1 %2 %3}<PL> %percent %bignum checked, %4 matched").arg(withName, key, valueExp, "%1"),
+                      qq("{%1 %2 %3}<PL> %percent %step checked, %4 matched").arg(withName, key, valueExp, "%1"),
                       future.progressMaximum());
+      pl.showLast();
       while (future.isRunning()) {
         QThread::msleep(100);
         pl.step(future.progressValue(), {count.loadRelaxed()});

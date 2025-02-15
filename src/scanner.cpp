@@ -144,10 +144,9 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
 
   // TODO: remove any expected path that doesn't start with path
   // we are wanting to index
-  qInfo("<NC>"); // empty log line
+  qInfo() << "scanning:<PATH>" << _topDirPath;
   readDirectory(path, zipFiles, expected);
-  scanProgress(path);
-  qInfo("<NC>"); // empty log line
+  progress(path);
 
   // estimate the cost of each video, to process longest-job-first (LJF),
   // - this is slow; so try to avoid it
@@ -216,8 +215,8 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
 
   _queuedFiles = _imageQueue.count() + _videoQueue.count();
   if (_imageQueue.count() > 0 || _videoQueue.count() > 0) {
-    qInfo() << "scan completed, removing" << expected.count() << "file(s), adding"
-            << _imageQueue.count() << "image(s)," << _videoQueue.count() << "video(s)";
+    qInfo() << "scan completed, removing" << expected.count() << ", adding" << _imageQueue.count()
+            << "image(s)," << _videoQueue.count() << "video(s)";
     QTimer::singleShot(1, this, &Scanner::processOne);
   } else {
     qInfo() << "scan completed, no changes";
@@ -293,18 +292,17 @@ QMutex* Scanner::staticMutex() {
   return &mutex;
 }
 
-void Scanner::scanProgress(const QString& path) const {
+void Scanner::progress(const QString& path) const {
   const QString elided = qElide(path.mid(_topDirPath.length() + 1), 80);
 
-  QString status = QString::asprintf("<NC>checking <BLU>%s<RESET>$<PL> "
-                                     "images:<CYN>%'lld<RESET> "
-                                     "videos:<CYN>%'lld<RESET> "
-                                     "ign:<CYN>%'d<RESET> "
-                                     "mod:<CYN>%'d<RESET> "
-                                     "unch:<CYN>%'d<RESET> <EL><BLU>%s",
-                                     qUtf8Printable(_topDirPath), _imageQueue.count(),
-                                     _videoQueue.count(), _ignoredFiles, _modifiedFiles,
-                                     _existingFiles, qUtf8Printable(elided));
+  QString status = QString::asprintf("<PL>"
+                                     "images:<NUM>%'lld<RESET> "
+                                     "videos:<NUM>%'lld<RESET> "
+                                     "ign:<NUM>%'d<RESET> "
+                                     "mod:<NUM>%'d<RESET> "
+                                     "unch:<NUM>%'d<RESET> <EL><PATH>%s",
+                                     _imageQueue.count(), _videoQueue.count(), _ignoredFiles,
+                                     _modifiedFiles, _existingFiles, qUtf8Printable(elided));
   qInfo().noquote() << status;
 }
 
@@ -318,7 +316,7 @@ void Scanner::readDirectory(const QString& dirPath,
   }
 
   QStringList dirs;
-  scanProgress(dirPath);
+  progress(dirPath);
 
   QDir::Filters filters = QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot;
 
@@ -449,7 +447,7 @@ void Scanner::readDirectory(const QString& dirPath,
           _existingFiles += removed;
           if (removed > 0) continue;
         }
-        scanProgress(path);
+        progress(path);
         readArchive(path, expected);
       } else {
         _ignoredFiles++;
@@ -525,10 +523,10 @@ void Scanner::finish() {
       if (_videoProgress.count() > 0)
         for (int percent : qAsConst(_videoProgress).values()) {
           if (percent == 100) continue; // we don't need to see quick jobs
-          vList += qq("%1%").arg(percent);
+          vList += qq("<YEL>%1%<RESET>").arg(percent);
         }
 
-      const QString vProgress = vList.count() ? ", videos{" + vList.join(',') + '}' : "";
+      const QString vProgress = vList.count() ? " videos{" + vList.join(',') + '}' : "";
 
       int gpuJobs = _gpuPool.activeThreadCount();
       int cpuJobs = QThreadPool::globalInstance()->activeThreadCount();
@@ -536,17 +534,17 @@ void Scanner::finish() {
 
       QString runningStatus;
       if (gpuJobs)
-        runningStatus = qq("running{gpu:%1 cpu:%2}").arg(gpuJobs).arg(cpuJobs);
+        runningStatus
+            = qq("running{gpu:<NUM>%1<RESET> cpu:<NUM>%2<RESET>}").arg(gpuJobs).arg(cpuJobs);
       else
-        runningStatus = qq("running:%1").arg(cpuJobs);
+        runningStatus = qq("running:<NUM>%1<RESET>").arg(cpuJobs);
 
-      QString status = QString::asprintf(
-          "<NC>indexing %s$<PL> waiting{i:%lld v:%lld} %s threads:%d "
-          "%d%% %d indexed<EL>%s",
-          qUtf8Printable(_topDirPath), _imageQueue.count(), _videoQueue.count(),
-          qUtf8Printable(runningStatus),
-          threads,
-          progress, finished, qUtf8Printable(vProgress));
+      QString status = QString::asprintf("indexing:<PL> waiting{i:<NUM>%'lld<RESET> "
+                                         "v:<NUM>%'lld<RESET>} %s threads:<NUM>%d<RESET> "
+                                         "indexed:<MAG>%'d<RESET> <GRN>%d%%<RESET><EL>%s",
+                                         _imageQueue.count(), _videoQueue.count(),
+                                         qUtf8Printable(runningStatus), threads, finished, progress,
+                                         qUtf8Printable(vProgress));
       qInfo().noquote() << status;
 
       QStringList vDone;

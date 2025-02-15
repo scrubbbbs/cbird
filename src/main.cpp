@@ -522,12 +522,19 @@ static Engine* _engine = nullptr;
 Engine& engine() {
   QDir dir(indexPath());
   if (!_engine && checkIndexPathExists && !dir.exists(INDEX_DIRNAME)) {
-    qFlushMessageLog();
-    printf("cbird: No index found. Pass -use <dir> to a valid location,\n"
-           "       or pass -create to skip this prompt.\n\n");
-    printf("cbird: Create index in {%s} ? [Y/n] : ", qUtf8Printable(dir.absolutePath()));
-    char choice = inputChar('Y');
-    if (choice != 'Y' && choice != 'y') exit(0);
+    QString path = indexPath();
+    if (path == ".") path = "CWD";
+    qInfo("<NC>"
+          "    cbird: <YEL>No index found in <PATH>%s<RESET>\n"
+          "         - pass <MAG>-use <dir><RESET> to a valid location\n"
+          "         - pass <MAG>-use @<RESET> to search in parent\n"
+          "         - pass <MAG>-create<RESET> to create index in CWD.",
+          qUtf8Printable(path));
+    exit(0);
+    // qFlushMessageLog();
+    // printf("cbird: Create index in {%s} ? [Y/n] : ", qUtf8Printable(dir.absolutePath()));
+    // char choice = inputChar('Y');
+    // if (choice != 'Y' && choice != 'y') exit(0);
   }
   if (!_engine) _engine = new Engine(indexPath(), IndexParams());
   return *_engine;
@@ -700,7 +707,8 @@ int main(int argc, char** argv) {
 
       auto selection = engine().db->mediaWithPathRegexp(path);
 
-      qInfo().nospace() << "select {path ~= " << path << "}: " << selection.count() << " items";
+      qInfo("select {path ~= \"%s\"}: <NUM>%'lld<RESET> items", qUtf8Printable(path),
+            selection.count());
       return selection;
     } else {
       // TODO: QRegularExpression::fromWildcard() would probably be OK here
@@ -750,8 +758,8 @@ int main(int argc, char** argv) {
       path = path.replace("@asterisk@", "*");
 
       auto selection = engine().db->mediaWithPathLike(path);
-
-      qInfo().nospace() << "select {path like " << path << "}: " << selection.count() << " items";
+      qInfo("select {path like \"%s\"}: <NUM>%'lld<RESET> items", qUtf8Printable(path),
+            selection.count());
       return selection;
     }
     Q_UNREACHABLE();
@@ -895,7 +903,7 @@ int main(int argc, char** argv) {
       //            const QStringList qv = {"??", "??"};
       qInfo() << "<CYN>" CBIRD_PROGNAME << "<MAG>" CBIRD_VERSION << "<RESET>[<GRN>"
               << CBIRD_GITVERSION << "<RESET>]"
-              << "<UNDERL><BLU>" CBIRD_HOMEPAGE;
+              << "<UNDERL><CYN>" CBIRD_HOMEPAGE;
       qInfo() << "build:" << buildFlags();
       qInfo() << "settings:" << DesktopHelper::settingsFile();
       qInfo() << "Qt" << qVersion() << "compiled:" << QT_VERSION_STR;
@@ -934,7 +942,7 @@ int main(int argc, char** argv) {
       install(argv[0], prefix);
 #endif
     } else if (arg == "-remove") {
-      qInfo() << "removing: " << selection.count() << "items";
+      qInfo() << "removing" << selection.count() << "items";
       engine().db->remove(selection);
     } else if (arg == "-dups") {
       queryResult = engine().db->dupsByMd5(params);
@@ -1031,7 +1039,6 @@ int main(int argc, char** argv) {
       params.inSet = true;
       selection.clear();
       queryResult = engine().db->similar(params);
-      qInfo() << "similar-in: " << queryResult.count() << "result(s)";
     } else if (arg == "-similar-to") {
       const QString to = nextArg();
       const QFileInfo info(to);
@@ -1156,7 +1163,7 @@ int main(int argc, char** argv) {
           work.append(QtConcurrent::run(&Engine::query, &engine(), search));
         }
 
-      PROGRESS_LOGGER(pl, "similar-to:<PL> %percent %bignum lookups, %1 results", work.count());
+      PROGRESS_LOGGER(pl, "similar-to:<PL> %percent %step lookups, %1 results", work.count());
       pl.showLast();
 
       int i = 1;
@@ -1413,7 +1420,9 @@ int main(int argc, char** argv) {
           if (!getValue(*m).isNull()) nonNull.fetchAndAddRelaxed(1);
         });
         PROGRESS_LOGGER(pl,
-                        qq("sort: collecting {%1}<PL> %percent %bignum lookups, %2 values").arg(prop).arg("%1"),
+                        qq("sort: collecting {%1}<PL> %percent %step lookups, %2 values")
+                            .arg(prop)
+                            .arg("%1"),
                         future.progressMaximum());
         while (!future.isFinished()) {
           QThread::msleep(100);
@@ -1425,7 +1434,8 @@ int main(int argc, char** argv) {
         auto future = QtConcurrent::map(mediaPtr, [](Media* m) {
           m->readMetadata();
         });
-        PROGRESS_LOGGER(pl, "sort: read metadata<PL> %percent %bignum files", future.progressMaximum());
+        PROGRESS_LOGGER(pl, "sort: reading metadata:<PL> %percent %step files",
+                        future.progressMaximum());
         while (!future.isFinished()) {
           QThread::msleep(100);
           pl.step(future.progressValue());

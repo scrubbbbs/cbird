@@ -107,7 +107,7 @@ void Engine::update(bool wait, const QString& dirPath) {
   if (scanner->indexParams().algos & (1 << SearchParams::AlgoVideo)) {
     QVector<int> missingVideos;
     const MediaGroup videos = db->mediaWithType(Media::TypeVideo);
-    PROGRESS_LOGGER(pl, "verifying video index:<PL> %percent %bignum videos", videos.count());
+    PROGRESS_LOGGER(pl, "verifying video index:<PL> %percent %step videos", videos.count());
     int i = 0;
     QElapsedTimer timer;
     timer.start();
@@ -123,13 +123,9 @@ void Engine::update(bool wait, const QString& dirPath) {
           missingVideos.append(m.id());
         }
       }
-      ++i;
-      if (timer.elapsed() > 100) {
-        pl.step(i);
-        timer.start();
-      }
+      pl.stepRateLimited(i++);
     }
-    pl.end();
+    pl.end(i);
     db->remove(missingVideos);
   }
 
@@ -251,7 +247,8 @@ void Engine::update(bool wait, const QString& dirPath) {
     }
 
     if (reindex.count()) {
-      qWarning() << "re-indexing" << reindex.count() << "file(s) due to -i.algos change";
+      qWarning() << "re-indexing" << reindex.count()
+                 << "file(s) due to -i.algos change (use \"-i.verbose 1 -v\" for details)";
       if (!scanner->indexParams().dryRun) db->remove(reindex);
     }
 
@@ -297,7 +294,7 @@ void Engine::update(bool wait, const QString& dirPath) {
     QList<QString> sorted = indexedFiles.values();
     std::sort(sorted.begin(), sorted.end());
 
-    PROGRESS_LOGGER(pl, "preparing for removal <PL>%percent %bignum <EL>%1", indexedFiles.count());
+    PROGRESS_LOGGER(pl, "preparing for removal:<PL> %percent %step <EL>%1", indexedFiles.count());
     size_t i = 0;
     // TODO: this takes a long time for big removals...could be threaded
     // NOTE: use db->indexedFiles() instead of querying each file

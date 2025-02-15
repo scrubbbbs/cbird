@@ -259,11 +259,13 @@ void writeFileAtomically(const QString& path, const std::function<void(QFile&)>&
 
 bool SimpleIO_QFile::open(const QString& path, bool forReading) {
   _file.reset(new QFile(path));
+  _filePath = "";
   _buffer.clear();
   if (!_file->open(forReading ? QFile::ReadOnly : QFile::WriteOnly)) {
     qCritical() << _file->errorString();
     return false;
   }
+  _filePath = path;
   return true;
 }
 
@@ -315,6 +317,7 @@ bool SimpleIO_QFile::bufferAll() {
 
 bool SimpleIO_Stdio::open(const QString& path, bool forReading) {
   close();
+  _filePath = "";
 #ifdef Q_OS_WIN
   _file = _wfopen(qUtf16Printable(path), forReading ? L"rb" : L"wb");
 #else
@@ -324,7 +327,7 @@ bool SimpleIO_Stdio::open(const QString& path, bool forReading) {
     qCritical() << "open failed:" << strerror(errno);
     return false;
   }
-
+  _filePath = path;
   return true;
 }
 

@@ -47,9 +47,17 @@ int VideoIndex::getVersion(SimpleIO& io) {
   }
 
   if (version == 1) {
+    // do not show when resuming after -migrate
+    if (QFileInfo(io.filePath()).completeBaseName().startsWith("resume-")) return version;
+
     if (!upgradeMessageShown) {
       upgradeMessageShown = true;
-      qWarning() << "<NC>old video index format in use, run -migrate to update files";
+      qInfo()
+          << "<NC>\n"
+             "    cbird: <YEL>old video index format in use (limited to 65k frames/videos)\n<RESET>"
+             "        (1) pass <MAG>-i.dryrun true -migrate<RESET> to test/review changes\n"
+             "        (2) pass <MAG>-migrate<RESET> to update files\n"
+             "        (3) pass <MAG>-update<RESET> to reprocess affected files\n";
     }
   }
 
@@ -95,8 +103,7 @@ void VideoIndex::migrate(const MediaGroup& media, const QString& root, const Ind
 
   if (params.dryRun) qInfo("dry run, checking conversion with temp file");
 
-  const QString fmt = qq("<PL>%percent %bignum files, %1 updated, %2 removed");
-  PROGRESS_LOGGER(pl, fmt, media.count());
+  PROGRESS_LOGGER(pl, "checking:<PL> %percent %step files, %1 updated, %2 removed", media.count());
   int i = 0, updated = 0, removed = 0;
 
   pl.showLast();

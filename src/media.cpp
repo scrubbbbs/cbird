@@ -376,7 +376,9 @@ MediaGroupList Media::groupBy(const MediaGroup& group_, const QString& expr) {
     QString attr = expr + " == " + v.toString(); // formatting used by gui..
     m.setAttribute("group", attr);
   });
-  PROGRESS_LOGGER(pl, qq("collecting {%1} <PL>%percent %bignum lookups, %2 values").arg(expr).arg("%1"), f.progressMaximum());
+  PROGRESS_LOGGER(pl,
+                  qq("collecting {%1} <PL> %percent %step lookups, %2 values").arg(expr).arg("%1"),
+                  f.progressMaximum());
   while (f.isRunning()) {
     QThread::msleep(100);
     pl.step(f.progressValue(), {nonNull.loadRelaxed()});
@@ -702,7 +704,15 @@ PropertyFunc Media::propertyFunc(const QString& expr) {
          QString path = m.path();
          if (m.isArchived()) m.archivePaths(&path);
          QFileInfo info(path);
-         return info.birthTime();
+         QDateTime created = info.birthTime();
+
+         static bool shown = false;
+         if (!shown && info.exists() && !created.isValid()) {
+           shown = true;
+           qWarning() << "created/birthtime is not available on this filesystem";
+         }
+
+         return created;
        }},
       {"modified",
        [](const Media& m) {
@@ -1144,7 +1154,7 @@ void Media::openMedia(const Media& m, float seek) {
       f.close();  // necessary because file was opened excl mode (win32)
 
       QUrl url = QUrl::fromLocalFile(temporaryName);
-      qDebug() << "QDesktopServices::openUrl" << url;
+      qInfo() << "QDesktopServices::openUrl" << url;
       QDesktopServices::openUrl(url);
     }
     delete io;
@@ -1157,7 +1167,7 @@ void Media::openMedia(const Media& m, float seek) {
       url = QUrl::fromLocalFile(path);
     }
 
-    qDebug() << "QDesktopServices::openUrl" << url;
+    qInfo() << "QDesktopServices::openUrl" << url;
     QDesktopServices::openUrl(url);
   }
 }
@@ -1478,10 +1488,10 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
   // FIXME: is size before or after orientation?
   if (size != QSize()) img = constrainedResize(img, size);
 
-  if (reader.error())
-    qWarning("%s: xform=0x%x orient=%d size=%dx%d error=%s", format.data(),
-             int(reader.transformation()), int(exifOrientation), img.width(), img.height(),
-             qPrintable(reader.errorString()));
+  if (reader.error() && (!future || (future && !future->isCanceled())))
+    qWarning("Failed to load: \"%s\" bytes=%'lld format=\"%s\" xform=0x%x orient=%d size=%dx%d",
+             qPrintable(reader.errorString()), data.size(), format.data(),
+             int(reader.transformation()), int(exifOrientation), img.width(), img.height());
 
   return img;
 }
@@ -1627,6 +1637,8 @@ QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString&
     if (!image.get()) return values;
 
     image->readMetadata();
+    if (!image->good()) return values;
+
     std::function<QVariant(const QString&)> findKey = [](const QString&) { return QVariant(); };
 
     if (type == "exif") {

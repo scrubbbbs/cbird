@@ -124,7 +124,7 @@ void DctFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QS
 
       // progress bar
       size_t rowCount = DBHelper::rowCount(query, "kphash");
-      PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
+      PROGRESS_LOGGER(pl, "querying:<PL> %percent %step rows", rowCount);
 
       std::vector<HammingTree::Value> chunk; // build tree in chunks to reduce temp memory
       const int minChunkSize = 100000;       // TODO: this size seems to have some small effect
@@ -195,7 +195,7 @@ QSet<mediaid_t> DctFeaturesIndex::mediaIds(QSqlDatabase& db,
 
   // progress bar
   size_t rowCount = DBHelper::rowCount(query, "kphash");
-  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %step rows", rowCount);
 
   if (!query.exec("select media_id from kphash")) SQL_FATAL(exec);
 
@@ -266,7 +266,6 @@ QVector<Index::Match> DctFeaturesIndex::find(const Media& needle, const SearchPa
     // we can get them from tree
     if (needle.id() > 0) {
       // FIXME: this is not great as it touches every index in the tree
-      qWarning() << "walking the tree to find needle hashes";
       _tree->findIndex(needle.id(), hashes);
     }
 

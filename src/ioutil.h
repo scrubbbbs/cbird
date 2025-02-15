@@ -30,6 +30,7 @@ class SimpleIO_QFile
  private:
   std::unique_ptr<QIODevice> _file;
   QByteArray _buffer;
+  QString _filePath;
 
  public:
   static const char* name() { return "qfile"; }
@@ -82,6 +83,8 @@ class SimpleIO_QFile
 
   // size of file in bytes
   size_t fileSize() const { return _file->size(); }
+
+  QString filePath() const { return _filePath; }
 };
 
 class SimpleIO_Stdio
@@ -91,6 +94,7 @@ class SimpleIO_Stdio
  private:
   FILE* _file = nullptr;
   char _buffer[256 * 1024];
+  QString _filePath;
 
  public:
   static const char* name() { return "stdio"; }
@@ -142,6 +146,8 @@ class SimpleIO_Stdio
 
   // size of file in bytes
   size_t fileSize() const;
+
+  QString filePath() const { return _filePath; }
 };
 
 /// QIODevice wrapper that can fake an EOF error to halt the consumer

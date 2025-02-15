@@ -529,7 +529,7 @@ void Database::remove(const QVector<int>& ids) {
   QLockFile dbLock(indexPath() + "/write.lock");
   if (!dbLock.tryLock(0)) {
     qCritical() << "database update aborted, another process is writing,"
-                << "or lock file is stale";
+                << "or lock file is stale:" << dbLock.fileName();
     return;
   }
 
@@ -552,46 +552,52 @@ void Database::remove(const QVector<int>& ids) {
   then = now;
 #endif
 
-  for (int id : ids)
-    if (!query.exec("delete from media where id=" + QString::number(id))) SQL_FATAL(exec);
+  {
+    PROGRESS_LOGGER(pl, "removing metadata:<PL> %percent %step items", ids.count());
+    int step = 0;
+    for (int id : ids) {
+      pl.stepRateLimited(step++);
+      if (!query.exec("delete from media where id=" + QString::number(id))) SQL_FATAL(exec);
+    }
+    connect().commit();
+    pl.end(step);
+  }
 
-  now = nanoTime();
-  qInfo("<PL>delete media   =%dms", int((now - then) / 1000000));
-  then = now;
+  {
+    int step = 0;
+    PROGRESS_LOGGER(pl, "removing algos:<PL> %percent step=%step", _algos.count() * 4);
+    for (Index* i : _algos) {
+      pl.stepRateLimited(step++);
+      QSqlDatabase db = connect(i->databaseId());
 
-  qInfo("<PL>committing txn...");
-  connect().commit();
+      if (!db.transaction()) qFatal("create transaction: %s", qPrintable(db.lastError().text()));
+      pl.stepRateLimited(step++);
 
-  now = nanoTime();
-  qInfo("<PL>finished       =%dms", int((now - then) / 1000000));
-  then = now;
+      i->removeRecords(db, ids);
+      pl.stepRateLimited(step++);
 
-  for (Index* i : _algos) {
-    qInfo("<PL>algo: %d deleting", i->id());
-
-    QSqlDatabase db = connect(i->databaseId());
-    if (!db.transaction()) qFatal("create transaction: %s", qPrintable(db.lastError().text()));
-
-    i->removeRecords(db, ids);
-
-    qInfo("<PL>algo: %d committing...", i->id());
-    if (!db.commit()) qFatal("commit transaction: %s", qPrintable(db.lastError().text()));
-
-    now = nanoTime();
-
-    qInfo("<PL>algo: %d commit=%dms", i->id(), int((now - then) / 1000000));
-    then = now;
+      if (!db.commit()) qFatal("commit transaction: %s", qPrintable(db.lastError().text()));
+      pl.stepRateLimited(step++);
+    }
+    pl.end(step);
   }
 
   // if it's a video, delete the hash file
   // TODO: this could be in removeRecords()
-  for (int id : ids) {
-    QString hashFile = QString::asprintf("%s/%d.vdx", qPrintable(videoPath()), id);
-    if (QFileInfo::exists(hashFile))
-      if (!QFile(hashFile).remove()) qCritical("failure to delete file %s", qPrintable(hashFile));
+  {
+    int step = 0;
+    PROGRESS_LOGGER(pl, "removing videos:<PL> %percent %step items", ids.count());
+    for (int id : ids) {
+      pl.stepRateLimited(step++);
+      QString hashFile = QString::asprintf("%s/%d.vdx", qPrintable(videoPath()), id);
+      if (QFileInfo::exists(hashFile))
+        if (!QFile(hashFile).remove()) qCritical("failure to delete file %s", qPrintable(hashFile));
+    }
+    pl.end(step);
   }
 
-  for (Index* i : _algos) i->remove(ids);
+  for (Index* i : _algos)
+    i->remove(ids);
 }
 
 void Database::vacuum() {
@@ -849,7 +855,7 @@ bool Database::moveDir(const QString& dirPath, const QString& newName) {
 }
 
 void Database::fillMediaGroup(QSqlQuery& query, MediaGroup& media, int maxLen) {
-  PROGRESS_LOGGER(pl, "querying:<PL> %bignum rows", -1);
+  PROGRESS_LOGGER(pl, "querying:<PL> %step rows", -1);
   int i = 0;
 
   while (query.next()) {
@@ -1300,6 +1306,8 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
     QSqlQuery query(connect());
     query.setForwardOnly(true);
+
+    // fixme; this is really slow for large dbs; but not with sqlite3 command?
     if (!query.exec("select * from media where type in (" + queryTypes.join(",") + ")"))
       SQL_FATAL(exec);
     fillMediaGroup(query, haystack);
@@ -1328,7 +1336,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
       slice = index->slice(ids);
       if (slice) {
         index = slice;
-        qInfo() << "using haystack slice with" << slice->count() << "items";
+        qInfo("using sliced haystack with <NUM>%'d<RESET> items", slice->count());
       } else
         qWarning() << "Index::slice unsupported for index" << index->id();
     }
@@ -1372,7 +1380,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
     }
   }
 
-  qInfo("index loaded in %dms", int(QDateTime::currentMSecsSinceEpoch() - start));
+  qDebug("index loaded in %dms", int(QDateTime::currentMSecsSinceEpoch() - start));
   start = QDateTime::currentMSecsSinceEpoch();
 
   int progressInterval =
@@ -1380,7 +1388,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   const int progressTotal = haystackSize;
 
-  QAtomicInt progress;
+  QAtomicInt progress, resultCount;
   if (!progress.isFetchAndAddNative())
     qWarning() << "QAtomicInt::fetchAndAddNative() unsupported, performance may suffer";
 
@@ -1392,13 +1400,12 @@ MediaGroupList Database::similar(const SearchParams& params) {
   QSet<int> skip;
   QMutex mutex;
 
-  PROGRESS_LOGGER(pl, "<PL>%percent %bignum lookups", progressTotal);
+  PROGRESS_LOGGER(pl, "searching:<PL> %percent %step lookups, %1 results", progressTotal);
   pl.showLast();
 
-  QFuture<void> f = QtConcurrent::map(
-      haystack,
-      [&idMap, &results, &progress, &tm, &pl, progressInterval, params, index, this](
-          const Media& m) {
+  QFuture<void>
+      f = QtConcurrent::map(haystack, [&idMap, &results, &progress, &resultCount, &tm, &pl,
+                                       progressInterval, params, index, this](const Media& m) {
         MediaGroup result = this->searchIndex(index, m, params, idMap);
 
         // give each work item a (lockless) way to write results
@@ -1421,36 +1428,46 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
           // we reserved the space so we can write without locks
           results[resultIndex] = result;
+
+          resultCount.fetchAndAddRelaxed(1);
         }
         // TODO: pass the actual lookup count so the display is
         // x images, x videos, x lookups, x ms/lookup
-        if ((resultIndex % progressInterval) == 0) pl.step(resultIndex);
+        if ((resultIndex % progressInterval) == 0)
+          pl.step(resultIndex, {(int) resultCount.loadRelaxed()});
       });
 
   f.waitForFinished();
   delete slice;
-  pl.end();
+  pl.end(0, {(int) resultCount.loadRelaxed()});
 
-  qInfo("searched %d items and found %lld matches in %dms", haystackSize, results.count(),
-        int(QDateTime::currentMSecsSinceEpoch() - start));
-
-  qDebug() << "filter matches";
-  start = QDateTime::currentMSecsSinceEpoch();
-
-  MediaGroupList list;
   int matchCount = 0;
   for (MediaGroup& match : results) {
-    if (match.count() <= 0) continue; // expected since results ==# of needles
+    if (match.count() <= 0) continue; // # results ==# of needles
     matchCount++;
-    if (!filterMatch(params, match)) list.append(match);
   }
 
-  filterMatches(params, list);
+  // qInfo("<NUM>%'d<RESET> items, <NUM>%'d<RESET> potential matches, <TIME>%'dms", haystackSize,
+  // matchCount, int(QDateTime::currentMSecsSinceEpoch() - start));
+
+  MediaGroupList list;
+  {
+    PROGRESS_LOGGER(pl, "filtering:<PL> %percent %1 matches", matchCount);
+    pl.showLast();
+    int i = 0;
+    for (MediaGroup& match : results) {
+      if (match.count() <= 0) continue;
+      if (!filterMatch(params, match)) list.append(match);
+      pl.stepRateLimited(i++, {list.count()});
+    }
+
+    filterMatches(params, list);
+
+    pl.end(i, {list.count()});
+  }
 
   Media::sortGroupList(list, {"path"});
 
-  qInfo("filtered %d matches to %lld in %lldms", matchCount, list.count(),
-        QDateTime::currentMSecsSinceEpoch() - start);
   return list;
 }
 
@@ -1493,7 +1510,7 @@ MediaGroup Database::similarTo(const Media& needle, const SearchParams& params) 
 
   if (params.verbose) {
     MessageContext mc(needle.path().mid(path().length() + 1));
-    qInfo("%lld results (%d filtered out) in %lldms", result.count(), filtered,
+    qInfo("%'lld results (%'d filtered out) in %'lldms", result.count(), filtered,
           QDateTime::currentMSecsSinceEpoch() - start);
   }
 

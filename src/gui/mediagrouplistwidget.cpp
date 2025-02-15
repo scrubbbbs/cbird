@@ -1940,6 +1940,9 @@ void MediaGroupListWidget::updateItems() {
 #define WEED_CSTR "\317\211" // omega (curvy w)
     if (m.isWeed()) title += " " WEED_CSTR;
 
+      // I wanted to use unicode LOCK, which works, however it renders
+      // too small (about 1/2 size) and making it larger also makes table cell taller,
+      // qt richtext is just too limited...
 #define LOCK_CSTR "\316\273" // lambda
     if (locked) title += " " LOCK_CSTR;
 
@@ -2123,7 +2126,7 @@ void MediaGroupListWidget::waitLoaders() {
   for (auto* w : _loaders)
     w->cancel();
 
-  PROGRESS_LOGGER(pl, "waiting for image loaders...<PL> %bignum", _loaders.count());
+  PROGRESS_LOGGER(pl, "waiting for image loaders:<PL> %percent %step", _loaders.count());
   while (_loaders.count() > 0) {
     QThread::msleep(100);
     qApp->processEvents(QEventLoop::ExcludeUserInputEvents);

@@ -181,14 +181,26 @@ static void FFmpeg(void* ptr, int level, const char* fmt, va_list vl) {
     msgContext += "unknown file";
   }
 
-  if (ptr) msgContext += QString("(") + av_default_item_name(ptr) + ")";
+  if (ptr) {
+    const QLatin1StringView avClassName(av_default_item_name(ptr));
+    msgContext += lc('|');
+    if (avClassName == "AVFormatContext")
+      msgContext += ((AVFormatContext*) ptr)->iformat->name;
+    else if (avClassName == "AVCodecContext") {
+      auto ctx = (AVCodecContext*) ptr;
+      if (ctx->codec_descriptor)
+        msgContext += ctx->codec_descriptor->name;
+      else
+        msgContext += "codec";
+    } else
+      msgContext += av_default_item_name(ptr);
+  }
 
   MessageContext context(msgContext);
 
   char buf[1024] = {0};
   vsnprintf(buf, sizeof(buf) - 1, fmt, vl);
-  QString str = buf;
-  QByteArray bytes = str.trimmed().toUtf8();
+  const QByteArray bytes = QByteArray(buf).trimmed();
   const char* msg = bytes.data();
 
   //     if (level >= AV_LOG_TRACE) ;

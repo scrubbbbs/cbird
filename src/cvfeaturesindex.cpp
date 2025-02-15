@@ -186,7 +186,7 @@ void CvFeaturesIndex::load(QSqlDatabase& db, const QString& cachePath, const QSt
       query.setForwardOnly(true);
 
       size_t rowCount = DBHelper::rowCount(query, "matrix");
-      PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
+      PROGRESS_LOGGER(pl, "querying:<PL> %percent %step rows", rowCount);
 
       if (!query.exec("select media_id,rows,cols,type,stride,data from matrix order by media_id"))
         SQL_FATAL(exec)
@@ -370,7 +370,7 @@ void CvFeaturesIndex::buildIndex(const cv::Mat& addedDescriptors) {
 
     // build the index incrementally, it is a quite faster
     // somehow, and does not seem to affect accuracy
-    PROGRESS_LOGGER(pl, "<PL>%percent %bignum descriptors", _descriptors.rows);
+    PROGRESS_LOGGER(pl, "<PL>%percent %step descriptors", _descriptors.rows);
 
     for (int i = 0; i < _descriptors.rows; i += 10000) {
       int upper = std::min(i + 10000, _descriptors.rows);

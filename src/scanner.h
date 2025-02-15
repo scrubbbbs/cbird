@@ -222,7 +222,7 @@ class Scanner : public QObject {
  private:
   void readDirectory(const QString& dir, const QMap<QString,QStringList> zipFiles, QSet<QString>& expected);
   void readArchive(const QString& path, QSet<QString>& expected);
-  void scanProgress(const QString& path) const;
+  void progress(const QString& path) const;
 
   bool isQueued(const QString& path) const { return _queuedWork.contains(path); }
 

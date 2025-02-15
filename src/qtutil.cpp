@@ -1142,7 +1142,14 @@ class MessageLog {
 #endif
 };
 
-void qFlushMessageLog() { MessageLog::instance().flush(); }
+void qFlushMessageLog() {
+  MessageLog::instance().flush();
+}
+
+Q_NORETURN void cbirdAbort() {
+  qFlushMessageLog();
+  _Exit(255);
+}
 
 void qMessageLogCategoryEnable(const QString& category, bool enable) {
   MessageLog::instance().setCategoryFilter(category, enable);
@@ -1157,6 +1164,13 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& ctx, const QS
 
   MessageLog::instance().append(LogMsg{threadContext, type, msg, ctx.version, ctx.line, ctx.file,
                                        ctx.function, ctx.category});
+
+  if (type == QtMsgType::QtFatalMsg) {
+    // qFatal() is being used for user errors...however that causes core dumps
+    // and possibly triggers telemetry/crash-handling -- so just exit,
+    // preferably w/o calling static destructors
+    cbirdAbort();
+  }
 
 #ifdef DEBUG
   // we can crash the app to help locate a log message!
@@ -1403,17 +1417,17 @@ QString MessageLog::format(const LogMsg& msg, int& outUnprintable) const {
                                                             "<UNDERL><BRIGHT><RED>"},
                                                            {QLatin1String("I"), ""}};
 
-  // note: everything in this table should be unprintable (colors, etc)
+  // TODO: some colors could come from LS_COLORS for better integration
+  // note: everything in this table should be unprintable (color,underline,bold,etc)
   static constexpr struct {
     const char* name;
     const char* replacement;
-  } tags[] = {
-      {"<RED>", VT_RED},         {"<GRN>", VT_GRN},       {"<YEL>", VT_YEL},
-      {"<BLU>", VT_BLU},         {"<MAG>", VT_MAG},       {"<CYN>", VT_CYN},
-      {"<WHT>", VT_WHT},         {"<RESET>", VT_RESET},   {"<BRIGHT>", VT_BRIGHT},
-      {"<DIM>", VT_DIM},         {"<UNDERL>", VT_UNDERL}, {"<BLINK>", VT_BLINK},
-      {"<REVERSE>", VT_REVERSE}, {"<HIDDEN>", VT_HIDDEN},
-  };
+  } tags[] = {{"<RED>", VT_RED},         {"<GRN>", VT_GRN},       {"<YEL>", VT_YEL},
+              {"<BLU>", VT_BLU},         {"<MAG>", VT_MAG},       {"<CYN>", VT_CYN},
+              {"<WHT>", VT_WHT},         {"<RESET>", VT_RESET},   {"<BRIGHT>", VT_BRIGHT},
+              {"<DIM>", VT_DIM},         {"<UNDERL>", VT_UNDERL}, {"<BLINK>", VT_BLINK},
+              {"<REVERSE>", VT_REVERSE}, {"<HIDDEN>", VT_HIDDEN}, {"<NUM>", VT_CYN},
+              {"<TIME>", VT_DIM VT_WHT}, {"<PATH>", VT_GRN}};
 
   // table could become invalid, enum is unnumbered in qlogging.h
   static_assert(QtDebugMsg == 0 && QtInfoMsg == 4);
@@ -1698,16 +1712,24 @@ int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const Q
       return cmp.compare(a.mid(ia), b.mid(ib));
     }
 
-    Q_UNREACHABLE();  // every case either continues or returns
+    Q_UNREACHABLE(); // every case either continues or returns
   }
 }
 
 bool ProgressLogger::_alwaysShow = false;
 
+ProgressLogger::ProgressLogger(const QString& format, uint64_t maxStep, const char* contextFunc)
+    : _format(format)
+    , _max(maxStep)
+    , _context("", 0, contextFunc, "") {
+  _hideTimer.start();
+  _rateLimitTimer.start();
+}
+
 void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantList& args) const {
   str.replace("%percent",
               "<GRN>" + (_max > 0 ? QString::number(step * 100 / _max) : "100") + "%<RESET>");
-  str.replace("%bignum", "<CYN>" + _locale.toString(step) + "<RESET>");
+  str.replace("%step", "<CYN>" + _locale.toString(step) + "<RESET>");
 
   for (int i = 0; i < args.size(); ++i) {
     const QVariant& val = args.at(i);
@@ -1722,17 +1744,17 @@ void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantLis
       case QMetaType::ULongLong:
       case QMetaType::Long:
       case QMetaType::ULong:
-        repl = _locale.toString(val.toULongLong());
+        repl = "<NUM>" + _locale.toString(val.toULongLong()) + "<RESET>";
         break;
       case QMetaType::Float:
       case QMetaType::Double:
-        repl = _locale.toString(val.toDouble());
+        repl = "<NUM>" + _locale.toString(val.toDouble()) + "<RESET>";
         break;
       default:
         repl = val.toString();
     }
 
-    str.replace("%"+QString::number(i+1), repl);
+    str.replace("%" + QString::number(i + 1), repl);
   }
 }
 
@@ -1759,7 +1781,8 @@ void ProgressLogger::stepRateLimited(uint64_t step, const QVariantList& args) {
 void ProgressLogger::end(uint64_t step, const QVariantList& args) const {
   if (!_alwaysShow && !_showLast && _hideTimer.elapsed() < 500) return;
   QString out = _format;
-  out += ", <DIM><WHT>" + _locale.toString(_hideTimer.elapsed()) + "ms";
+  out.replace(" %percent", "");
+  out += " <TIME>" + _locale.toString(_hideTimer.elapsed()) + "ms";
   formatString(out, step > 0 ? step : _max, args);
   qColorMessageOutput(QtInfoMsg, _context, out);
 }

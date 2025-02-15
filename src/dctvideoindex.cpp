@@ -114,7 +114,7 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
     auto* tree = new VideoSearchTree(params.videoRadix);
     QElapsedTimer timer; // don't spam progress prints
     timer.start();
-    PROGRESS_LOGGER(pl, "<PL>%percent %bignum videos", _mediaId.size());
+    PROGRESS_LOGGER(pl, "<PL>%percent %step videos", _mediaId.size());
     for (size_t i = 0; i < _mediaId.size(); ++i) {
       if (timer.elapsed() > 100) {
         pl.step(i);
@@ -182,7 +182,7 @@ void DctVideoIndex::load(QSqlDatabase& db, const QString& cachePath, const QStri
   _mediaId.clear();
   _isLoaded = false;
 
-  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %step rows", rowCount);
 
   size_t i = 0;
   while (query.next()) {
@@ -232,7 +232,7 @@ QSet<mediaid_t> DctVideoIndex::mediaIds(QSqlDatabase& db,
 
   if (!query.exec()) SQL_FATAL(exec);
 
-  PROGRESS_LOGGER(pl, "querying:<PL> %percent %bignum rows", rowCount);
+  PROGRESS_LOGGER(pl, "querying:<PL> %percent %step rows", rowCount);
   size_t i = 0;
   while (query.next()) {
     uint32_t id = query.value(0).toUInt();
