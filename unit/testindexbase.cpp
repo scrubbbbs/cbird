@@ -130,16 +130,14 @@ void TestIndexBase::baseTestLoad(const SearchParams& params) {
   // are processing the file as the scanner would
   for (const QString& path : _database->indexedFiles()) {
     Media needle = _scanner->processImageFile(path).media;
-    bool ok = params.mediaReady(needle);
 
-    if (!ok) QEXPECT_FAIL("", qUtf8Printable(path), Continue);
-
+    // we require this to be true even if search is not possible;
+    // it indicates the file was seen by indexer and processed, even
+    // if it generated no valid descriptors/hashes/etc
     QVERIFY(indexedByAlgoBefore.contains(path));
-
-    if (!ok) QEXPECT_FAIL("", qUtf8Printable(path), Continue);
-
     QVERIFY(indexedByAlgoAfter.contains(path));
 
+    bool ok = params.mediaReady(needle);
     if (!ok) QEXPECT_FAIL("", qUtf8Printable(path), Continue);
 
     MediaGroup group = _database->similarTo(needle, params);
