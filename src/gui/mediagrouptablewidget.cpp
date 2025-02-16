@@ -22,6 +22,17 @@
 
 #include "../qtutil.h"
 
+#include <QtCore/QFileInfo>
+#include <QtCore/QSettings>
+#include <QtCore/QUrl>
+
+#include <QtGui/QClipboard>
+#include <QtGui/QGuiApplication>
+
+#include <QtWidgets/QFileDialog>
+#include <QtWidgets/QItemDelegate>
+#include <QtWidgets/QMenu>
+
 int MediaGroupTableModel::validMatchFlags(int oldFlags, int newFlag) {
   switch (newFlag) {
     case ShowBigger:

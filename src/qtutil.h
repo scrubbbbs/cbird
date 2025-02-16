@@ -70,6 +70,16 @@ class DesktopHelper {
   static bool moveFile(const QString& path, const QString& dir);
 };
 
+class QTableView;
+class QSettings;
+class QAction;
+class QSqlDatabase;
+class QSqlQuery;
+class QMenu;
+class QCollator;
+template<class T>
+class QThreadStorage;
+
 /// common tasks for widgets
 class WidgetHelper {
  public:
@@ -111,10 +121,7 @@ class WidgetHelper {
 
 class DBHelper {
  public:
-  static bool isCacheFileStale(const QSqlDatabase& db, const QString& cacheFile) {
-    QFileInfo cacheInfo(cacheFile);
-    return !cacheInfo.exists() || lastModified(db) > cacheInfo.lastModified();
-  }
+  static bool isCacheFileStale(const QSqlDatabase& db, const QString& cacheFile);
 
   static size_t rowCount(QSqlQuery& query, const QString& tableName);
 
@@ -135,15 +142,6 @@ class MenuHelper {
                            int maxFolders,
                            int maxDepth,
                            int depth);
-};
-
-/// obscure parent to emphasize foreground
-class ShadeWidget : public QLabel {
-  NO_COPY_NO_DEFAULT(ShadeWidget, QLabel);
-  Q_OBJECT
- public:
-  ShadeWidget(QWidget* parent);
-  virtual ~ShadeWidget();
 };
 
 /**
@@ -225,7 +223,7 @@ class ProgressLogger {
   const QString _format;
   const uint64_t _max;
   const QMessageLogContext _context;
-  const QLocale _locale;
+  // const QLocale _locale;
 
   QElapsedTimer _hideTimer, _rateLimitTimer;
   bool _showLast = false;

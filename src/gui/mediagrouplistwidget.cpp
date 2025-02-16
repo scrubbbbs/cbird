@@ -19,13 +19,14 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "mediagrouplistwidget.h"
+#include "cropwidget.h"
+#include "mediabrowser.h"
 #include "mediaitemdelegate.h"
 #include "mediapage.h"
 #include "pooledimageallocator.h"
-#include "videocomparewidget.h"
-#include "cropwidget.h"
-#include "mediabrowser.h"
+#include "shadewidget.h"
 #include "theme.h"
+#include "videocomparewidget.h"
 
 #include "../cimgops.h" // qualityScore
 #include "../database.h"
@@ -35,6 +36,25 @@
 #include "../qtutil.h"
 #include "../templatematcher.h"
 #include "../videocontext.h"
+
+#include <QtCore/QBuffer>
+#include <QtCore/QDir>
+#include <QtCore/QFutureWatcher>
+#include <QtCore/QProcessEnvironment>
+#include <QtCore/QSettings>
+
+#include <QtConcurrent/QtConcurrentMap>
+#include <QtConcurrent/QtConcurrentRun>
+
+#include <QtGui/QClipboard>
+#include <QtGui/QContextMenuEvent>
+#include <QtGui/QKeyEvent>
+#include <QtGui/QPainter>
+#include <QtGui/QWheelEvent>
+
+#include <QtWidgets/QInputDialog>
+#include <QtWidgets/QMenu>
+#include <QtWidgets/QMessageBox>
 
 #ifdef LW_RLIMIT
 #include <sys/resource.h>  // setrlimit()

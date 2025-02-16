@@ -34,6 +34,13 @@ extern "C" {
 
 #include <unistd.h>  // getcwd
 
+#include <QtCore/QFileInfo>
+#include <QtCore/QFuture>
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QMessageLogger>
+#include <QtCore/QMutexLocker>
+#include <QtCore/QThreadStorage>
+
 #define AV_CRITICAL(x) qCritical() << x << Qt::hex << err << avErrorString(err)
 #define AV_WARNING(x) qWarning() << x
 #define AV_DEBUG(x) qDebug() << x

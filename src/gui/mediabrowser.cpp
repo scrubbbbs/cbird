@@ -30,6 +30,11 @@
 #include "../scanner.h"
 #include "../videocontext.h"
 
+#include <QtConcurrent/QtConcurrentMap>
+#include <QtCore/QFile>
+#include <QtCore/QTimer>
+#include <QtWidgets/QApplication>
+
 static QImage loadThumb(const Media& m, const MediaWidgetOptions& options) {
   const qreal dpr = qApp->devicePixelRatio();
   const int iconSize = dpr * options.iconSize;

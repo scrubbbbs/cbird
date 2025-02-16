@@ -25,6 +25,10 @@ License along with cbird; if not, see
 
 #include "opencv2/imgproc/imgproc.hpp"
 
+#include <QtCore/QProcessEnvironment>
+#include <QtGui/QPainter>
+#include <QtWidgets/QAbstractItemView>
+
 MediaItemDelegate::MediaItemDelegate(QAbstractItemView* parent)
     : QAbstractItemDelegate(parent) {
   _filters.push_back({-1, "Qt"});

@@ -21,11 +21,23 @@
 #include "media.h"
 #include "cvutil.h"
 
-#include "dctvideoindex.h"
 #include "hamm.h"
 #include "ioutil.h"
 #include "qtutil.h"
+
+#include "dctvideoindex.h"
 #include "videocontext.h"
+
+#include <QtConcurrent/QtConcurrentMap>
+#include <QtCore/QBuffer>
+#include <QtCore/QCollator>
+#include <QtCore/QDir>
+#include <QtCore/QRegularExpression>
+#include <QtCore/QUrl>
+
+#include <QtGui/QDesktopServices>
+#include <QtGui/QIcon>
+#include <QtGui/QImageReader>
 
 #include "exiv2/exiv2.hpp"
 #include "quazip/quazip.h"

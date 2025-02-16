@@ -20,12 +20,38 @@
    <https://www.gnu.org/licenses/>.  */
 #include "qtutil.h"
 
-#include "gui/theme.h"  // TODO: I don't like this dependency
+#include "gui/shadewidget.h"
+#include "gui/theme.h" // TODO: I don't like this dependency
 #include "profile.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h> // ShQueryRecycleBin
 #endif
+
+#include <QtCore/QCollator>
+#include <QtCore/QCoreApplication>
+#include <QtCore/QDir>
+#include <QtCore/QFileInfo>
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QMutexLocker>
+#include <QtCore/QProcess>
+#include <QtCore/QSettings>
+#include <QtCore/QStorageInfo>
+#include <QtCore/QTemporaryFile>
+#include <QtCore/QThread>
+#include <QtCore/QThreadStorage>
+#include <QtCore/QTimer>
+#include <QtCore/QWaitCondition>
+
+#include <QtGui/QDesktopServices>
+#include <QtGui/QScreen>
+#include <QtSql/QSqlError>
+#include <QtSql/QSqlQuery>
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QHeaderView>
+#include <QtWidgets/QInputDialog>
+#include <QtWidgets/QMenu>
+#include <QtWidgets/QTableView>
 
 // qttools/src/qdbus/qdbus/qdbus.cpp
 #ifndef Q_OS_WIN
@@ -831,6 +857,11 @@ QAction* WidgetHelper::addSeparatorAction(QWidget* parent) {
   return sep;
 }
 
+bool DBHelper::isCacheFileStale(const QSqlDatabase& db, const QString& cacheFile) {
+  QFileInfo cacheInfo(cacheFile);
+  return !cacheInfo.exists() || lastModified(db) > cacheInfo.lastModified();
+}
+
 size_t DBHelper::rowCount(QSqlQuery& query, const QString& tableName) {
   if (!query.exec("select count(0) from " + tableName)) SQL_FATAL(exec);
   if (!query.next()) SQL_FATAL(next);
@@ -1603,25 +1634,6 @@ QPartialOrdering qVariantCompare(const QVariant& a, const QVariant& b) {
 }
 #endif
 
-ShadeWidget::ShadeWidget(QWidget* parent) : QLabel(parent) {
-#ifndef QT_TESTLIB_LIB // theme dep in unit tests
-  setProperty("style", Theme::instance().property("style")); // stylesheet sets transparent bg color
-#endif
-  setGeometry({0, 0, parent->width(), parent->height()});
-  setMargin(0);
-  setFrameShape(QFrame::NoFrame);
-  // prevent stacking of effect; note it will still stack with
-  // the window manager's effect (os x, kde)
-  if (!parent->property("shaded").toBool()) {
-    parent->setProperty("shaded", true);
-    show();
-  }
-}
-
-ShadeWidget::~ShadeWidget() {
-  if (!isHidden())
-    parent()->setProperty("shaded", false);
-}
 
 int qNumericSubstringCompare(const QCollator& cmp, const QStringView& a, const QStringView& b) {
   static const auto indexOfNumber = [](const QStringView& str, int start) {
@@ -1730,9 +1742,11 @@ ProgressLogger::ProgressLogger(const QString& format, uint64_t maxStep, const ch
 }
 
 void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantList& args) const {
+  static const QLocale locale;
+
   str.replace("%percent",
               "<GRN>" + (_max > 0 ? QString::number(step * 100 / _max) : "100") + "%<RESET>");
-  str.replace("%step", "<CYN>" + _locale.toString(step) + "<RESET>");
+  str.replace("%step", "<CYN>" + locale.toString(step) + "<RESET>");
 
   for (int i = 0; i < args.size(); ++i) {
     const QVariant& val = args.at(i);
@@ -1747,11 +1761,11 @@ void ProgressLogger::formatString(QString& str, uint64_t step, const QVariantLis
       case QMetaType::ULongLong:
       case QMetaType::Long:
       case QMetaType::ULong:
-        repl = "<NUM>" + _locale.toString(val.toULongLong()) + "<RESET>";
+        repl = "<NUM>" + locale.toString(val.toULongLong()) + "<RESET>";
         break;
       case QMetaType::Float:
       case QMetaType::Double:
-        repl = "<NUM>" + _locale.toString(val.toDouble()) + "<RESET>";
+        repl = "<NUM>" + locale.toString(val.toDouble()) + "<RESET>";
         break;
       default:
         repl = val.toString();
@@ -1782,10 +1796,11 @@ void ProgressLogger::stepRateLimited(uint64_t step, const QVariantList& args) {
 }
 
 void ProgressLogger::end(uint64_t step, const QVariantList& args) const {
+  static const QLocale locale;
   if (!_alwaysShow && !_showLast && _hideTimer.elapsed() < 500) return;
   QString out = _format;
   out.replace(" %percent", "");
-  out += " <TIME>" + _locale.toString(_hideTimer.elapsed()) + "ms";
+  out += " <TIME>" + locale.toString(_hideTimer.elapsed()) + "ms";
   formatString(out, step > 0 ? step : _max, args);
   qColorMessageOutput(QtInfoMsg, _context, out);
 }

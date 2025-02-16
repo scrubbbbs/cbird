@@ -26,6 +26,9 @@
 #include "qtutil.h"
 #include "scanner.h"
 
+#include <QtCore/QDir>
+#include <QtCore/QFileInfo>
+
 bool VideoIndex::upgradeMessageShown = false;
 
 void VideoIndex::save(const QString& file) const {

@@ -25,12 +25,28 @@
 #define __STDC_FORMAT_MACROS 1
 #endif
 
+#define SLIM_PCH
+//#define FAT_PCH
+
+#ifdef SLIM_PCH
+
+#include <QtCore/QElapsedTimer> // qtutil.h
+#include <QtCore/QVariant>      // params.h
+#include <QtGui/QImage>         // media.h
+
+#endif
+
+#ifdef FAT_PCH
+
 #include <QtCore/QtCore>
-Q_STATIC_ASSERT_X(QT_VERSION_MAJOR == 6, "Qt " QT_VERSION_STR " is not a supported qt version");
 
 #include <QtConcurrent/QtConcurrent>
 #include <QtSql/QtSql>
 #include <QtGui/QtGui>
 #include <QtWidgets/QtWidgets>
+
+#endif
+
+Q_STATIC_ASSERT_X(QT_VERSION_MAJOR == 6, "Qt " QT_VERSION_STR " is not a supported qt version");
 
 #include "global.h"

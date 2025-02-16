@@ -21,6 +21,8 @@ License along with cbird; if not, see
 #pragma once
 #include "../media.h"
 
+#include <QtCore/QMutex>
+
 /**
  * @brief allocator for Media::loadImage() that prevents OOM and speeds
  *        up loading by reusing buffers

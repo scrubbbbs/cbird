@@ -21,6 +21,9 @@ License along with cbird; if not, see
 #include "mediapage.h"
 #include "../database.h"
 
+#include <QtCore/QDir>
+#include <QtCore/QFileInfo>
+
 bool MediaPage::isLoaded() const {
   for (const Media& m : group)
     if (!isLoaded(m)) return false;

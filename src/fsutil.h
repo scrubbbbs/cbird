@@ -78,6 +78,8 @@ Q_ALWAYS_INLINE uint qHash(const FileId& id) { return qHash(id.st.st_ino ^ id.st
 #endif
 
 #ifdef Q_OS_WIN
+#include <QtCore/QFileInfo>
+
 typedef struct _REPARSE_DATA_BUFFER {
   ULONG ReparseTag;
   USHORT ReparseDataLength;

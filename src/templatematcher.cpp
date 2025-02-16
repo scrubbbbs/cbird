@@ -28,9 +28,19 @@
 #include "opencv2/video/tracking.hpp"  // estimateRigidTransform
 #include "profile.h"
 
-TemplateMatcher::TemplateMatcher() {}
+#include <QtCore/QReadWriteLock>
+#ifdef TESTING
+#include <QtGui/QPainter>
+#include <QtWidgets/QLabel>
+#endif
 
-TemplateMatcher::~TemplateMatcher() {}
+TemplateMatcher::TemplateMatcher() {
+  _lock = new QReadWriteLock;
+}
+
+TemplateMatcher::~TemplateMatcher() {
+  delete _lock;
+}
 
 void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const SearchParams& params) {
   if (group.count() <= 0) return;
@@ -54,7 +64,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
   MediaGroup good, notCached;
 
   if (useCache) {
-    QReadLocker locker(&_lock);
+    QReadLocker locker(_lock);
 
     for (int i = 0; i < group.count(); i++) {
       Media& m = group[i];
@@ -219,7 +229,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
 
     if (nMatches <= 0) {
       if (params.verbose) qInfo("(%d) no keypoint matches", i);
-      QWriteLocker locker(&_lock);
+      QWriteLocker locker(_lock);
       _cache[cacheKey] = INT_MAX;
       continue;
     }
@@ -244,7 +254,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
     // need at least 3 points to estimate transform
     if (tmplPoints.size() < 3) {
       if (params.verbose) qInfo("(%d) less than 3 keypoint matches", i);
-      QWriteLocker locker(&_lock);
+      QWriteLocker locker(_lock);
       _cache[cacheKey] = INT_MAX;
       continue;
     }
@@ -257,7 +267,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
 
     if (transform.empty()) {
       if (params.verbose) qInfo("(%d) no transform found", i);
-      QWriteLocker locker(&_lock);
+      QWriteLocker locker(_lock);
       _cache[cacheKey] = INT_MAX;
       continue;
     }
@@ -371,7 +381,7 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
       good.append(m);
     else {
       if (params.verbose) qInfo("(%d) match above threshold (%d), consider raising tmThresh", i, dist);
-
+#ifdef TESTING
       if (getenv("TEMPLATE_MATCHER_DEBUG")) {
         QImage tImg, txImg;
         cvImgToQImage(tmplMasked, tImg);
@@ -396,9 +406,10 @@ void TemplateMatcher::match(const Media& tmplMedia, MediaGroup& group, const Sea
         window->setPixmap(QPixmap::fromImage(test));
         window->show();
       }
+#endif
     }
 
-    QWriteLocker locker(&_lock);
+    QWriteLocker locker(_lock);
     _cache[cacheKey] = dist;
   }
 

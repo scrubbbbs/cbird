@@ -20,7 +20,7 @@
    <https://www.gnu.org/licenses/>.  */
 
 #ifdef __gnu_linux__
-
+#include <QtCore/QFile>
 #  include <unistd.h>  // usleep
 
 /**
@@ -164,6 +164,8 @@ CPU_STATE_NICE]; total = inUse + cpuInfo[(CPU_STATE_MAX * i) + CPU_STATE_IDLE];
 #  include <sys/sysctl.h>
 #  include <sys/types.h>
 #  include <unistd.h>
+
+#include <QtConcurrent/QtConcurrentRun>
 
 class CPU {
  public:

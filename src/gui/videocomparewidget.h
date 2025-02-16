@@ -23,6 +23,8 @@
 #include "../videocontext.h"
 #include "mediawidget.h"
 
+#include <QtWidgets/QWidget>
+
 class FrameCache;
 class Frame;
 class Database;

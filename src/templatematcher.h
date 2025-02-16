@@ -21,6 +21,8 @@
 #pragma once
 
 #include "media.h"
+
+class QReadWriteLock;
 class SearchParams;
 
 class TemplateMatcher {
@@ -56,5 +58,5 @@ class TemplateMatcher {
 
  private:
   QHash<QString, int> _cache;
-  QReadWriteLock _lock;
+  QReadWriteLock* _lock = nullptr;
 };

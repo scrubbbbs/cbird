@@ -23,6 +23,10 @@
 
 #include <cfloat>
 
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlError>
+#include <QtSql/QSqlQuery>
+
 ColorDescIndex::ColorDescIndex() : Index() {
   _id = SearchParams::AlgoColor;
   _count = 0;

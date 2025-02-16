@@ -3,6 +3,16 @@
 #include "mediagrouptablewidget.h"
 #include "../qtutil.h"
 
+#include <QtCore/QSettings>
+
+#include <QtWidgets/QComboBox>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QLayout>
+#include <QtWidgets/QLineEdit>
+#include <QtWidgets/QMenu>
+#include <QtWidgets/QPushButton>
+#include <QtWidgets/QTableView>
+
 MediaFilterWidget::MediaFilterWidget(QWidget* parent) : QWidget(parent) {
   QSettings settings(DesktopHelper::settingsFile(), QSettings::IniFormat);
   settings.beginGroup(self::staticMetaObject.className());

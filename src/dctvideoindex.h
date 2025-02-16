@@ -60,6 +60,8 @@ class RadixMap_t;
 typedef RadixMap_t<VideoTreeIndex> VideoSearchTree;
 #endif
 
+class QMutex;
+
 /**
  * @class DctVideoIndex
  * @brief Detect similar videos with full-frame dct hashes
@@ -111,6 +113,6 @@ class DctVideoIndex : public Index {
   std::vector<mediaid_t> _mediaId;
   QString _dataPath;
   std::map<mediaid_t, VideoSearchTree*> _cachedIndex;
-  QMutex _mutex;
+  QMutex* _mutex = nullptr;
   bool _isLoaded;
 };

@@ -10,6 +10,9 @@ QT *= widgets
 #DEFINES += DEBUG
 #DEFINES += DEBUG_OPTIMIZED
 
+# enables code only for testing
+#DEFINES += TESTING
+
 CONFIG -= debug_and_release
 CONFIG -= debug_and_release_target
 CONFIG += release

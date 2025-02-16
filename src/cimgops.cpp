@@ -22,6 +22,8 @@
 #include "media.h"
 #include "profile.h"
 
+#include <QtConcurrent/QtConcurrentRun>
+
 #define MT_QUALITYSCORE (1)
 
 // originally used float, uint8_t is fine, cast to int for absolute difference

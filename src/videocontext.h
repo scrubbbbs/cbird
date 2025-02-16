@@ -20,6 +20,8 @@
    <https://www.gnu.org/licenses/>.  */
 #pragma once
 
+#include <QtCore/QTime>
+
 namespace cv {
 class Mat;
 }
@@ -31,6 +33,10 @@ typedef int (*AvExec2Callback)(AVCodecContext*, void*, int, int);
 
 class VideoContextPrivate;
 class Media;
+
+class QMutex;
+template<typename T>
+class QFuture;
 
 /// Video decoding
 class VideoContext {

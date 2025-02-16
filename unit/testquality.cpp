@@ -8,6 +8,8 @@
 #include "gui/mediagrouplistwidget.h"
 #include "gui/theme.h"
 
+#include <QtGui/QImageReader>
+
 class TestQuality : public TestBase {
   Q_OBJECT
 

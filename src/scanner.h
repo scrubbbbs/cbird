@@ -23,6 +23,9 @@
 #include "media.h"
 #include "params.h"
 
+#include <QtCore/QDateTime>
+#include <QtCore/QFutureWatcher>
+
 class FileId;
 
 /// settings to control scanning/indexing

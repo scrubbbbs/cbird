@@ -19,6 +19,9 @@ You should have received a copy of the GNU General Public
 License along with cbird; if not, see
 <https://www.gnu.org/licenses/>.  */
 #pragma once
+
+#include <QtWidgets/QAbstractItemDelegate>
+
 class MediaPage;
 
 /// Custom painting and layout of list view items, maybe generalized to any view

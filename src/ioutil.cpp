@@ -20,6 +20,12 @@
    <https://www.gnu.org/licenses/>.  */
 #include "ioutil.h"
 
+#include <QtCore/QBuffer>
+#include <QtCore/QCryptographicHash>
+#include <QtCore/QFuture>
+#include <QtCore/QSemaphore>
+#include <QtCore/QTemporaryFile>
+
 QCancelableIODevice::QCancelableIODevice(QIODevice* io, const QFuture<void>* future)
     : _io(io), _future(future) {
   setOpenMode(_io->openMode());

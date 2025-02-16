@@ -35,7 +35,8 @@ FILES_INDEX = index ioutil media videoindex videocontext cvutil qtutil database 
 # deps for gui
 FILES_GUI = gui/mediagrouplistwidget gui/mediafolderlistwidget env \
     lib/jpegquality gui/videocomparewidget cimgops nleutil gui/cropwidget \
-    gui/theme gui/mediapage gui/mediaitemdelegate gui/pooledimageallocator
+    gui/theme gui/mediapage gui/mediaitemdelegate gui/pooledimageallocator \
+    gui/shadewidget
 
 win32 {
   PRECOMPILED_HEADER=../src/prefix.h

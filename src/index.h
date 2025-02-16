@@ -144,6 +144,8 @@ class SearchParams : public Params {
   //                               rescale candidate prior to feature detection
 };
 
+class QSqlDatabase;
+
 /// Common base for searchable index
 class Index {
   Q_DISABLE_COPY_MOVE(Index)

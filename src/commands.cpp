@@ -27,6 +27,20 @@ License along with cbird; if not, see
 #include "qtutil.h"
 #include "videocontext.h"
 
+#include <QtCore/QDir>
+#include <QtCore/QFileInfo>
+#include <QtCore/QRegularExpression>
+
+#include <QtConcurrent/QtConcurrentMap>
+#include <QtConcurrent/QtConcurrentRun>
+
+#include <QtGui/QKeyEvent>
+
+#include <QtWidgets/QDialog>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QLayout>
+#include <QtWidgets/QPushButton>
+
 /// <expression> parser and evaluator
 class Expression {
  private:

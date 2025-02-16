@@ -22,6 +22,8 @@
 #include "../media.h"
 #include "mediawidget.h"
 
+#include <QtWidgets/QListWidget>
+
 class Database;
 
 class MediaFolderListWidget : public QListWidget {

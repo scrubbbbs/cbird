@@ -26,6 +26,18 @@
 #include "opencv2/core.hpp"
 #include "exiv2/exiv2.hpp"
 
+#include <QtCore/QCryptographicHash>
+#include <QtCore/QFileInfo>
+
+#include <QtConcurrent/QtConcurrentRun>
+
+#include <QtGui/QKeyEvent>
+#include <QtGui/QMouseEvent>
+#include <QtGui/QPainter>
+#include <QtGui/QScreen>
+
+#include <QtWidgets/QApplication>
+
 bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidget *parent,
                                    bool async, const std::function<void(bool)> &after) {
   CropWidget w(media.loadImage(), true, parent);

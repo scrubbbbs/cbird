@@ -24,6 +24,17 @@
 #include "qtutil.h"
 #include "templatematcher.h"
 
+#include <QtConcurrent/QtConcurrentMap>
+#include <QtConcurrent/QtConcurrentRun>
+#include <QtCore/QDir>
+#include <QtCore/QFileInfo>
+#include <QtCore/QLockFile>
+#include <QtCore/QReadWriteLock>
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlError>
+#include <QtSql/QSqlQuery>
+#include <QtSql/QSqlRecord>
+
 QAtomicInt& Database::connectionCount() {
   static auto* s = new QAtomicInt(0);
   return *s;
@@ -263,6 +274,8 @@ void Database::createTables() {
 }
 
 Database::Database(const QString& path_) {
+  _rwLock = new QReadWriteLock;
+
   QDir dir = QDir::current();
   if (path_ != "") dir = QDir(path_);
 
@@ -294,6 +307,7 @@ Database::~Database() {
   saveIndices();
   qInfo("save Indices: done");
 
+  delete _rwLock;
   // close all db connections; hopefully there are no
   // threads running that want the db
   // FIXME: remove this code or fix it if it is actually needed
@@ -352,7 +366,7 @@ void Database::add(MediaGroup& inMedia) {
   // It is still possible to corrupt if another thread crashes the app
   // during a commit.
 
-  QWriteLocker locker(&_rwLock);
+  QWriteLocker locker(_rwLock);
   QLockFile dbLock(indexPath() + "/write.lock");
   if (!dbLock.tryLock(0)) {
     qCritical() << "database update aborted, another process is writing,"
@@ -525,7 +539,7 @@ void Database::remove(const QVector<int>& ids) {
       return;
     }
 
-  QWriteLocker locker(&_rwLock);
+  QWriteLocker locker(_rwLock);
   QLockFile dbLock(indexPath() + "/write.lock");
   if (!dbLock.tryLock(0)) {
     qCritical() << "database update aborted, another process is writing,"
@@ -596,7 +610,7 @@ void Database::remove(const QVector<int>& ids) {
 }
 
 void Database::vacuum() {
-  QWriteLocker locker(&_rwLock);
+  QWriteLocker locker(_rwLock);
   QLockFile dbLock(indexPath() + "/write.lock");
   if (!dbLock.tryLock(0)) {
     qCritical() << "database update aborted, another process is writing,"
@@ -1327,7 +1341,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
         ids.insert(uint32_t(m.id()));
 
     if (!ids.isEmpty()) {
-      QReadLocker lock(&_rwLock);
+      QReadLocker lock(_rwLock);
       slice = index->slice(ids);
       if (slice) {
         index = slice;
@@ -1553,7 +1567,7 @@ QSet<QString> Database::indexedFiles() {
 }
 
 QHash<QString, Database::Item> Database::indexedItems() {
-  QWriteLocker locker(&_rwLock);          // using write lock since we might need to fix orphans
+  QWriteLocker locker(_rwLock);           // using write lock since we might need to fix orphans
   QHash<QString, Item> result;
   QHash<int, QSet<mediaid_t>> indexedIds; // index id=> media id list
   for (const Index* i : std::as_const(_algos)) {
@@ -1611,7 +1625,7 @@ QHash<QString, Database::Item> Database::indexedItems() {
 }
 
 QHash<QString, mediaid_t> Database::indexedForAlgos(int algos, bool missing) {
-  QReadLocker locker(&_rwLock);
+  QReadLocker locker(_rwLock);
   QHash<QString, mediaid_t> result;
   QHash<int, QSet<mediaid_t>> indexedIds; // index id=> media id list
   for (const Index* i : std::as_const(_algos)) {
@@ -1670,7 +1684,7 @@ Index* Database::loadIndex(const SearchParams& params) {
   Index* i = chooseIndex(params);
   if (i->isLoaded()) return i;
 
-  QWriteLocker locker(&_rwLock);
+  QWriteLocker locker(_rwLock);
   if (!i->isLoaded()) {
     QString dataPath = "";
     if (i->id() == SearchParams::AlgoVideo) dataPath = videoPath();
@@ -1695,7 +1709,7 @@ MediaGroup Database::searchIndex(Index* index, const Media& needle, const Search
   // - number of actual tree lookups
   // - etc etc
   // This will make possible an accurate "time per hash" stat on progress line
-  QReadLocker locker(&_rwLock);
+  QReadLocker locker(_rwLock);
 
   QVector<Index::Match> matches = index->find(needle, params);
 
@@ -1759,7 +1773,7 @@ DONE:
 bool Database::isNegativeMatch(const Media& m1, const Media& m2) {
   if (!_negMatchLoaded) loadNegativeMatches();
 
-  QReadLocker locker(&_rwLock);
+  QReadLocker locker(_rwLock);
   auto& map = qAsConst(_negMatch);
   auto it = map.find(m1.md5());
   if (it != map.end() && it.value().contains(m2.md5())) return true;
@@ -1788,7 +1802,7 @@ void Database::addNegativeMatch(const Media& m1, const Media& m2) {
   if (m1.md5().isEmpty() || m2.md5().isEmpty()) return;
   if (m1.md5() == m2.md5()) return;
 
-  QWriteLocker locker(&_rwLock);
+  QWriteLocker locker(_rwLock);
   qDebug() << "adding" << m1.md5() << m2.md5();
 
   auto& key = m1.md5();
@@ -1800,7 +1814,7 @@ void Database::addNegativeMatch(const Media& m1, const Media& m2) {
 }
 
 void Database::loadNegativeMatches() {
-  QWriteLocker locker(&_rwLock);
+  QWriteLocker locker(_rwLock);
   if (_negMatchLoaded) return;
   Q_ASSERT(_negMatch.count() == 0);
 
@@ -1813,13 +1827,13 @@ void Database::loadNegativeMatches() {
 }
 
 void Database::unloadNegativeMatches() {
-  QWriteLocker lock(&_rwLock);
+  QWriteLocker lock(_rwLock);
   _negMatch.clear();
   _negMatchLoaded = false;
 }
 
 void Database::loadWeeds() {
-  QWriteLocker lock(&_rwLock);
+  QWriteLocker lock(_rwLock);
   if (_weedsLoaded) return;
   Q_ASSERT(_weeds.isEmpty());
 
@@ -1830,7 +1844,7 @@ void Database::loadWeeds() {
 }
 
 void Database::unloadWeeds() {
-  QWriteLocker lock(&_rwLock);
+  QWriteLocker lock(_rwLock);
   _weeds.clear();
   _weedsLoaded = false;
 }
@@ -1840,7 +1854,7 @@ bool Database::addWeed(const Media& weed, const Media& original) {
   if (weed.md5() == original.md5()) return false;
   if (weed.type() != original.type()) return false;
   if (isWeed(weed)) {
-    QReadLocker locker(&_rwLock);
+    QReadLocker locker(_rwLock);
     if (_weeds.value(weed.md5()) == original.md5())  // did not change the mapping
       return true;
     // FIXME: this would be OK but we have to rewrite the weed.dat
@@ -1853,7 +1867,7 @@ bool Database::addWeed(const Media& weed, const Media& original) {
     return false;
   }
   qDebug() << weed.path() << "=>" << original.path();
-  QWriteLocker lock(&_rwLock);
+  QWriteLocker lock(_rwLock);
   auto& key = weed.md5();
   auto& value = original.md5();
   _weeds.insert(key, value);
@@ -1862,7 +1876,7 @@ bool Database::addWeed(const Media& weed, const Media& original) {
 
 bool Database::isWeed(const Media& media) {
   if (!_weedsLoaded) loadWeeds();
-  QReadLocker lock(&_rwLock);
+  QReadLocker lock(_rwLock);
 
   const auto& map = _weeds;
   const auto it = map.find(media.md5());
@@ -1873,7 +1887,7 @@ bool Database::isWeed(const Media& media) {
 
 bool Database::removeWeed(const Media& media) {
   if (isWeed(media)) {
-    QWriteLocker locker(&_rwLock);
+    QWriteLocker locker(_rwLock);
     _weeds.remove(media.md5());
     qDebug() << media.md5();
     QVector<std::pair<QString, QString>> pairs;
@@ -1891,7 +1905,7 @@ bool Database::removeWeed(const Media& media) {
 //  for (const auto& m : all)
 //    existing.insert(m.md5(), &m);
 
-//  QWriteLocker lock(&_rwLock);
+//  QWriteLocker lock(_rwLock);
 //  bool rewrite = false;
 //  const auto copy = qAsConst(_weeds); // copy needed for remove()
 //  for (auto it = copy.begin(); it != copy.end(); ++it)
@@ -1914,7 +1928,7 @@ bool Database::removeWeed(const Media& media) {
 
 MediaGroupList Database::weeds() {
   if (!_weedsLoaded) loadWeeds();
-  QReadLocker lock(&_rwLock);
+  QReadLocker lock(_rwLock);
 
   MediaGroupList list;
 

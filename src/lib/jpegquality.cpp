@@ -47,6 +47,8 @@
 #include <ctype.h>
 #include <string.h>
 
+#include <QtCore/QIODevice>
+
 //static int Debug=0;
 
 #define	Abs(x)	((x) < 0 ? -(x) : (x))

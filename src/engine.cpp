@@ -30,6 +30,10 @@
 #include "templatematcher.h"
 #include "qtutil.h"
 
+#include <QtCore/QDir>
+#include <QtCore/QFile>
+#include <QtCore/QFileInfo>
+
 Engine::Engine(const QString& path, const IndexParams& params) {
   db = new Database(path);
   db->addIndex(new DctHashIndex);

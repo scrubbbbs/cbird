@@ -1,6 +1,29 @@
 #include "theme.h"
 
+#include "shadewidget.h"
+
 #include "../qtutil.h"
+
+#include <QtCore/QFile>
+#include <QtCore/QMessageLogger>
+#include <QtCore/QMetaProperty>
+#include <QtCore/QThread>
+
+#include <QtGui/QPainter>
+#include <QtGui/QStyleHints>
+#include <QtGui/QTextDocument>
+#include <QtGui/QWindow>
+
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QColorDialog>
+#include <QtWidgets/QDialog>
+#include <QtWidgets/QFileDialog>
+#include <QtWidgets/QInputDialog>
+#include <QtWidgets/QLayout>
+#include <QtWidgets/QMessageBox>
+#include <QtWidgets/QPushButton>
+#include <QtWidgets/QStyle>
+#include <QtWidgets/QTableWidget>
 
 QString* Theme::_defaultStyle = nullptr;
 

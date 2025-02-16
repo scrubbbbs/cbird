@@ -22,6 +22,11 @@
 #include "theme.h"
 #include "../qtutil.h"
 
+#include <QtCore/QSettings>
+#include <QtCore/QTimer>
+
+#include <QtGui/QMouseEvent>
+
 #define LW_ITEM_SPACING (8)             // can't be too small or it breaks layout logic
 
 MediaFolderListWidget::MediaFolderListWidget(const MediaGroup& list,

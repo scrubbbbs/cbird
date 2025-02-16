@@ -27,6 +27,12 @@
 
 #include "opencv2/features2d.hpp"
 
+#include <QtCore/QDateTime>
+
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlError>
+#include <QtSql/QSqlQuery>
+
 // there is a breaking change to flann interface at some point
 #if !(CV_VERSION_EPOCH == 2 && CV_VERSION_MAJOR >= 4 && CV_VERSION_MINOR >= 13)
 #  error OpenCV 2.4.13+ is required

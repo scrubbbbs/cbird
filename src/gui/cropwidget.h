@@ -19,6 +19,9 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #pragma once
+
+#include <QtWidgets/QLabel>
+
 class Database;
 class Media;
 

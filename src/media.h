@@ -36,6 +36,9 @@ typedef Rect_<int> Rect;
 class Media;
 class VideoContext;
 
+template<typename T>
+class QFuture;
+
 /// List of media, typically needle followed by matches
 typedef QVector<Media> MediaGroup;
 /// List of groups, typically search results

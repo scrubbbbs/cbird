@@ -25,6 +25,12 @@
 #include "qtutil.h"
 #include "tree/hammingtree.h"
 
+#include <QtCore/QDateTime>
+
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlError>
+#include <QtSql/QSqlQuery>
+
 static QString cacheFile(const QString& cachePath) { return cachePath + qq("/dctfeatures.cache"); }
 
 DctFeaturesIndex::DctFeaturesIndex() { init(); }

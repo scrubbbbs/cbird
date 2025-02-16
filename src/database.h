@@ -23,6 +23,10 @@
 #include "index.h"
 #include "media.h"
 
+class QSqlQuery;
+class QRecursiveMutex;
+class QReadWriteLock;
+
 /// Manage and query media in a directory
 class Database {
  public:
@@ -286,7 +290,7 @@ class Database {
   QString _indexDir;
 
   /// Lock for single-writer, multiple-reader situations
-  QReadWriteLock _rwLock;
+  QReadWriteLock* _rwLock;
 
   /// Registered algorithms
   QVector<Index*> _algos;

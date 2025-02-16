@@ -28,6 +28,10 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
+#include <QtCore/QMutexLocker>
+#include <QtCore/QRegularExpression>
+#include <QtCore/QThread>
+
 static_assert(cv::INTER_LANCZOS4 == FWD_INTER_LANCZOS4, "check header for invalid constant");
 
 // TODO: new versions of load/save matrix that do not have to

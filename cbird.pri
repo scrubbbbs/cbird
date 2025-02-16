@@ -17,6 +17,8 @@ VERSION=0.7.3
 
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
 QMAKE_CXXFLAGS += -Wno-deprecated-declarations
+#QMAKE_CXXFLAGS += -ftime-report
+
 #QMAKE_CXXFLAGS += -Werror
 
 # cimg has openmp support, doesn't do much (qualityscore())

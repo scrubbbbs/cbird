@@ -20,6 +20,8 @@
    <https://www.gnu.org/licenses/>.  */
 #pragma once
 
+class QMutex;
+
 #include "cimg_fwd.h"
 //#include "opencv2/imgproc/imgproc.hpp"
 namespace cv {

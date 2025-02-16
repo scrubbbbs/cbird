@@ -26,13 +26,22 @@
 #include <unordered_map>
 #include <cinttypes>
 
+#include <QtCore/QFileInfo>
+#include <QtCore/QMutex>
+
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlError>
+#include <QtSql/QSqlQuery>
+
 DctVideoIndex::DctVideoIndex() {
   _id = SearchParams::AlgoVideo;
   _tree = nullptr;
   _isLoaded = false;
+  _mutex = new QMutex;
 }
 
 DctVideoIndex::~DctVideoIndex() {
+  delete _mutex;
   delete _tree;
   for (auto it : _cachedIndex) delete it.second;
 }
@@ -106,7 +115,7 @@ void DctVideoIndex::buildTree(const SearchParams& params) {
 
   if (_tree) return;
 
-  QMutexLocker locker(&_mutex);
+  QMutexLocker locker(_mutex);
 
   if (!_tree) {
     VStat sum{0, 0};
@@ -289,7 +298,7 @@ QVector<Index::Match> DctVideoIndex::findFrame(const Media& needle, const Search
   if (params.target != 0) {
     if (params.verbose) qInfo("search single video");
 
-    QMutexLocker locker(&_mutex);
+    QMutexLocker locker(_mutex);
 
     if (_cachedIndex[params.target])
       queryIndex = _cachedIndex[params.target];

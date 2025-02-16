@@ -23,6 +23,10 @@
 #include "qtutil.h"
 #include "tree/dcttree.h"
 
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlError>
+#include <QtSql/QSqlQuery>
+
 DctHashIndex::DctHashIndex() {
   _id = SearchParams::AlgoDCT;
   init();

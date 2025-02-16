@@ -20,6 +20,13 @@
    <https://www.gnu.org/licenses/>.  */
 #pragma once
 
+#include <QtCore/QFile>
+
+class QIODevice;
+
+template<typename T>
+class QFuture;
+
 /**
  * File I/O wrapper w/error reporting/handling 
  */

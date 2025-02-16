@@ -22,6 +22,9 @@
 #include "../media.h"
 #include "mediawidget.h"
 
+#include <QtCore/QTimer>
+#include <QtWidgets/QListWidget>
+
 class Database;
 class MediaItemDelegate;
 class MediaPage;

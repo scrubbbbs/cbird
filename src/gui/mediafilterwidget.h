@@ -21,6 +21,11 @@
 */
 #pragma once
 
+#include <QtWidgets/QWidget>
+
+class QPushButton;
+class QTableView;
+
 class MediaFilterWidget : public QWidget {
   Q_OBJECT
   NO_COPY_NO_DEFAULT(MediaFilterWidget, QWidget)

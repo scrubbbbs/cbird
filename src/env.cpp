@@ -27,6 +27,8 @@
 #include <iostream>
 #include <string>
 
+#include <QtCore/QFile>
+
 #ifdef Q_OS_WIN
 
 // clang-format off

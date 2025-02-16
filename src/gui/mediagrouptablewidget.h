@@ -22,6 +22,9 @@
 
 #include "../media.h"
 
+#include <QtCore/QAbstractTableModel>
+#include <QtWidgets/QTableView>
+
 class Database;
 
 /**

@@ -19,6 +19,11 @@ You should have received a copy of the GNU General Public
 License along with cbird; if not, see
 <https://www.gnu.org/licenses/>.  */
 
+#include <QtWidgets/QWidget>
+
+class QMessageBox;
+class QInputDialog;
+
 /**
  * @brief The Theme class initialized the theme, provides style information,
  *        and provides utilities for common tasks like dialogs

@@ -38,6 +38,14 @@
 #include "qtutil.h"
 #include "scanner.h"
 
+#include <QtConcurrent/QtConcurrentMap>
+#include <QtConcurrentRun>
+#include <QtCore/QCoreApplication>
+#include <QtCore/QDir>
+#include <QtCore/QLoggingCategory>
+#include <QtGui/QImageReader>
+#include <QtWidgets/QApplication>
+
 static QStringList buildFlags() {
   QStringList flags;
 #if defined(__clang__)

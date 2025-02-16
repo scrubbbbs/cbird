@@ -31,6 +31,14 @@
 #include "opencv2/features2d.hpp"
 #include "quazip/quazip.h"
 
+#include <QtConcurrent/QtConcurrentRun>
+#include <QtCore/QBuffer>
+#include <QtCore/QCryptographicHash>
+#include <QtCore/QDir>
+#include <QtCore/QRegularExpression>
+#include <QtCore/QTimer>
+#include <QtGui/QImageReader>
+
 Scanner::Scanner() {
   // clang-format off
   _imageTypes << "jpg" << "jpeg" << "jfif" << "png" << "bmp" << "gif";

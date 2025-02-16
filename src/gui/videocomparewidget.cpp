@@ -30,6 +30,18 @@
 
 #include "opencv2/core.hpp"
 
+#include <QtConcurrent/QtConcurrentRun>
+#include <QtCore/QFuture>
+#include <QtCore/QSettings>
+#include <QtCore/QThread>
+#include <QtCore/QTimer>
+
+#include <QtGui/QDesktopServices>
+#include <QtGui/QPainter>
+#include <QtGui/QWheelEvent>
+
+#include <QtWidgets/QApplication>
+
 /// frame cache entry
 class Frame {
  public:
