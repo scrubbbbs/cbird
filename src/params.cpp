@@ -60,11 +60,26 @@ QString Params::toString(const QString& key) const {
   return getValue(key).toString(this);
 }
 
+QString Params::categoryLabel(int category) const {
+  (void) category;
+  return "";
+}
+
 void Params::print() const {
   auto keys = _params.keys();
-  keys.sort();
+  std::sort(keys.begin(), keys.end(), [this](const QString& a, const QString& b) {
+    return _params[a].sort < _params[b].sort;
+  });
+  int cat = -1;
   for (auto& k : qAsConst(keys)) {
     const auto& p = _params.value(k);
+    if (p.category != cat) {
+      cat = p.category;
+      qInfo();
+      QString label = categoryLabel(p.category);
+      qInfo().noquote().nospace() << "--<BRIGHT> " << label
+                                  << "<RESET> " + QString().fill('-', 30 - label.length());
+    }
     qInfo().noquote() << qSetFieldWidth(7) << p.key << qSetFieldWidth(10) << p.toString(this)
                       << p.label;
   }

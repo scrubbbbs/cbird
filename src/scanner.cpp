@@ -1119,80 +1119,97 @@ IndexParams::IndexParams() {
         {1 << SearchParams::AlgoCVFeatures, "orb", "ORB descriptors of features"},
         {1 << SearchParams::AlgoColor, "color", "Color histogram"},
         {1 << SearchParams::AlgoVideo, "video", "DCT image hashes of video frames"}};
-    add({"algos", "Enabled algorithms", Value::Flags, counter++, SET_FLAGS("algos", algos, bits),
-         GET(algos), GET_CONST(bits), NO_RANGE});
+    add({"algos", CatAlgorithms, "Enabled algorithms", Value::Flags, counter++,
+         SET_FLAGS("algos", algos, bits), GET(algos), GET_CONST(bits), NO_RANGE});
   }
 
   {
     static const QVector<NamedValue> bits{{TypeImage, "i", "Image files"},
                                           {TypeVideo, "v", "Video files"},
                                           {TypeAudio, "a", "Audio files"}};
-    add({"types", "Enabled media types", Value::Flags, counter++, SET_FLAGS("types", types, bits),
-         GET(types), GET_CONST(bits), NO_RANGE});
+    add({"types", CatAlgorithms, "Enabled media types", Value::Flags, counter++,
+         SET_FLAGS("types", types, bits), GET(types), GET_CONST(bits), NO_RANGE});
   }
 
-  add({"dirs", "Enable indexing of subdirectories", Value::Bool, counter++, SET_BOOL(recursive),
-       GET(recursive), NO_NAMES, NO_RANGE});
+  add({"dirs", CatFilesystem, "Enable recursive scan of subdirectories", Value::Bool, counter++,
+       SET_BOOL(recursive), GET(recursive), NO_NAMES, NO_RANGE});
 
-  add({"ignored", "Log all ignored files", Value::Bool, counter++, SET_BOOL(showIgnored),
-       GET(showIgnored), NO_NAMES, NO_RANGE});
+  add({"exclude", CatFilesystem, "Add glob/pattern to exclude matching paths", Value::Glob,
+       counter++, ADD_GLOB(excludePatterns), GET(excludePatterns), NO_NAMES, NO_RANGE});
 
-  add({"verbose", "Log all links followed and files queued for processing", Value::Bool, counter++,
-       SET_BOOL(verbose), GET(verbose), NO_NAMES, NO_RANGE});
+  add({"include", CatFilesystem, "Add glob/pattern to include matching paths", Value::Glob,
+       counter++, ADD_GLOB(includePatterns), GET(includePatterns), NO_NAMES, NO_RANGE});
 
-  add({"links", "Follow symlinks to files and directories", Value::Bool, counter++,
+  add({"fsize", CatFilesystem, "Minimum file size in bytes, ignore smaller files", Value::Int,
+       counter++, SET_INT(minFileSize), GET(minFileSize), NO_NAMES, GET_CONST(positive)});
+
+  add({"links", CatFilesystem, "Follow symlinks to files and directories", Value::Bool, counter++,
        SET_BOOL(followSymlinks), GET(followSymlinks), NO_NAMES, NO_RANGE});
 
-  add({"exclude", "Add glob/pattern to exclude matching paths", Value::Glob, counter++,
-       ADD_GLOB(excludePatterns), GET(excludePatterns), NO_NAMES, NO_RANGE});
+  add({"resolve", CatFilesystem, "Store resolved symlink if it is child of index root", Value::Bool,
+       counter++, SET_BOOL(resolveLinks), GET(resolveLinks), NO_NAMES, NO_RANGE});
 
-  add({"include", "Add glob/pattern to include matching paths", Value::Glob, counter++,
-       ADD_GLOB(includePatterns), GET(includePatterns), NO_NAMES, NO_RANGE});
+  add({"dups", CatFilesystem, "Follow duplicate inodes (hard links,symlinks,junctions)",
+       Value::Bool, counter++, SET_BOOL(dupInodes), GET(dupInodes), NO_NAMES, NO_RANGE});
 
-  add({"resolve", "Resolve symlinks, store canonical path if possible", Value::Bool, counter++,
-       SET_BOOL(resolveLinks), GET(resolveLinks), NO_NAMES, NO_RANGE});
+  add({"modtime", CatFilesystem, "Force using potentially unreliable file modification time",
+       Value::Bool, counter++, SET_BOOL(modTime), GET(modTime), NO_NAMES, NO_RANGE});
 
-  add({"dups", "Follow duplicate inodes (hard links, soft links etc)", Value::Bool, counter++,
-       SET_BOOL(dupInodes), GET(dupInodes), NO_NAMES, NO_RANGE});
+  add({"crop", CatImageProc, "Enable border crop/de-letterbox for images (video=>always enabled)",
+       Value::Bool, counter++, SET_BOOL(autocrop), GET(autocrop), NO_NAMES, NO_RANGE});
 
-  add({"modtime", "Force using possibly unreliable file modification time checks", Value::Bool,
-       counter++, SET_BOOL(modTime), GET(modTime), NO_NAMES, NO_RANGE});
+  add({"nfeat", CatImageProc, "Number of features per image (fdct,orb)", Value::Int, counter++,
+       SET_INT(numFeatures), GET(numFeatures), NO_NAMES, GET_CONST(positive)});
 
-  add({"ljf", "Estimate job cost and process longest jobs first", Value::Bool, counter++,
-       SET_BOOL(estimateCost), GET(estimateCost), NO_NAMES, NO_RANGE});
+  add({"rsize", CatImageProc,
+       "Dimension for prescaling images before processing (dct,fddt,orb,color)", Value::Int,
+       counter++, SET_INT(resizeLongestSide), GET(resizeLongestSide), NO_NAMES, GET_CONST(nonzero)});
 
-  add({"dryrun", "Dry run, only show what would be done", Value::Bool, counter++, SET_BOOL(dryRun),
-       GET(dryRun), NO_NAMES, NO_RANGE});
+  add({"vht", CatImageProc, "Dct threshold for discarding nearby frame hashes (video)", Value::Int,
+       counter++, SET_INT(videoThreshold), GET(videoThreshold), NO_NAMES, GET_CONST(nonzero)});
 
-  add({"fsize", "Minimum file size in bytes, ignore smaller files", Value::Int, counter++,
-       SET_INT(minFileSize), GET(minFileSize), NO_NAMES, GET_CONST(positive)});
-
-  add({"bsize", "Size of database write batches", Value::Int, counter++, SET_INT(writeBatchSize),
-       GET(writeBatchSize), NO_NAMES, GET_CONST(nonzero)});
-
-  add({"crop", "Enable border detect/crop of video", Value::Bool, counter++, SET_BOOL(autocrop),
-       GET(autocrop), NO_NAMES, NO_RANGE});
-
-  add({"nfeat", "Number of features per image", Value::Int, counter++, SET_INT(numFeatures),
-       GET(numFeatures), NO_NAMES, GET_CONST(positive)});
-
-  add({"rsize", "Dimension for prescaling images before processing", Value::Int, counter++,
-       SET_INT(resizeLongestSide), GET(resizeLongestSide), NO_NAMES, GET_CONST(nonzero)});
-
-  add({"vht", "Video index threshold for discarding hashes", Value::Int, counter++,
-       SET_INT(videoThreshold), GET(videoThreshold), NO_NAMES, GET_CONST(nonzero)});
-
-  add({"gpu", "Enable gpu video decoding (Nvidia)", Value::Bool, counter++,
+  add({"gpu", CatThreads, "Enable gpu video decoding (Nvidia)", Value::Bool, counter++,
        SET_BOOL(useHardwareDec), GET(useHardwareDec), NO_NAMES, NO_RANGE});
 
-  add({"decthr", "Max threads for video decoding (0==auto)", Value::Int, counter++,
+  add({"decthr", CatThreads, "Max threads for video decoding (0==auto)", Value::Int, counter++,
        SET_INT(decoderThreads), GET(decoderThreads), NO_NAMES, GET_CONST(positive)});
 
-  add({"idxthr", "Max threads for all jobs (0==auto)", Value::Int, counter++, SET_INT(indexThreads),
-       GET(indexThreads), NO_NAMES, GET_CONST(positive)});
+  add({"idxthr", CatThreads, "Max threads for all jobs (0==auto)", Value::Int, counter++,
+       SET_INT(indexThreads), GET(indexThreads), NO_NAMES, GET_CONST(positive)});
 
-  add({"gputhr", "Max decoders per gpu", Value::Int, counter++, SET_INT(gpuThreads),
+  add({"gputhr", CatThreads, "Max decoders per gpu", Value::Int, counter++, SET_INT(gpuThreads),
        GET(gpuThreads), NO_NAMES, GET_CONST(nonzero)});
+
+  add({"bsize", CatJobs, "Size of database write batches", Value::Int, counter++,
+       SET_INT(writeBatchSize), GET(writeBatchSize), NO_NAMES, GET_CONST(nonzero)});
+
+  add({"ljf", CatJobs, "Estimate job cost and process longest jobs first", Value::Bool, counter++,
+       SET_BOOL(estimateCost), GET(estimateCost), NO_NAMES, NO_RANGE});
+
+  add({"ignored", CatDiagnostic, "Log all ignored files", Value::Bool, counter++,
+       SET_BOOL(showIgnored), GET(showIgnored), NO_NAMES, NO_RANGE});
+
+  add({"verbose", CatDiagnostic, "Log links followed, all files queued for processing, etc",
+       Value::Bool, counter++, SET_BOOL(verbose), GET(verbose), NO_NAMES, NO_RANGE});
+
+  add({"dryrun", CatDiagnostic, "Don't index any files, only show what changes would be made",
+       Value::Bool, counter++, SET_BOOL(dryRun), GET(dryRun), NO_NAMES, NO_RANGE});
+}
+
+QString IndexParams::categoryLabel(int category) const {
+  const struct {
+    int cat;
+    const char* label;
+  } labels[] = {{CatAlgorithms, "Algorithms"},
+                {CatFilesystem, "Filesystem"},
+                {CatImageProc, "Image Processing"},
+                {CatThreads, "Threads"},
+                {CatJobs, "Jobs"},
+                {CatDiagnostic, "Diagnostics"},
+                {-1, nullptr}};
+  for (auto* p = labels; p->label; ++p)
+    if (p->cat == category) return p->label;
+  return "";
 }
 
 int IndexParams::supportedTypes(int algos) {

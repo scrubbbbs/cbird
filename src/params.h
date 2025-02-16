@@ -41,7 +41,8 @@ class Params {
   /// Binds a struct member to a getter/setter and other useful things
   class Value {
    public:
-    QString key;    /// property name
+    QString key;    /// name
+    int category;   /// category
     QString label;  /// ui label
 
     enum { Bool = 1, Int, Enum, Flags, Glob } type; /// data type
@@ -73,7 +74,7 @@ class Params {
   Value getValue(const QString& key) const;
   bool setValue(const QString& key, const QVariant& val);
   QString toString(const QString& key) const;
-
+  virtual QString categoryLabel(int category) const;
   void print() const;
 
  protected:

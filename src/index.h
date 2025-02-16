@@ -68,23 +68,32 @@ class SearchParams : public Params {
     FlagAudio = 1 << (Media::TypeAudio - 1)
   };
 
-  int algo = AlgoDCT,        // AlgoXXX
-      dctThresh = 5,         // threshold for DCT hash hamming distance
-      cvThresh = 25,         // threshold for ORB descriptors distance
-      minMatches = 1,        // minimum number of matches required
-      maxMatches = 5,        // maximum number of matches after sort by score
-      needleFeatures = 100,  // template match: number of needle/template features
-      haystackFeatures = 1000,  // template match: number of haystack/candidate features
-      mirrorMask = MirrorNone,  // MirrorXXX flags for mirror search
-      maxThresh = 0,          // if > 0, increment dct/cv/Thresh < maxThresh until match is found
-      tmThresh = 7,           // template match: threshold for match validation
-      tmScalePct = 200;       // template match: max scale factor between template/cand
+  enum { CatAlgo = 0, CatQuery, CatPre, CatPost, CatDiag, NumCategories };
 
+  /// Algorithm
+  int algo = AlgoDCT,          // AlgoXXX
+      dctThresh = 5,           // threshold for DCT hash hamming distance
+      cvThresh = 25,           // threshold for ORB descriptors distance
+      minMatches = 1,          // minimum number of matches required
+      maxMatches = 5,          // maximum number of matches after sort by score
+      needleFeatures = 100,    // template match: number of needle/template features
+      haystackFeatures = 1000, // template match: number of haystack/candidate features
+      mirrorMask = MirrorNone, // MirrorXXX flags for mirror search
+      maxThresh = 0,           // if > 0, increment dct/cv/Thresh < maxThresh until match is found
+      tmThresh = 7,            // template match: threshold for match validation
+      tmScalePct = 200;        // template match: max scale factor between template/cand
+
+  /// Pre-filtering
+
+  /// Post-filtering
+
+  /// Template Matching
   bool templateMatch = false,  // remove results that don't pass the template matcher
       negativeMatch = false,   // remove results in the negative matches (blacklist)
       autoCrop = false,        // de-letterbox prior to search
       verbose = false;         // show more information about what the query is doing
 
+  /// Subset control
   QString path;         // subdirectory to search or accept/reject results from
   bool inPath = false;  // true==accept results from, false=reject results from
 
@@ -96,6 +105,7 @@ class SearchParams : public Params {
 
   int queryTypes = FlagImage;  // types to include in query set
 
+  /// Video search
   int skipFrames = 300;       // video search: ignore first and last N frames of video
   int minFramesMatched = 30;  // video search: require >N frames match between videos
   int minFramesNear = 60;     // video search: require >N% of frames that matched are nearby
@@ -123,6 +133,8 @@ class SearchParams : public Params {
   int resultTypes() const;
 
   SearchParams();
+
+  QString categoryLabel(int category) const override;
 
   // int cvMatchMatches; // cv features: default:10 max number of near features
   // to consider with knn search on descriptors
