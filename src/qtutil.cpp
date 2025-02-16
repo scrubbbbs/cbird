@@ -1317,7 +1317,7 @@ void MessageLog::outputThread() {
 
       // compress repeats while we hold the lock
       int pl = msg.msg.indexOf(tokenProgress);  // do not compress progress lines
-      if (pl <= 0 && lastMsg == msg.msg) {
+      if (pl <= 0 && lastMsg == msg.msg && !msg.msg.isEmpty()) {
         numRepeats++;
         continue;
       }
