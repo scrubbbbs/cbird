@@ -166,14 +166,14 @@ class RadixMap_t
     }
     uint64_t memory = sum + sizeof(Bucket*) * (1U << _radix);
 
-    const uint mean = sum / (1U << _radix);
+    const uint mean = sum / (1U << (_radix & 0x1F));
     sum = 0;
     for (size_t i = 0; i < (1U << _radix); ++i) {
       size_t bytes = _buckets[i]->size();
       int64_t x = (bytes - mean);
       sum += x * x;
     }
-    uint stdDev = sqrt(sum / (1U << _radix));
+    uint stdDev = sqrt(sum / (1U << (_radix & 0x1F)));
 
     return Stats{.memory = memory,
                  .numBuckets = 1U << _radix,

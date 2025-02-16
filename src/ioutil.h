@@ -93,7 +93,7 @@ class SimpleIO_Stdio
 
  private:
   FILE* _file = nullptr;
-  char _buffer[256 * 1024];
+  // char _buffer[256 * 1024];
   QString _filePath;
 
  public:

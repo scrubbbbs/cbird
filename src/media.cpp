@@ -911,8 +911,6 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
     index.frames.clear();
   }
 
-  int curFrames = 0;
-
   int corruptFrames = 0;
   int nearFrames = 0;
   int filteredFrames = 0;
@@ -962,7 +960,6 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
       //        video.threadCount(),
       //        int(curFrames * 1000 / (now - then)),
       //        percent);
-      curFrames = 0;
       then = now;
       progressCb(percent);
     }
@@ -995,7 +992,6 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
     }
 
     frameNumber++;
-    curFrames++;
 
     if (frameNumber == MAX_FRAMES_PER_VIDEO) {
       qWarning() << "too many frames, skipping the rest";

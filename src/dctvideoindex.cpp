@@ -423,6 +423,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
 
       VideoTreeIndex index;
       index.frame = srcFrame;
+      index.idx = 0;
 
       VideoSearchTree::Value v(index, srcIndex.hashes[i]);
 #if 1
@@ -466,7 +467,6 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
                               &filterSelf,
                               &needleId,
                               &cand,
-                              &params,
                               this](VideoSearchTree::hash_t queryHash,
                                     int queryFrame,
                                     const std::vector<VideoSearchTree::Match>& matches) {

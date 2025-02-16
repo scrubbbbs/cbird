@@ -537,9 +537,6 @@ void Database::remove(const QVector<int>& ids) {
 
   connect().transaction();
 
-  uint64_t now;
-  uint64_t then = nanoTime();
-
   // TODO: vacuum database after a lot of deletions
 
   // TODO: see if we should delete in reverse order of creation; maybe it
@@ -547,9 +544,7 @@ void Database::remove(const QVector<int>& ids) {
 #ifdef ENABLE_KEYPOINTS_DB
   for (int id : ids) ("delete from keypoint where media_id=" + QString::number(id));
 
-  now = nanoTime();
   qInfo("delete keypoint=%dms", (int)((now - then) / 1000000));
-  then = now;
 #endif
 
   {
@@ -1381,7 +1376,6 @@ MediaGroupList Database::similar(const SearchParams& params) {
   }
 
   qDebug("index loaded in %dms", int(QDateTime::currentMSecsSinceEpoch() - start));
-  start = QDateTime::currentMSecsSinceEpoch();
 
   int progressInterval =
       haystackSize < 100 ? 1 : qBound(1, params.progressInterval, haystackSize / 100);
