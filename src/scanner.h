@@ -47,6 +47,7 @@ class IndexParams : public Params {
 
   int algos = 31;              // enabled search algorithms
   int types = TypeAll;         // enabled media types
+  bool sync = true;            // changing algos keeps the ones already present
 
   /// filesystem
   bool recursive = true;       // scan subdirs

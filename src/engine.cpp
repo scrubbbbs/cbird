@@ -203,8 +203,7 @@ void Engine::update(bool wait, const QString& dirPath) {
 
   // if -i.algos changed try to manage the situation, prior to v0.8 there
   // was no management and -remove or rm -rf _index was needed
-  // TODO: option to enable/disable this
-  if (true) {
+  if (scanner->indexParams().sync) {
     qDebug() << "checking for algos changes... (disable with -i.sync false)";
     const auto indexedItems = db->indexedItems();
 

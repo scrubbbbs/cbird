@@ -1139,6 +1139,9 @@ IndexParams::IndexParams() {
          SET_FLAGS("types", types, bits), GET(types), GET_CONST(bits), NO_RANGE});
   }
 
+  add({"sync", CatAlgorithms, "Ensures previous algos persist even if -i.algos changes",
+       Value::Bool, counter++, SET_BOOL(sync), GET(sync), NO_NAMES, NO_RANGE});
+
   add({"dirs", CatFilesystem, "Enable recursive scan of subdirectories", Value::Bool, counter++,
        SET_BOOL(recursive), GET(recursive), NO_NAMES, NO_RANGE});
 
