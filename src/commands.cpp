@@ -275,8 +275,18 @@ void Commands::filter(const std::vector<Filter>& filters) const {
     const QString& valueExp = std::get<1>(filter);
     bool without = std::get<2>(filter);
 
+    // to init expression we need return type of property/function,
+    // which we cannot know without calling the function. So we must
+    // pick some media and pass to the function.
+    Media nullMedia;
+    Media* firstMedia = &nullMedia;
+    if (_selection.count() > 0)
+      firstMedia = &_selection[0];
+    else if (_queryResult.count())
+      firstMedia = &_queryResult[0][0];
+
     const auto getValue = Media::propertyFunc(key);
-    const Expression op(valueExp, getValue(Media()).metaType());
+    const Expression op(valueExp, getValue(*firstMedia).metaType());
     const char* withName = without ? "without" : "with";
 
     // some properties require readMetadata()
