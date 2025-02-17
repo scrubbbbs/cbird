@@ -1907,17 +1907,17 @@ void MediaGroupListWidget::updateItems() {
       first.duration = duration;
       first.fps = fps;
 
-      compare.compression = compare.pixels = compare.score = compare.size = compare.fileCount =
-          "none";
+      compare.compression = compare.pixels = compare.score = compare.size = compare.fileCount
+          = "none";
       compare.date = "same";
       compare.duration = "same";   // isVideo ? "same" : "none"; // do not hide
       compare.frameRate = "same";  // isVideo ? "same" : "none";
       compare.jpegQuality = jpegQuality == 0 ? "none" : "same";  // hide unless computed
       compare.qualityScore = qualityScore == 0 ? "none" : "same";
     } else {
-      compare.compression = percent(compression, first.compression) == 0
+      compare.compression = percent(first.compression, compression) == 0
                                 ? "same"
-                                : relativeLabel(compression, first.compression);
+                                : relativeLabel(first.compression, compression);
       compare.pixels = relativeLabel(pixels, first.pixels);
       compare.size = percent(size, first.size) == 0 ? "same" : relativeLabel(size, first.size);
       compare.score = relativeLabel(score, first.score);
