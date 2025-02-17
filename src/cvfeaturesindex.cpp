@@ -95,16 +95,8 @@ void CvFeaturesIndex::addRecords(QSqlDatabase& db, const MediaGroup& media) cons
 
 void CvFeaturesIndex::removeRecords(QSqlDatabase& db, const QVector<int>& mediaIds) const {
   QSqlQuery query(db);
-  // for (auto id : mediaIds)
-  // if (!query.exec("delete from matrix where media_id=" + QString::number(id))) SQL_FATAL(exec);
-  qDebug() << "exec batch";
-  QVariantList ids;
   for (auto id : mediaIds)
-    ids.append(id);
-
-  if (!query.prepare("delete from matrix where media_id=:id")) SQL_FATAL(prepare);
-  query.bindValue(":id", ids);
-  if (!query.execBatch()) SQL_FATAL(execBatch);
+    if (!query.exec("delete from matrix where media_id=" + QString::number(id))) SQL_FATAL(exec);
 }
 
 bool CvFeaturesIndex::isLoaded() const { return _index != nullptr; }
