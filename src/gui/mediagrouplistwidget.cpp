@@ -269,9 +269,6 @@ static void loadImage(QPromise<void>& promise, ImageWork* work, bool fastSeek) {
     VideoContext video;
     video.open(m.path());
     video.metadata().toMediaAttributes(m);
-
-    static auto dateFunc = Media::propertyFunc("ffmeta#creation_time");
-    m.setAttribute("date", dateFunc(m).toString());
   }
 
   if (!img.isNull()) {

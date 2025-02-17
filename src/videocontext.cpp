@@ -1256,6 +1256,7 @@ void VideoContext::Metadata::toMediaAttributes(Media& media) const {
   media.setAttribute("fps", QString::number(double(frameRate)));
   media.setAttribute("time", timeDuration().toString("h:mm:ss"));
   media.setAttribute("vformat", toString());
+  media.setAttribute("datetime", creationTime.toString());
 }
 
 VideoContext::DecodeOptions::DecodeOptions() {}
