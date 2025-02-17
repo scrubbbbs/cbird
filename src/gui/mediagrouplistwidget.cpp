@@ -1890,9 +1890,14 @@ void MediaGroupListWidget::updateItems() {
       return int((a - b) * 100.0 / b);
     };
 
-    static const auto formatPercent = [](double a, double b) {
+    // static const auto formatPercent = [](double a, double b) {
+    //   if (b == 0) return QString("--");
+    //   return QString("%1").arg(percent(a,b));
+    // };
+
+    static const auto formatDots = [](double a, double b) {
       if (b == 0) return QString("--");
-      return QString("%1").arg(percent(a,b));
+      return QString().fill(QChar(0x25CF), qMax(1, qMin(5, abs(int(percent(a, b) / 100.0 * 5)))));
     };
 
     if (i == 0) {
@@ -1976,38 +1981,37 @@ void MediaGroupListWidget::updateItems() {
     // @prop-diff-date@
     //
     // note: table width=100% does not work..., pass pixel width in paint()
-    const QString text =
-        QString(
-            "<table width=@width@><tbody>"
-            "<tr class=\"base\">"
-            "<td class=\"%26\" colspan=\"3\" count=\"%15\">"
-            "%1"                                 // file name + count
-            "<span class=\"%16\">(%17)</span>"   // count difference
-            "<span class=\"weed\">%27</span>"    // weed
-            "<span class=\"locked\">%28</span>"  // folder lock
-            "</td>"
-            "</tr>"
-            "<tr class=\"altbase\">"
-            "<td>%2x%3</td>"
-            "<td><span class=\"%7\">%11%</span></td>"
-            "<td><span class=\"%18\">%19</span></td>"
-            "</tr>"
-            "<tr class=\"base\">"
-            "<td>%4k</td>"
-            "<td><span class=\"%8\">%12%</span></td>"
-            "<td><span class=\"%20\">%21</span></td>"
-            "</tr>"
-            "<tr class=\"altbase\">"
-            "<td>%5:1</td>"
-            "<td><span class=\"%9\">%13%</span></td>"
-            "<td><span class=\"%22\">%23</span></td>"
-            "</tr>"
-            "<tr class=\"base\">"
-            "<td>s%6</td>"
-            "<td><span class=\"%10\">%14%</span></td>"
-            "<td><span class=\"%24\">%25</span></td>"
-            "</tr>"
-            "</tbody></table>")
+    const QString text = //
+        QString("<table width=@width@><tbody>"
+                "<tr class=\"base\">"
+                "<td class=\"%26\" colspan=\"3\" count=\"%15\">"
+                "%1"                                // file name + count
+                "<span class=\"%16\">(%17)</span>"  // count difference
+                "<span class=\"weed\">%27</span>"   // weed
+                "<span class=\"locked\">%28</span>" // folder lock
+                "</td>"
+                "</tr>"
+                "<tr class=\"altbase\">"
+                "<td>%2x%3</td>"
+                "<td align=\"center\"><span class=\"%7\">%11</span></td>"
+                "<td><span class=\"%18\">%19</span></td>"
+                "</tr>"
+                "<tr class=\"base\">"
+                "<td>%4k</td>"
+                "<td align=\"center\"><span class=\"%8\">%12</span></td>"
+                "<td><span class=\"%20\">%21</span></td>"
+                "</tr>"
+                "<tr class=\"altbase\">"
+                "<td>%5:1</td>"
+                "<td align=\"center\"><span class=\"%9\">%13</span></td>"
+                "<td><span class=\"%22\">%23</span></td>"
+                "</tr>"
+                "<tr class=\"base\">"
+                "<td>s%6</td>"
+                "<td><span class=\"%10\">%14</span></td>"
+                "<td><span class=\"%24\">%25</span></td>"
+                "</tr>"
+                "</tbody></table>")
             .arg("@title@") // paint elides text to the item width
             .arg(m.width())
             .arg(m.height())
@@ -2018,10 +2022,10 @@ void MediaGroupListWidget::updateItems() {
             .arg(compare.size)
             .arg(compare.compression)
             .arg(compare.score)
-            .arg(formatPercent(pixels, first.pixels))
-            .arg(formatPercent(size, first.size))
-            .arg(formatPercent(compression, first.compression))
-            .arg(formatPercent(score, first.score))
+            .arg(formatDots(pixels, first.pixels))
+            .arg(formatDots(size, first.size))
+            .arg(formatDots(compression, first.compression))
+            .arg("") //formatPercent(score, first.score))
             .arg(fileCount)
             .arg(compare.fileCount)
             .arg(fileCount - first.fileCount)
