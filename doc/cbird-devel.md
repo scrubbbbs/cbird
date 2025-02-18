@@ -1,9 +1,8 @@
 Release Blockers (v0.8)
 =========================
 
-- opencv 4
+- opencv 4 -- requires cbird to be GPL	v3
 - review and update the build notes
-- check if metadatacchangetime works or not before relying on it
 - index is spawning more parallel jobs than it should
 - "invalid key size" with odt too large  > 100?  (-sort-similar)
 - can we avoid "memory allocation failed" error from qimagereader?
@@ -28,17 +27,17 @@ Wish List
 - nuke-dups-in: show how many would not be deleted
 - group-by breaks the sort/sort doesn't work on group-by?
 - -with type <x>, recognize enumerations as in params
-- sort result groups too
+- ~sort result groups too~
 - option to pre-compute no-reference quality score for each image,
   might be reasonable for automatic deletions
 - ~frame grab any non-indexed video in similar-to~ added in v0.7.?
-- sort by path should sort files before files in subfolders
+- sort by path should sort files before folders in subfolders
 
 ### Indexing
-- file/directory name filters for inclusion/exclusion
+- ~file/directory name filters for inclusion/exclusion~ added v0.7.4
 - store date-modified,size for better updating
 - also store container md5 (.zip) for faster updating/verifying
-- ~\>64k frames per video~
+- ~\>64k frames per video~ added v0.7.4
 - capture more common errors in indexer
   - unsupported ICC profile
   - colordescriptor on grayscale image
@@ -74,7 +73,7 @@ Wish List
 - show results in batches as they are being computed, make slow queries less painful
 - toggle histogram view
 - context menu: copy path to clipboard
-- when deleting zip, remove all zip contents from viewer (on other pages)
+- ~when deleting zip, remove all zip contents from viewer (on other pages)~ v0.7.3
 - ~~remember past deletions and optionally replay them in the future should they reappear (via traal)~~ added "weeds" feature v0.6
 - detect breaking of symlinks on delete/rename
 - visual indicator of the needle in group view, gets lost when rotating
@@ -83,7 +82,7 @@ Wish List
 - select-all, clear-selection
 - ~~action groups to compact the context menu~~
 - option to force layout to use one row/column
-- option to choose default selected index (default == right/last)
+- ~option to choose default selected index (default == right/last)~ v0.7.3 (-focus-first)
 
 ### Misc
 - QString/char* sweep

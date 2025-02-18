@@ -51,7 +51,7 @@ cbird [...]
 `cbird/cbird-mac [...]`
 
 
-#### Windows 10
+#### Windows 10+
 - Unzip the distribution file and run the program
 - Install helpers (optional): vlc, kdenlive
 
@@ -76,15 +76,23 @@ Getting Started
 ========================
 
 #### Get Help
-`cbird -help` [is very detailed](https://gist.github.com/scrubbbbs/c7177a0a97e098c6bb10ae4afe8f6c35)
+
+- `cbird -help` is very detailed, copied [here](https://gist.github.com/scrubbbbs/c7177a0a97e098c6bb10ae4afe8f6c35) for your convenience
+- [github wiki](https://github.com/scrubbbbs/cbird/wiki) has more details
+- some commands that take a value will also accept "help" to get more info, e.g. `-i.algos help`
+- `-list-*` commands give more info about settings/configuration
+
 
 #### Index the files in `<path>`, caching into `<path>/_index`
-`cbird -use <path> -update`
+`cbird -use <path> -create -update`
 
 #### Index files in cwd
+`cbird -create -update`
+
+#### Update existing index in cwd
 `cbird -update`
 
-#### MD5 Checksums
+#### Show exact duplicates (MD5 checksums)
 `cbird -dups -show`
 
 #### Search cwd, default threshold
@@ -101,26 +109,27 @@ This is lacking documentation at the moment. But for now...
 - The GUI is displayed with `-show` if there is a selection or results.
 - GUI windows have a context menu (right click) with all available actions.
 - The two deletion actions ("Delete" and "Replace") use the trash/recycler by default. There is no way to permanently delete files (not even with batch deletion commands)
+- You can modify keybindings in the config file (see `-about` for the location)
 
 Use Cases
 =========================
-- Find exact duplicates (using file checksums)
+- Find exact duplicates (file checksums)
 - Find modifications
-  - General transforms: resize, rotate, crop
-  - Image edits: blur, sharpen, noise, color-grade, grayscale
-  - Video edits: clipping, fps change, letter boxing
+  + General transforms: resize, rotate, crop
+  + Image edits: blur, sharpen, noise, color-grade, grayscale
+  + Video edits: clipping, fps change, letter boxing
 - Evaluate matches
-  - Compare attributes (resolution, file size, compression ratio)
-  - Flip between matches
-  - Zoom-in to see fine details, compression losses
-  - False-color visualization of differences for fast evaluation
-  - No-reference subjective quality estimate
-  - Jpeg compression quality estimate
-  - Align videos temporally, flip between them or play side-by-side
+  + Compare attributes (resolution, file size, compression ratio)
+  + Flip between matches
+  + Zoom-in to see fine details, compression losses
+  + False-color visualization of differences for fast evaluation
+  + No-reference subjective quality estimate
+  + Jpeg compression quality estimate
+  + Align videos temporally, flip between them or play side-by-side
 - File management
-  - Sort/rename based on similarity
-  - Rename files using regular expressions
-  - Move/rename files/directories within the index
+  + Sort/rename based on similarity
+  + Rename files using regular expressions
+  + Move/rename files/directories within the index
 
 File Formats
 =========================
@@ -146,7 +155,7 @@ Note that cbird does not not prevent broken links from occurring, the link check
 
 Using Weeds
 ======================
-The "weed" feature allows fast deletion of deleted files that reappear in the future. A weed record is a pair of file hashes, one is the weed/deleted file, the other is the original/retained file. When the weed shows up again, it can be deleted without inspection (`-nuke-weeds`)
+The "weed" feature allows fast deletion of deleted files that reappear in the future. A weed record is a pair of file checksums, one is the weed/deleted file, the other is the original/retained file. When the weed shows up again, it can be deleted without inspection (`-nuke-weeds`)
 
 ## How weeds are recorded
 
@@ -171,8 +180,8 @@ There are a few for power users.
 - `CBIRD_SETTINGS_FILE` overrides the path to the settings file (`cbird -about` shows the default)
 - `CBIRD_TRASH_DIR` overrides the path to trash folder, do not use the system trash bin
 - `CBIRD_CONSOLE_WIDTH` set character width of terminal console (default auto-detect)
-- `CBIRD_COLOR_CONSOLE` use colored output even if console says no (default auto-detect)
 - `CBIRD_FORCE_COLORS` use colored output even if console is not detected
+- `CBIRD_NO_COLORS` disable colored output
 - `CBIRD_LOG_TIMESTAMP` add time delta to log messages
 - `CBIRD_NO_BUNDLED_PROGS` do not use bundled programs like ffmpeg in the appimage/binary distribution
 - `QT_IMAGE_ALLOC_LIMIT_MB` maximum memory allocation for image files (default 256)
@@ -288,61 +297,70 @@ Release Notes
 #### v0.8
 
 - Command Line
-	+ Simplified logging
-		* progress logs hidden for fast operations
+	+ Simplify logging
+    * new color scheme
+    * unified logging wording/text/behavior
+    * progress logs hidden for fast operations
 		* use `-v` to see verbose logging
-	+ Handle TTY resize signal
+	+ Handle TTY resizing
+	+ Add ZSH tab completion to `-install`
 	+ Add `-list-formats` `-list-codecs` to check FFmpeg configuration
-	+ `-move` supports .zip
-	+ `-select-grid` accepts multiple file arguments
-	+ Add syntax to find the nearest index from a subfolder
-		* `cbird -use @ ...`
+  + Support .zip in `-move`
+  + Support multiple files passed to `-select-grid`
+	+ Add special path (`@`) for `-use` to find the index in the parent path
 - Indexing
-	+ New file format removes the 65,535 frames-per-video limit (now 16.7 million), without increasing file size.
-	+ use `-migrate` to convert existing files, and `-update` to index any files that had over 65k frames.
+  + Keep algos working if `-i.algos` changes (`-i.sync`)
+  + Add optional path to `-update` to scan a sub-directory
+	+ Add `-i.include` and `-i.exclude` to include/exclude files or directories matching patterns
+	+ Add new video index file format
+		* removes the 65,535 frames-per-video limit (now 16.7 million)
+	+ Add `-migrate` to convert existing video index files
+		* files with >65k frames will be resumed and added back after `-update`
 - Searching
-	+ Much faster and tuneable video search
-	+ use `-p.vradix <num>` to speed up searches, higher `n` is faster but less accurate
-	+ `-similar-to` works for more files/algos
-	+ features search (fdct) about 25% faster
+  + Optimize video search, 5-10x speedup.
+  + Add `-p.vradix <num>` to control speed/accuracy tradeoff 
+  + Fix a few issues with `-similar-to`
+	+ Optimize features search (fdct), about 25% faster
 - Sorting/Filtering
-	+ Sort by the needle in results with `-sort-result`
-	+ Sort by multiple properties
+	+ Add sort by the needle in results with `-sort-result`
+	+ Add sort by multiple properties
 		* `-sort-by exif#Photo#DateTimeOriginal#year -sort parentPath` => sort by year taken, then by directory path
-	+ Boolean operators on properties
+	+ Add boolean operators in expressions
 		* `-with name '~foo || ~bar'` => name contains foo or bar
-	+ Type conversions on properties, sometimes needed for correct filtering
+	+ Add type conversion functions, sometimes needed for correct filtering
 		* `-with exif#Photo.DateTimeOriginal#todate` => "convert string date/time to a date/time object"
-	+ Comparison with the needle
+	+ Add comparison with the needle in expressions
     		* `-with res '==%needle' -with
     compressionRatio '>%needle'` => only show more-compressed duplicates with the same pixel size
-    	+ Comparison with the needle (absolute difference)
+	+ Add comparison with the needle (absolute difference)
     		* `-with fileSize '%<4096'` => only show results if the difference between their sizes less than 4KB.
 
 - Viewing
-	+ Refactored and much improved memory management
-	+ Add folder-lock feature to mark folders locked for modification
+  + Add "dots" display instead of showing percentages
+  + Add folder-lock feature to mark folders locked for modification
 	+ Add position indicator/progress bar to top of viewer
 	+ Add `-no-delete` to disable all file deletion
 	+ Add `-focus-first` to select the first item (needle) by default
 	+ When deleting, update all other affected rows, not just the visible one
 		* Remove any rows remaining with <2 items
-	+ Fix rename folder using the wrong name
-	+ Disable move shortcut for zips
-	+ Fix menu dir shortcut for zips
+  + Use elide-middle for long filenames
+  + Save scale mode and diff image setting
+  + Improved item info display
+  + Add codec profile to video compare
+  + Refactored and much improved memory management
+  + Fix missing video creation date metadata
+  + Fix rename folder using the wrong name
+  + Disable move action for zips
+  + Fix menu dir action for zips
 	+ Fix preloader non-functional when going backwards
-	+ Use elide-middle for long filenames
-	+ Save scale mode and diff image setting
-	+ Use correct color indicator on 0% size/compression
-	+ Improved item info display
-	+ Video compare: add codec profile
+  + Fix correct color indicator on 0% size/compression
 	
 - Bug Fixes
 	+ Fix potental file handle leak in video decoder
 	+ Fix sometimes incorrect numeric/natural sort
 	+ Fix potentially incorrect dir selection (`-select-path` etc)
 	+ Fix potential crash and speedup theme parser
-	+ Intialize exiv2, may prevent crashes
+  + Initialize exiv2, may prevent crashes
 	+ Prevent certain database corruption from aborting
 	+ Fix template matcher bugs
 	+ Fix maximized window restore on GNOME

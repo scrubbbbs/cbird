@@ -135,7 +135,7 @@ Miscellaneous
   -list-index-params               list current index parameters
   -list-search-params              list current search parameters
   -list-formats                    list available image and video formats
-	-list-codecs										 list	available video codecs
+  -list-codecs                     list	available video codecs
   -video-thumbnail <file> <frame#> crop video thumbnail at frame
 
 Search Parameters (for -similar*)
@@ -184,10 +184,10 @@ Definitions
       %n                          - special: the sequence number, with automatic zero-padding
       {arg:<func>}                - special: transform arg (after capture/special expansion) with function(s)
       {<prop>[#<func>]}           - special: insert property
-  <glob>                          Pattern for file path/name matching
+  <glob>                          pattern for file path/name matching
       :<regular-expression>       - not a glob, but a pcre, prefixed by colon
       path glob                   - case-sensitive path glob (see QRegularExpression::wildcardToRegularExpression())
-  <binop>                         operator for <expr>
+  <binop>                         binary operator for <expr>
       ==, =                       - equal to
       !=                          - not equal to
       <, <=, >, >=                - less-than/greater-than
@@ -196,9 +196,9 @@ Definitions
   <expr>                          expression to test a value, returns true or false, default operator ==
       :<regular-expression>       - pcre matches value
       [<binop>]<string>           - compare using operator, string is converted to value's type
-			[<binop>]%needle            - compare with needle (first item in group)
-			%<binop><string>            - compare with needle, absolute difference
-			<expr>&&<expr>              - logical AND, if both expressions are true -> true
+      [<binop>]%needle            - compare with needle (first item in group)
+      %<binop><string>            - compare with needle, absolute difference
+      <expr>&&<expr>              - logical AND, if both expressions are true -> true
       <expr>||<expr>              - logical OR, one expression is true -> true
       %null                       - true if value is null
       !%null                      - true if value is not null
@@ -225,16 +225,17 @@ Definitions
       pop                         - remove string from end of array
       shift                       - remove string from front of array
       peek                        - return string at given index
-      foreach,<func>[|func]...    - apply function(s) separated by pipe (|) to each array element
+      foreach,<func>[|<func>]...  - apply function(s) separated by pipe (|) to each array element
       add,<integer>               - add integer arg to value
       pad,<integer>               - pad integer value with zeros, to width argument
       to<type>                    - convert data type (date,time,string,bool,int,float)
 
 Examples
 ==============================================================================
-  create index in cwd             cbird -update
-  find exact duplicates           cbird -update -dups -show
-  find near duplicates            cbird -update -similar -show
+  create index in cwd             cbird -create -update
+  update index in ~/Pictures      cbird -use ~/Pictures -update
+  find exact duplicates           cbird -dups -show
+  find near duplicates            cbird -similar -show
   find near duplicates (video)    cbird -update -p.alg video -p.dht 7 -p.vtrim 1000 -similar -show
   group photo sets by month       cbird -select-type 1 -group-by exif#Photo.DateTimeOriginal#month -folders -show
   browse items, 16 per page       cbird -select-all -max-per-page 16 -show
