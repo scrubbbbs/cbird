@@ -254,8 +254,16 @@ void VideoContext::listFormats() {
   qInfo("----------------------------------------");
   qInfo("Name \"Description\" (Known Extensions)");
   qInfo("----------------------------------------");
-  while (nullptr != (fmt = av_demuxer_iterate(&opaque)))
-    qInfo("%s \"%s\" (%s)", fmt->name, fmt->long_name, fmt->extensions);
+  QVector<QPair<QString, QString>> formats;
+  while (nullptr != (fmt = av_demuxer_iterate(&opaque))) {
+    QString desc = QString().asprintf("%-10s \"%s\" (%s)", fmt->name, fmt->long_name,
+                                      fmt->extensions);
+    formats.append({fmt->name, desc});
+  }
+  std::sort(formats.begin(), formats.end(), [](auto& a, auto& b) { return a.first < b.first; });
+
+  for (auto& format : std::as_const(formats))
+    qInfo().noquote() << format.second;
 }
 
 void VideoContext::listCodecs() {
@@ -267,14 +275,25 @@ void VideoContext::listCodecs() {
   qInfo("------------------------------");
   qInfo("Threads Type Name Description");
   qInfo("------------------------------");
+  QVector<QPair<QString, QString>> codecs;
   while (nullptr != (codec = av_codec_iterate(&opaque))) {
-    if (codec->type == AVMEDIA_TYPE_VIDEO)
-      qInfo("%3s %3s %-20s %s",
-            codec->capabilities & (AV_CODEC_CAP_SLICE_THREADS | AV_CODEC_CAP_FRAME_THREADS) ? "mt" : "st",
-            codec->capabilities & AV_CODEC_CAP_HARDWARE ? "gpu" : "cpu",
-            codec->name,
-            codec->long_name);
+    if (codec->type != AVMEDIA_TYPE_VIDEO) continue;
+
+    QString desc = QString().asprintf("%3s %3s %-20s %s",
+                                      codec->capabilities
+                                              & (AV_CODEC_CAP_SLICE_THREADS
+                                                 | AV_CODEC_CAP_FRAME_THREADS)
+                                          ? "mt"
+                                          : "st",
+                                      codec->capabilities & AV_CODEC_CAP_HARDWARE ? "gpu" : "cpu",
+                                      codec->name, codec->long_name);
+    codecs.append({codec->name, desc});
   }
+
+  std::sort(codecs.begin(), codecs.end(), [](auto& a, auto& b) { return a.first < b.first; });
+
+  for (auto& codec : std::as_const(codecs))
+    qInfo().noquote() << codec.second;
 }
 
 class VideoContextPrivate {
