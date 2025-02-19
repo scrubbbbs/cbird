@@ -361,14 +361,6 @@ QImage VideoContext::frameGrab(const QString& path, int frame, bool fastSeek,
 
 VideoContext::VideoContext() {
   _p = new VideoContextPrivate;
-  _videoFrameCount = 0;
-  _consumed = 0;
-  _errorCount = 0;
-  _deviceIndex = -1;
-  _isHardware = false;
-  _eof = false;
-  _numThreads = 1;
-  _lastFrameNumber = -1;
 }
 
 VideoContext::~VideoContext() {
@@ -380,21 +372,120 @@ VideoContext::~VideoContext() {
 //   static QMutex mutex;
 //   return &mutex;
 // }
+bool VideoContext::openGpu(const AVCodec** outCodec,
+                           AVCodecContext** outContext,
+                           bool* outIsHardwareScaled,
+                           const QString& fileName,
+                           const DecodeOptions& opt,
+                           const AVCodecContext* swContext,
+                           const AVStream* videoStream) {
+  // FIXME: robust support means having a table of all pixelformats/codecs for
+  // all known gpus as we cannot probe this information...or else users have to
+  // supply it.
+
+  // we *must* create a software context, as this is the only way to get pixel format
+  // when this was written, some supposedly supported pixel formats did not work (driver bugs?)
+
+  // the actual format support doesn't seem to be published by ffmpeg
+  // the codec says only nv12, p010le, p016le, but yuv420 works fine
+  // TODO: system configuration
+  constexpr AVPixelFormat hwFormats[] = {AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUV440P, AV_PIX_FMT_NV12,
+                                         AV_PIX_FMT_NONE};
+  bool supported = false;
+  const AVPixelFormat* fmt = hwFormats;
+  while (*fmt != AV_PIX_FMT_NONE)
+    if (*fmt++ == swContext->pix_fmt) supported = true;
+
+  // we also might need to look at these
+  //_p->context->profile;
+  //_p->context->level;
+
+  if (!supported) {
+    qWarning() << "pixel format unsupported in hardware codec, falling back to software :"
+               << av_pix_fmt_desc_get(swContext->pix_fmt)->name;
+    return false;
+  }
+
+  // TODO: multiple device support
+  // TODO: system configuration
+  constexpr struct {
+    AVCodecID id;
+    int flag;
+    const char* name;
+  } codecs[] = {{AV_CODEC_ID_AV1, 0, "av1_cuvid"},   {AV_CODEC_ID_H264, 0, "h264_cuvid"},
+                {AV_CODEC_ID_HEVC, 0, "hevc_cuvid"}, {AV_CODEC_ID_MPEG4, 0, "mpeg4_cuvid"},
+                {AV_CODEC_ID_VC1, 0, "vc1_cuvid"},   {AV_CODEC_ID_VP8, 0, "vp8_cuvid"},
+                {AV_CODEC_ID_VP9, 0, "vp9_cuvid"},   {AV_CODEC_ID_NONE, 0, nullptr}};
+
+  const AVCodec* hwCodec = nullptr;
+
+  for (int i = 0; codecs[i].id; i++)
+    if (codecs[i].id == swContext->codec_id) {
+      qDebug() << "trying hw codec :" << codecs[i].name;
+      hwCodec = avcodec_find_decoder_by_name(codecs[i].name);
+      break;
+    }
+
+  if (!hwCodec) {
+    qDebug() << "no hw codec found";
+    return false;
+  }
+
+  AVCodecContext* hwContext = avcodec_alloc_context3(hwCodec);
+  if (!hwContext) {
+    AV_WARNING("could not allocate hardware video codec context");
+    return false;
+  }
+
+  avLoggerSetFileName(hwContext, fileName);
+
+  int err;
+  if ((err = avcodec_parameters_to_context(hwContext, videoStream->codecpar)) < 0) {
+    AV_CRITICAL("failed to copy codec params to codec context");
+    avLoggerUnsetFileName(hwContext);
+    return -3;
+  }
+
+  AVDictionary* hwOptions = nullptr;
+
+  // _deviceIndex = opt.deviceIndex;
+
+  if (opt.maxW > 0 && opt.maxW == opt.maxH && QString(hwCodec->name).endsWith("cuvid")) {
+    // enable hardware scaler
+    QString size = QString("%1x%2").arg(opt.maxW).arg(opt.maxH);
+    qDebug() << "using gpu scaler@" << size;
+    av_dict_set(&hwOptions, "resize", qPrintable(size), 0);
+    *outIsHardwareScaled = true;
+  }
+
+  if ((err = avcodec_open2(hwContext, hwCodec, &hwOptions)) < 0) {
+    AV_CRITICAL("failed to open codec");
+    return false;
+  }
+
+  *outContext = hwContext;
+  *outCodec = hwCodec;
+
+  return true;
+}
 
 int VideoContext::open(const QString& path, const DecodeOptions& opt) {
+  _path = path;
   _opt = opt;
+
   _errorCount = 0;
+
   _firstPts = AV_NOPTS_VALUE;
   _deviceIndex = -1;
   _isHardware = false;
+  _isHardwareScaled = false;
   _lastFrameNumber = -1;
+
   _eof = false;
+  _numThreads = 1;
   _p->packet.size = 0;
   _p->packet.data = nullptr;
 
-  // QMutexLocker locker(ffGlobalMutex());//&_mutex);
-
-  _path = path;
 
   _p->format = avformat_alloc_context();  // only reason for this is avLogger
   Q_ASSERT(_p->format);
@@ -560,14 +651,14 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   _p->videoStream = _p->format->streams[videoStreamIndex];
   _p->format->flags |= AVFMT_FLAG_GENPTS;
 
-  const AVCodec* codec = avcodec_find_decoder(_p->videoStream->codecpar->codec_id);
-  if (!codec) {
-    AV_CRITICAL("could not find video codec");
+  const AVCodec* swCodec = avcodec_find_decoder(_p->videoStream->codecpar->codec_id);
+  if (!swCodec) {
+    AV_CRITICAL("cannot find video codec");
     freeFormat();
     return -3;
   }
 
-  _p->context = avcodec_alloc_context3(codec);
+  _p->context = avcodec_alloc_context3(swCodec);
   if (!_p->context) {
     AV_CRITICAL("could not allocate video codec context");
     freeFormat();
@@ -590,150 +681,90 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     return -3;
   }
 
-  // FIXME: hwdec is probably broken since using current FFmpeg (git ~2022/12)
-  bool tryHardware = opt.gpu;
-  if (tryHardware) {
-    // the actual format support doesn't seem to be published by ffmpeg
-    // the codec says only nv12, p010le, p016le, but yuv420 works fine
-    // TODO: system configuration
-    constexpr AVPixelFormat hwFormats[] = {AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUV440P, AV_PIX_FMT_NV12,
-                                           AV_PIX_FMT_NONE};
-    bool supported = false;
-    const AVPixelFormat* fmt = hwFormats;
-    while (*fmt != AV_PIX_FMT_NONE)
-      if (*fmt++ == _p->context->pix_fmt) supported = true;
-
-    if (!supported) {
-      qWarning() << "pixel format unsupported, falling back to sw :"
-                 << av_pix_fmt_desc_get(_p->context->pix_fmt)->name;
-      tryHardware = false;
-    }
-  }
-
-  if (tryHardware) {
-    // TODO: multiple device support
-    // TODO: system configuration
-    constexpr struct {
-      AVCodecID id;
-      int flag;
-      const char* name;
-    } codecs[] = {{AV_CODEC_ID_AV1, 0, "av1_cuvid"},   {AV_CODEC_ID_H264, 0, "h264_cuvid"},
-                  {AV_CODEC_ID_HEVC, 0, "hevc_cuvid"}, {AV_CODEC_ID_MPEG4, 0, "mpeg4_cuvid"},
-                  {AV_CODEC_ID_VC1, 0, "vc1_cuvid"},   {AV_CODEC_ID_VP8, 0, "vp8_cuvid"},
-                  {AV_CODEC_ID_VP9, 0, "vp9_cuvid"},   {AV_CODEC_ID_NONE, 0, nullptr}};
-
-    for (int i = 0; codecs[i].id; i++)
-      if (codecs[i].id == _p->context->codec_id) {
-        qDebug() << "trying hw codec :" << codecs[i].name;
-        _p->codec = avcodec_find_decoder_by_name(codecs[i].name);
-        break;
-      }
-  }
-
-  AVDictionary* codecOptions = nullptr;
-  if (!_p->codec) {
-    if (tryHardware) AV_DEBUG("no hw codec, trying sw");
-
-    _p->codec = avcodec_find_decoder(_p->context->codec_id);
-    if (!_p->codec) {
-      AV_WARNING("no codec found");
-      freeContext();
-      return -4;
-    }
-  } else {
-    _isHardware = true;
-    _deviceIndex = opt.deviceIndex;
-    if (opt.maxW > 0 && opt.maxW == opt.maxH && QString(_p->codec->name).endsWith("cuvid")) {
-      // enable hardware scaler
-      QString size = QString("%1x%2").arg(opt.maxW).arg(opt.maxH);
-      qDebug() << "using gpu scaler@" << size;
-      av_dict_set(&codecOptions, "resize", qPrintable(size), 0);
-      _isHardwareScaled = true;
-    }
-  }
-
-  if (opt.fast) {
-    // it seems safe to enable this, about 20% boost.
-    // the downscaler will smooth out any artifacts
-    av_dict_set(&codecOptions, "skip_loop_filter", "all", 0);
-
-    // grayscale decoding is not built-in to ffmpeg usually,
-    // performance improvement is 5-10%
-    // if (!opt.rgb)
-    // av_dict_set(&codecOptions, "flags", "gray", 0);
-  }
-
-  if (opt.iframes) {
-    // note: some codecs do not support this or are already intra-frame codecs
-    // FIXME: is there a way to tell before we see the gap in the frame numbers?
-
-    // for these codecs we want "nointra", to get more keyframes; note if this list
-    // is wrong, we get 0 keyframes
-    static constexpr AVCodecID codecs[] = {AV_CODEC_ID_H264,
-                                           AV_CODEC_ID_AV1,
-                                           AV_CODEC_ID_HEVC,
-                                           AV_CODEC_ID_MPEG2VIDEO,
-                                           AV_CODEC_ID_PDV,
-                                           AV_CODEC_ID_NONE};
-    const char* skip = "nokey";
-    for (int i = 0; codecs[i]; ++i)
-      if (_p->codec->id == codecs[i]) {
-        skip = "nointra";
-        break;
-      }
-    av_dict_set(&codecOptions, "skip_frame", skip, 0);
-  }
-
-  if (opt.lowres > 0) {
-    // this is quite good for some old codecs; nothing modern though
-    // TODO: set lowres value so it gives >= maxw/maxh
-    int lowres = opt.lowres;
-    if (_p->codec->max_lowres <= 0)
-      qDebug("lowres decoding requested but %s doesn't support it", qPrintable(_metadata.videoCodec));
-    else {
-      if (lowres > _p->codec->max_lowres) {
-        lowres = _p->codec->max_lowres;
-        qWarning("lowres limited to %d", lowres);
-      }
-      av_dict_set(&codecOptions, "lowres", qPrintable(QString::number(lowres)), 0);
-    }
-  }
-
-  // if (_p->codec->capabilities & CODEC_CAP_TRUNCATED)
-  //    _p->context->flags|= CODEC_FLAG_TRUNCATED; // we do not send complete
-  //    frames
-
-  _numThreads = 1;
-  if (!_isHardware
-      && _p->codec->capabilities & (AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS)) {
-    _numThreads = opt.threads;
-    _metadata.supportsThreads = true;
-  }
-
-  // note: no need to set thread_type, let ffmpeg choose the best options
-  if (_numThreads > 0)
-    _p->context->thread_count = _numThreads;
-
-  if ((err = avcodec_open2(_p->context, _p->codec, &codecOptions)) < 0) {
-    if (_isHardware) {
-      AV_WARNING("could not open hardware codec, trying software");
-      _isHardware = false;
-      _p->codec = avcodec_find_decoder(_p->context->codec_id);
-      if (!_p->codec) {
-        AV_WARNING("no codec found");
-        freeContext();
-        return -4;
-      }
-
-      if ((err = avcodec_open2(_p->context, _p->codec, nullptr)) < 0) {
-        AV_CRITICAL("could not open fallback codec");
-        freeContext();
-        return -5;
-      }
+  if (opt.gpu) {
+    AVCodecContext* hwContext = nullptr;
+    const AVCodec* hwCodec = nullptr;
+    if (openGpu(&hwCodec, &hwContext, &_isHardwareScaled, fileName, opt, _p->context,
+                _p->videoStream)) {
+      avLoggerUnsetFileName(_p->context);
+      avcodec_free_context(&_p->context);
+      _p->context = hwContext;
+      _p->codec = hwCodec;
+      _isHardware = true;
+      _deviceIndex = opt.deviceIndex; // placeholder
     } else {
+      avLoggerUnsetFileName(hwContext);
+      avcodec_free_context(&hwContext);
+      _isHardware = false;
+      _isHardwareScaled = false;
+      qDebug() << "hardware codec failed, falling back to software";
+    }
+  }
+
+  if (!_isHardware) {
+    AVDictionary* codecOptions = nullptr;
+    _p->codec = swCodec;
+
+    if (opt.fast) {
+      // it seems safe to enable this, about 20% boost.
+      // the downscaler will smooth out any artifacts
+      av_dict_set(&codecOptions, "skip_loop_filter", "all", 0);
+
+      // grayscale decoding is not built-in to ffmpeg usually,
+      // performance improvement is 5-10%
+      // if (!opt.rgb)
+      // av_dict_set(&codecOptions, "flags", "gray", 0);
+    }
+
+    if (opt.iframes) {
+      // note: some codecs do not support this or are already intra-frame codecs
+      // FIXME: is there a way to tell before we see the gap in the frame numbers?
+
+      // for these codecs we want "nointra", to get more keyframes; note if this list
+      // is wrong, we get 0 keyframes
+      static constexpr AVCodecID codecs[] = {AV_CODEC_ID_H264, AV_CODEC_ID_AV1,
+                                             AV_CODEC_ID_HEVC, AV_CODEC_ID_MPEG2VIDEO,
+                                             AV_CODEC_ID_PDV,  AV_CODEC_ID_NONE};
+      const char* skip = "nokey";
+      for (int i = 0; codecs[i]; ++i)
+        if (_p->codec->id == codecs[i]) {
+          skip = "nointra";
+          break;
+        }
+      av_dict_set(&codecOptions, "skip_frame", skip, 0);
+    }
+
+    if (opt.lowres > 0) {
+      // this is quite good for some old codecs; nothing modern though
+      // TODO: set lowres value so it gives >= maxw/maxh
+      int lowres = opt.lowres;
+      if (_p->codec->max_lowres <= 0)
+        qDebug("lowres decoding requested but %s doesn't support it",
+               qPrintable(_metadata.videoCodec));
+      else {
+        if (lowres > _p->codec->max_lowres) {
+          lowres = _p->codec->max_lowres;
+          qWarning("lowres limited to %d", lowres);
+        }
+        av_dict_set(&codecOptions, "lowres", qPrintable(QString::number(lowres)), 0);
+      }
+    }
+
+    // if (_p->codec->capabilities & CODEC_CAP_TRUNCATED)
+    //    _p->context->flags|= CODEC_FLAG_TRUNCATED; // we do not send complete
+    //    frames
+
+    if (_p->codec->capabilities & (AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS)) {
+      _numThreads = opt.threads;
+      _metadata.supportsThreads = true;
+    }
+
+    // note: no need to set thread_type, let ffmpeg choose the best options
+    if (_numThreads > 0) _p->context->thread_count = _numThreads;
+
+    if ((err = avcodec_open2(_p->context, _p->codec, &codecOptions)) < 0) {
       AV_CRITICAL("could not open codec");
       freeContext();
-      return -5;
     }
   }
 
@@ -750,25 +781,14 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     return -6;
   }
 
-  _videoFrameCount = 0;
-
   if (_p->videoStream->nb_frames == 0)
-    _p->videoStream->nb_frames =
-        long(_p->videoStream->duration * av_q2d(_p->videoStream->time_base) /
-             av_q2d(_p->videoStream->r_frame_rate));
+    _p->videoStream->nb_frames = long(_p->videoStream->duration * av_q2d(_p->videoStream->time_base)
+                                      / av_q2d(_p->videoStream->r_frame_rate));
 
   return 0;
 }
 
 void VideoContext::close() {
-  _errorCount = 0;
-  _videoFrameCount = 0;
-  _numThreads = 1;
-  _isHardware = false;
-  _lastFrameNumber = -1;
-
-  // QMutexLocker locker(ffGlobalMutex());//&_mutex);
-
   if (_p->scaler) {
     avLoggerUnsetFileName(_p->scaler);
     sws_freeContext(_p->scaler);
@@ -916,7 +936,6 @@ bool VideoContext::seek(int frame, QVector<QImage>* decoded, int* maxDecoded) {
   }
 
   // accurate seek requires decoding some frames
-  _consumed = 0;
   int framesLeft = frame - seekedFrame;
   if (framesLeft > 0) AV_DEBUG("decoding") << framesLeft << "interframes";
 
@@ -978,7 +997,8 @@ bool VideoContext::decodeFrame() {
           frameNumber++;
         }
 
-        // NOTE: this will happen, commonly with stream captures; but it would break indexer(maybe)
+        // NOTE: this will happen, commonly with stream captures; but it would break indexer
+        // as it requires increasing frame numbers (since v2 format)
         if (frameNumber < _lastFrameNumber)
           qWarning() << "backwards frame number" << frameNumber << _lastFrameNumber << _p->context->frame_num;
 

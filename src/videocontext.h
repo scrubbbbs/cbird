@@ -28,6 +28,8 @@ class Mat;
 
 extern "C" {
 struct AVCodecContext;
+struct AVCodec;
+struct AVStream;
 typedef int (*AvExec2Callback)(AVCodecContext*, void*, int, int);
 };
 
@@ -183,21 +185,27 @@ class VideoContext {
   static void avLoggerSetFileName(void* ptr, const QString& name);
   static void avLoggerUnsetFileName(void* ptr);
 
+  static bool openGpu(const AVCodec** codec,
+                      AVCodecContext** context,
+                      bool* outIsHardwareScaled,
+                      const QString& fileName,
+                      const DecodeOptions& opt,
+                      const AVCodecContext* swContext,
+                      const AVStream* videoStream);
+
+  VideoContextPrivate* _p = nullptr;
   QString _path;
-  VideoContextPrivate* _p;
-  int _videoFrameCount;
-  int _consumed;
-  //QMutex _mutex;
-  int _errorCount;
-  Metadata _metadata;
-  int64_t _firstPts;       // pts of first frame for accurate seek
-  int _deviceIndex;        // device index of the decoder
-  bool _isHardware;        // using hardware codec
-  bool _isHardwareScaled;  // hardware codec also does the scaling
-  bool _eof;               // true when eof on input
-  int _numThreads;         // max number of threads for decoding
   VideoContext::DecodeOptions _opt;
+  Metadata _metadata;
+
+  int _errorCount = 0;                    // TODO: tally errors to reject indexing
+  int64_t _firstPts = -1;                 // pts of first frame for accurate seek
+  int _deviceIndex = -1;                  // device index of the decoder
+  bool _isHardware = false;               // using hardware codec
+  bool _isHardwareScaled = false;         // hardware codec also does the scaling
+  bool _eof = false;                      // true when eof on input
+  int _numThreads = 1;                    // max number of threads for decoding
 
   const int _MAX_DUMBSEEK_FRAMES = 10000; // do not seek if there are too many
-  int _lastFrameNumber;    // estimated last frame number based on pts&frame rate
+  int _lastFrameNumber = -1;              // estimated last frame number based on pts&frame rate
 };
