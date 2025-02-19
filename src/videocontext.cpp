@@ -987,7 +987,6 @@ bool VideoContext::decodeFrame() {
     int err = avcodec_receive_frame(_p->context, _p->frame);
 
     if (err == 0) {
-      if (_opt.iframes) {
         auto conv = av_mul_q(_p->videoStream->time_base, _p->videoStream->r_frame_rate);
         auto pts = av_make_q(_p->frame->best_effort_timestamp, 1);
         int frameNumber = av_q2d(av_mul_q(pts, conv));
@@ -999,14 +998,13 @@ bool VideoContext::decodeFrame() {
 
         // NOTE: this will happen, commonly with stream captures; but it would break indexer
         // as it requires increasing frame numbers (since v2 format)
-        if (frameNumber < _lastFrameNumber)
+        if (_opt.iframes && frameNumber < _lastFrameNumber)
           qWarning() << "backwards frame number" << frameNumber << _lastFrameNumber << _p->context->frame_num;
 
         // if (frameNumber != _lastFrameNumber+1) // we expect this if skip_frame is working
         //   qWarning() << "non-monotonically increasing frame number" << frameNumber << _lastFrameNumber << _p->context->frame_num;
 
         _lastFrameNumber = frameNumber;
-      }
 
       return true;
     }
@@ -1015,7 +1013,8 @@ bool VideoContext::decodeFrame() {
       AV_DEBUG("avcodec_receive_frame eof");
       break;
     } else if (err != AVERROR(EAGAIN)) {
-      AV_CRITICAL("avcodec_receive_frame");
+      qCritical() << "avcodec_receive_frame near frame:" << _lastFrameNumber << Qt::hex << err
+                  << avErrorString(err);
       break;
     }
 
@@ -1027,17 +1026,22 @@ bool VideoContext::decodeFrame() {
       }
 
       if (_p->packet.size == 0) {
-        AV_CRITICAL("empty packet, giving up");
+        qCritical() << "empty packet, giving up; near frame:" << _lastFrameNumber << Qt::hex << err
+                    << avErrorString(err);
         break;
       }
 
       Q_ASSERT(_p->packet.stream_index == _p->videoStream->index);
 
       err = avcodec_send_packet(_p->context, &_p->packet);
-      if (err != 0) AV_CRITICAL("avcodec_send_packet"); // TODO: limit number of errors logged
+      if (err != 0) {
+        // TODO: limit number of errors logged
+        qCritical() << "avcodec_send_packet; near frame:" << _lastFrameNumber << Qt::hex << err
+                    << avErrorString(err);
+      }
     } else {
       // attempt to prevent hang when seeking near the eof
-      AV_WARNING("resending null packet, might hang here");
+      qWarning() << "resending null packet near frame:" << _lastFrameNumber;
       avcodec_send_packet(_p->context, nullptr);
     }
   }
