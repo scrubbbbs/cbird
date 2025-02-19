@@ -282,7 +282,8 @@ void VideoContext::listCodecs() {
     QString desc = QString().asprintf("%3s %3s %-20s %s",
                                       codec->capabilities
                                               & (AV_CODEC_CAP_SLICE_THREADS
-                                                 | AV_CODEC_CAP_FRAME_THREADS)
+                                                 | AV_CODEC_CAP_FRAME_THREADS
+                                                 | AV_CODEC_CAP_OTHER_THREADS)
                                           ? "mt"
                                           : "st",
                                       codec->capabilities & AV_CODEC_CAP_HARDWARE ? "gpu" : "cpu",
@@ -616,10 +617,10 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       AVCodecID id;
       int flag;
       const char* name;
-    } codecs[] = {{AV_CODEC_ID_H264, 0, "h264_cuvid"},   {AV_CODEC_ID_HEVC, 0, "hevc_cuvid"},
-                  {AV_CODEC_ID_MPEG4, 0, "mpeg4_cuvid"}, {AV_CODEC_ID_VC1, 0, "vc1_cuvid"},
-                  {AV_CODEC_ID_VP8, 0, "vp8_cuvid"},     {AV_CODEC_ID_VP9, 0, "vp9_cuvid"},
-                  {AV_CODEC_ID_NONE, 0, nullptr}};
+    } codecs[] = {{AV_CODEC_ID_AV1, 0, "av1_cuvid"},   {AV_CODEC_ID_H264, 0, "h264_cuvid"},
+                  {AV_CODEC_ID_HEVC, 0, "hevc_cuvid"}, {AV_CODEC_ID_MPEG4, 0, "mpeg4_cuvid"},
+                  {AV_CODEC_ID_VC1, 0, "vc1_cuvid"},   {AV_CODEC_ID_VP8, 0, "vp8_cuvid"},
+                  {AV_CODEC_ID_VP9, 0, "vp9_cuvid"},   {AV_CODEC_ID_NONE, 0, nullptr}};
 
     for (int i = 0; codecs[i].id; i++)
       if (codecs[i].id == _p->context->codec_id) {
