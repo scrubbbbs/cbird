@@ -1089,8 +1089,9 @@ QVariantList VideoContext::readMetaData(const QString& _path, const QStringList&
 }
 
 bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
-  if ((!_opt.gray) ||
-      (_opt.maxW && _opt.maxH && (_p->frame->width > _opt.maxW || _p->frame->height > _opt.maxH))) {
+  if ((!_opt.gray) || (_opt.gray && fmt != AV_PIX_FMT_YUV420P)
+      || (_opt.maxW && _opt.maxH
+          && (_p->frame->width > _opt.maxW || _p->frame->height > _opt.maxH))) {
     w = _opt.maxW;
     h = _opt.maxH;
 
