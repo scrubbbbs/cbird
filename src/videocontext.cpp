@@ -1038,6 +1038,12 @@ bool VideoContext::decodeFrame() {
         // TODO: limit number of errors logged
         qCritical() << "avcodec_send_packet; near frame:" << _lastFrameNumber << Qt::hex << err
                     << avErrorString(err);
+
+        // we get this when decoding av1 when there is no av1 implementation "Function not implemented"
+        if (err == -0x28) {
+          qWarning() << "decode aborted";
+          return false;
+        }
       }
     } else {
       // attempt to prevent hang when seeking near the eof
