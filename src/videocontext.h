@@ -79,6 +79,7 @@ class VideoContext {
     int threads = 1;      // max # of threads
     bool gpu = false;     // try gpu decoding
     int deviceIndex = 0;  // gpu device index
+    QString deviceType;   // decoder device name/type e.g. pascal/turing/ampere etc
 
     DecodeOptions();
   };

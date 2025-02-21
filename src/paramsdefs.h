@@ -60,3 +60,9 @@ License along with cbird; if not, see
     ((PARAMS_CLASS*) p)->member.append(v.toString()); \
     return true; \
   }
+
+#define ADD_STRING(member) \
+  [](Params* p, const QVariant& v) { \
+    ((PARAMS_CLASS*) p)->member.append(v.toString()); \
+    return true; \
+  }

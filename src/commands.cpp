@@ -637,10 +637,16 @@ void Commands::verify(Database* db, const QString& jpegFixPath) {
 
 void Commands::testVideoDecoder(const QString& path) {
   VideoContext::DecodeOptions opt;
-  opt.gpu = _indexParams.useHardwareDec;
   opt.threads = _indexParams.decoderThreads;
   opt.maxH = 128;  // 128 is used for video hashing
   opt.maxW = 128;
+
+  if (!_indexParams.gpuList.isEmpty()) {
+    QStringList parts = _indexParams.gpuList[0].split(':');
+    opt.deviceIndex = parts[0].toInt();
+    opt.deviceType = parts[1];
+    opt.gpu = true;
+  }
 
   bool display = false, loop = false, scale = false, crop = false, zoom = false, noSws = false;
   while (_args.count() > 0) {
@@ -656,9 +662,11 @@ void Commands::testVideoDecoder(const QString& path) {
       opt.maxW = intArg();
     else if (arg == "-maxh")
       opt.maxH = intArg();
-    else if (arg == "-device")
+    else if (arg == "-device") {
       opt.deviceIndex = intArg();
-    else if (arg == "-fast")
+      Q_ASSERT(_indexParams.gpuList.count() > opt.deviceIndex);
+      opt.deviceType = _indexParams.gpuList[opt.deviceIndex].split(':').last();
+    } else if (arg == "-fast")
       opt.fast = true;
     else if (arg == "-scale")
       scale = true;
@@ -732,6 +740,7 @@ void Commands::testVideoDecoder(const QString& path) {
       zoomSize = int(screenRect.height() * 0.95 / opt.maxH) * opt.maxH;
       qInfo() << "zoom in (nearest neighbor) :" << zoomSize;
     } else {
+      qInfo() << "opening decoder to determine window size";
       VideoContext video;
       Q_ASSERT(0 == video.open(path, opt));
       QImage img;
@@ -747,6 +756,7 @@ void Commands::testVideoDecoder(const QString& path) {
   }
 
   do {
+    qInfo() << "opening decoder";
     VideoContext video;
     Q_ASSERT(0 == video.open(path, opt));
     auto md = video.metadata();

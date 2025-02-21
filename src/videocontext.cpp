@@ -379,61 +379,158 @@ bool VideoContext::openGpu(const AVCodec** outCodec,
                            const DecodeOptions& opt,
                            const AVCodecContext* swContext,
                            const AVStream* videoStream) {
-  // FIXME: robust support means having a table of all pixelformats/codecs for
-  // all known gpus as we cannot probe this information...or else users have to
-  // supply it.
+  MessageContext ctx(fileName + "|gpu" + QString::number(opt.deviceIndex));
 
   // we *must* create a software context, as this is the only way to get pixel format
   // when this was written, some supposedly supported pixel formats did not work (driver bugs?)
 
-  // the actual format support doesn't seem to be published by ffmpeg
-  // the codec says only nv12, p010le, p016le, but yuv420 works fine
-  // TODO: system configuration
-  constexpr AVPixelFormat hwFormats[] = {AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUV440P, AV_PIX_FMT_NV12,
-                                         AV_PIX_FMT_NONE};
-  bool supported = false;
-  const AVPixelFormat* fmt = hwFormats;
-  while (*fmt != AV_PIX_FMT_NONE)
-    if (*fmt++ == swContext->pix_fmt) supported = true;
+  static constexpr struct {
+    const char* type;
+    int nvdecVersion;
+  } supportedGpus[] = {
+      {"maxwell-v1", 10}, {"maxwell-v2", 20}, {"maxwell-v2+", 25}, {"pascal", 30},
+      {"pascal+", 35},    {"volta", 36},      {"turing", 40},      {"hopper", 40},
+      {"ampere", 50},     {"ada", 50},        {"blackwell", 60},
+  };
 
-  // we also might need to look at these
-  //_p->context->profile;
-  //_p->context->level;
+  static constexpr struct {
+    int id;
+    const char* name;
+  } supportedCodecs[] = {
+      {AV_CODEC_ID_AV1, "av1"},
+      {AV_CODEC_ID_H264, "h264"},
+      {AV_CODEC_ID_HEVC, "hevc"},
+      {AV_CODEC_ID_VP9, "vp9"},
+      // todo; add the other somewhat useless codecs (mpeg1,mpeg2,mpeg4,vc1,vp8)
+  };
 
-  if (!supported) {
-    qWarning() << "pixel format unsupported in hardware codec, falling back to software :"
-               << av_pix_fmt_desc_get(swContext->pix_fmt)->name;
+  // https://developer.nvidia.com/video-encode-and-decode-gpu-support-matrix-new
+  static constexpr struct {
+    const char* name;
+    int pixFmt;
+    int nvdecVersion;
+  } supportedPixelFormats[] = {
+      // clang-format off
+      // maxwell-v1/v2
+      {"h264", AV_PIX_FMT_YUV420P, 10},
+      
+			// maxwell-v2+, GTX750 / GTX950-960, GeForce GTX 965M
+      {"hevc", AV_PIX_FMT_YUV420P, 25},
+      {"hevc", AV_PIX_FMT_YUV420P10, 25},
+      
+			// pascal, 10-series
+      {"vp9", AV_PIX_FMT_YUV420P, 30},
+      {"hevc", AV_PIX_FMT_YUV420P12, 30},
+
+      // pascal+, 1050ti/1080ti/Titan
+      {"vp9", AV_PIX_FMT_YUV420P10, 35},
+      {"vp9", AV_PIX_FMT_YUV420P12, 35},
+      
+			// turing, 20-series
+      {"hevc", AV_PIX_FMT_YUV444P, 40},
+      {"hevc", AV_PIX_FMT_YUV444P10, 40},
+      {"hevc", AV_PIX_FMT_YUV444P12, 40},
+      
+			// ampere/ada 30/40 series
+      {"av1",  AV_PIX_FMT_YUV420P, 50},
+      {"av1",  AV_PIX_FMT_YUV420P10, 50},
+      
+			// blackwell 50-series
+      {"h264", AV_PIX_FMT_YUV420P10, 60},
+      {"h264", AV_PIX_FMT_YUV422P, 60},
+      {"h264", AV_PIX_FMT_YUV422P10, 60},
+
+      {"hevc", AV_PIX_FMT_YUV422P, 60},
+      {"hevc", AV_PIX_FMT_YUV422P10, 60},
+      // clang-format on
+  };
+
+  static constexpr struct {
+    const char* codec;
+    int maxW;
+    int maxH;
+    int nvdecVersion;
+  } supportedResolutions[] = {
+      {"h264", 4096, 4096, 1}, {"hevc", 4096, 2304, 25}, {"hevc", 8192, 8192, 3},
+      {"vp9", 8192, 8192, 3},  {"av1", 8192, 8192, 5},
+  };
+
+  QStringList gpuTypes;
+  int nvdecVersion = -1;
+  for (auto& gpu : supportedGpus) {
+    gpuTypes += gpu.type;
+    if (gpu.type == opt.deviceType) nvdecVersion = gpu.nvdecVersion;
+  }
+
+  if (nvdecVersion < 0) {
+    qWarning() << "unsupported nvidia gpu:" << opt.deviceType << "choices are" << gpuTypes;
+    qInfo() << "reference: "
+               "<UNDERL><CYN>https://developer.nvidia.com/"
+               "video-encode-and-decode-gpu-support-matrix-new";
     return false;
   }
 
-  // TODO: multiple device support
-  // TODO: system configuration
-  constexpr struct {
-    AVCodecID id;
-    int flag;
-    const char* name;
-  } codecs[] = {{AV_CODEC_ID_AV1, 0, "av1_cuvid"},   {AV_CODEC_ID_H264, 0, "h264_cuvid"},
-                {AV_CODEC_ID_HEVC, 0, "hevc_cuvid"}, {AV_CODEC_ID_MPEG4, 0, "mpeg4_cuvid"},
-                {AV_CODEC_ID_VC1, 0, "vc1_cuvid"},   {AV_CODEC_ID_VP8, 0, "vp8_cuvid"},
-                {AV_CODEC_ID_VP9, 0, "vp9_cuvid"},   {AV_CODEC_ID_NONE, 0, nullptr}};
-
-  const AVCodec* hwCodec = nullptr;
-
-  for (int i = 0; codecs[i].id; i++)
-    if (codecs[i].id == swContext->codec_id) {
-      qDebug() << "trying hw codec :" << codecs[i].name;
-      hwCodec = avcodec_find_decoder_by_name(codecs[i].name);
+  QString codecName;
+  for (auto& codec : supportedCodecs)
+    if (codec.id == swContext->codec_id) {
+      codecName = codec.name;
       break;
     }
 
+  if (codecName.isEmpty()) {
+    qDebug() << "codec id unsupported in cuvid:" << swContext->codec_id;
+    return false;
+  }
+
+  bool supported = false;
+  for (auto& codec : supportedPixelFormats) {
+    if (codec.nvdecVersion > nvdecVersion) break;
+    if (codec.name == codecName && codec.pixFmt == swContext->pix_fmt) {
+      supported = true;
+      break;
+    }
+  }
+
+  if (!supported) {
+    qDebug() << "pixel format unsupported in hardware:" << codecName
+             << av_pix_fmt_desc_get(swContext->pix_fmt)->name;
+    return false;
+  }
+
+  const QSize videoRes(videoStream->codecpar->width, videoStream->codecpar->height);
+  if (videoRes.width() < 48 || videoRes.height() < 48) {
+    qDebug() << "resolution must be at least 48x48:" << videoRes;
+    return false;
+  }
+
+  supported = false;
+  for (auto& res : supportedResolutions) {
+    if (res.nvdecVersion > nvdecVersion) break;
+    if (res.codec == codecName && res.maxH >= videoRes.height() && res.maxW >= videoRes.width()) {
+      supported = true;
+      break;
+    }
+  }
+
+  if (!supported) {
+    qDebug() << "resolution unsupported in hardware:" << codecName << videoRes;
+    return false;
+  }
+
+  const AVCodec* hwCodec = nullptr;
+
+  codecName += "_cuvid";
+  qDebug() << "trying codec:" << codecName;
+  hwCodec = avcodec_find_decoder_by_name(qUtf8Printable(codecName));
+
   if (!hwCodec) {
-    qDebug() << "no hw codec found";
+    qDebug() << "no codec found, was ffmpeg compiled correctly?";
     return false;
   }
 
   AVCodecContext* hwContext = avcodec_alloc_context3(hwCodec);
   if (!hwContext) {
-    AV_WARNING("could not allocate hardware video codec context");
+    AV_WARNING("could not allocate codec context");
     return false;
   }
 
@@ -441,19 +538,22 @@ bool VideoContext::openGpu(const AVCodec** outCodec,
 
   int err;
   if ((err = avcodec_parameters_to_context(hwContext, videoStream->codecpar)) < 0) {
-    AV_CRITICAL("failed to copy codec params to codec context");
+    AV_CRITICAL("failed to copy codec params");
     avLoggerUnsetFileName(hwContext);
     return -3;
   }
 
   AVDictionary* hwOptions = nullptr;
 
-  // _deviceIndex = opt.deviceIndex;
+  if (opt.deviceIndex >= 0) {
+    QString id = QString::number(opt.deviceIndex);
+    av_dict_set(&hwOptions, "gpu", qPrintable(id), 0);
+  }
 
   if (opt.maxW > 0 && opt.maxW == opt.maxH && QString(hwCodec->name).endsWith("cuvid")) {
-    // enable hardware scaler
+    // hardware scaling should be better, assuming it can happen without leaving the gpu
     QString size = QString("%1x%2").arg(opt.maxW).arg(opt.maxH);
-    qDebug() << "using gpu scaler@" << size;
+    qDebug() << "using gpu scaler" << size;
     av_dict_set(&hwOptions, "resize", qPrintable(size), 0);
     *outIsHardwareScaled = true;
   }
@@ -754,13 +854,17 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     //    _p->context->flags|= CODEC_FLAG_TRUNCATED; // we do not send complete
     //    frames
 
-    if (_p->codec->capabilities & (AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS)) {
+    if (_p->codec->capabilities
+        & (AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS | AV_CODEC_CAP_OTHER_THREADS)) {
       _numThreads = opt.threads;
       _metadata.supportsThreads = true;
     }
 
     // note: no need to set thread_type, let ffmpeg choose the best options
-    if (_numThreads > 0) _p->context->thread_count = _numThreads;
+    if (_numThreads > 0) {
+      qDebug() << "set thread count" << _numThreads;
+      _p->context->thread_count = _numThreads;
+    }
 
     if ((err = avcodec_open2(_p->context, _p->codec, &codecOptions)) < 0) {
       AV_CRITICAL("could not open codec");

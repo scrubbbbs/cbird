@@ -126,6 +126,8 @@ QString Params::Value::toString(const Params* p) const {
     }
     case Glob:
       return get(p).toStringList().join(';');
+    case List:
+      return get(p).toStringList().join(',');
     default:
       return get(p).toString();
   }
@@ -148,6 +150,9 @@ const char* Params::Value::typeName() const {
       break;
     case Glob:
       name = "glob";
+      break;
+    case List:
+      name = "list";
       break;
     default:
       Q_UNREACHABLE();

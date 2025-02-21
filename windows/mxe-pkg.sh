@@ -2,7 +2,7 @@
 VERSION=$1
 ARCH=$2
 BUILD=_win32
-PKG_DIR=$BUILD/cbird
+PKG_DIR=$BUILD/cbird-win
 ZIP=cbird-windows-$VERSION-$ARCH.zip
 MXE_BIN="$MXE_DIR/usr/$MXE_TARGET/bin"
 OPENCV_BIN=_libs-win32/build-opencv/install/x64/mingw/bin
@@ -25,7 +25,6 @@ cp -au "$QT_DIR/plugins" "$PKG_DIR"
 echo "programs..."
 mkdir -p "$PKG_DIR"
 cp -au cbird.exe "$PKG_DIR/"
-#cp -auv $MXE_BIN/ff*.exe "$PKG_DIR/"
 
 #echo "termcap..."
 #TERMCAP_DIR="$MXE_BIN/../share/terminfo"
@@ -41,7 +40,11 @@ for exe in sqlite3.exe; do
     cp -au "$MXE_DIR/usr/$MXE_TARGET/bin/$exe" "$PKG_DIR/"
 done
 
-for exe in cbird.exe sqlite3.exe; do
+for exe in ffplay.exe ffprobe.exe ffmpeg.exe; do
+    cp -auv "$CROSS_BIN/$exe" "$PKG_DIR/"
+done
+
+for exe in cbird.exe sqlite3.exe ffplay.exe ffprobe.exe ffmpeg.exe; do
 #for exe in cbird.exe ffmpeg.exe ffplay.exe ffprobe.exe; do
     
     PASS=1
@@ -51,10 +54,10 @@ for exe in cbird.exe sqlite3.exe; do
         PASS=0
         DLLS=`wine "$PKG_DIR/$exe" -about 2>&1 | grep :err:module:import_dll | cut -d' ' -f3`
         for x in $DLLS; do
-            if   [ -e "$MXE_BIN/$x"    ]; then cp -au "$MXE_BIN/$x" "$PKG_DIR/"
-            elif [ -e "$QT_BIN/$x"     ]; then cp -au "$QT_BIN/$x" "$PKG_DIR/"
+            if   [ -e "$CROSS_BIN/$x"  ]; then cp -au "$CROSS_BIN/$x" "$PKG_DIR/"
             elif [ -e "$OPENCV_BIN/$x" ]; then cp -au "$OPENCV_BIN/$x" "$PKG_DIR/"
-            elif [ -e "$CROSS_BIN/$x"  ]; then cp -au "$CROSS_BIN/$x" "$PKG_DIR/"
+            elif [ -e "$QT_BIN/$x"     ]; then cp -au "$QT_BIN/$x" "$PKG_DIR/"
+            elif [ -e "$MXE_BIN/$x"    ]; then cp -au "$MXE_BIN/$x" "$PKG_DIR/"
             else
                 echo "can't find dll: $x"
                 exit 1

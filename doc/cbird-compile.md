@@ -112,7 +112,7 @@ cd /path/to/stuff
 apt-get install libpcre3-dev
 git clone https://github.com/mxe/mxe.git
 cd mxe
-make MXE_TARGETS='x86_64-w64-mingw32.shared' cc qt6-qtbase qt6-qt5compat exiv2 sdl2
+make MXE_TARGETS='x86_64-w64-mingw32.shared' cc qt6-qtbase qt6-qt5compat exiv2 sdl2 meson
 
 export MXE_DIR=/path/to/stuff/mxe
 ```
@@ -151,13 +151,51 @@ make install
 #### 2.4 Cross-compiling FFmpeg
 
 Optional, if mxe ffmpeg version is incompatible.
+- with nvidia gpu support
 
 ```shell
 source windows/mxe.env
+
+# get nvidia headers for nvdec support
+cd _libs-win32
+git clone https://github.com/FFmpeg/nv-codec-headers
+cd nv-codecs-headers
+make PREFIX=$MXE_DIR/usr/$MXE_TARGET install
+
+# get amd AMF headers
+cd _libs-win32
+git clone https://github.com/GPUOpen-LibrariesAndSDKs/AMF
+mkdir $MXE_DIR/usr/$MXE_TARGET/include/AMF
+cp -rv AMF/amf/public/include/* $MXE_DIR/usr/$MXE_TARGET/include/AMF/
+
+# compile libvpl for intel quicksync support
+git clone https://github.com/intel/libvpl
+cd libvpl
+mkdir build
+cd build
+cmake ..
+make -j8
+make install
+
+# compile dav1d for av1 software decoding support
+cd _libs-win32
+git clone https://github.com/videolan/dav1d
+cd dav1d
+mkdir build
+cd build
+meson --buildtype release
+ninja
+ninja install
+
+# compile ffmpeg
 cd _libs-win32
 git clone https://github.com/ffmpeg/FFmpeg.git
 cd FFmpeg
-./configure --cross-prefix=x86_64-w64-mingw32.shared- --enable-cross-compile --arch=x86_64 --target-os=mingw32 --enable-shared --disable-static --yasmexe=x86_64-w64-mingw32.shared-yasm --disable-debug --disable-pthreads --enable-w32threads --disable-doc --enable-gpl --extra-libs='-mconsole' --extra-ldflags="-fstack-protector" --prefix=../build-mxe
+git checkout n7.0.2 # n7.1 build is broken
+	./configure --cross-prefix=x86_64-w64-mingw32.shared- --enable-cross-compile --arch=x86_64 --target-os=mingw32 --enable-shared --disable-static --x86asmexe=x86_64-w64-mingw32.shared-yasm --disable-debug --disable-pthreads --enable-w32threads --disable-doc --enable-gpl --enable-ffnvcodec --enable-libdav1d --enable-libvpl --extra-libs='-mconsole' --extra-ldflags="-fstack-protector" --prefix=../build-mxe
+
+make -j8
+make install
 ```
 
 #### 2.5 Cross-compiling quazip
@@ -184,7 +222,7 @@ make -j8
 make install # build/update portable dir in _win32/cbird/
 ```
 
-## Compiling: Mac OS X
+	## Compiling: Mac OS X
 
 #### 3.1 Install Homebrew
 

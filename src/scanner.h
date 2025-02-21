@@ -75,6 +75,8 @@ class IndexParams : public Params {
 
   /// threads
   bool useHardwareDec = false; // try hardware decoder for supported formats
+  QStringList gpuList;
+
   int decoderThreads = 0;      // threads per item decoder (hardwaredec always == 1)
   int indexThreads = 0;        // total max threads (cpu) <=0 means auto detect
   int gpuThreads = 1;          // number of parallel hardware decoders

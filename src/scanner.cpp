@@ -1182,6 +1182,10 @@ IndexParams::IndexParams() {
   add({"gpu", CatThreads, "Enable gpu video decoding (Nvidia)", Value::Bool, counter++,
        SET_BOOL(useHardwareDec), GET(useHardwareDec), NO_NAMES, NO_RANGE});
 
+  add({"hwdec", CatThreads,
+       "Add gpu decoder <index>:<type> e.g. 0:pascal for the first 10-series gpu in the system",
+       Value::List, counter++, ADD_STRING(gpuList), GET(gpuList), NO_NAMES, NO_RANGE});
+
   add({"decthr", CatThreads, "Max threads for video decoding (0==auto)", Value::Int, counter++,
        SET_INT(decoderThreads), GET(decoderThreads), NO_NAMES, GET_CONST(positive)});
 
