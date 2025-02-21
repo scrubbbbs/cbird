@@ -368,30 +368,166 @@ VideoContext::~VideoContext() {
   delete _p;
 }
 
-// static QMutex* ffGlobalMutex() {
-//   static QMutex mutex;
-//   return &mutex;
-// }
-bool VideoContext::openGpu(const AVCodec** outCodec,
-                           AVCodecContext** outContext,
-                           bool* outIsHardwareScaled,
-                           const QString& fileName,
-                           const DecodeOptions& opt,
-                           const AVCodecContext* swContext,
-                           const AVStream* videoStream) {
-  MessageContext ctx(fileName + "|gpu" + QString::number(opt.deviceIndex));
+bool VideoContext::checkQuicksync(
+    const QString& family, int codecId, int pixelFormat, int width, int height) {
+  static constexpr struct {
+    const char* type;
+    int qsvVersion;
+  } supportedGpus[] = {{"clarkdale", 10},  {"sandybridge", 11}, {"ivybridge", 20},
+                       {"haswell", 30},    {"broadwell", 40},   {"braswell", 50},
+                       {"skylake", 51},    {"apollolake", 60},  {"kabylake", 61},
+                       {"coffeelake", 61}, {"cometlake", 61},   {"whiskeylake", 61},
+                       {"icelake", 70},    {"jasperlake", 70},  {"tigerlake", 80},
+                       {"rocketlake", 80}, {"alderlake", 80},   {"raptorlake", 80},
+                       {"meteorlake", 90}, {"arrowlake", 90},   {"arc-alchemist", 90},
+                       {"lunarlake", 100}};
 
-  // we *must* create a software context, as this is the only way to get pixel format
-  // when this was written, some supposedly supported pixel formats did not work (driver bugs?)
+  static constexpr struct {
+    int id;
+    const char* name;
+  } supportedCodecs[] = {
+      {AV_CODEC_ID_AV1, "av1"}, {AV_CODEC_ID_H264, "h264"}, {AV_CODEC_ID_HEVC, "hevc"},
+      {AV_CODEC_ID_VP9, "vp9"}, {AV_CODEC_ID_VVC, "vvc"},
+      // todo; add the other somewhat useless codecs
+  };
 
+  // https://en.wikipedia.org/wiki/Intel_Quick_Sync_Video
+  // https://trac.ffmpeg.org/wiki/Hardware/QuickSync
+  // https://github.com/intel/media-driver#decodingencoding-features
+  static constexpr struct {
+    const char* name;
+    int pixFmt;
+    int qsvVersion;
+  } supportedPixelFormats[] = {
+      // clang-format off
+      // clarkdale 
+      {"h264", AV_PIX_FMT_YUV420P, 10},
+      
+			// braswell
+      {"hevc", AV_PIX_FMT_YUV420P, 50},
+
+			// apollo lake
+      {"hevc", AV_PIX_FMT_YUV420P10, 60},
+      
+      // kaby lake
+      {"vp9", AV_PIX_FMT_YUV420P, 61},
+      {"vp9", AV_PIX_FMT_YUV420P10, 61},
+      {"hevc", AV_PIX_FMT_YUV420P12, 61},
+
+			// ice lake
+      {"vp9", AV_PIX_FMT_YUV444P, 70},
+      {"vp9", AV_PIX_FMT_YUV444P10, 70},
+      {"hevc", AV_PIX_FMT_YUV422P, 70},
+      {"hevc", AV_PIX_FMT_YUV422P10, 70},
+		  {"hevc", AV_PIX_FMT_YUV444P, 70},
+			{"hevc", AV_PIX_FMT_YUV444P10,70},
+
+      // tiger lake
+      {"vp9", AV_PIX_FMT_YUV420P12, 80},
+      {"vp9", AV_PIX_FMT_YUV444P12, 80},
+      {"hevc", AV_PIX_FMT_YUV420P12, 80},
+      {"hevc", AV_PIX_FMT_YUV422P12, 80},
+      {"hevc", AV_PIX_FMT_YUV444P12, 80},
+      {"av1",  AV_PIX_FMT_YUV420P, 80},
+      {"av1", AV_PIX_FMT_YUV420P10, 80},
+     
+      // lunar lake 
+      {"vvc", AV_PIX_FMT_YUV420P, 100},
+      {"vvc", AV_PIX_FMT_YUV420P10, 100},
+
+      // clang-format on
+  };
+
+  static constexpr struct {
+    const char* codec;
+    int maxW;
+    int maxH;
+    int qsvVersion;
+  } supportedResolutions[] = {
+      {"h264", 4096, 4096, 10}, //
+      {"hevc", 4096, 4096, 60}, // https://forums.serverbuilds.net/t/guide-hardware-transcoding-the-jdm-way-quicksync-and-nvenc/1408/3
+      {"hevc", 8192, 8192, 61}, {"vp9", 4096, 4096, 80},    {"vp9", 8192, 8192, 80},
+      {"av1", 8192, 8192, 80},  {"vvc", 16384, 16384, 100}, // FIXME: guess
+  };
+
+  QStringList gpuTypes;
+  int qsvVersion = -1;
+  for (auto& gpu : supportedGpus) {
+    gpuTypes += gpu.type;
+    if (gpu.type == family) qsvVersion = gpu.qsvVersion;
+  }
+
+  if (qsvVersion < 0) {
+    qWarning() << "unsupported intel cpu/gpu:" << family << "choices are" << gpuTypes;
+    qInfo() << "reference: "
+               "<UNDERL><CYN>https://en.wikipedia.org/wiki/Intel_Quick_Sync_Video";
+    return false;
+  }
+
+  QString codecName;
+  for (auto& codec : supportedCodecs)
+    if (codec.id == codecId) {
+      codecName = codec.name;
+      break;
+    }
+
+  if (codecName.isEmpty()) {
+    qDebug() << "unsupported codec:" << codecId;
+    return false;
+  }
+
+  bool supported = false;
+  for (auto& codec : supportedPixelFormats) {
+    if (codec.qsvVersion > qsvVersion) break;
+    if (codec.name == codecName && codec.pixFmt == pixelFormat) {
+      supported = true;
+      break;
+    }
+  }
+
+  if (!supported) {
+    qDebug() << "unsupported codec/pixel format:" << codecName
+             << av_pix_fmt_desc_get(AVPixelFormat(pixelFormat))->name;
+    return false;
+  }
+
+  const QSize videoRes(width, height);
+  if (videoRes.width() < 48 || videoRes.height() < 48) {
+    qDebug() << "resolution must be at least 48x48:" << videoRes;
+    return false;
+  }
+
+  supported = false;
+  for (auto& res : supportedResolutions) {
+    if (res.qsvVersion > qsvVersion) break;
+    if (res.codec == codecName && res.maxH >= videoRes.height() && res.maxW >= videoRes.width()) {
+      supported = true;
+      break;
+    }
+  }
+
+  if (!supported) {
+    qDebug() << "unsupported resolution:" << codecName << videoRes;
+    return false;
+  }
+
+  return true;
+}
+
+bool VideoContext::checkNvdec(
+    const QString& family, int codecId, int pixelFormat, int width, int height) {
   static constexpr struct {
     const char* type;
     int nvdecVersion;
-  } supportedGpus[] = {
-      {"maxwell-v1", 10}, {"maxwell-v2", 20}, {"maxwell-v2+", 25}, {"pascal", 30},
-      {"pascal+", 35},    {"volta", 36},      {"turing", 40},      {"hopper", 40},
-      {"ampere", 50},     {"ada", 50},        {"blackwell", 60},
-  };
+  } supportedGpus[] = {{"maxwell-v1", 10}, {"maxwell-v2", 20},  {"maxwell-v2+", 25},
+                       {"pascal", 30},     {"pascal+", 35},     {"volta", 36},
+                       {"turing", 40},     {"hopper", 40},      {"ampere", 50},
+                       {"ada", 50},        {"blackwell", 60},
+
+                       {"clarkdale", 10},  {"sandybridge", 20}, {"ivybridge", 30},
+                       {"haswell", 30},    {"broadwell", 40},   {"braswell", 50},
+                       {"skylake", 60},    {"apollolake", 70},  {"kabylake", 80},
+                       {"tigerlake", 110}, {"meteorlake", 130}, {"arc", 130}};
 
   static constexpr struct {
     int id;
@@ -414,11 +550,11 @@ bool VideoContext::openGpu(const AVCodec** outCodec,
       // maxwell-v1/v2
       {"h264", AV_PIX_FMT_YUV420P, 10},
       
-			// maxwell-v2+, GTX750 / GTX950-960, GeForce GTX 965M
+	  // maxwell-v2+, GTX750 / GTX950-960, GeForce GTX 965M
       {"hevc", AV_PIX_FMT_YUV420P, 25},
       {"hevc", AV_PIX_FMT_YUV420P10, 25},
       
-			// pascal, 10-series
+      // pascal, 10-series
       {"vp9", AV_PIX_FMT_YUV420P, 30},
       {"hevc", AV_PIX_FMT_YUV420P12, 30},
 
@@ -426,16 +562,16 @@ bool VideoContext::openGpu(const AVCodec** outCodec,
       {"vp9", AV_PIX_FMT_YUV420P10, 35},
       {"vp9", AV_PIX_FMT_YUV420P12, 35},
       
-			// turing, 20-series
+      // turing, 20-series
       {"hevc", AV_PIX_FMT_YUV444P, 40},
       {"hevc", AV_PIX_FMT_YUV444P10, 40},
       {"hevc", AV_PIX_FMT_YUV444P12, 40},
       
-			// ampere/ada 30/40 series
+      // ampere/ada 30/40 series
       {"av1",  AV_PIX_FMT_YUV420P, 50},
       {"av1",  AV_PIX_FMT_YUV420P10, 50},
       
-			// blackwell 50-series
+      // blackwell 50-series
       {"h264", AV_PIX_FMT_YUV420P10, 60},
       {"h264", AV_PIX_FMT_YUV422P, 60},
       {"h264", AV_PIX_FMT_YUV422P10, 60},
@@ -459,11 +595,11 @@ bool VideoContext::openGpu(const AVCodec** outCodec,
   int nvdecVersion = -1;
   for (auto& gpu : supportedGpus) {
     gpuTypes += gpu.type;
-    if (gpu.type == opt.deviceType) nvdecVersion = gpu.nvdecVersion;
+    if (gpu.type == family) nvdecVersion = gpu.nvdecVersion;
   }
 
   if (nvdecVersion < 0) {
-    qWarning() << "unsupported nvidia gpu:" << opt.deviceType << "choices are" << gpuTypes;
+    qWarning() << "unsupported nvdec engine:" << family << "choices are" << gpuTypes;
     qInfo() << "reference: "
                "<UNDERL><CYN>https://developer.nvidia.com/"
                "video-encode-and-decode-gpu-support-matrix-new";
@@ -472,32 +608,32 @@ bool VideoContext::openGpu(const AVCodec** outCodec,
 
   QString codecName;
   for (auto& codec : supportedCodecs)
-    if (codec.id == swContext->codec_id) {
+    if (codec.id == codecId) {
       codecName = codec.name;
       break;
     }
 
   if (codecName.isEmpty()) {
-    qDebug() << "codec id unsupported in cuvid:" << swContext->codec_id;
+    qDebug() << "unsupported codec:" << codecId;
     return false;
   }
 
   bool supported = false;
   for (auto& codec : supportedPixelFormats) {
     if (codec.nvdecVersion > nvdecVersion) break;
-    if (codec.name == codecName && codec.pixFmt == swContext->pix_fmt) {
+    if (codec.name == codecName && codec.pixFmt == pixelFormat) {
       supported = true;
       break;
     }
   }
 
   if (!supported) {
-    qDebug() << "pixel format unsupported in hardware:" << codecName
-             << av_pix_fmt_desc_get(swContext->pix_fmt)->name;
+    qDebug() << "unsupported pixel format:" << codecName
+             << av_pix_fmt_desc_get(AVPixelFormat(pixelFormat))->name;
     return false;
   }
 
-  const QSize videoRes(videoStream->codecpar->width, videoStream->codecpar->height);
+  const QSize videoRes(width, height);
   if (videoRes.width() < 48 || videoRes.height() < 48) {
     qDebug() << "resolution must be at least 48x48:" << videoRes;
     return false;
@@ -513,14 +649,50 @@ bool VideoContext::openGpu(const AVCodec** outCodec,
   }
 
   if (!supported) {
-    qDebug() << "resolution unsupported in hardware:" << codecName << videoRes;
+    qDebug() << "unsupported resolution:" << codecName << videoRes;
     return false;
   }
 
+  return true;
+}
+
+bool VideoContext::openGpu(const AVCodec** outCodec,
+                           AVCodecContext** outContext,
+                           bool* outIsHardwareScaled,
+                           const QString& fileName,
+                           const DecodeOptions& opt,
+                           const AVCodec* swCodec,
+                           const AVCodecContext* swContext,
+                           const AVStream* videoStream) {
+  MessageContext ctx(fileName + "|gpu" + QString::number(opt.deviceIndex));
+
+  QString platform = opt.deviceType;
+  QString family = opt.deviceFamily;
+
+  QString codecSuffix = "";
+  bool supported = false;
+  if (platform == "nvdec") {
+    supported = checkNvdec(family, swContext->codec_id, swContext->pix_fmt,
+                           videoStream->codecpar->width, videoStream->codecpar->height);
+    codecSuffix = "_cuvid";
+  } else if (platform == "qsv") {
+    supported = checkQuicksync(family, swContext->codec_id, swContext->pix_fmt,
+                               videoStream->codecpar->width, videoStream->codecpar->height);
+    codecSuffix = "_qsv";
+  } else {
+    qWarning() << "unsupported platform" << platform << "choices are: nvdec,qsv";
+  }
+
+  if (!supported) return false;
+
   const AVCodec* hwCodec = nullptr;
 
-  codecName += "_cuvid";
-  qDebug() << "trying codec:" << codecName;
+  const QString codecName = swCodec->name + codecSuffix;
+
+  qDebug() << "trying codec:" << codecName
+           << av_pix_fmt_desc_get(AVPixelFormat(swContext->pix_fmt))->name
+           << videoStream->codecpar->width << videoStream->codecpar->height;
+
   hwCodec = avcodec_find_decoder_by_name(qUtf8Printable(codecName));
 
   if (!hwCodec) {
@@ -784,7 +956,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   if (opt.gpu) {
     AVCodecContext* hwContext = nullptr;
     const AVCodec* hwCodec = nullptr;
-    if (openGpu(&hwCodec, &hwContext, &_isHardwareScaled, fileName, opt, _p->context,
+    if (openGpu(&hwCodec, &hwContext, &_isHardwareScaled, fileName, opt, swCodec, _p->context,
                 _p->videoStream)) {
       avLoggerUnsetFileName(_p->context);
       avcodec_free_context(&_p->context);

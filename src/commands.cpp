@@ -643,8 +643,10 @@ void Commands::testVideoDecoder(const QString& path) {
 
   if (!_indexParams.gpuList.isEmpty()) {
     QStringList parts = _indexParams.gpuList[0].split(':');
+    if (parts.count() < 3) qFatal("invalid device id, expected <index>:<type>:<family>");
     opt.deviceIndex = parts[0].toInt();
     opt.deviceType = parts[1];
+    opt.deviceFamily = parts[2];
     opt.gpu = true;
   }
 

@@ -78,8 +78,9 @@ class VideoContext {
 
     int threads = 1;      // max # of threads
     bool gpu = false;     // try gpu decoding
-    int deviceIndex = 0;  // gpu device index
-    QString deviceType;   // decoder device name/type e.g. pascal/turing/ampere etc
+    int deviceIndex = 0;  // gpu device index: 0,1,2
+    QString deviceType;   // decoder device type: cuvid,qsv
+    QString deviceFamily; // decoder device family: pascal,turing
 
     DecodeOptions();
   };
@@ -191,6 +192,7 @@ class VideoContext {
                       bool* outIsHardwareScaled,
                       const QString& fileName,
                       const DecodeOptions& opt,
+                      const AVCodec* swCodec,
                       const AVCodecContext* swContext,
                       const AVStream* videoStream);
 
@@ -209,4 +211,8 @@ class VideoContext {
 
   const int _MAX_DUMBSEEK_FRAMES = 10000; // do not seek if there are too many
   int _lastFrameNumber = -1;              // estimated last frame number based on pts&frame rate
+
+  static bool checkNvdec(const QString& family, int codecId, int pixelFormat, int width, int height);
+  static bool checkQuicksync(
+      const QString& family, int codecId, int pixelFormat, int width, int height);
 };
