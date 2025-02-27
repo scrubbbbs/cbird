@@ -966,12 +966,9 @@ IndexResult Scanner::processImageFile(const QString& path, const QByteArray& dat
 VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu, int cpuThreads) const {
   VideoContext* video = new VideoContext;
 
-  int deviceIndex = -1;
-
   VideoContext::DecodeOptions opt;
   opt.threads = cpuThreads;
   opt.gpu = tryGpu;
-  opt.deviceIndex = deviceIndex;
   opt.maxH = 128;  // need just enough to detect/crop borders
   opt.maxW = 128;
   opt.fast = true; // enable speeds ok for indexing
@@ -1182,9 +1179,8 @@ IndexParams::IndexParams() {
   add({"gpu", CatThreads, "Enable gpu video decoding (Nvidia)", Value::Bool, counter++,
        SET_BOOL(useHardwareDec), GET(useHardwareDec), NO_NAMES, NO_RANGE});
 
-  add({"hwdec", CatThreads,
-       "Add gpu decoder <index>:<type> e.g. 0:pascal for the first 10-series gpu in the system",
-       Value::List, counter++, ADD_STRING(gpuList), GET(gpuList), NO_NAMES, NO_RANGE});
+  add({"hwdec", CatThreads, "Add hardware decoder <device-id>,family=<family>[,...]", Value::List,
+       counter++, ADD_STRING(gpuList), GET(gpuList), NO_NAMES, NO_RANGE});
 
   add({"decthr", CatThreads, "Max threads for video decoding (0==auto)", Value::Int, counter++,
        SET_INT(decoderThreads), GET(decoderThreads), NO_NAMES, GET_CONST(positive)});

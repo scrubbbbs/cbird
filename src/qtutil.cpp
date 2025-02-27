@@ -1351,7 +1351,7 @@ void MessageLog::outputThread() {
 
       // compress repeats while we hold the lock
       int pl = msg.msg.indexOf(tokenProgress);  // do not compress progress lines
-      if (pl <= 0 && lastMsg == msg.msg && !msg.msg.isEmpty()) {
+      if (pl < 0 && lastMsg == msg.msg && !msg.msg.isEmpty()) {
         numRepeats++;
         continue;
       }
@@ -1461,7 +1461,7 @@ QString MessageLog::format(const LogMsg& msg, int& outUnprintable) const {
               {"<WHT>", VT_WHT},         {"<RESET>", VT_RESET},   {"<BRIGHT>", VT_BRIGHT},
               {"<DIM>", VT_DIM},         {"<UNDERL>", VT_UNDERL}, {"<BLINK>", VT_BLINK},
               {"<REVERSE>", VT_REVERSE}, {"<HIDDEN>", VT_HIDDEN}, {"<NUM>", VT_CYN},
-              {"<TIME>", VT_DIM VT_WHT}, {"<PATH>", VT_GRN}};
+              {"<TIME>", VT_DIM VT_WHT}, {"<PATH>", VT_GRN},      {"<URL>", VT_UNDERL VT_CYN}};
 
   // table could become invalid, enum is unnumbered in qlogging.h
   static_assert(QtDebugMsg == 0 && QtInfoMsg == 4);

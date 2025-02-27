@@ -635,22 +635,28 @@ void Commands::verify(Database* db, const QString& jpegFixPath) {
   exit(status);
 }
 
-void Commands::testVideoDecoder(const QString& path) {
+void Commands::testVideoDecoder() {
   VideoContext::DecodeOptions opt;
   opt.threads = _indexParams.decoderThreads;
   opt.maxH = 128;  // 128 is used for video hashing
   opt.maxW = 128;
 
   if (!_indexParams.gpuList.isEmpty()) {
-    QStringList parts = _indexParams.gpuList[0].split(':');
-    if (parts.count() < 3) qFatal("invalid device id, expected <index>:<type>:<family>");
-    opt.deviceIndex = parts[0].toInt();
-    opt.deviceType = parts[1];
-    opt.deviceFamily = parts[2];
+    opt.accel = _indexParams.gpuList[0];
     opt.gpu = true;
   }
 
-  bool display = false, loop = false, scale = false, crop = false, zoom = false, noSws = false;
+  QStringList files;
+  for (auto& m : std::as_const(_selection))
+    files.append(m.path());
+  if (files.isEmpty()) {
+    qWarning() << "no selection";
+    return;
+  }
+
+  int maxFrames = -1;
+  bool display = false, loop = false, seek = false, scale = false, crop = false, zoom = false,
+       noSws = false, cvImg = false, hash = false;
   while (_args.count() > 0) {
     const QString arg = nextArg();
     if (arg == "-show") {
@@ -658,17 +664,15 @@ void Commands::testVideoDecoder(const QString& path) {
       scale = true;
     } else if (arg == "-loop")
       loop = true;
+    else if (arg == "-seek")
+      seek = true;
     else if (arg == "-gray")
       opt.gray = 1;
     else if (arg == "-maxw")
       opt.maxW = intArg();
     else if (arg == "-maxh")
       opt.maxH = intArg();
-    else if (arg == "-device") {
-      opt.deviceIndex = intArg();
-      Q_ASSERT(_indexParams.gpuList.count() > opt.deviceIndex);
-      opt.deviceType = _indexParams.gpuList[opt.deviceIndex].split(':').last();
-    } else if (arg == "-fast")
+    else if (arg == "-fast")
       opt.fast = true;
     else if (arg == "-scale")
       scale = true;
@@ -686,6 +690,15 @@ void Commands::testVideoDecoder(const QString& path) {
       opt.iframes = true;
     } else if (arg == "-lowres") {
       opt.lowres = intArg();
+    } else if (arg == "-cv") {
+      cvImg = true;
+    } else if (arg == "-maxframes") {
+      maxFrames = intArg();
+    } else if (arg == "-hash") {
+      cvImg = true;
+      hash = true;
+      display = false;
+      scale = true;
     } else
       qFatal("invalid arg to -test-video-decoder");
   }
@@ -744,12 +757,13 @@ void Commands::testVideoDecoder(const QString& path) {
     } else {
       qInfo() << "opening decoder to determine window size";
       VideoContext video;
-      Q_ASSERT(0 == video.open(path, opt));
+      Q_ASSERT(0 == video.open(files[0], opt));
       QImage img;
       video.nextFrame(img);
       windowRect.setWidth(img.width());
       windowRect.setHeight(img.height());
       windowRect.moveCenter(screenRect.center());
+      qInfo() << "window size:" << img.size();
     }
     window->setGeometry(windowRect);
     window->setContentsMargins(0, 0, 0, 0);
@@ -757,10 +771,20 @@ void Commands::testVideoDecoder(const QString& path) {
     window->show();
   }
 
+  int fileIndex = 0;
+  int loopCount = 0;
+  VideoContext video;
   do {
-    qInfo() << "opening decoder";
-    VideoContext video;
-    Q_ASSERT(0 == video.open(path, opt));
+    const qint64 start0 = QDateTime::currentMSecsSinceEpoch();
+    qint64 start1 = start0;
+
+    if (loopCount == 0 || !seek) {
+      qInfo() << "opening decoder";
+      Q_ASSERT(0 == video.open(files[fileIndex], opt));
+      fileIndex = (fileIndex + 1) % files.count();
+    } else
+      video.seek(1); // seek (0) reopens
+
     auto md = video.metadata();
     qInfo() << md.frameSize << md.frameRate << md.videoCodec  << md.pixelFormat << md.videoBitrate;
 
@@ -769,15 +793,37 @@ void Commands::testVideoDecoder(const QString& path) {
     totalFrames = 0;
     if (scale) {
       QImage img, out;
-      while ((noSws ? video.decodeFrame() : video.nextFrame(img))) {
+      cv::Mat cvIn, cvOut;
+      bool firstFrame = true;
+      while (
+          (noSws ? video.decodeFrame() : (cvImg ? video.nextFrame(cvIn) : video.nextFrame(img)))) {
+        if (firstFrame) {
+          start1 = QDateTime::currentMSecsSinceEpoch();
+          firstFrame = false;
+        }
+
         if (quit) ::exit(0);
         if (crop) {
-          cv::Mat m1;
-          qImageToCvImg(img, m1);
-          autocrop(m1);
-          cvImgToQImage(m1, out);
-        } else
-          out = img;
+          if (cvImg) {
+            cvOut = cvIn;
+            autocrop(cvOut);
+            /*if (hash) qInfo() << "<PL>" << Qt::bin <<*/ dctHash64(cvOut);
+          } else {
+            cv::Mat m1;
+            qImageToCvImg(img, m1);
+            autocrop(m1);
+            cvImgToQImage(m1, out);
+          }
+        } else {
+          if (cvImg) {
+            cvOut = cvIn;
+            if (hash)
+              /*qInfo() << "<PL>" << Qt::bin <<*/ dctHash64(cvOut);
+            else
+              cvImgToQImageNoCopy(cvOut, out);
+          } else
+            out = img;
+        }
         if (display) {
           if (zoom)
             out = out.scaled(zoomSize, zoomSize, Qt::KeepAspectRatio, Qt::FastTransformation);
@@ -786,11 +832,26 @@ void Commands::testVideoDecoder(const QString& path) {
           qApp->processEvents();  // repaint
         }
         timing();
+        if (maxFrames > 0 && totalFrames > maxFrames) break;
       }
     } else
-      while (video.decodeFrame()) timing();
-    video.seekFast(0);
-    qInfo() << "decoded" << totalFrames << "frames";
+      while (video.decodeFrame()) {
+        timing();
+        if (maxFrames > 0 && totalFrames > maxFrames) break;
+      }
+
+    //video.seekFast(0);
+
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (loop) qInfo() << "loops:                   " << ++loopCount;
+    qInfo() << "decoded frames:          " << totalFrames;
+    qInfo() << "wall time:               " << (now - start0) / 1000.0;
+    qInfo() << "avg rate incl setup:     " << totalFrames * 1000 / (now - start0) << "frames/s";
+    qInfo() << "avg rate after 1st frame:" << totalFrames * 1000 / (now - start1) << "frames/s";
+    if (totalFrames == 0) {
+      qInfo() << "exiting loop as there were no frames decoded";
+      break;
+    }
     totalFrames = 0;
   } while (loop);
 }

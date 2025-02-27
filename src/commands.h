@@ -53,7 +53,7 @@ class Commands {
   MediaGroup selectFiles();
   void verify(Database* db, const QString& jpegFixPath);
 
-  void testVideoDecoder(const QString& path);
+  void testVideoDecoder();
   void testImageSearch(Engine& engine);
   void testVideoIndex(Engine& engine, const QString& path);
   void testUpdate(Engine& engine);

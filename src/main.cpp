@@ -180,15 +180,15 @@ int printCompletions(const char* argv0, const QStringList& args) {
   cmds += propArg;
 
   const QSet<QString> fileArg{"-select-one",     "-jpeg-repair-script", "-test-csv",
-                              "-test-video-decoder", "-compare-videos",
-                              "-test-image-loader",  "-video-thumbnail"};
+                              "-compare-videos", "-test-image-loader",  "-video-thumbnail"};
   cmds += fileArg;
 
   const QSet<QString> dirArg{"-use",          "-update",     "-dups-in",
                              "-nuke-dups-in", "-similar-in", "-move"};
   cmds += dirArg;
 
-  const QSet<QString> fileOrDirArg{"-similar-to", "-select-path", "-select-files", "-merge", "-select-grid"};
+  const QSet<QString> fileOrDirArg{"-similar-to", "-select-path", "-select-files",
+                                   "-merge",      "-select-grid", "-test-video-decoder"};
   cmds += fileOrDirArg;
 
   const SearchParams searchParams;
@@ -911,7 +911,7 @@ int main(int argc, char** argv) {
       //            const QStringList qv = {"??", "??"};
       qInfo() << "<CYN>" CBIRD_PROGNAME << "<MAG>" CBIRD_VERSION << "<RESET>[<GRN>"
               << CBIRD_GITVERSION << "<RESET>]"
-              << "<UNDERL><CYN>" CBIRD_HOMEPAGE;
+              << "<URL>" CBIRD_HOMEPAGE;
       qInfo() << "build:" << buildFlags();
       qInfo() << "settings:" << DesktopHelper::settingsFile();
       qInfo() << "Qt" << qVersion() << "compiled:" << QT_VERSION_STR;
@@ -1752,8 +1752,7 @@ int main(int argc, char** argv) {
     } else if (arg == "-test-image-search") {
       _commands.testImageSearch(engine());
     } else if (arg == "-test-video-decoder") {
-      const QString path = nextArg();
-      _commands.testVideoDecoder(path);
+      _commands.testVideoDecoder();
     } else if (arg == "-test-video") {
       _commands.testVideoIndex(engine(), nextArg());
     } else if (arg == "-test-update") {

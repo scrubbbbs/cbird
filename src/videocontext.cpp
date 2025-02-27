@@ -26,6 +26,8 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavfilter/buffersink.h>
+#include <libavfilter/buffersrc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
@@ -199,6 +201,12 @@ static void FFmpeg(void* ptr, int level, const char* fmt, va_list vl) {
         msgContext += ctx->codec_descriptor->name;
       else
         msgContext += "codec";
+    } else if (avClassName == "AVFilter") {
+      // auto filter = (AVFilter*) ptr;
+      // if (filter->name)
+      // msgContext += filter->name; // TODO: prints nonsense
+      // else
+      msgContext += "filter";
     } else
       msgContext += av_default_item_name(ptr);
   }
@@ -304,10 +312,16 @@ class VideoContextPrivate {
   VideoContextPrivate(){};
 
   AVFormatContext* format = nullptr;
-  AVCodecContext* context = nullptr;
-  const AVCodec* codec = nullptr;
-  AVFrame* frame = nullptr;
   AVStream* videoStream = nullptr;
+  const AVCodec* codec = nullptr;
+  AVCodecContext* context = nullptr;
+
+  AVFilterGraph* filterGraph = nullptr;
+  AVFilterContext* filterSource = nullptr;
+  AVFilterContext* filterSink = nullptr;
+  AVFrame* filterFrame = nullptr;          // result of filter
+
+  AVFrame* frame = nullptr;                // frame we decode into (could be hardware frame)
   AVPacket packet;
   float sar = -1.0;
 
@@ -366,6 +380,148 @@ VideoContext::VideoContext() {
 VideoContext::~VideoContext() {
   if (_p->context) close();
   delete _p;
+}
+
+bool VideoContext::initFilters(const char* filters) {
+  if (_p->filterGraph || _p->filterFrame || _p->filterSource || _p->filterSink) {
+    qCritical("filter graph wasn't cleaned up correctly");
+    return false;
+  }
+
+  // stuff we need to cleanup before returning
+  struct ScopedPointers {
+    AVFilterInOut* outputs = avfilter_inout_alloc(); // always free on return
+    AVFilterInOut* inputs = avfilter_inout_alloc();
+    AVFilterGraph* graph = avfilter_graph_alloc();   // free only if error
+    AVFilterContext* source = nullptr;               // do not free as always tied to graph
+    AVFilterContext* sink = nullptr;
+    bool success = false; // set to true and copy retained pointers on success
+    ScopedPointers(VideoContextPrivate* _p) {
+      avLoggerSetFileName(graph, avLoggerGetFileName(_p->context));
+    }
+    ~ScopedPointers() {
+      if (!success) {
+        avLoggerUnsetFileName(source);
+        avLoggerUnsetFileName(sink);
+        avLoggerUnsetFileName(graph);
+        avfilter_graph_free(&graph);
+      }
+      avfilter_inout_free(&inputs);
+      avfilter_inout_free(&outputs);
+    }
+  } s(_p);
+
+  // we cannot use avfilter_graph_create_filter() as we might need to set hw_frames_ctx
+  s.source = avfilter_graph_alloc_filter(s.graph, avfilter_get_by_name("buffer"), "in");
+  if (!s.source) {
+    qCritical("alloc filter failed");
+    return false;
+  }
+  avLoggerSetFileName(s.source, avLoggerGetFileName(_p->context));
+
+  // hw_frames_ctx is obtained by decoding the first frame
+  if (_p->context->hw_device_ctx && !_p->context->hw_frames_ctx) {
+    qCritical("cannot setup hardware avfilter without hw_frames_ctx");
+    return false;
+  }
+
+  auto* params = av_buffersrc_parameters_alloc();
+  params->color_range = _p->context->color_range;
+  params->color_space = _p->context->colorspace;
+  params->time_base = _p->videoStream->time_base; // _p->context->time_base is always 0/1
+  params->width = _p->context->width;
+  params->height = _p->context->height;
+  params->format = _p->context->pix_fmt;
+  params->sample_aspect_ratio = _p->context->sample_aspect_ratio;
+
+  if (_p->context->hw_frames_ctx) {
+    auto* hwctx = (AVHWFramesContext*) _p->context->hw_frames_ctx->data;
+    qDebug() << "<MAG>configuring hw avfilter:" << av_get_pix_fmt_name(hwctx->format);
+    params->format = hwctx->format;
+    params->hw_frames_ctx = _p->context->hw_frames_ctx;
+  }
+
+  // this works, but has issues since frames are not shared with decoder,
+  // we cannot use hwdownload without another hwfilter ahead of it
+
+  /*
+    AVBufferRef* frameCtx = av_hwframe_ctx_alloc(_p->context->hw_device_ctx);
+    AVHWFramesContext* c = (AVHWFramesContext*) frameCtx->data;
+    c->format = AV_PIX_FMT_QSV;
+    c->sw_format = AV_PIX_FMT_NV12; //_p->context->sw_pix_fmt;
+    c->width = _p->context->width;
+    c->height = _p->context->height;
+    c->initial_pool_size = 2 + _p->context->extra_hw_frames;
+    int err = av_hwframe_ctx_init(frameCtx);
+    if (err < 0) {
+      AV_CRITICAL("hwframe_ctx_init");
+      cleanup();
+      return false;
+    }
+    params->hw_frames_ctx = frameCtx;
+		*/
+
+  int err;
+  if ((err = av_buffersrc_parameters_set(s.source, params)) < 0) {
+    AV_CRITICAL("buffersrc params");
+    av_free(params);
+    return false;
+  }
+  av_free(params);
+
+  if ((err = avfilter_init_dict(s.source, NULL)) < 0) {
+    AV_CRITICAL("buffersrc init");
+    return false;
+  }
+
+  err = avfilter_graph_create_filter(&s.sink, avfilter_get_by_name("buffersink"), "out", NULL, NULL,
+                                     s.graph);
+  if (err < 0) {
+    AV_CRITICAL("create buffer sink");
+    return false;
+  }
+  avLoggerSetFileName(s.sink, avLoggerGetFileName(_p->context));
+
+  /* this was in example but now says deprecated
+  enum AVPixelFormat pix_fmts[] = {AV_PIX_FMT_NV12, AV_PIX_FMT_NONE};
+  err = av_opt_set_int_list(_p->filterSinkCtx, "pix_fmts", pix_fmts, AV_PIX_FMT_NONE,
+                            AV_OPT_SEARCH_CHILDREN);
+  if (err < 0) {
+    AV_CRITICAL("set buffer sink options");
+    cleanup();
+    return false;
+  }
+*/
+
+  s.outputs->name = av_strdup("in");
+  s.outputs->filter_ctx = s.source;
+  s.outputs->pad_idx = 0;
+  s.outputs->next = NULL;
+
+  s.inputs->name = av_strdup("out");
+  s.inputs->filter_ctx = s.sink;
+  s.inputs->pad_idx = 0;
+  s.inputs->next = NULL;
+
+  err = avfilter_graph_parse_ptr(s.graph, filters, &s.inputs, &s.outputs, NULL);
+  if (err < 0) {
+    AV_CRITICAL("parse filter description");
+    return false;
+  }
+
+  err = avfilter_graph_config(s.graph, NULL);
+  if (err < 0) {
+    AV_CRITICAL("config filter graph");
+    return false;
+  }
+
+  s.success = true;
+  _p->filterGraph = s.graph;
+  _p->filterSource = s.source;
+  _p->filterSink = s.sink;
+  _p->filterFrame = av_frame_alloc();
+
+  return true;
 }
 
 bool VideoContext::checkQuicksync(
@@ -446,7 +602,7 @@ bool VideoContext::checkQuicksync(
   } supportedResolutions[] = {
       {"h264", 4096, 4096, 10}, //
       {"hevc", 4096, 4096, 60}, // https://forums.serverbuilds.net/t/guide-hardware-transcoding-the-jdm-way-quicksync-and-nvenc/1408/3
-      {"hevc", 8192, 8192, 61}, {"vp9", 4096, 4096, 80},    {"vp9", 8192, 8192, 80},
+      {"hevc", 8192, 8192, 61}, {"vp9", 8192, 8192, 61},
       {"av1", 8192, 8192, 80},  {"vvc", 16384, 16384, 100}, // FIXME: guess
   };
 
@@ -457,10 +613,15 @@ bool VideoContext::checkQuicksync(
     if (gpu.type == family) qsvVersion = gpu.qsvVersion;
   }
 
+  if (qsvVersion < 0 && family == "all") qsvVersion = INT_MAX;
+
   if (qsvVersion < 0) {
-    qWarning() << "unsupported intel cpu/gpu:" << family << "choices are" << gpuTypes;
-    qInfo() << "reference: "
-               "<UNDERL><CYN>https://en.wikipedia.org/wiki/Intel_Quick_Sync_Video";
+    qWarning() << "<NC>\nqsv: cannot check format support, unknown device family:" << family;
+    qInfo() << "<NC>-options:" << gpuTypes;
+    qInfo() << "<NC>-or use <MAG>\"all\"<RESET> to blindly try all known formats";
+    qInfo() << "<NC>-reference: "
+               "<URL><CYN>https://en.wikipedia.org/wiki/Intel_Quick_Sync_Video";
+    qInfo() << "<NC>";
     return false;
   }
 
@@ -519,15 +680,11 @@ bool VideoContext::checkNvdec(
   static constexpr struct {
     const char* type;
     int nvdecVersion;
-  } supportedGpus[] = {{"maxwell-v1", 10}, {"maxwell-v2", 20},  {"maxwell-v2+", 25},
-                       {"pascal", 30},     {"pascal+", 35},     {"volta", 36},
-                       {"turing", 40},     {"hopper", 40},      {"ampere", 50},
-                       {"ada", 50},        {"blackwell", 60},
-
-                       {"clarkdale", 10},  {"sandybridge", 20}, {"ivybridge", 30},
-                       {"haswell", 30},    {"broadwell", 40},   {"braswell", 50},
-                       {"skylake", 60},    {"apollolake", 70},  {"kabylake", 80},
-                       {"tigerlake", 110}, {"meteorlake", 130}, {"arc", 130}};
+  } supportedGpus[] = {
+      {"maxwell-v1", 10}, {"maxwell-v2", 20}, {"maxwell-v2+", 25}, {"pascal", 30},
+      {"pascal+", 35},    {"volta", 36},      {"turing", 40},      {"hopper", 40},
+      {"ampere", 50},     {"ada", 50},        {"blackwell", 60},
+  };
 
   static constexpr struct {
     int id;
@@ -598,11 +755,16 @@ bool VideoContext::checkNvdec(
     if (gpu.type == family) nvdecVersion = gpu.nvdecVersion;
   }
 
+  if (nvdecVersion < 0 && family == "all") nvdecVersion = INT_MAX;
+
   if (nvdecVersion < 0) {
-    qWarning() << "unsupported nvdec engine:" << family << "choices are" << gpuTypes;
-    qInfo() << "reference: "
-               "<UNDERL><CYN>https://developer.nvidia.com/"
+    qWarning() << "<NC>\ncannot check format support, unknown nvidia family:" << family;
+    qInfo() << "<NC>-options are:<MAG>" << gpuTypes;
+    qInfo() << "<NC>-or use <MAG>\"all\"<RESET> to blindly try all known formats";
+    qInfo() << "<NC>-reference: "
+               "<URL><CYN>https://developer.nvidia.com/"
                "video-encode-and-decode-gpu-support-matrix-new";
+    qInfo() << "<NC>";
     return false;
   }
 
@@ -656,31 +818,88 @@ bool VideoContext::checkNvdec(
   return true;
 }
 
-bool VideoContext::openGpu(const AVCodec** outCodec,
-                           AVCodecContext** outContext,
-                           bool* outIsHardwareScaled,
-                           const QString& fileName,
-                           const DecodeOptions& opt,
-                           const AVCodec* swCodec,
-                           const AVCodecContext* swContext,
-                           const AVStream* videoStream) {
-  MessageContext ctx(fileName + "|gpu" + QString::number(opt.deviceIndex));
+/* not using this for now, see initAccel() comment
+static AVPixelFormat get_format_qsv(AVCodecContext* avctx, const enum AVPixelFormat* pix_fmts) {
+  (void) avctx;
+  qDebug() << "ccalled";
+  while (*pix_fmts != AV_PIX_FMT_NONE) {
+    qDebug() << av_get_pix_fmt_name(*pix_fmts);
+    if (*pix_fmts == AV_PIX_FMT_QSV) break;
+    pix_fmts++;
+  }
 
-  QString platform = opt.deviceType;
-  QString family = opt.deviceFamily;
+  if (*pix_fmts != AV_PIX_FMT_QSV) {
+    qCritical() << "qsv pixel format was not offered";
+    return AV_PIX_FMT_NONE;
+  }
 
-  QString codecSuffix = "";
+  return AV_PIX_FMT_QSV;
+}
+*/
+
+bool VideoContext::initAccel(const AVCodec** outCodec,
+                             AVCodecContext** outContext,
+                             const QString& fileName,
+                             const DecodeOptions& opt,
+                             const AVCodec* swCodec,
+                             const AVCodecContext* swContext,
+                             const AVStream* videoStream) {
+  QString deviceType, deviceId, deviceFamily;
+  // <libav-device-string>,family=<family>,reject=<rej-list>,accept=<accept-list>
+  QHash<QString, QString> deviceOptions;
+  {
+    const QStringList parts = opt.accel.split(',');
+    deviceId = parts[0];
+    deviceType = deviceId.mid(0, deviceId.indexOf(':'));
+    for (int i = 1; i < parts.count(); ++i) {
+      QStringList kv = parts[i].split('=');
+      if (kv[0] == "family") {
+        deviceFamily = kv[1];
+        continue; // don't pass our own options to libavcodec
+      }
+      deviceOptions.insert(kv[0], kv[1]);
+    }
+  }
+  MessageContext ctx(fileName + "|" + deviceId + '|' + deviceFamily);
+
+  AVHWDeviceType deviceTypeId = AV_HWDEVICE_TYPE_NONE;
   bool supported = false;
-  if (platform == "nvdec") {
-    supported = checkNvdec(family, swContext->codec_id, swContext->pix_fmt,
+  QString codecSuffix = "";
+
+  if (deviceType == "nvdec") {
+    // we do not setup hwdevice for nvdec as it can decode&scale directly into system memory
+    // the device index is set via the "gpu" option to the codec
+    if (deviceFamily.isEmpty()) {
+      qWarning("device family is required for \"nvdec\" e.g. -i.hwdec nvdec,family=pascal");
+      return false;
+    }
+    supported = checkNvdec(deviceFamily, swContext->codec_id, swContext->pix_fmt,
                            videoStream->codecpar->width, videoStream->codecpar->height);
     codecSuffix = "_cuvid";
-  } else if (platform == "qsv") {
-    supported = checkQuicksync(family, swContext->codec_id, swContext->pix_fmt,
-                               videoStream->codecpar->width, videoStream->codecpar->height);
+  } else if (deviceType == "qsv") {
+    if (deviceFamily.isEmpty()) {
+      qWarning("device family is required for \"qsv\" e.g. -i.hwdec qsv,family=tigerlake");
+      return false;
+    }
+    deviceTypeId = AV_HWDEVICE_TYPE_QSV;
     codecSuffix = "_qsv";
+    supported = checkQuicksync(deviceFamily, swContext->codec_id, swContext->pix_fmt,
+                               videoStream->codecpar->width, videoStream->codecpar->height);
+  } else if (deviceType == "d3d11va") { // TODO: maybe remove anything with no hw scaler
+    deviceTypeId = AV_HWDEVICE_TYPE_D3D11VA;
+    supported = true;
+  } else if (deviceType == "d3d12va") {
+    deviceTypeId = AV_HWDEVICE_TYPE_D3D12VA;
+    supported = true;
+  } else if (deviceType == "dxva2") {
+    deviceTypeId = AV_HWDEVICE_TYPE_DXVA2;
+    supported = true;
+  } else if (deviceType == "vaapi") {
+    deviceTypeId = AV_HWDEVICE_TYPE_VAAPI;
+    supported = true;
   } else {
-    qWarning() << "unsupported platform" << platform << "choices are: nvdec,qsv";
+    // FIXME: choices array
+    qWarning() << "unsupported device type" << deviceType << "choices are: nvdec,qsv";
   }
 
   if (!supported) return false;
@@ -689,75 +908,121 @@ bool VideoContext::openGpu(const AVCodec** outCodec,
 
   const QString codecName = swCodec->name + codecSuffix;
 
-  qDebug() << "trying codec:" << codecName
+  qDebug() << "checking codec:" << codecName
            << av_pix_fmt_desc_get(AVPixelFormat(swContext->pix_fmt))->name
            << videoStream->codecpar->width << videoStream->codecpar->height;
 
   hwCodec = avcodec_find_decoder_by_name(qUtf8Printable(codecName));
 
   if (!hwCodec) {
-    qDebug() << "no codec found, was ffmpeg compiled correctly?";
+    qWarning()
+        << "codec" << codecName
+        << "is not available in libavcodec, make sure you compiled ffmpeg with --enable-libvpl";
     return false;
   }
+
+  int err = 0;
 
   AVCodecContext* hwContext = avcodec_alloc_context3(hwCodec);
   if (!hwContext) {
     AV_WARNING("could not allocate codec context");
     return false;
   }
-
   avLoggerSetFileName(hwContext, fileName);
+  *outContext = hwContext; // the caller must free on error
 
-  int err;
+  if (deviceTypeId) {
+    av_log_set_level(AV_LOG_TRACE);
+    AVDictionary* dict = nullptr;
+    for (const auto& option : std::as_const(deviceOptions).asKeyValueRange())
+      av_dict_set(&dict, qPrintable(option.first), qPrintable(option.second), 0);
+
+    int pos = deviceId.indexOf(':');
+
+    QString device;
+    if (pos > 0) device = deviceId.mid(pos + 1);
+
+    qDebug() << "creating device context" << deviceId << device;
+    // FIXME: quicksync leaks badly unless we only do this once; however it also
+    // crashes after around 45-46 iterations either way
+    //static AVBufferRef* devCtx = nullptr;
+    //if (!devCtx) err = av_hwdevice_ctx_create(&devCtx, deviceTypeId, qPrintable(deviceId), dict, 0);
+    //hwContext->hw_device_ctx = av_buffer_ref(devCtx);
+    err = av_hwdevice_ctx_create(&hwContext->hw_device_ctx, deviceTypeId,
+                                 device.isEmpty() ? NULL : qPrintable(device), dict, 0);
+    av_dict_free(&dict);
+
+    if (err != 0 || !hwContext->hw_device_ctx) {
+      AV_CRITICAL("create device context failed");
+      qInfo("check you supplied the correct device id and options");
+      qInfo("see ffmpeg -init_hw_device "
+            "<URL>https://www.ffmpeg.org/ffmpeg.html#Advanced-Video-options");
+      return false;
+    }
+    av_log_set_level(AV_LOG_INFO);
+    qDebug() << "<MAG>create hw device successful";
+
+    //hwContext->get_format = get_format_qsv;
+    // the documentation says I should not be setting hw_device_ctx but rather
+    // setting hw_frames_ctx from get_format()... however, this has problems:
+    // - what sw_pix_fmt to use? depends on accel/codec/etc..
+    // - what initial_pool_size value is sufficient for accel/codec)
+    // - get_format() is not called when opening the codec as docs suggest (at least for qsv),
+    //   so I would not be able to initialize filter (which needs hw_frames_ctx), before decoding any frame
+    // - all of this is solved by allowing libavcodec to manage hw_frames_ctx, the
+    //   downside is hw filters cannot be initialized until after the first decodeFrame()
+  }
+
   if ((err = avcodec_parameters_to_context(hwContext, videoStream->codecpar)) < 0) {
     AV_CRITICAL("failed to copy codec params");
-    avLoggerUnsetFileName(hwContext);
     return -3;
   }
 
   AVDictionary* hwOptions = nullptr;
-
-  if (opt.deviceIndex >= 0) {
-    QString id = QString::number(opt.deviceIndex);
-    av_dict_set(&hwOptions, "gpu", qPrintable(id), 0);
+  if (QString(hwCodec->name).endsWith("cuvid")) {
+    int pos = deviceId.indexOf(':');
+    if (pos >= 0) {
+      QString index = deviceId.mid(pos + 1);
+      qDebug() << "using nvdec option gpu=" << index;
+      av_dict_set(&hwOptions, "gpu", qPrintable(index), 0);
+    }
+    if (opt.maxW > 0 && opt.maxW == opt.maxH) {
+      // hardware scaling should be better, assuming it can happen without leaving the gpu,
+      // and does not require filter graph
+      QString size = QString("%1x%2").arg(opt.maxW).arg(opt.maxH);
+      qDebug() << "using nvdec option resize=" << size;
+      av_dict_set(&hwOptions, "resize", qPrintable(size), 0);
+    }
   }
 
-  if (opt.maxW > 0 && opt.maxW == opt.maxH && QString(hwCodec->name).endsWith("cuvid")) {
-    // hardware scaling should be better, assuming it can happen without leaving the gpu
-    QString size = QString("%1x%2").arg(opt.maxW).arg(opt.maxH);
-    qDebug() << "using gpu scaler" << size;
-    av_dict_set(&hwOptions, "resize", qPrintable(size), 0);
-    *outIsHardwareScaled = true;
-  }
+  // if (hwContext->hw_device_ctx) hwContext->extra_hw_frames = 2;
 
   if ((err = avcodec_open2(hwContext, hwCodec, &hwOptions)) < 0) {
     AV_CRITICAL("failed to open codec");
     return false;
   }
 
-  *outContext = hwContext;
   *outCodec = hwCodec;
 
   return true;
 }
 
 int VideoContext::open(const QString& path, const DecodeOptions& opt) {
+  if (_p->context) close();
+
   _path = path;
   _opt = opt;
 
   _errorCount = 0;
 
   _firstPts = AV_NOPTS_VALUE;
-  _deviceIndex = -1;
   _isHardware = false;
-  _isHardwareScaled = false;
   _lastFrameNumber = -1;
 
   _eof = false;
   _numThreads = 1;
   _p->packet.size = 0;
   _p->packet.data = nullptr;
-
 
   _p->format = avformat_alloc_context();  // only reason for this is avLogger
   Q_ASSERT(_p->format);
@@ -777,6 +1042,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     _p->format = nullptr;
     return -1;
   }
+  avLoggerSetFileName(_p->format->pb, fileName); // IO context;
 
   // firstPts is needed for seeking
   // read a few packets to find it, then close/reopen the file
@@ -805,6 +1071,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     i++;
   }
 
+  avLoggerUnsetFileName(_p->format->pb);
   avLoggerUnsetFileName(_p->format);
   avformat_close_input(&_p->format);  // _p->format == nullptr
   Q_ASSERT(_p->format == nullptr);
@@ -829,8 +1096,10 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     _p->format = nullptr;
     return -1;
   }
+  avLoggerSetFileName(_p->format->pb, fileName); // IO context;
 
   auto freeFormat = [this]() {
+    avLoggerUnsetFileName(_p->format->pb);
     avLoggerUnsetFileName(_p->format);
     avformat_close_input(&_p->format);
     Q_ASSERT(_p->format == nullptr);
@@ -942,6 +1211,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     avLoggerUnsetFileName(_p->context);
     avcodec_free_context(&_p->context);
     Q_ASSERT(_p->context == nullptr);
+    avLoggerUnsetFileName(_p->format->pb);
     avLoggerUnsetFileName(_p->format);
     avformat_close_input(&_p->format);
     Q_ASSERT(_p->format == nullptr);
@@ -954,21 +1224,18 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   }
 
   if (opt.gpu) {
-    AVCodecContext* hwContext = nullptr;
     const AVCodec* hwCodec = nullptr;
-    if (openGpu(&hwCodec, &hwContext, &_isHardwareScaled, fileName, opt, swCodec, _p->context,
-                _p->videoStream)) {
+    AVCodecContext* hwContext = nullptr;
+    if (initAccel(&hwCodec, &hwContext, fileName, opt, swCodec, _p->context, _p->videoStream)) {
       avLoggerUnsetFileName(_p->context);
       avcodec_free_context(&_p->context);
-      _p->context = hwContext;
       _p->codec = hwCodec;
+      _p->context = hwContext;
       _isHardware = true;
-      _deviceIndex = opt.deviceIndex; // placeholder
     } else {
       avLoggerUnsetFileName(hwContext);
       avcodec_free_context(&hwContext);
       _isHardware = false;
-      _isHardwareScaled = false;
       qDebug() << "hardware codec failed, falling back to software";
     }
   }
@@ -1072,6 +1339,23 @@ void VideoContext::close() {
   }
   if (_p->scaled.data[0]) av_freep(&(_p->scaled.data[0]));
 
+  if (_p->filterFrame) av_frame_free(&_p->filterFrame);
+
+  if (_p->filterGraph) {
+    avLoggerUnsetFileName(_p->filterGraph);
+    avfilter_graph_free(&_p->filterGraph);
+  }
+
+  avLoggerUnsetFileName(_p->filterSource);
+  avLoggerUnsetFileName(_p->filterSink);
+  _p->filterSource = nullptr;
+  _p->filterSink = nullptr;
+
+  if (_p->frame) {
+    av_frame_free(&_p->frame);
+    Q_ASSERT(_p->frame == nullptr);
+  }
+
   if (_p->context) {
     avLoggerUnsetFileName(_p->context);
     avcodec_free_context(&_p->context);
@@ -1079,14 +1363,10 @@ void VideoContext::close() {
   }
 
   if (_p->format) {
+    avLoggerUnsetFileName(_p->format->pb);
     avLoggerUnsetFileName(_p->format);
     avformat_close_input(&_p->format);
     Q_ASSERT(_p->format == nullptr);
-  }
-
-  if (_p->frame) {
-    av_frame_free(&_p->frame);
-    Q_ASSERT(_p->frame == nullptr);
   }
 
   // av_packet_unref(&_p->packet);
@@ -1370,107 +1650,121 @@ QVariantList VideoContext::readMetaData(const QString& _path, const QStringList&
   return values;
 }
 
-bool VideoContext::convertFrame(int& w, int& h, int& fmt) {
-  if ((!_opt.gray) || (_opt.gray && fmt != AV_PIX_FMT_YUV420P)
-      || (_opt.maxW && _opt.maxH
-          && (_p->frame->width > _opt.maxW || _p->frame->height > _opt.maxH))) {
-    w = _opt.maxW;
-    h = _opt.maxH;
+int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame) {
+  w = _opt.maxW;
+  h = _opt.maxH;
 
-    if (!w || !h) {
-      w = _p->frame->width;
-      h = _p->frame->height;
-    }
-
-    fmt = AV_PIX_FMT_BGR24;
-    if (_opt.gray) fmt = AV_PIX_FMT_YUV420P;
-
-    if (_p->scaler == nullptr) {
-      if (!av_pix_fmt_desc_get(AVPixelFormat(_p->frame->format))) {
-        int err = 0;
-        AV_CRITICAL("invalid pixel format in AVFrame");
-        return false;
-      }
-
-      // area filter seems the best for downscaling (indexing)
-      // - faster than bicubic with fewer artifacts
-      // - less artifacts than bilinear
-      // fast-bilinear produces artifacts if heights differ
-      int fastFilter = SWS_AREA;
-      int fw = _p->frame->width;
-      int fh = _p->frame->height;
-      if (w >= fw || h > fh) {
-        if (fh == h)
-          fastFilter = SWS_FAST_BILINEAR;
-        else
-          fastFilter = SWS_BILINEAR;
-      }
-      int filter = _opt.fast ? fastFilter : SWS_BICUBIC;
-
-      const char* filterName = "other";
-      switch (filter) {
-        case SWS_AREA:
-          filterName = "area";
-          break;
-        case SWS_BILINEAR:
-          filterName = "bilinear";
-          break;
-        case SWS_FAST_BILINEAR:
-          filterName = "fast-bilinear";
-          break;
-        case SWS_BICUBIC:
-          filterName = "bicubic";
-          break;
-      }
-
-      // all of this to supress a warning:
-      // "deprecated pixel format..."
-      // which requires us to use a different one and set the color range to full
-      int srcFmt = _p->frame->format;
-      static constexpr struct {
-        int deprecated;
-        int compatible;
-      } deprecatedFormats[] = {
-          {AV_PIX_FMT_YUVJ411P, AV_PIX_FMT_YUV411P}, {AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUV420P},
-          {AV_PIX_FMT_YUVJ422P, AV_PIX_FMT_YUV422P}, {AV_PIX_FMT_YUVJ440P, AV_PIX_FMT_YUV440P},
-          {AV_PIX_FMT_YUVJ444P, AV_PIX_FMT_YUV444P},
-      };
-      for (auto& d : deprecatedFormats)
-        if (d.deprecated == srcFmt) {
-          srcFmt = d.compatible;
-          break;
-        }
-
-      qDebug() << av_get_pix_fmt_name(AVPixelFormat(srcFmt))
-               << QString("@%1x%2").arg(_p->frame->width).arg(_p->frame->height) << "=>"
-               << av_get_pix_fmt_name(AVPixelFormat(fmt)) << QString("@%1x%2").arg(w).arg(h)
-               << filterName << (_opt.fast ? "fast" : "");
-
-      _p->scaler = sws_getContext(_p->frame->width, _p->frame->height, AVPixelFormat(srcFmt), w, h,
-                                  AVPixelFormat(fmt), filter, nullptr, nullptr, nullptr);
-      avLoggerSetFileName(_p->scaler, QFileInfo(_path).fileName());
-
-      if (srcFmt != _p->frame->format) {
-        if (_p->context->color_range != AVCOL_RANGE_JPEG)
-          qWarning() << "full-range colorspace is not enabled in codec";
-
-        const int* srcTable = sws_getCoefficients(_p->context->colorspace);
-        const int* dstTable = sws_getCoefficients(AVCOL_SPC_RGB);
-        if (0 > sws_setColorspaceDetails(_p->scaler, srcTable, 1, dstTable, 1, 0, 1 << 16, 1 << 16))
-          qWarning() << "full-range colorspace could not be enabled in scaler";
-      }
-
-      int size = av_image_alloc(_p->scaled.data, _p->scaled.linesize, w, h, AVPixelFormat(fmt), 16);
-      if (size < 0) qFatal("av_image_alloc failed: %d", size);
-    }
-
-    sws_scale(_p->scaler, _p->frame->data, _p->frame->linesize, 0, _p->frame->height,
-              _p->scaled.data, _p->scaled.linesize);
-
-    return true;
+  if (!w || !h) {
+    w = srcFrame->width;
+    h = srcFrame->height;
   }
 
-  return false;
+  // formats we can convert directly to cvImg/QImage
+  const bool isConvertable = (_opt.gray && srcFrame->format == AV_PIX_FMT_YUV420P);
+
+  // hw frames have to be downloaded/mapped to system memory
+  const bool isHardware = srcFrame->hw_frames_ctx != NULL;
+
+  if (isConvertable && !isHardware && w == srcFrame->width && h == srcFrame->height)
+    return ConvertNotNeeded;
+
+  // we could do this with api, but we need avfilter anyways
+  if (isHardware) {
+    qWarning() << "hwdownload filter must be used for hw frames";
+    return ConvertError;
+  }
+
+  fmt = AV_PIX_FMT_BGR24;
+  if (_opt.gray) fmt = AV_PIX_FMT_YUV420P;
+
+  if (_p->scaler == nullptr) {
+    if (!av_pix_fmt_desc_get(AVPixelFormat(srcFrame->format))) {
+      int err = 0;
+      AV_CRITICAL("invalid pixel format in AVFrame");
+      return ConvertError;
+    }
+
+    // area filter seems the best for downscaling (indexing)
+    // - faster than bicubic with fewer artifacts
+    // - less artifacts than bilinear
+    // fast-bilinear produces artifacts if heights differ
+    int fastFilter = SWS_AREA;
+    int fw = srcFrame->width;
+    int fh = srcFrame->height;
+    if (w >= fw || h > fh) {
+      if (fh == h)
+        fastFilter = SWS_FAST_BILINEAR;
+      else
+        fastFilter = SWS_BILINEAR;
+    }
+    int filter = _opt.fast ? fastFilter : SWS_BICUBIC;
+
+    const char* filterName = "other";
+    switch (filter) {
+      case SWS_AREA:
+        filterName = "area";
+        break;
+      case SWS_BILINEAR:
+        filterName = "bilinear";
+        break;
+      case SWS_FAST_BILINEAR:
+        filterName = "fast-bilinear";
+        break;
+      case SWS_BICUBIC:
+        filterName = "bicubic";
+        break;
+    }
+
+    // all of this to supress a warning:
+    // "deprecated pixel format..."
+    // which requires us to use a different one and set the color range to full
+    int srcFmt = srcFrame->format;
+    static constexpr struct {
+      int deprecated;
+      int compatible;
+    } deprecatedFormats[] = {
+        {AV_PIX_FMT_YUVJ411P, AV_PIX_FMT_YUV411P}, {AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUV420P},
+        {AV_PIX_FMT_YUVJ422P, AV_PIX_FMT_YUV422P}, {AV_PIX_FMT_YUVJ440P, AV_PIX_FMT_YUV440P},
+        {AV_PIX_FMT_YUVJ444P, AV_PIX_FMT_YUV444P},
+    };
+    for (auto& d : deprecatedFormats)
+      if (d.deprecated == srcFmt) {
+        srcFmt = d.compatible;
+        break;
+      }
+
+    qDebug() << av_get_pix_fmt_name(AVPixelFormat(srcFmt))
+             << QString("@%1x%2").arg(srcFrame->width).arg(srcFrame->height) << "=>"
+             << av_get_pix_fmt_name(AVPixelFormat(fmt)) << QString("@%1x%2").arg(w).arg(h)
+             << filterName << (_opt.fast ? "fast" : "");
+
+    _p->scaler = sws_getContext(srcFrame->width, srcFrame->height, AVPixelFormat(srcFmt), w, h,
+                                AVPixelFormat(fmt), filter, nullptr, nullptr, nullptr);
+    if (!_p->scaler) {
+      qCritical() << "failed to allocate sw scaler";
+      return ConvertError;
+    }
+
+    avLoggerSetFileName(_p->scaler, QFileInfo(_path).fileName());
+
+    if (srcFmt != srcFrame->format) {
+      if (_p->context->color_range != AVCOL_RANGE_JPEG)
+        qWarning() << "full-range colorspace is not enabled in codec";
+
+      const int* srcTable = sws_getCoefficients(_p->context->colorspace);
+      const int* dstTable = sws_getCoefficients(AVCOL_SPC_RGB);
+      if (0 > sws_setColorspaceDetails(_p->scaler, srcTable, 1, dstTable, 1, 0, 1 << 16, 1 << 16))
+        qWarning() << "full-range colorspace could not be enabled in scaler";
+    }
+
+    int size = av_image_alloc(_p->scaled.data, _p->scaled.linesize, w, h, AVPixelFormat(fmt), 16);
+    if (size < 0) qFatal("av_image_alloc failed: %d", size);
+  }
+
+  sws_scale(_p->scaler, srcFrame->data, srcFrame->linesize, 0, srcFrame->height, _p->scaled.data,
+            _p->scaled.linesize);
+
+  return ConvertOK;
 }
 
 QHash<void*, QString>& VideoContext::pointerToFileName() {
@@ -1501,13 +1795,18 @@ QString VideoContext::avLoggerGetFileName(void* ptr) {
   return QString();
 }
 
-void VideoContext::frameToQImg(QImage& img) {
+bool VideoContext::frameToQImg(QImage& img) {
   int w, h, fmt;
 
-  if (convertFrame(w, h, fmt))
+  const AVFrame* srcFrame = _p->filterFrame ? _p->filterFrame : _p->frame;
+  int status = convertFrame(w, h, fmt, srcFrame);
+
+  if (status == ConvertOK)
     avImgToQImg(_p->scaled.data, _p->scaled.linesize, w, h, img, AVPixelFormat(fmt));
+  else if (status == ConvertNotNeeded)
+    avFrameToQImg(*srcFrame, img);
   else
-    avFrameToQImg(*(_p->frame), img);
+    return false;
 
   bool isKey = _p->frame->key_frame || _p->frame->pict_type == AV_PICTURE_TYPE_I;
 
@@ -1524,25 +1823,125 @@ void VideoContext::frameToQImg(QImage& img) {
     img.setText("format", formatName);
     _metadata.pixelFormat = formatName;
   }
+
+  return true;
+}
+
+bool VideoContext::decodeFrameFiltered() {
+  bool ok = decodeFrame();
+
+  // the first time through we setup the filter graph,
+  // this has to be done here since we don't have everything we need (like hw_frames_ctx)
+  // note: some hwdecs will *not* have a device context, like nvdec which decodes directly to system memory by default!
+  if (ok && !_p->filterGraph && _p->context->hw_device_ctx) {
+    av_log_set_level(AV_LOG_TRACE);
+
+    Q_ASSERT(_p->context->hw_frames_ctx); // should be true if we decoded a frame
+
+    AVHWFramesContext* fc = (AVHWFramesContext*) _p->context->hw_frames_ctx->data;
+    qDebug() << "hw_frames_ctx:" << fc->width << fc->height << av_get_pix_fmt_name(fc->format)
+             << av_get_pix_fmt_name(fc->sw_format) << fc->initial_pool_size;
+
+    QString filters = qq("hwdownload,format=%1").arg(fc->sw_format);
+    if (_opt.maxH && _opt.maxW) {
+      // scaling high-res frames is very intensive on CPU and somewhat defeats the purpose of hwdec!
+      if (fc->format == AV_PIX_FMT_QSV) {
+        // qsv scaling is horrible at low sizes (at least on coffeelake), so first scale to something larger,
+        // this will blur the result slightly and require more CPU usage, but dcthash is not sensitive to blur
+        float factor = _p->context->height / _opt.maxH;
+        if (factor > 8)
+          filters = qq("scale_qsv=w=-1:h=ih/8:mode=hq,") + filters;
+        else
+          filters = qq("scale_qsv=w=%1:h=%2:mode=hq,").arg(_opt.maxW).arg(_opt.maxH) + filters;
+      } else if (fc->format == AV_PIX_FMT_D3D11) {
+        // prototype d3d11 scaler from dash; does not work with quicksync devices
+        filters = qq("scale_d3d11=width=%1:height=%2,").arg(_opt.maxW).arg(_opt.maxH) + filters;
+      } else if (fc->format == AV_PIX_FMT_VAAPI) {
+        // same qsv problem on Linux; if amd is ok in this regard should be an option
+        float factor = _p->context->height / _opt.maxH;
+        if (factor > 8)
+          filters = qq("scale_vaapi=w=-1:h=ih/8:mode=hq,") + filters;
+        else
+          filters = qq("scale_vaapi=w=%1:h=%2:mode=hq,").arg(_opt.maxW).arg(_opt.maxH) + filters;
+      } else {
+        qWarning() << "no hardware scaler for" << av_get_pix_fmt_name(fc->format)
+                   << "expect extremely poor performance";
+      }
+    }
+    qDebug() << "using hw avfilter:" << filters;
+    if (!initFilters(qPrintable(filters))) {
+      qCritical("filter setup failure"); // FIXME: cleanup
+      return false;
+    }
+    av_log_set_level(AV_LOG_VERBOSE);
+  }
+
+  // test sw filter graph
+  if (ok && !_p->filterGraph && getenv("CBIRD_SW_FILTER")) {
+    av_log_set_level(AV_LOG_TRACE);
+    if (!initFilters(getenv("CBIRD_SW_FILTER"))) return false;
+    av_log_set_level(AV_LOG_VERBOSE);
+  }
+
+  if (!_p->filterGraph) return ok;
+
+  // qDebug() << "filtering" << _p->filterGraph << _p->filterSource << _p->filterSink;
+
+  while (ok) { // FIXME: ok==false we stil have flush the graph...
+    _p->frame->pts = _p->frame->best_effort_timestamp;
+    _p->frame->time_base = _p->videoStream->time_base;
+
+    // AV_BUFFERSRC_FLAG_KEEPREF is also an option..
+    int err = av_buffersrc_add_frame_flags(_p->filterSource, _p->frame, AV_BUFFERSRC_FLAG_PUSH);
+    if (err < 0) {
+      AV_CRITICAL("feeding filtergraph");
+      return false;
+    }
+
+    err = av_buffersink_get_frame(_p->filterSink, _p->filterFrame);
+    if (err == AVERROR(EAGAIN)) {
+      AV_CRITICAL("buffersink_get_frame");
+      ok = decodeFrame();
+    } else if (err == AVERROR_EOF) {
+      AV_CRITICAL("buffersink_get_frame");
+      ok = false;
+    } else {
+      return true;
+    }
+  }
+  return ok;
 }
 
 bool VideoContext::nextFrame(QImage& outQImg) {
-  bool gotFrame = decodeFrame();
-  frameToQImg(outQImg);
-  return gotFrame;
+  bool gotFrame = decodeFrameFiltered();
+  if (!gotFrame) return false;
+
+  if (!frameToQImg(outQImg)) return false;
+
+  if (_p->filterGraph) // we already called decodeEnd() when consuming decoded frame
+    av_frame_unref(_p->filterFrame);
+
+  return true;
 }
 
 bool VideoContext::nextFrame(cv::Mat& outImg) {
-  bool gotFrame = decodeFrame();
+  bool gotFrame = decodeFrameFiltered();
+  if (!gotFrame) return false;
 
   int w, h, fmt;
 
-  if (convertFrame(w, h, fmt))
+  const AVFrame* srcFrame = _p->filterFrame ? _p->filterFrame : _p->frame;
+  int status = convertFrame(w, h, fmt, srcFrame);
+  if (status == ConvertOK)
     avImgToCvImg(_p->scaled.data, _p->scaled.linesize, w, h, outImg, AVPixelFormat(fmt));
+  else if (status == ConvertNotNeeded)
+    avFrameToCvImg(*srcFrame, outImg);
   else
-    avFrameToCvImg(*(_p->frame), outImg);
+    return false;
 
-  return gotFrame;
+  if (_p->filterGraph) av_frame_unref(_p->filterFrame);
+
+  return true;
 }
 
 float VideoContext::pixelAspectRatio() const {

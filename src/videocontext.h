@@ -30,7 +30,8 @@ extern "C" {
 struct AVCodecContext;
 struct AVCodec;
 struct AVStream;
-typedef int (*AvExec2Callback)(AVCodecContext*, void*, int, int);
+struct AVBufferRef;
+struct AVFrame;
 };
 
 class VideoContextPrivate;
@@ -78,9 +79,7 @@ class VideoContext {
 
     int threads = 1;      // max # of threads
     bool gpu = false;     // try gpu decoding
-    int deviceIndex = 0;  // gpu device index: 0,1,2
-    QString deviceType;   // decoder device type: cuvid,qsv
-    QString deviceFamily; // decoder device family: pascal,turing
+    QString accel;        // <libav-device-spec>|<family>|<cbird-options>
 
     DecodeOptions();
   };
@@ -120,10 +119,14 @@ class VideoContext {
   ~VideoContext();
 
   /**
-   * open video for decoding
+   * open video for decoding; if video is already open, close() will be called
    * @return 0 if no error, <0 if error
    */
-  int open(const QString& path, const DecodeOptions& opt=DecodeOptions());
+  int open(const QString& path, const DecodeOptions& opt = DecodeOptions());
+
+  /**
+   * release resources without destruction; retains metadata
+   */
   void close();
 
   /// seek by decoding every frame; painfully slow but reliable
@@ -144,7 +147,7 @@ class VideoContext {
 
   /**
    * get the next frame available
-   * @note overwrites the image pixels in-place if possible
+   * @note allocates image if needed; overwrites the image pixels in-place if possible
    */
   bool nextFrame(QImage& imgOut);
   bool nextFrame(cv::Mat& outImg);
@@ -163,10 +166,9 @@ class VideoContext {
   float fps() const { return metadata().frameRate; }
 
   bool isHardware() const { return _isHardware; }
-  int deviceIndex() const { return _deviceIndex; }
   int threadCount() const { return _numThreads; }
 
-  /// @note only public for benchmarking
+  /// @note only public for -test-video-decoder
   bool decodeFrame();
 
   /// @note only useful in iframes-only mode
@@ -176,8 +178,13 @@ class VideoContext {
 
  private:
   bool readPacket();
-  bool convertFrame(int& w, int& h, int& fmt);
-  void frameToQImg(QImage& img);
+  bool initFilters(const char* filters);
+  bool decodeFrameFiltered();
+
+  enum { ConvertOK = 0, ConvertNotNeeded = 1, ConvertError = 2 };
+  int convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame);
+
+  bool frameToQImg(QImage& img);
   int ptsToFrame(int64_t pts) const;
   int64_t frameToPts(int frame) const;
 
@@ -187,9 +194,11 @@ class VideoContext {
   static void avLoggerSetFileName(void* ptr, const QString& name);
   static void avLoggerUnsetFileName(void* ptr);
 
-  static bool openGpu(const AVCodec** codec,
+  static bool checkNvdec(const QString& family, int codecId, int pixelFormat, int width, int height);
+  static bool checkQuicksync(
+      const QString& family, int codecId, int pixelFormat, int width, int height);
+  static bool initAccel(const AVCodec** codec,
                       AVCodecContext** context,
-                      bool* outIsHardwareScaled,
                       const QString& fileName,
                       const DecodeOptions& opt,
                       const AVCodec* swCodec,
@@ -203,16 +212,10 @@ class VideoContext {
 
   int _errorCount = 0;                    // TODO: tally errors to reject indexing
   int64_t _firstPts = -1;                 // pts of first frame for accurate seek
-  int _deviceIndex = -1;                  // device index of the decoder
   bool _isHardware = false;               // using hardware codec
-  bool _isHardwareScaled = false;         // hardware codec also does the scaling
   bool _eof = false;                      // true when eof on input
   int _numThreads = 1;                    // max number of threads for decoding
 
   const int _MAX_DUMBSEEK_FRAMES = 10000; // do not seek if there are too many
   int _lastFrameNumber = -1;              // estimated last frame number based on pts&frame rate
-
-  static bool checkNvdec(const QString& family, int codecId, int pixelFormat, int width, int height);
-  static bool checkQuicksync(
-      const QString& family, int codecId, int pixelFormat, int width, int height);
 };
