@@ -120,11 +120,16 @@ unix:!macx {
     # quazip uses a funky versioned include directory...and now qt6 doesn't seem
     # to distribute pkg-config files at all (Ubuntu 22.04) but they're still in the source build 
     # .. so we need to find quazip ourself
-		# TODO: qt6 seems to have moved to cmake so throw all of this out..
+    # TODO: qt6 seems to have moved to cmake so throw all of this out..
     QUAZIP_MODULE=quazip1-qt6
 		QUAZIP_VERSION=$$system("pkg-config $$QUAZIP_MODULE --modversion") # 1.4
     QUAZIP_HEADERS="/usr/local/include/QuaZip-Qt6-$$QUAZIP_VERSION"
     QUAZIP_LIB = "/usr/local/lib/lib$${QUAZIP_MODULE}.so"
+    
+    !exists($$QUAZIP_HEADERS) {
+       QUAZIP_HEADERS="/usr/include/QuaZip-Qt6-$$QUAZIP_VERSION"
+       QUAZIP_LIB = "/usr/lib/x86_64-linux-gnu/lib$${QUAZIP_MODULE}.so"
+    }
 
     !exists($$QUAZIP_HEADERS) {
         message(expected QuaZip headers in $$QUAZIP_HEADERS)

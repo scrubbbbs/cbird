@@ -231,7 +231,7 @@ static void FFmpeg(void* ptr, int level, const char* fmt, va_list vl) {
   else if (level >= AV_LOG_FATAL)
     qCCritical(category) << msg;
   else if (level >= AV_LOG_PANIC)
-    qCFatal(category, "%s", msg);
+    qFatal("%s", msg);
 }
 
 void VideoContext::loadLibrary() {

@@ -34,6 +34,7 @@ License along with cbird; if not, see
 #include <QtConcurrent/QtConcurrentMap>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include <QtGui/QGuiApplication>
 #include <QtGui/QKeyEvent>
 
 #include <QtWidgets/QDialog>
