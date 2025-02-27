@@ -13,7 +13,7 @@ macx {
   CONFIG -= app_bundle
 }
 
-VERSION=0.7.3
+VERSION=0.7.4
 
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
 QMAKE_CXXFLAGS += -Wno-deprecated-declarations
@@ -76,7 +76,7 @@ win32 {
         LIBS *= -lopencv_$${CVLIB}$${OPENCV_VERSION}
     }
 
-    INCLUDEPATH += _libs-win32/build-mxe/include
+    INCLUDEPATH = _libs-win32/build-mxe/include $$INCLUDEPATH # ensure this precedes mxe
     LIBS += -L_libs-win32/build-mxe/lib
    
     INCLUDEPATH += _libs-win32/build-mxe/include/QuaZip-Qt6-1.4
@@ -142,18 +142,28 @@ unix:!macx {
 
 # cross-platform common libs
 contains(DEFINES, ENABLE_CIMG) LIBS *= -lpng -ljpeg
-LIBS *= -lavcodec -lavformat -lavutil -lswscale
+LIBS *= -lavcodec -lavformat -lavutil -lswscale -lavfilter
 LIBS *= -lexiv2
 
 # testing other search tree implementations
 # LIBS *= lib/vptree/lib/libvptree.a
 
+contains(DEFINES, FASTBUILD) {
+    warning("******************************")
+    warning("FAST BUILD")
+    warning("******************************")
+    QMAKE_CXXFLAGS_RELEASE = -O0
+} else {
+    QMAKE_CXXFLAGS_RELEASE = -O3
+}
+
+# compile/link as fast as possible
 contains(DEFINES, DEBUG) {
     warning("******************************")
     warning("DEBUG BUILD")
     warning("******************************")
     contains(DEFINES, DEBUG_OPTIMIZED) {
-      QMAKE_CXXFLAGS_RELEASE = -g -O3 -march=native
+      QMAKE_CXXFLAGS_RELEASE += -g -march=native
     }
     else {
       QMAKE_CXXFLAGS_RELEASE = -g -O0
@@ -162,12 +172,10 @@ contains(DEFINES, DEBUG) {
 else {
     # -westmere is latest that I can run in qemu, and
     #  it has popcnt (population count) which is nice for hamm64()
-    win32: QMAKE_CXXFLAGS_RELEASE = -O3 -march=westmere
-    unix: QMAKE_CXXFLAGS_RELEASE = -O3 -march=native
+    win32: QMAKE_CXXFLAGS_RELEASE += -march=westmere
+    unix: QMAKE_CXXFLAGS_RELEASE += -march=native
 }
 
 # -no-ms-bitfields fixes struct packing problem for 24-bit video index,
 # however it will break windows APIs if we're not careful
 win32: QMAKE_CXXFLAGS_RELEASE += -mno-ms-bitfields
-
-

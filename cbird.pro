@@ -110,7 +110,7 @@ unix: {
 }
 
 macx: {
-  TARGET = cbird-mac # don't step on Linux build
+  DESTDIR=$$BUILDDIR # don't step on Linux build
 
   DEFINES += CBIRD_PORTABLE_BINARY # look for runtime deps in applicationDirPath
 
