@@ -193,14 +193,12 @@ static void FFmpeg(void* ptr, int level, const char* fmt, va_list vl) {
   if (ptr) {
     const QLatin1StringView avClassName(av_default_item_name(ptr));
     msgContext += lc('|');
-    if (avClassName == "AVFormatContext")
-      msgContext += ((AVFormatContext*) ptr)->iformat->name;
-    else if (avClassName == "AVCodecContext") {
+    if (avClassName == "AVFormatContext") {
+      auto ctx = (AVFormatContext*) ptr;
+      msgContext += ctx->iformat ? ctx->iformat->name : "format";
+    } else if (avClassName == "AVCodecContext") {
       auto ctx = (AVCodecContext*) ptr;
-      if (ctx->codec_descriptor)
-        msgContext += ctx->codec_descriptor->name;
-      else
-        msgContext += "codec";
+      msgContext += ctx->codec_descriptor ? ctx->codec_descriptor->name : "codec";
     } else if (avClassName == "AVFilter") {
       // auto filter = (AVFilter*) ptr;
       // if (filter->name)
@@ -1079,7 +1077,6 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
   *outContext = hwContext; // the caller must free on error
 
   if (deviceTypeId) {
-    av_log_set_level(AV_LOG_TRACE);
     AVDictionary* dict = nullptr;
     for (const auto& option : std::as_const(deviceOptions).asKeyValueRange())
       av_dict_set(&dict, qPrintable(option.first), qPrintable(option.second), 0);
@@ -1095,9 +1092,11 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
     //static AVBufferRef* devCtx = nullptr;
     //if (!devCtx) err = av_hwdevice_ctx_create(&devCtx, deviceTypeId, qPrintable(deviceId), dict, 0);
     //hwContext->hw_device_ctx = av_buffer_ref(devCtx);
+    av_log_set_level(AV_LOG_TRACE);
     err = av_hwdevice_ctx_create(&hwContext->hw_device_ctx, deviceTypeId,
                                  device.isEmpty() ? NULL : qPrintable(device), dict, 0);
     av_dict_free(&dict);
+    av_log_set_level(AV_LOG_INFO);
 
     if (err != 0 || !hwContext->hw_device_ctx) {
       AV_CRITICAL("create device context failed");
@@ -1106,7 +1105,6 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
             "<URL>https://www.ffmpeg.org/ffmpeg.html#Advanced-Video-options");
       return false;
     }
-    av_log_set_level(AV_LOG_INFO);
     qDebug() << "<MAG>create hw device successful";
 
     //hwContext->get_format = get_format_qsv;
@@ -2039,23 +2037,20 @@ bool VideoContext::decodeFrameFiltered() {
     }
     qDebug() << "using hw avfilter:" << filters;
     av_log_set_level(AV_LOG_TRACE);
-
-    if (!initFilters(qPrintable(filters))) {
-      qCritical("filter setup failure"); // FIXME: cleanup
-      av_log_set_level(AV_LOG_VERBOSE);
+    ok = initFilters(qPrintable(filters));
+    av_log_set_level(AV_LOG_INFO);
+    if (!ok) {
+      qCritical("filter setup failure");
       return false;
     }
-    av_log_set_level(AV_LOG_VERBOSE);
   }
 
   // test sw filter graph
   if (ok && !_p->filterGraph && getenv("CBIRD_SW_FILTER")) {
     av_log_set_level(AV_LOG_TRACE);
-    if (!initFilters(getenv("CBIRD_SW_FILTER"))) {
-      av_log_set_level(AV_LOG_VERBOSE);
-      return false;
-    }
-    av_log_set_level(AV_LOG_VERBOSE);
+    ok = initFilters(getenv("CBIRD_SW_FILTER"));
+    av_log_set_level(AV_LOG_INFO);
+    if (!ok) return false;
   }
 
   if (!_p->filterGraph) return ok;
