@@ -79,6 +79,7 @@ class VideoContext {
 
     int threads = 1;      // max # of threads
     QString accel;        // <libav-device-spec>|<family>|<cbird-options>
+    bool nofallback = false; // do not fallback to sw decoding when accel requested
 
     DecodeOptions();
   };

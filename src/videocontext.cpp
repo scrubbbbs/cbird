@@ -1236,6 +1236,11 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       avLoggerUnsetFileName(hwContext);
       avcodec_free_context(&hwContext);
       _isHardware = false;
+      if (opt.nofallback) {
+        qDebug() << "hardware codec failed";
+        freeContext();
+        return -3;
+      }
       qDebug() << "hardware codec failed, falling back to software";
     }
   }
