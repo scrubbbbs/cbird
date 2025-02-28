@@ -1223,7 +1223,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     return -3;
   }
 
-  if (opt.gpu) {
+  if (!opt.accel.isEmpty()) {
     const AVCodec* hwCodec = nullptr;
     AVCodecContext* hwContext = nullptr;
     if (initAccel(&hwCodec, &hwContext, fileName, opt, swCodec, _p->context, _p->videoStream)) {

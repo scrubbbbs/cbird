@@ -78,7 +78,6 @@ class VideoContext {
     int lowres = 0;       // lowres decoding factor: 1=1/2 resolution, 2=1/4 etc
 
     int threads = 1;      // max # of threads
-    bool gpu = false;     // try gpu decoding
     QString accel;        // <libav-device-spec>|<family>|<cbird-options>
 
     DecodeOptions();

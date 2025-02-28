@@ -968,7 +968,7 @@ VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu, int cp
 
   VideoContext::DecodeOptions opt;
   opt.threads = cpuThreads;
-  opt.gpu = tryGpu;
+  //opt.gpu = tryGpu;
   opt.maxH = 128;  // need just enough to detect/crop borders
   opt.maxW = 128;
   opt.fast = true; // enable speeds ok for indexing

@@ -642,10 +642,7 @@ void Commands::testVideoDecoder() {
   opt.maxH = 128;  // 128 is used for video hashing
   opt.maxW = 128;
 
-  if (!_indexParams.gpuList.isEmpty()) {
-    opt.accel = _indexParams.gpuList[0];
-    opt.gpu = true;
-  }
+  if (!_indexParams.gpuList.isEmpty()) opt.accel = _indexParams.gpuList[0];
 
   QStringList files;
   for (auto& m : std::as_const(_selection))
@@ -966,7 +963,7 @@ void Commands::testVideoIndex(Engine& engine, const QString& path) {
   opt.maxW = 128;
   opt.maxH = 128;
   opt.gray = true;
-  opt.gpu = _indexParams.useHardwareDec;
+  opt.accel = _indexParams.gpuList.count() ? _indexParams.gpuList[0] : "";
   opt.threads = _indexParams.decoderThreads;
 
   if (0 != vc.open(path, opt)) {
