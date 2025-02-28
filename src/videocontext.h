@@ -78,7 +78,7 @@ class VideoContext {
     int lowres = 0;       // lowres decoding factor: 1=1/2 resolution, 2=1/4 etc
 
     int threads = 1;      // max # of threads
-    QString accel;        // <libav-device-spec>|<family>|<cbird-options>
+    QString accel;        // <libav-device-spec>,<cbird-options>
     bool nofallback = false; // do not fallback to sw decoding when accel requested
 
     DecodeOptions();
@@ -197,13 +197,15 @@ class VideoContext {
   static bool checkNvdec(const QString& family, int codecId, int pixelFormat, int width, int height);
   static bool checkQuicksync(
       const QString& family, int codecId, int pixelFormat, int width, int height);
+  static bool checkAmd(const QString& family, int codecId, int pixelFormat, int width, int height);
+
   static bool initAccel(const AVCodec** codec,
-                      AVCodecContext** context,
-                      const QString& fileName,
-                      const DecodeOptions& opt,
-                      const AVCodec* swCodec,
-                      const AVCodecContext* swContext,
-                      const AVStream* videoStream);
+                        AVCodecContext** context,
+                        const QString& fileName,
+                        const DecodeOptions& opt,
+                        const AVCodec* swCodec,
+                        const AVCodecContext* swContext,
+                        const AVStream* videoStream);
 
   VideoContextPrivate* _p = nullptr;
   QString _path;

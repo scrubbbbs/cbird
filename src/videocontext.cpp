@@ -524,6 +524,137 @@ bool VideoContext::initFilters(const char* filters) {
   return true;
 }
 
+bool VideoContext::checkAmd(
+    const QString& family, int codecId, int pixelFormat, int width, int height) {
+  static constexpr struct {
+    const char* type;
+    int hwVersion;
+  } supportedGpus[] = {
+      {"uvd2", 20},  {"uvd5", 50},  {"uvd6", 60},  {"uvd6.3", 63},
+      {"vcn1", 100}, {"vnc2", 120}, {"vcn3", 130},
+  };
+
+  static constexpr struct {
+    int id;
+    const char* name;
+  } supportedCodecs[] = {
+      {AV_CODEC_ID_AV1, "av1"},
+      {AV_CODEC_ID_H264, "h264"},
+      {AV_CODEC_ID_HEVC, "hevc"},
+      {AV_CODEC_ID_VP9, "vp9"},
+  };
+
+  // https://wiki.archlinux.org/title/Hardware_video_acceleration#NVIDIA_driver_only
+  // https://en.wikipedia.org/wiki/Unified_Video_Decoder
+  static constexpr struct {
+    const char* name;
+    int pixFmt;
+    int hwVersion;
+  } supportedPixelFormats[] = {
+      // clang-format off
+      {"h264", AV_PIX_FMT_YUV420P, 20},
+      
+      {"hevc", AV_PIX_FMT_YUV420P, 60},
+      {"hevc", AV_PIX_FMT_YUV420P10, 63},
+      
+      {"vp9", AV_PIX_FMT_YUV420P, 100},
+      {"vp9", AV_PIX_FMT_YUV420P10, 100},
+      {"vp9", AV_PIX_FMT_YUV420P12, 100},
+
+      {"av1",  AV_PIX_FMT_YUV420P, 130},
+      {"av1",  AV_PIX_FMT_YUV420P10, 130},
+      // clang-format on
+  };
+
+  static constexpr struct {
+    const char* codec;
+    int maxW;
+    int maxH;
+    int hwVersion;
+  } supportedResolutions[] = {
+      // clang-format off
+      {"h264", 1920, 1080, 20},
+      {"h264", 4096, 2304, 50},
+
+      {"hevc", 4096, 2304, 60},
+
+      {"h264", 7680, 4320, 120},
+      {"hevc", 7680, 4320, 120},
+      {"vp9", 7680, 4320, 120},
+
+      {"av1", 7680, 4320, 130},
+      // clang-format on
+  };
+
+  QStringList gpuTypes;
+  int hwVersion = -1;
+  for (auto& gpu : supportedGpus) {
+    gpuTypes += gpu.type;
+    if (gpu.type == family) hwVersion = gpu.hwVersion;
+  }
+
+  if (hwVersion < 0 && family == "all") hwVersion = INT_MAX;
+
+  if (hwVersion < 0) {
+    qWarning() << "<NC>\namd: cannot check format support, unknown device family:" << family;
+    qInfo() << "<NC>-options are:<MAG>" << gpuTypes;
+    qInfo() << "<NC>-or use <MAG>\"all\"<RESET> to blindly try all known formats";
+    qInfo() << "<NC>-reference: "
+               "<URL><CYN>https://en.wikipedia.org/wiki/Unified_Video_Decoder";
+    qInfo() << "<NC>";
+    return false;
+  }
+
+  QString codecName;
+  for (auto& codec : supportedCodecs)
+    if (codec.id == codecId) {
+      codecName = codec.name;
+      break;
+    }
+
+  if (codecName.isEmpty()) {
+    qDebug() << "unsupported codec:" << codecId;
+    return false;
+  }
+
+  bool supported = false;
+  for (auto& codec : supportedPixelFormats) {
+    if (codec.hwVersion > hwVersion) break;
+    if (codec.name == codecName && codec.pixFmt == pixelFormat) {
+      supported = true;
+      break;
+    }
+  }
+
+  if (!supported) {
+    qDebug() << "unsupported pixel format:" << codecName
+             << av_pix_fmt_desc_get(AVPixelFormat(pixelFormat))->name;
+    return false;
+  }
+
+  const QSize videoRes(width, height);
+  if (videoRes.width() < 48 || videoRes.height() < 48) {
+    qDebug() << "resolution must be at least 48x48:" << videoRes;
+    return false;
+  }
+
+  supported = false;
+  for (auto& res : supportedResolutions) {
+    if (res.hwVersion > hwVersion) break;
+    if (res.codec == codecName && res.maxH >= videoRes.height() && res.maxW >= videoRes.width()) {
+      supported = true;
+      break;
+    }
+  }
+
+  if (!supported) {
+    qDebug() << "unsupported resolution:" << codecName << videoRes;
+    return false;
+  }
+
+  return true;
+}
+
 bool VideoContext::checkQuicksync(
     const QString& family, int codecId, int pixelFormat, int width, int height) {
   static constexpr struct {
@@ -758,7 +889,7 @@ bool VideoContext::checkNvdec(
   if (nvdecVersion < 0 && family == "all") nvdecVersion = INT_MAX;
 
   if (nvdecVersion < 0) {
-    qWarning() << "<NC>\ncannot check format support, unknown nvidia family:" << family;
+    qWarning() << "<NC>\nnvdec: cannot check format support, unknown nvidia family:" << family;
     qInfo() << "<NC>-options are:<MAG>" << gpuTypes;
     qInfo() << "<NC>-or use <MAG>\"all\"<RESET> to blindly try all known formats";
     qInfo() << "<NC>-reference: "
@@ -818,25 +949,6 @@ bool VideoContext::checkNvdec(
   return true;
 }
 
-/* not using this for now, see initAccel() comment
-static AVPixelFormat get_format_qsv(AVCodecContext* avctx, const enum AVPixelFormat* pix_fmts) {
-  (void) avctx;
-  qDebug() << "ccalled";
-  while (*pix_fmts != AV_PIX_FMT_NONE) {
-    qDebug() << av_get_pix_fmt_name(*pix_fmts);
-    if (*pix_fmts == AV_PIX_FMT_QSV) break;
-    pix_fmts++;
-  }
-
-  if (*pix_fmts != AV_PIX_FMT_QSV) {
-    qCritical() << "qsv pixel format was not offered";
-    return AV_PIX_FMT_NONE;
-  }
-
-  return AV_PIX_FMT_QSV;
-}
-*/
-
 bool VideoContext::initAccel(const AVCodec** outCodec,
                              AVCodecContext** outContext,
                              const QString& fileName,
@@ -844,8 +956,9 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
                              const AVCodec* swCodec,
                              const AVCodecContext* swContext,
                              const AVStream* videoStream) {
-  QString deviceType, deviceId, deviceFamily;
-  // <libav-device-string>,family=<family>,reject=<rej-list>,accept=<accept-list>
+  QString deviceType, deviceId, deviceVendor, deviceFamily;
+
+  // <libav-device-string>,family=<family>,vendor=<vendor>,reject=<rej-list>,accept=<accept-list>
   QHash<QString, QString> deviceOptions;
   {
     const QStringList parts = opt.accel.split(',');
@@ -857,49 +970,84 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
         deviceFamily = kv[1];
         continue; // don't pass our own options to libavcodec
       }
+      if (kv[0] == "vendor") {
+        deviceVendor = kv[1];
+        continue;
+      }
       deviceOptions.insert(kv[0], kv[1]);
     }
   }
   MessageContext ctx(fileName + "|" + deviceId + '|' + deviceFamily);
 
   AVHWDeviceType deviceTypeId = AV_HWDEVICE_TYPE_NONE;
-  bool supported = false;
   QString codecSuffix = "";
 
+  const char* ffConfigure = nullptr;
   if (deviceType == "nvdec") {
     // we do not setup hwdevice for nvdec as it can decode&scale directly into system memory
     // the device index is set via the "gpu" option to the codec
-    if (deviceFamily.isEmpty()) {
-      qWarning("device family is required for \"nvdec\" e.g. -i.hwdec nvdec,family=pascal");
-      return false;
-    }
-    supported = checkNvdec(deviceFamily, swContext->codec_id, swContext->pix_fmt,
-                           videoStream->codecpar->width, videoStream->codecpar->height);
+    deviceVendor = "nvidia";
     codecSuffix = "_cuvid";
+    ffConfigure = "--enable-cuvid";
   } else if (deviceType == "qsv") {
-    if (deviceFamily.isEmpty()) {
-      qWarning("device family is required for \"qsv\" e.g. -i.hwdec qsv,family=tigerlake");
-      return false;
-    }
     deviceTypeId = AV_HWDEVICE_TYPE_QSV;
+    deviceVendor = "intel";
     codecSuffix = "_qsv";
-    supported = checkQuicksync(deviceFamily, swContext->codec_id, swContext->pix_fmt,
-                               videoStream->codecpar->width, videoStream->codecpar->height);
-  } else if (deviceType == "d3d11va") { // TODO: maybe remove anything with no hw scaler
+    ffConfigure = "--enable-libvpl";
+  }
+#ifdef Q_OS_UNIX
+  else if (deviceType == "vaapi") {
+    deviceTypeId = AV_HWDEVICE_TYPE_VAAPI;
+    ffConfigure = "--enable-vaapi";
+  }
+#endif
+#ifdef Q_OS_WIN
+  else if (deviceType == "d3d11va") { // TODO: maybe remove anything with no hw scaler
     deviceTypeId = AV_HWDEVICE_TYPE_D3D11VA;
-    supported = true;
   } else if (deviceType == "d3d12va") {
     deviceTypeId = AV_HWDEVICE_TYPE_D3D12VA;
-    supported = true;
   } else if (deviceType == "dxva2") {
     deviceTypeId = AV_HWDEVICE_TYPE_DXVA2;
-    supported = true;
-  } else if (deviceType == "vaapi") {
-    deviceTypeId = AV_HWDEVICE_TYPE_VAAPI;
-    supported = true;
+  }
+#endif
+  else {
+
+    QStringList hwAccels;
+#ifdef Q_OS_LINUX
+    hwAccels = {"nvdec,qsv,vaapi"};
+#endif
+#ifdef Q_OS_WIN
+    hwAccels = {"nvdec,qsv,d3d11va,d3d12va,dxva2"};
+#endif
+
+    qWarning() << "unsupported device type" << deviceType << "choices are: " << hwAccels;
+    return false;
+  }
+
+  if (deviceFamily.isEmpty()) {
+    qWarning("device type and family is required e.g. -i.hwdec nvdec,family=pascal");
+    return false;
+  }
+
+  bool supported = false;
+  if (deviceVendor == "intel")
+    supported = checkQuicksync(deviceFamily, swContext->codec_id, swContext->pix_fmt,
+                               videoStream->codecpar->width, videoStream->codecpar->height);
+  else if (deviceVendor == "nvidia")
+    supported = checkNvdec(deviceFamily, swContext->codec_id, swContext->pix_fmt,
+                           videoStream->codecpar->width, videoStream->codecpar->height);
+  else if (deviceVendor == "amd")
+    supported = checkAmd(deviceFamily, swContext->codec_id, swContext->pix_fmt,
+                         videoStream->codecpar->width, videoStream->codecpar->height);
+  else if (deviceVendor != "any") {
+    qWarning() << "<NC>\ncannot check format support, device vendor is required, e.g. -i.hwdec "
+                  "vaapi,vendor=intel,family=kabylake";
+    qInfo() << "<NC>-options are: <MAG>amd, intel, nvidia";
+    qInfo() << "<NC>-or use <MAG>\"any\"<RESET> to skip format checks";
+    qInfo() << "<NC>";
   } else {
-    // FIXME: choices array
-    qWarning() << "unsupported device type" << deviceType << "choices are: nvdec,qsv";
+    supported = true;
+    qDebug() << "format checks disabled";
   }
 
   if (!supported) return false;
@@ -915,9 +1063,8 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
   hwCodec = avcodec_find_decoder_by_name(qUtf8Printable(codecName));
 
   if (!hwCodec) {
-    qWarning()
-        << "codec" << codecName
-        << "is not available in libavcodec, make sure you compiled ffmpeg with --enable-libvpl";
+    qWarning() << "codec" << codecName << "is not available in libavcodec";
+    if (ffConfigure) qWarning() << "did you compiled ffmpeg with" << ffConfigure << "?";
     return false;
   }
 
@@ -943,8 +1090,8 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
     if (pos > 0) device = deviceId.mid(pos + 1);
 
     qDebug() << "creating device context" << deviceId << device;
-    // FIXME: quicksync leaks badly unless we only do this once; however it also
-    // crashes after around 45-46 iterations either way
+    // FIXME: quicksync on Windows11 leaks badly unless we only do this once; however it also
+    // crashes after around 45-46 iterations if we do
     //static AVBufferRef* devCtx = nullptr;
     //if (!devCtx) err = av_hwdevice_ctx_create(&devCtx, deviceTypeId, qPrintable(deviceId), dict, 0);
     //hwContext->hw_device_ctx = av_buffer_ref(devCtx);
@@ -1333,7 +1480,25 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     _p->videoStream->nb_frames = long(_p->videoStream->duration * av_q2d(_p->videoStream->time_base)
                                       / av_q2d(_p->videoStream->r_frame_rate));
 
-  return 0;
+  // if we are using hwaccel, we should probably decode a frame. It seems most hwaccel will
+  // happily open the codec to then find out it is unsupported format or there was a problem
+  // opening the hwaccel in the first place...
+  if (!_isHardware) return 0;
+
+  QImage frame;
+  if (nextFrame(frame)) {
+    int err;
+    if ((err = av_seek_frame(_p->format, _p->videoStream->index, 0, AVSEEK_FLAG_BACKWARD) < 0)) {
+      AV_CRITICAL("seek to frame 0");
+      return -8;
+    }
+    avcodec_flush_buffers(_p->context);
+    return 0;
+  } else {
+    qDebug() << "failed to decode the first frame";
+    close();
+    return -7;
+  }
 }
 
 void VideoContext::close() {
@@ -1839,9 +2004,8 @@ bool VideoContext::decodeFrameFiltered() {
   // this has to be done here since we don't have everything we need (like hw_frames_ctx)
   // note: some hwdecs will *not* have a device context, like nvdec which decodes directly to system memory by default!
   if (ok && !_p->filterGraph && _p->context->hw_device_ctx) {
-    av_log_set_level(AV_LOG_TRACE);
-
-    Q_ASSERT(_p->context->hw_frames_ctx); // should be true if we decoded a frame
+    // should be non-null if we decoded a frame, but sometimes not (vaapi)
+    if (!_p->context->hw_frames_ctx) return false;
 
     AVHWFramesContext* fc = (AVHWFramesContext*) _p->context->hw_frames_ctx->data;
     qDebug() << "hw_frames_ctx:" << fc->width << fc->height << av_get_pix_fmt_name(fc->format)
@@ -1874,8 +2038,11 @@ bool VideoContext::decodeFrameFiltered() {
       }
     }
     qDebug() << "using hw avfilter:" << filters;
+    av_log_set_level(AV_LOG_TRACE);
+
     if (!initFilters(qPrintable(filters))) {
       qCritical("filter setup failure"); // FIXME: cleanup
+      av_log_set_level(AV_LOG_VERBOSE);
       return false;
     }
     av_log_set_level(AV_LOG_VERBOSE);
@@ -1884,7 +2051,10 @@ bool VideoContext::decodeFrameFiltered() {
   // test sw filter graph
   if (ok && !_p->filterGraph && getenv("CBIRD_SW_FILTER")) {
     av_log_set_level(AV_LOG_TRACE);
-    if (!initFilters(getenv("CBIRD_SW_FILTER"))) return false;
+    if (!initFilters(getenv("CBIRD_SW_FILTER"))) {
+      av_log_set_level(AV_LOG_VERBOSE);
+      return false;
+    }
     av_log_set_level(AV_LOG_VERBOSE);
   }
 
