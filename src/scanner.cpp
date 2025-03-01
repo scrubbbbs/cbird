@@ -1036,7 +1036,8 @@ VideoContext* Scanner::initVideoProcess(const QString& path, int accelIndex, int
 }
 
 IndexResult Scanner::processVideo(VideoContext* video) const {
-  const QString context = video->path().mid(_topDirPath.length() + 1);
+  const QString context = video->path().mid(_topDirPath.length() + 1)
+                          + (video->isHardware() ? '|' + video->deviceId() : "");
   const CVErrorLogger cvLogger("processVideo:" + context);
   const MessageContext mc(context);
 

@@ -168,6 +168,7 @@ class VideoContext {
   const DecodeOptions& options() const { return _options; };
   bool isHardware() const { return !_options.accel.isEmpty(); }
   int threadCount() const { return _options.threads; }
+  QString deviceId() const { return _options.accel.split(',').first(); }
 
   /// @note only public for -test-video-decoder
   bool decodeFrame();
