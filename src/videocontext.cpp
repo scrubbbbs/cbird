@@ -1161,11 +1161,10 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   _errorCount = 0;
 
   _firstPts = AV_NOPTS_VALUE;
-  _isHardware = false;
+  _options = opt;
   _lastFrameNumber = -1;
 
   _eof = false;
-  _numThreads = 1;
   _p->packet.size = 0;
   _p->packet.data = nullptr;
 
@@ -1376,11 +1375,13 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       avcodec_free_context(&_p->context);
       _p->codec = hwCodec;
       _p->context = hwContext;
-      _isHardware = true;
+      _options.threads = 1;
+      _options.iframes = false;
+      _options.lowres = false;
     } else {
       avLoggerUnsetFileName(hwContext);
       avcodec_free_context(&hwContext);
-      _isHardware = false;
+      _options.accel.clear();
       if (opt.nofallback) {
         qDebug() << "hardware codec failed";
         freeContext();
@@ -1390,7 +1391,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     }
   }
 
-  if (!_isHardware) {
+  if (opt.accel.isEmpty()) {
     AVDictionary* codecOptions = nullptr;
     _p->codec = swCodec;
 
@@ -1427,14 +1428,16 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       // this is quite good for some old codecs; nothing modern though
       // TODO: set lowres value so it gives >= maxw/maxh
       int lowres = opt.lowres;
-      if (_p->codec->max_lowres <= 0)
+      if (_p->codec->max_lowres <= 0) {
         qDebug("lowres decoding requested but %s doesn't support it",
                qPrintable(_metadata.videoCodec));
-      else {
+        _options.lowres = 0;
+      } else {
         if (lowres > _p->codec->max_lowres) {
           lowres = _p->codec->max_lowres;
           qWarning("lowres limited to %d", lowres);
         }
+        _options.lowres = lowres;
         av_dict_set(&codecOptions, "lowres", qPrintable(QString::number(lowres)), 0);
       }
     }
@@ -1443,16 +1446,17 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     //    _p->context->flags|= CODEC_FLAG_TRUNCATED; // we do not send complete
     //    frames
 
+    _options.threads = 1;
     if (_p->codec->capabilities
         & (AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS | AV_CODEC_CAP_OTHER_THREADS)) {
-      _numThreads = opt.threads;
+      _options.threads = opt.threads;
       _metadata.supportsThreads = true;
     }
 
     // note: no need to set thread_type, let ffmpeg choose the best options
-    if (_numThreads > 0) {
-      qDebug() << "set thread count" << _numThreads;
-      _p->context->thread_count = _numThreads;
+    if (_options.threads > 0) {
+      qDebug() << "set thread count" << _options.threads;
+      _p->context->thread_count = _options.threads;
     }
 
     if ((err = avcodec_open2(_p->context, _p->codec, &codecOptions)) < 0) {
@@ -1481,7 +1485,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   // if we are using hwaccel, we should probably decode a frame. It seems most hwaccel will
   // happily open the codec to then find out it is unsupported format or there was a problem
   // opening the hwaccel in the first place...
-  if (!_isHardware) return 0;
+  if (_options.accel.isEmpty()) return 0;
 
   QImage frame;
   if (nextFrame(frame)) {

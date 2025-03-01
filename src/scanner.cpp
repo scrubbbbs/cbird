@@ -118,8 +118,6 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   if (!_includePatterns.empty() && !_excludePatterns.empty())
     qDebug() << "note: -exclude applied after -include";
 
-  _gpuPool.setMaxThreadCount(_params.gpuThreads);
-
   _topDirPath = path;
   _existingFiles = 0;
   _ignoredFiles = 0;
@@ -219,6 +217,25 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   if (_params.dryRun) {
     qInfo() << "dry run, flushing queues";
     flush(false);
+  }
+
+  if (_params.accelList.count()) {
+    int accelThreads = 0;
+    _accel.clear();
+    for (int i = 0; i < _params.accelList.count(); ++i) {
+      int maxThreads = 1;
+      const QStringList options = _params.accelList[i].split(',');
+      for (auto& s : options)
+        if (s.startsWith("jobs=")) {
+          const QStringList option = s.split('=');
+          maxThreads = option[1].toInt();
+        }
+
+      qDebug() << "adding accel" << i << options[0] << "jobs:" << maxThreads;
+      _accel.push_back(Accel{i, 0, maxThreads});
+      accelThreads += maxThreads;
+    }
+    _accelPool.setMaxThreadCount(accelThreads);
   }
 
   _queuedFiles = _imageQueue.count() + _videoQueue.count();
@@ -536,7 +553,7 @@ void Scanner::finish() {
 
       const QString vProgress = vList.count() ? " videos{" + vList.join(',') + '}' : "";
 
-      int gpuJobs = _gpuPool.activeThreadCount();
+      int gpuJobs = _accelPool.activeThreadCount();
       int cpuJobs = QThreadPool::globalInstance()->activeThreadCount();
       int threads = totalThreadCount();
 
@@ -616,8 +633,8 @@ void Scanner::processOne() {
       path = _videoQueue.first();
       const MessageContext mc(path.mid(_topDirPath.length() + 1));
 
-      const bool tryGpu = _params.useHardwareDec &&
-                          _gpuPool.activeThreadCount() < _gpuPool.maxThreadCount();
+      bool tryAccel = _accel.count()
+                      && _accelPool.activeThreadCount() < _accelPool.maxThreadCount();
 
       const int activeThreads = totalThreadCount();
       const int availThreads = _params.indexThreads - activeThreads;
@@ -635,12 +652,33 @@ void Scanner::processOne() {
 
       // qWarning() << "threads" << activeThreads << availThreads << cpuThreads;
 
-      if (tryGpu || cpuThreads > 0) {
-        VideoContext* v = initVideoProcess(path, tryGpu, cpuThreads);
+      if (tryAccel || cpuThreads > 0) {
+        VideoContext* v = nullptr;
+
+        // try accel with the most slots open first
+        if (tryAccel) {
+          Q_ASSERT(_accel.count() == _params.accelList.count());
+          auto accels = _accel;
+          std::sort(accels.begin(), accels.end(), [](const auto& a, const auto& b) {
+            return (b.maxThreadCount - b.threadCount) < (a.maxThreadCount - a.threadCount);
+          });
+          for (const auto& a : std::as_const(accels)) {
+            if (a.maxThreadCount > a.threadCount) {
+              v = initVideoProcess(path, a.index, cpuThreads);
+              if (v) {
+                _accel[a.index].threadCount++;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!v && cpuThreads > 0) v = initVideoProcess(path, -1, cpuThreads);
+
         if (v) {
           QThreadPool* pool = nullptr;
           if (v->isHardware()) {
-            pool = &_gpuPool;
+            pool = &_accelPool;
           } else if (cpuThreads > 0) {
             pool = QThreadPool::globalInstance();
 
@@ -651,7 +689,7 @@ void Scanner::processOne() {
             childThreads += v->threadCount() - 1;
           }
 
-          if (!pool && tryGpu) {
+          if (!pool && tryAccel) {
             // stop gpu from retrying the same file
             // FIXME: disable gpu after too many fails
             // FIXME: search queue for possibly compatible files
@@ -728,6 +766,13 @@ void Scanner::processFinished() {
 
     VideoContext* v = result.context;
     if (v) {
+      if (v->isHardware()) {
+        int accelIndex = _params.accelList.indexOf(v->options().accel);
+        Q_ASSERT(accelIndex >= 0 && accelIndex < _accel.count());
+        _accel[accelIndex].threadCount--;
+        Q_ASSERT(_accel[accelIndex].threadCount >= 0);
+      }
+
       delete v;
       result.context = nullptr;
     }
@@ -963,18 +1008,24 @@ IndexResult Scanner::processImageFile(const QString& path, const QByteArray& dat
   return result;
 }
 
-VideoContext* Scanner::initVideoProcess(const QString& path, bool tryGpu, int cpuThreads) const {
+VideoContext* Scanner::initVideoProcess(const QString& path, int accelIndex, int cpuThreads) const {
   VideoContext* video = new VideoContext;
 
   VideoContext::DecodeOptions opt;
   opt.threads = cpuThreads;
-  //opt.gpu = tryGpu;
   opt.maxH = 128;  // need just enough to detect/crop borders
   opt.maxW = 128;
   opt.fast = true; // enable speeds ok for indexing
   opt.gray = true; // only look at the "Y" channel, dct algo is grayscale
+
+  if (accelIndex >= 0) {
+    Q_ASSERT(accelIndex < _params.accelList.count());
+    opt.accel = _params.accelList.at(accelIndex);
+    opt.nofallback = true;
+  }
+
   if (video->open(path, opt) < 0) {
-    setError(path, ErrorLoad);
+    if (opt.accel.isEmpty()) setError(path, ErrorLoad);
     delete video;
     return nullptr;
   }
@@ -1086,7 +1137,8 @@ bool Scanner::includePath(const QString& path) const {
 }
 
 IndexResult Scanner::processVideoFile(const QString& path) const {
-  VideoContext* video = initVideoProcess(path, _params.useHardwareDec, _params.decoderThreads);
+  // FIXME: only used for -test-add-video
+  VideoContext* video = initVideoProcess(path, -1, _params.decoderThreads);
 
   if (!video) {
     IndexResult result;
@@ -1176,20 +1228,14 @@ IndexParams::IndexParams() {
   add({"vht", CatImageProc, "Dct threshold for discarding nearby frame hashes (video)", Value::Int,
        counter++, SET_INT(videoThreshold), GET(videoThreshold), NO_NAMES, GET_CONST(nonzero)});
 
-  add({"gpu", CatThreads, "Enable gpu video decoding (Nvidia)", Value::Bool, counter++,
-       SET_BOOL(useHardwareDec), GET(useHardwareDec), NO_NAMES, NO_RANGE});
-
   add({"hwdec", CatThreads, "Add hardware decoder <device-id>,family=<family>[,...]", Value::List,
-       counter++, ADD_STRING(gpuList), GET(gpuList), NO_NAMES, NO_RANGE});
+       counter++, ADD_STRING(accelList), GET(accelList), NO_NAMES, NO_RANGE});
 
-  add({"decthr", CatThreads, "Max threads for video decoding (0==auto)", Value::Int, counter++,
-       SET_INT(decoderThreads), GET(decoderThreads), NO_NAMES, GET_CONST(positive)});
+  add({"decthr", CatThreads, "Max threads for a cpu video decoding job (0==auto)", Value::Int,
+       counter++, SET_INT(decoderThreads), GET(decoderThreads), NO_NAMES, GET_CONST(positive)});
 
   add({"idxthr", CatThreads, "Max threads for all jobs (0==auto)", Value::Int, counter++,
        SET_INT(indexThreads), GET(indexThreads), NO_NAMES, GET_CONST(positive)});
-
-  add({"gputhr", CatThreads, "Max decoders per gpu", Value::Int, counter++, SET_INT(gpuThreads),
-       GET(gpuThreads), NO_NAMES, GET_CONST(nonzero)});
 
   add({"bsize", CatJobs, "Size of database write batches", Value::Int, counter++,
        SET_INT(writeBatchSize), GET(writeBatchSize), NO_NAMES, GET_CONST(nonzero)});

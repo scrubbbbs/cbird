@@ -165,8 +165,9 @@ class VideoContext {
   int height() const { return metadata().frameSize.height(); }
   float fps() const { return metadata().frameRate; }
 
-  bool isHardware() const { return _isHardware; }
-  int threadCount() const { return _numThreads; }
+  const DecodeOptions& options() const { return _options; };
+  bool isHardware() const { return !_options.accel.isEmpty(); }
+  int threadCount() const { return _options.threads; }
 
   /// @note only public for -test-video-decoder
   bool decodeFrame();
@@ -214,10 +215,9 @@ class VideoContext {
 
   int _errorCount = 0;                    // TODO: tally errors to reject indexing
   int64_t _firstPts = -1;                 // pts of first frame for accurate seek
-  bool _isHardware = false;               // using hardware codec
   bool _eof = false;                      // true when eof on input
-  int _numThreads = 1;                    // max number of threads for decoding
 
   const int _MAX_DUMBSEEK_FRAMES = 10000; // do not seek if there are too many
   int _lastFrameNumber = -1;              // estimated last frame number based on pts&frame rate
+  DecodeOptions _options;                 // on open successful, contains options actually used
 };

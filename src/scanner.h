@@ -74,12 +74,10 @@ class IndexParams : public Params {
   bool retainImage = false;    // retain the decompressed image
 
   /// threads
-  bool useHardwareDec = false; // try hardware decoder for supported formats
-  QStringList gpuList;
+  QStringList accelList;       // list of accelerators to use
 
   int decoderThreads = 0;      // threads per item decoder (hardwaredec always == 1)
   int indexThreads = 0;        // total max threads (cpu) <=0 means auto detect
-  int gpuThreads = 1;          // number of parallel hardware decoders
 
   /// job control
   int writeBatchSize = 1024;   // size of item batch when writing to database
@@ -242,7 +240,7 @@ class Scanner : public QObject {
   void processFinished();
 
   // prepare video to process in the main thread
-  VideoContext* initVideoProcess(const QString& path, bool tryGpu, int cpuThreads) const;
+  VideoContext* initVideoProcess(const QString& path, int accelIndex, int cpuThreads) const;
 
   // process video (in a thread)
   IndexResult processVideo(VideoContext* video) const;
@@ -283,7 +281,13 @@ class Scanner : public QObject {
 
   QSet<QString> _queuedWork;                 // all jobs; for fast lookup
 
-  QThreadPool _gpuPool;                      // separate pool since cpu doesn't do much
+  struct Accel {
+    int index = -1;
+    int threadCount = 0;
+    int maxThreadCount = 1;
+  };
+  QVector<Accel> _accel;                     // list of available accelerators
+  QThreadPool _accelPool;                    // separate pool since cpu doesn't do much
 
   QString _topDirPath;                       // relative path for logging
   int _existingFiles = 0, _ignoredFiles = 0, _modifiedFiles = 0, _queuedFiles = 0, _processedFiles = 0;
