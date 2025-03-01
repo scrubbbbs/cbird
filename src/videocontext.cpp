@@ -611,7 +611,8 @@ bool VideoContext::checkAmd(
     }
 
   if (codecName.isEmpty()) {
-    qDebug() << "unsupported codec:" << codecId;
+    auto* dec = avcodec_find_decoder((AVCodecID) codecId);
+    qDebug() << "unsupported codec:" << (dec ? QString(dec->name) : QString::number(codecId));
     return false;
   }
 
@@ -762,7 +763,8 @@ bool VideoContext::checkQuicksync(
     }
 
   if (codecName.isEmpty()) {
-    qDebug() << "unsupported codec:" << codecId;
+    auto* dec = avcodec_find_decoder((AVCodecID) codecId);
+    qDebug() << "unsupported codec:" << (dec ? QString(dec->name) : QString::number(codecId));
     return false;
   }
 
@@ -905,7 +907,8 @@ bool VideoContext::checkNvdec(
     }
 
   if (codecName.isEmpty()) {
-    qDebug() << "unsupported codec:" << codecId;
+    auto* dec = avcodec_find_decoder((AVCodecID) codecId);
+    qDebug() << "unsupported codec:" << (dec ? QString(dec->name) : QString::number(codecId));
     return false;
   }
 
@@ -1383,7 +1386,6 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       avcodec_free_context(&hwContext);
       _options.accel.clear();
       if (opt.nofallback) {
-        qDebug() << "hardware codec failed";
         freeContext();
         return -3;
       }

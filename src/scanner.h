@@ -285,6 +285,7 @@ class Scanner : public QObject {
     int index = -1;
     int threadCount = 0;
     int maxThreadCount = 1;
+    QSet<QString> failures;
   };
   QVector<Accel> _accel;                     // list of available accelerators
   QThreadPool _accelPool;                    // separate pool since cpu doesn't do much

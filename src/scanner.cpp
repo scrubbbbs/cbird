@@ -232,7 +232,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
         }
 
       qDebug() << "adding accel" << i << options[0] << "jobs:" << maxThreads;
-      _accel.push_back(Accel{i, 0, maxThreads});
+      _accel.push_back(Accel{i, 0, maxThreads, {}});
       accelThreads += maxThreads;
     }
     _accelPool.setMaxThreadCount(accelThreads);
@@ -609,7 +609,6 @@ void Scanner::processOne() {
   // job scheduler
   // - runs in main thread when a job completes or until
   //   queue limits are reached.
-  // - process longest jobs first (video before images), better utilization
   // - video decoder can be multithreaded, decreases # of parallel jobs
   //
   // queue enough work to keep thread pool full
@@ -630,8 +629,6 @@ void Scanner::processOne() {
     QString path;         // file path
     int childThreads = 0; // additional threads used by job
     if (!_videoQueue.empty()) {
-      path = _videoQueue.first();
-      const MessageContext mc(path.mid(_topDirPath.length() + 1));
 
       bool tryAccel = _accel.count()
                       && _accelPool.activeThreadCount() < _accelPool.maxThreadCount();
@@ -651,58 +648,55 @@ void Scanner::processOne() {
         cpuThreads = availThreads;
 
       // qWarning() << "threads" << activeThreads << availThreads << cpuThreads;
-
       if (tryAccel || cpuThreads > 0) {
         VideoContext* v = nullptr;
 
-        // try accel with the most slots open first
+        // fill accel with the most threads available, with the first supported file
         if (tryAccel) {
           Q_ASSERT(_accel.count() == _params.accelList.count());
           auto accels = _accel;
           std::sort(accels.begin(), accels.end(), [](const auto& a, const auto& b) {
             return (b.maxThreadCount - b.threadCount) < (a.maxThreadCount - a.threadCount);
           });
-          for (const auto& a : std::as_const(accels)) {
-            if (a.maxThreadCount > a.threadCount) {
-              v = initVideoProcess(path, a.index, cpuThreads);
-              if (v) {
-                _accel[a.index].threadCount++;
-                break;
+          for (auto& p : _videoQueue)
+            for (auto& a : accels) {
+              if (a.failures.contains(p)) continue;
+              if (a.maxThreadCount > a.threadCount) {
+                const MessageContext mc(p.mid(_topDirPath.length() + 1));
+                v = initVideoProcess(p, a.index, cpuThreads);
+                if (v) {
+                  _accel[a.index].threadCount++;
+                  path = p;
+                  goto DONE;
+                }
+                _accel[a.index].failures.insert(p);
               }
             }
-          }
+        }
+      DONE:
+        if (!v && cpuThreads > 0) {
+          path = _videoQueue.first();
+          const MessageContext mc(path.mid(_topDirPath.length() + 1));
+          v = initVideoProcess(path, -1, cpuThreads);
         }
 
-        if (!v && cpuThreads > 0) v = initVideoProcess(path, -1, cpuThreads);
-
         if (v) {
-          QThreadPool* pool = nullptr;
-          if (v->isHardware()) {
-            pool = &_accelPool;
-          } else if (cpuThreads > 0) {
-            pool = QThreadPool::globalInstance();
+          QThreadPool* pool = v->isHardware() ? &_accelPool : QThreadPool::globalInstance();
 
-            // subtract the job thread, which means actual threads used are greater
+          if (!v->isHardware()) {
+            // FIXME: what is this trying to do (-1)
             // - if indexThreads is divisible by decoderThreads we get expected number of parallel jobs
             // - the job thread isn't doing much compared to the decoder
             // - the total utilization is usually much less than 100% of threadCount threads.
             childThreads += v->threadCount() - 1;
           }
 
-          if (!pool && tryAccel) {
-            // stop gpu from retrying the same file
-            // FIXME: disable gpu after too many fails
-            // FIXME: search queue for possibly compatible files
-            _videoQueue.removeFirst();
-            _videoQueue.append(path);
-          }
-
-          if (pool) {
-            f = QtConcurrent::run(pool, &Scanner::processVideo, this, v);
-            _videoQueue.removeFirst();
-          }
-        } else
-          _videoQueue.removeFirst();  // failed to open
+          f = QtConcurrent::run(pool, &Scanner::processVideo, this, v);
+          _videoQueue.removeOne(path);
+        } else if (cpuThreads > 0) {
+          setError(path, ErrorLoad);   // could be unsupported type or corrupt file
+          _videoQueue.removeOne(path); // failed to open with cpu, nothing more we can do
+        }
       }
     } else if (!_imageQueue.empty()) {
       path = _imageQueue.takeFirst();
@@ -1025,7 +1019,6 @@ VideoContext* Scanner::initVideoProcess(const QString& path, int accelIndex, int
   }
 
   if (video->open(path, opt) < 0) {
-    if (opt.accel.isEmpty()) setError(path, ErrorLoad);
     delete video;
     return nullptr;
   }
