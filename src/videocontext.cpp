@@ -216,6 +216,11 @@ static void FFmpeg(void* ptr, int level, const char* fmt, va_list vl) {
   const QByteArray bytes = QByteArray(buf).trimmed();
   const char* msg = bytes.data();
 
+  // this warning comes from cuviddec and qsvdec, I don't think
+  // it has any consequence. the source is mp4 files with packet.timebase=0/1
+  // which seems to be pretty common
+  if (bytes.startsWith("Invalid pkt_timebase")) return;
+
   //     if (level >= AV_LOG_TRACE) ;
   // else if (level >= AV_LOG_DEBUG) ;
   static const QLoggingCategory category("FFmpeg");
@@ -1194,6 +1199,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   // firstPts is needed for seeking
   // read a few packets to find it, then close/reopen the file
   _p->format->flags |= AVFMT_FLAG_GENPTS;
+
   for (int i = 0; i < 5;) {
     if (0 > av_read_frame(_p->format, &_p->packet)) break;
 
@@ -1210,7 +1216,6 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     //      qDebug() << "stream start_time" << _firstPts;
     //      break;
     //    }
-
     if (_firstPts == AV_NOPTS_VALUE)
       _firstPts = pts;
     else
