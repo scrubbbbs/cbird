@@ -138,7 +138,7 @@ class FrameCache {
   }
 
   Frame* frame(int normalizedPos, bool scrub = false) {
-    MessageContext mctx(_ctx.path().split("/").last());
+    MessageContext mctx(_ctx.logContext());
 
     // pos is scaled to match videos with different rates, the
     // slower video returns cached frames (duplicates) as needed

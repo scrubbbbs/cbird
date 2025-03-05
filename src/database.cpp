@@ -92,7 +92,7 @@ QSqlDatabase Database::connect(int id) {
 
   const QString name = QString("sqlite_%1_%2").arg(id).arg(connId);
   const QString path = dbPath(id);
-  qDebug() << thread << name << QDir(this->path()).relativeFilePath(path);
+  qDebug() << thread << name << path;
 
   QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", name);
   db.setDatabaseName(path);
@@ -280,6 +280,8 @@ Database::Database(const QString& path_) {
   if (path_ != "") dir = QDir(path_);
 
   if (!dir.exists()) qFatal("directory does not exist: \"%s\"", qUtf8Printable(dir.absolutePath()));
+
+  qMessageLogSetRootPath(dir.absolutePath());
 
   // This is not redundant; absolutePath() does not
   // resolve the path the same way as QFileInfo.

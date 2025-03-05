@@ -93,7 +93,9 @@ class VideoContext {
    * @param future if non-null use for cancellation
    * @return
    */
-  static QImage frameGrab(const QString& path, int frame = -1, bool fastSeek=false,
+  static QImage frameGrab(const QString& path,
+                          int frame = -1,
+                          bool fastSeek = false,
                           const DecodeOptions& options = DecodeOptions(),
                           QFuture<void>* future = nullptr);
 
@@ -169,6 +171,7 @@ class VideoContext {
   bool isHardware() const { return !_options.accel.isEmpty(); }
   int threadCount() const { return _options.threads; }
   QString deviceId() const { return _options.accel.split(',').first(); }
+  const char* logContext() const { return _logContext; }
 
   /// @note only public for -test-video-decoder
   bool decodeFrame();
@@ -176,7 +179,9 @@ class VideoContext {
   /// @note only useful in iframes-only mode
   int lastFrameNumber() const { return _lastFrameNumber; }
 
-  static QString avLoggerGetFileName(void* ptr);
+  /// log errors to file instead of console
+  static void avLoggerSetLogFile(const QString& path);
+  static void avLoggerWriteLogLine(const QString& context, const QString& message);
 
  private:
   bool readPacket();
@@ -190,28 +195,23 @@ class VideoContext {
   int ptsToFrame(int64_t pts) const;
   int64_t frameToPts(int frame) const;
 
-  static QHash<void*, QString>& pointerToFileName();
   static QMutex* avLogMutex();
-  static void avLogger(void* ptr, int level, const char* fmt, va_list vl);
-  static void avLoggerSetFileName(void* ptr, const QString& name);
-  static void avLoggerUnsetFileName(void* ptr);
+  static QString& avLogFile();
+  static QString avLoggerGetLogFile();
 
   static bool checkNvdec(const QString& family, int codecId, int pixelFormat, int width, int height);
   static bool checkQuicksync(
       const QString& family, int codecId, int pixelFormat, int width, int height);
   static bool checkAmd(const QString& family, int codecId, int pixelFormat, int width, int height);
 
-  static bool initAccel(const AVCodec** codec,
-                        AVCodecContext** context,
-                        const QString& fileName,
-                        const DecodeOptions& opt,
-                        const AVCodec* swCodec,
-                        const AVCodecContext* swContext,
-                        const AVStream* videoStream);
+  bool initAccel(const AVCodec** codec,
+                 AVCodecContext** context,
+                 const AVCodec* swCodec,
+                 const AVCodecContext* swContext,
+                 const AVStream* videoStream) const;
 
   VideoContextPrivate* _p = nullptr;
   QString _path;
-  VideoContext::DecodeOptions _opt;
   Metadata _metadata;
 
   int _errorCount = 0;                    // TODO: tally errors to reject indexing
@@ -221,4 +221,5 @@ class VideoContext {
   const int _MAX_DUMBSEEK_FRAMES = 10000; // do not seek if there are too many
   int _lastFrameNumber = -1;              // estimated last frame number based on pts&frame rate
   DecodeOptions _options;                 // on open successful, contains options actually used
+  char _logContext[1024] = {0};           // assigned to opaque pointer on libav objects
 };

@@ -19,8 +19,8 @@
    License along with cbird; if not, see
    <https://www.gnu.org/licenses/>.  */
 #include "videocontext.h"
-#include "media.h" // setAttribute()
-#include "qtutil.h"  // message context
+#include "media.h"  // setAttribute()
+#include "qtutil.h" // message context
 
 #include "opencv2/core.hpp"
 
@@ -174,43 +174,6 @@ static void avFrameToCvImg(const AVFrame& frame, cv::Mat& dst) {
 static void FFmpeg(void* ptr, int level, const char* fmt, va_list vl) {
   if (level > av_log_get_level()) return;
 
-  QString msgContext;
-
-  // use the current context if there is one
-  auto& threadCtx = qMessageContext();
-  if (threadCtx.hasLocalData()) msgContext = threadCtx.localData();
-
-  // use file name associated with ptr
-  if (msgContext.isEmpty()) msgContext = VideoContext::avLoggerGetFileName(ptr);
-
-  // nothing found, cwd might be helpful
-  if (msgContext.isEmpty()) {
-    //char path[PATH_MAX + 1] = {0};
-    //if (getcwd(path, sizeof(path))) msgContext = QString("cwd={") + path + "}";
-    msgContext += "unknown file";
-  }
-
-  if (ptr) {
-    const QLatin1StringView avClassName(av_default_item_name(ptr));
-    msgContext += lc('|');
-    if (avClassName == "AVFormatContext") {
-      auto ctx = (AVFormatContext*) ptr;
-      msgContext += ctx->iformat ? ctx->iformat->name : "format";
-    } else if (avClassName == "AVCodecContext") {
-      auto ctx = (AVCodecContext*) ptr;
-      msgContext += ctx->codec_descriptor ? ctx->codec_descriptor->name : "codec";
-    } else if (avClassName == "AVFilter") {
-      // auto filter = (AVFilter*) ptr;
-      // if (filter->name)
-      // msgContext += filter->name; // TODO: prints nonsense
-      // else
-      msgContext += "filter";
-    } else
-      msgContext += av_default_item_name(ptr);
-  }
-
-  MessageContext context(msgContext);
-
   char buf[1024] = {0};
   vsnprintf(buf, sizeof(buf) - 1, fmt, vl);
   const QByteArray bytes = QByteArray(buf).trimmed();
@@ -220,6 +183,53 @@ static void FFmpeg(void* ptr, int level, const char* fmt, va_list vl) {
   // it has any consequence. the source is mp4 files with packet.timebase=0/1
   // which seems to be pretty common
   if (bytes.startsWith("Invalid pkt_timebase")) return;
+
+  QString msgContext;
+
+  // use the current context if there is one
+  auto& threadCtx = qMessageContext();
+  if (threadCtx.hasLocalData()) msgContext = threadCtx.localData();
+
+  if (msgContext.isEmpty()) msgContext = "unknown file";
+
+  // note a valid pointer will have its first member point to AVClass;
+  // there are some cases in libav where the ptr is valid but the
+  // class is null; av_default_item_name() will segfault in these cases
+  if (ptr && ((AVClass**) ptr)[0] != 0) {
+    const QLatin1StringView avClassName(av_default_item_name(ptr));
+    if (avClassName == "AVFormatContext") {
+      auto ctx = (AVFormatContext*) ptr;
+      if (ctx->opaque) msgContext = (const char*) ctx->opaque;
+      msgContext += lc('|');
+      msgContext += ctx->iformat ? ctx->iformat->name : "format";
+    } else if (avClassName == "AVCodecContext") {
+      auto ctx = (AVCodecContext*) ptr;
+      if (ctx->opaque) msgContext = (const char*) ctx->opaque;
+      msgContext += lc('|');
+      msgContext += ctx->codec_descriptor ? ctx->codec_descriptor->name : "codec";
+    } else if (avClassName == "AVFilterGraph") {
+      auto ctx = (AVFilterGraph*) ptr;
+      if (ctx->opaque) msgContext = (const char*) ctx->opaque;
+      msgContext += "|graph";
+    } else if (avClassName == "SwsContext") {
+      auto ctx = (SwsContext*) ptr;
+      if (ctx->opaque) msgContext = (const char*) ctx->opaque;
+      msgContext += "|sws";
+    } else if (avClassName == "AVFilter") {
+      // auto filter = (AVFilter*) ptr;
+      // if (filter->name)
+      // msgContext += filter->name; // TODO: prints nonsense
+      // else
+      msgContext += "|filter";
+    } else {
+      msgContext += lc('|');
+      msgContext += avClassName;
+    }
+  }
+
+  MessageContext context(msgContext);
+
+  if (level <= AV_LOG_ERROR) VideoContext::avLoggerWriteLogLine(msgContext, msg);
 
   //     if (level >= AV_LOG_TRACE) ;
   // else if (level >= AV_LOG_DEBUG) ;
@@ -399,20 +409,17 @@ bool VideoContext::initFilters(const char* filters) {
     AVFilterContext* source = nullptr;               // do not free as always tied to graph
     AVFilterContext* sink = nullptr;
     bool success = false; // set to true and copy retained pointers on success
-    ScopedPointers(VideoContextPrivate* _p) {
-      avLoggerSetFileName(graph, avLoggerGetFileName(_p->context));
-    }
+    ScopedPointers() { qDebug() << this; }
     ~ScopedPointers() {
       if (!success) {
-        avLoggerUnsetFileName(source);
-        avLoggerUnsetFileName(sink);
-        avLoggerUnsetFileName(graph);
         avfilter_graph_free(&graph);
       }
       avfilter_inout_free(&inputs);
       avfilter_inout_free(&outputs);
     }
-  } s(_p);
+  } s;
+
+  s.graph->opaque = (void*) logContext();
 
   // we cannot use avfilter_graph_create_filter() as we might need to set hw_frames_ctx
   s.source = avfilter_graph_alloc_filter(s.graph, avfilter_get_by_name("buffer"), "in");
@@ -420,7 +427,6 @@ bool VideoContext::initFilters(const char* filters) {
     qCritical("alloc filter failed");
     return false;
   }
-  avLoggerSetFileName(s.source, avLoggerGetFileName(_p->context));
 
   // hw_frames_ctx is obtained by decoding the first frame
   if (_p->context->hw_device_ctx && !_p->context->hw_frames_ctx) {
@@ -483,7 +489,6 @@ bool VideoContext::initFilters(const char* filters) {
     AV_CRITICAL("create buffer sink");
     return false;
   }
-  avLoggerSetFileName(s.sink, avLoggerGetFileName(_p->context));
 
   /* this was in example but now says deprecated
   enum AVPixelFormat pix_fmts[] = {AV_PIX_FMT_NV12, AV_PIX_FMT_NONE};
@@ -957,17 +962,15 @@ bool VideoContext::checkNvdec(
 
 bool VideoContext::initAccel(const AVCodec** outCodec,
                              AVCodecContext** outContext,
-                             const QString& fileName,
-                             const DecodeOptions& opt,
                              const AVCodec* swCodec,
                              const AVCodecContext* swContext,
-                             const AVStream* videoStream) {
+                             const AVStream* videoStream) const {
   QString deviceType, deviceId, deviceVendor, deviceFamily;
 
   // <libav-device-string>,family=<family>,vendor=<vendor>,reject=<rej-list>,accept=<accept-list>
   QHash<QString, QString> deviceOptions;
   {
-    const QStringList parts = opt.accel.split(',');
+    const QStringList parts = _options.accel.split(',');
     deviceId = parts[0];
     deviceType = deviceId.mid(0, deviceId.indexOf(':'));
     for (int i = 1; i < parts.count(); ++i) {
@@ -983,7 +986,6 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
       deviceOptions.insert(kv[0], kv[1]);
     }
   }
-  MessageContext ctx(fileName + "|" + deviceId + '|' + deviceFamily);
 
   AVHWDeviceType deviceTypeId = AV_HWDEVICE_TYPE_NONE;
   QString codecSuffix = "";
@@ -1081,7 +1083,8 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
     AV_WARNING("could not allocate codec context");
     return false;
   }
-  avLoggerSetFileName(hwContext, fileName);
+  hwContext->opaque = (void*) logContext();
+
   *outContext = hwContext; // the caller must free on error
 
   if (deviceTypeId) {
@@ -1139,10 +1142,10 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
       qDebug() << "using nvdec option gpu=" << index;
       av_dict_set(&hwOptions, "gpu", qPrintable(index), 0);
     }
-    if (opt.maxW > 0 && opt.maxW == opt.maxH) {
+    if (_options.maxW > 0 && _options.maxH > 0) {
       // hardware scaling should be better, assuming it can happen without leaving the gpu,
       // and does not require filter graph
-      QString size = QString("%1x%2").arg(opt.maxW).arg(opt.maxH);
+      QString size = QString("%1x%2").arg(_options.maxW).arg(_options.maxH);
       qDebug() << "using nvdec option resize=" << size;
       av_dict_set(&hwOptions, "resize", qPrintable(size), 0);
     }
@@ -1160,28 +1163,29 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
   return true;
 }
 
-int VideoContext::open(const QString& path, const DecodeOptions& opt) {
+int VideoContext::open(const QString& path, const DecodeOptions& opt_) {
   if (_p->context) close();
 
+  snprintf(_logContext, sizeof(_logContext), "%s", qUtf8Printable(path));
+
   _path = path;
-  _opt = opt;
+  _options = opt_;
 
   _errorCount = 0;
 
   _firstPts = AV_NOPTS_VALUE;
-  _options = opt;
   _lastFrameNumber = -1;
 
   _eof = false;
   _p->packet.size = 0;
   _p->packet.data = nullptr;
 
-  _p->format = avformat_alloc_context();  // only reason for this is avLogger
+  _p->format = avformat_alloc_context(); // only reason for this is avLogger
+  _p->format->opaque = (void*) logContext();
   Q_ASSERT(_p->format);
 
   // set context to log source of errors
   const QString fileName = QFileInfo(_path).fileName();
-  avLoggerSetFileName(_p->format, fileName); // TODO: use .opaque field instead
 
   AVDictionary* formatOptions = nullptr;
   av_dict_set(&formatOptions, "ignore_editlist", "1", 0);
@@ -1189,12 +1193,10 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
   int err = 0;
   if ((err = avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, &formatOptions)) < 0) {
     AV_CRITICAL("cannot open input");
-    avLoggerUnsetFileName(_p->format);
     avformat_free_context(_p->format);
     _p->format = nullptr;
     return -1;
   }
-  avLoggerSetFileName(_p->format->pb, fileName); // IO context;
 
   // firstPts is needed for seeking
   // read a few packets to find it, then close/reopen the file
@@ -1223,8 +1225,6 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     i++;
   }
 
-  avLoggerUnsetFileName(_p->format->pb);
-  avLoggerUnsetFileName(_p->format);
   avformat_close_input(&_p->format);  // _p->format == nullptr
   Q_ASSERT(_p->format == nullptr);
 
@@ -1236,23 +1236,19 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
   _p->format = avformat_alloc_context();
   Q_ASSERT(_p->format);
-  avLoggerSetFileName(_p->format, fileName);
+  _p->format->opaque = (void*) logContext();
 
   formatOptions = nullptr;
   av_dict_set(&formatOptions, "ignore_editlist", "1", 0);
 
   if ((err = avformat_open_input(&_p->format, qUtf8Printable(_path), nullptr, &formatOptions)) < 0) {
     AV_CRITICAL("cannot reopen input");
-    avLoggerUnsetFileName(_p->format);
     avformat_free_context(_p->format);
     _p->format = nullptr;
     return -1;
   }
-  avLoggerSetFileName(_p->format->pb, fileName); // IO context;
 
   auto freeFormat = [this]() {
-    avLoggerUnsetFileName(_p->format->pb);
-    avLoggerUnsetFileName(_p->format);
     avformat_close_input(&_p->format);
     Q_ASSERT(_p->format == nullptr);
   };
@@ -1357,14 +1353,11 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     freeFormat();
     return -3;
   }
-  avLoggerSetFileName(_p->context, fileName);
+  _p->context->opaque = (void*) logContext();
 
   auto freeContext = [this]() {
-    avLoggerUnsetFileName(_p->context);
     avcodec_free_context(&_p->context);
     Q_ASSERT(_p->context == nullptr);
-    avLoggerUnsetFileName(_p->format->pb);
-    avLoggerUnsetFileName(_p->format);
     avformat_close_input(&_p->format);
     Q_ASSERT(_p->format == nullptr);
   };
@@ -1375,22 +1368,22 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     return -3;
   }
 
-  if (!opt.accel.isEmpty()) {
+  if (!_options.accel.isEmpty()) {
     const AVCodec* hwCodec = nullptr;
     AVCodecContext* hwContext = nullptr;
-    if (initAccel(&hwCodec, &hwContext, fileName, opt, swCodec, _p->context, _p->videoStream)) {
-      avLoggerUnsetFileName(_p->context);
+    if (initAccel(&hwCodec, &hwContext, swCodec, _p->context, _p->videoStream)) {
       avcodec_free_context(&_p->context);
       _p->codec = hwCodec;
       _p->context = hwContext;
       _options.threads = 1;
       _options.iframes = false;
       _options.lowres = false;
+      snprintf(_logContext, sizeof(_logContext), "%s|%s", qUtf8Printable(path),
+               qUtf8Printable(deviceId()));
     } else {
-      avLoggerUnsetFileName(hwContext);
       avcodec_free_context(&hwContext);
       _options.accel.clear();
-      if (opt.nofallback) {
+      if (_options.nofallback) {
         freeContext();
         return -3;
       }
@@ -1398,11 +1391,11 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
     }
   }
 
-  if (opt.accel.isEmpty()) {
+  if (_options.accel.isEmpty()) {
     AVDictionary* codecOptions = nullptr;
     _p->codec = swCodec;
 
-    if (opt.fast) {
+    if (_options.fast) {
       // it seems safe to enable this, about 20% boost.
       // the downscaler will smooth out any artifacts
       av_dict_set(&codecOptions, "skip_loop_filter", "all", 0);
@@ -1413,7 +1406,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       // av_dict_set(&codecOptions, "flags", "gray", 0);
     }
 
-    if (opt.iframes) {
+    if (_options.iframes) {
       // note: some codecs do not support this or are already intra-frame codecs
       // FIXME: is there a way to tell before we see the gap in the frame numbers?
 
@@ -1431,34 +1424,35 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
       av_dict_set(&codecOptions, "skip_frame", skip, 0);
     }
 
-    if (opt.lowres > 0) {
+    if (_options.lowres > 0) {
       // this is quite good for some old codecs; nothing modern though
       // TODO: set lowres value so it gives >= maxw/maxh
-      int lowres = opt.lowres;
+      int lowres = _options.lowres;
       if (_p->codec->max_lowres <= 0) {
         qDebug("lowres decoding requested but %s doesn't support it",
                qPrintable(_metadata.videoCodec));
-        _options.lowres = 0;
+        lowres = 0;
       } else {
         if (lowres > _p->codec->max_lowres) {
           lowres = _p->codec->max_lowres;
           qWarning("lowres limited to %d", lowres);
         }
-        _options.lowres = lowres;
         av_dict_set(&codecOptions, "lowres", qPrintable(QString::number(lowres)), 0);
       }
+      _options.lowres = lowres;
     }
 
     // if (_p->codec->capabilities & CODEC_CAP_TRUNCATED)
     //    _p->context->flags|= CODEC_FLAG_TRUNCATED; // we do not send complete
     //    frames
 
-    _options.threads = 1;
+    int threads = 1;
     if (_p->codec->capabilities
         & (AV_CODEC_CAP_FRAME_THREADS | AV_CODEC_CAP_SLICE_THREADS | AV_CODEC_CAP_OTHER_THREADS)) {
-      _options.threads = opt.threads;
+      threads = _options.threads;
       _metadata.supportsThreads = true;
     }
+    _options.threads = threads;
 
     // note: no need to set thread_type, let ffmpeg choose the best options
     if (_options.threads > 0) {
@@ -1512,7 +1506,6 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt) {
 
 void VideoContext::close() {
   if (_p->scaler) {
-    avLoggerUnsetFileName(_p->scaler);
     sws_freeContext(_p->scaler);
     _p->scaler = nullptr;
   }
@@ -1521,12 +1514,9 @@ void VideoContext::close() {
   if (_p->filterFrame) av_frame_free(&_p->filterFrame);
 
   if (_p->filterGraph) {
-    avLoggerUnsetFileName(_p->filterGraph);
     avfilter_graph_free(&_p->filterGraph);
   }
 
-  avLoggerUnsetFileName(_p->filterSource);
-  avLoggerUnsetFileName(_p->filterSink);
   _p->filterSource = nullptr;
   _p->filterSink = nullptr;
 
@@ -1536,14 +1526,11 @@ void VideoContext::close() {
   }
 
   if (_p->context) {
-    avLoggerUnsetFileName(_p->context);
     avcodec_free_context(&_p->context);
     Q_ASSERT(_p->context == nullptr);
   }
 
   if (_p->format) {
-    avLoggerUnsetFileName(_p->format->pb);
-    avLoggerUnsetFileName(_p->format);
     avformat_close_input(&_p->format);
     Q_ASSERT(_p->format == nullptr);
   }
@@ -1655,7 +1642,7 @@ bool VideoContext::seek(int frame, QVector<QImage>* decoded, int* maxDecoded) {
         if (tries > 10) {
           AV_WARNING("failed after 10 attempts, seeking dumb");
           close();
-          open(_path, _opt);
+          open(_path, _options);
           return seekDumb(frame);
         }
       }
@@ -1667,7 +1654,7 @@ bool VideoContext::seek(int frame, QVector<QImage>* decoded, int* maxDecoded) {
     // to read frames from the start we have to reopen
     AV_WARNING("reopening stream for seek < first pts");
     close();
-    if (0 != open(_path, _opt)) return false;
+    if (0 != open(_path, _options)) return false;
   }
 
   // accurate seek requires decoding some frames
@@ -1733,7 +1720,7 @@ bool VideoContext::decodeFrame() {
 
         // NOTE: this will happen, commonly with stream captures; but it would break indexer
         // as it requires increasing frame numbers (since v2 format)
-        if (_opt.iframes && frameNumber < _lastFrameNumber)
+        if (_options.iframes && frameNumber < _lastFrameNumber)
           qWarning() << "backwards frame number" << frameNumber << _lastFrameNumber << _p->context->frame_num;
 
         // if (frameNumber != _lastFrameNumber+1) // we expect this if skip_frame is working
@@ -1748,8 +1735,12 @@ bool VideoContext::decodeFrame() {
       AV_DEBUG("avcodec_receive_frame eof");
       break;
     } else if (err != AVERROR(EAGAIN)) {
-      qCritical() << "avcodec_receive_frame near frame:" << _lastFrameNumber << Qt::hex << err
-                  << avErrorString(err);
+      QString msg = qq("avcodec_receive_frame near frame: %1 avError=%2 %3")
+                        .arg(_lastFrameNumber)
+                        .arg(err, 0, 16)
+                        .arg(avErrorString(err));
+      avLoggerWriteLogLine(logContext(), msg);
+      qCritical() << msg;
       break;
     }
 
@@ -1761,8 +1752,12 @@ bool VideoContext::decodeFrame() {
       }
 
       if (_p->packet.size == 0) {
-        qCritical() << "empty packet, giving up; near frame:" << _lastFrameNumber << Qt::hex << err
-                    << avErrorString(err);
+        QString msg = qq("empty packet, giving up near frame: %1 avError=%2 %3")
+                          .arg(_lastFrameNumber)
+                          .arg(err, 0, 16)
+                          .arg(avErrorString(err));
+        avLoggerWriteLogLine(logContext(), msg);
+        qCritical() << msg;
         break;
       }
 
@@ -1770,9 +1765,13 @@ bool VideoContext::decodeFrame() {
 
       err = avcodec_send_packet(_p->context, &_p->packet);
       if (err != 0) {
+        QString msg = qq("avcodec_send_packet near frame: %1 avError=%2 %3")
+                          .arg(_lastFrameNumber)
+                          .arg(err, 0, 16)
+                          .arg(avErrorString(err));
         // TODO: limit number of errors logged
-        qCritical() << "avcodec_send_packet; near frame:" << _lastFrameNumber << Qt::hex << err
-                    << avErrorString(err);
+        avLoggerWriteLogLine(logContext(), msg);
+        qCritical() << msg;
 
         // we get this when decoding av1 when there is no av1 implementation "Function not implemented"
         if (err == -0x28) {
@@ -1799,8 +1798,8 @@ QVariantList VideoContext::readMetaData(const QString& _path, const QStringList&
   format = avformat_alloc_context();
   Q_ASSERT(format);
 
-  const QString fileName = QFileInfo(_path).fileName();
-  avLoggerSetFileName(format, fileName);
+  QByteArray cPath = _path.toUtf8();
+  format->opaque = cPath.data();
 
   AVDictionary* formatOptions = nullptr;
   av_dict_set(&formatOptions, "ignore_editlist", "1", 0);
@@ -1808,13 +1807,11 @@ QVariantList VideoContext::readMetaData(const QString& _path, const QStringList&
   int err = 0;
   if ((err = avformat_open_input(&format, qUtf8Printable(_path), nullptr, &formatOptions)) < 0) {
     AV_CRITICAL("cannot open input");
-    avLoggerUnsetFileName(format);
     return values;
   }
 
   if (!format->metadata) {
     AV_DEBUG("no metadata");
-    avLoggerUnsetFileName(format);
     return values;
   }
 
@@ -1824,14 +1821,13 @@ QVariantList VideoContext::readMetaData(const QString& _path, const QStringList&
   }
 
   avformat_close_input(&format);
-  avLoggerUnsetFileName(format);
 
   return values;
 }
 
 int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame) {
-  w = _opt.maxW;
-  h = _opt.maxH;
+  w = _options.maxW;
+  h = _options.maxH;
 
   if (!w || !h) {
     w = srcFrame->width;
@@ -1839,7 +1835,7 @@ int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame
   }
 
   // formats we can convert directly to cvImg/QImage
-  const bool isConvertable = (_opt.gray && srcFrame->format == AV_PIX_FMT_YUV420P);
+  const bool isConvertable = (_options.gray && srcFrame->format == AV_PIX_FMT_YUV420P);
 
   // hw frames have to be downloaded/mapped to system memory
   const bool isHardware = srcFrame->hw_frames_ctx != NULL;
@@ -1854,7 +1850,7 @@ int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame
   }
 
   fmt = AV_PIX_FMT_BGR24;
-  if (_opt.gray) fmt = AV_PIX_FMT_YUV420P;
+  if (_options.gray) fmt = AV_PIX_FMT_YUV420P;
 
   if (_p->scaler == nullptr) {
     if (!av_pix_fmt_desc_get(AVPixelFormat(srcFrame->format))) {
@@ -1876,7 +1872,7 @@ int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame
       else
         fastFilter = SWS_BILINEAR;
     }
-    int filter = _opt.fast ? fastFilter : SWS_BICUBIC;
+    int filter = _options.fast ? fastFilter : SWS_BICUBIC;
 
     const char* filterName = "other";
     switch (filter) {
@@ -1915,7 +1911,7 @@ int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame
     qDebug() << av_get_pix_fmt_name(AVPixelFormat(srcFmt))
              << QString("@%1x%2").arg(srcFrame->width).arg(srcFrame->height) << "=>"
              << av_get_pix_fmt_name(AVPixelFormat(fmt)) << QString("@%1x%2").arg(w).arg(h)
-             << filterName << (_opt.fast ? "fast" : "");
+             << filterName << (_options.fast ? "fast" : "");
 
     _p->scaler = sws_getContext(srcFrame->width, srcFrame->height, AVPixelFormat(srcFmt), w, h,
                                 AVPixelFormat(fmt), filter, nullptr, nullptr, nullptr);
@@ -1924,7 +1920,7 @@ int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame
       return ConvertError;
     }
 
-    avLoggerSetFileName(_p->scaler, QFileInfo(_path).fileName());
+    _p->scaler->opaque = (void*) logContext();
 
     if (srcFmt != srcFrame->format) {
       if (_p->context->color_range != AVCOL_RANGE_JPEG)
@@ -1946,9 +1942,9 @@ int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame
   return ConvertOK;
 }
 
-QHash<void*, QString>& VideoContext::pointerToFileName() {
-  static QHash<void*, QString> hash;
-  return hash;
+QString& VideoContext::avLogFile() {
+  static QString logFile;
+  return logFile;
 }
 
 QMutex* VideoContext::avLogMutex() {
@@ -1956,22 +1952,42 @@ QMutex* VideoContext::avLogMutex() {
   return &mutex;
 }
 
-void VideoContext::avLoggerSetFileName(void* ptr, const QString& name) {
+void VideoContext::avLoggerSetLogFile(const QString& path) {
   QMutexLocker locker(avLogMutex());
-  pointerToFileName().insert(ptr, name);
+  avLogFile() = path;
 }
 
-void VideoContext::avLoggerUnsetFileName(void* ptr) {
+QString VideoContext::avLoggerGetLogFile() {
   QMutexLocker locker(avLogMutex());
-  pointerToFileName().remove(ptr);
+  QString file = avLogFile();
+  return file;
 }
 
-QString VideoContext::avLoggerGetFileName(void* ptr) {
-  QMutexLocker locker(avLogMutex());
-  const auto& map = pointerToFileName();
-  auto it = map.find(ptr);
-  if (it != map.end()) return it.value();
-  return QString();
+void VideoContext::avLoggerWriteLogLine(const QString& context, const QString& message) {
+  static bool failedLogFile = false;
+  static bool firstTime = true;
+  static QSet<QString> repeats;
+
+  QString logFile = VideoContext::avLoggerGetLogFile();
+
+  if (!logFile.isEmpty() && !failedLogFile) {
+    QFile file(logFile);
+    if (!file.open(QFile::WriteOnly | QFile::Append)) {
+      failedLogFile = true;
+      qWarning() << "failed to open ffmpeg log file" << file.errorString();
+    }
+    if (firstTime) {
+      firstTime = false;
+      qInfo() << "<MAG>logging video errors to:<PATH>" << logFile;
+      QString line = "opening log file: " + QDateTime::currentDateTime().toString() + '\n';
+      file.write(qUtf8Printable(line));
+    }
+    QString line = context + ':' + ' ' + message + '\n';
+    QMutexLocker locker(avLogMutex());
+    if (repeats.contains(line)) return;
+    repeats.insert(line);
+    file.write(qUtf8Printable(line));
+  }
 }
 
 bool VideoContext::frameToQImg(QImage& img) {
@@ -2021,26 +2037,29 @@ bool VideoContext::decodeFrameFiltered() {
              << av_get_pix_fmt_name(fc->sw_format) << fc->initial_pool_size;
 
     QString filters = qq("hwdownload,format=%1").arg(fc->sw_format);
-    if (_opt.maxH && _opt.maxW) {
+    if (_options.maxH && _options.maxW) {
       // scaling high-res frames is very intensive on CPU and somewhat defeats the purpose of hwdec!
       if (fc->format == AV_PIX_FMT_QSV) {
         // qsv scaling is horrible at low sizes (at least on coffeelake), so first scale to something larger,
         // this will blur the result slightly and require more CPU usage, but dcthash is not sensitive to blur
-        float factor = _p->context->height / _opt.maxH;
+        float factor = _p->context->height / _options.maxH;
         if (factor > 8)
           filters = qq("scale_qsv=w=-1:h=ih/8:mode=hq,") + filters;
         else
-          filters = qq("scale_qsv=w=%1:h=%2:mode=hq,").arg(_opt.maxW).arg(_opt.maxH) + filters;
+          filters = qq("scale_qsv=w=%1:h=%2:mode=hq,").arg(_options.maxW).arg(_options.maxH)
+                    + filters;
       } else if (fc->format == AV_PIX_FMT_D3D11) {
         // prototype d3d11 scaler from dash; does not work with quicksync devices
-        filters = qq("scale_d3d11=width=%1:height=%2,").arg(_opt.maxW).arg(_opt.maxH) + filters;
+        filters = qq("scale_d3d11=width=%1:height=%2,").arg(_options.maxW).arg(_options.maxH)
+                  + filters;
       } else if (fc->format == AV_PIX_FMT_VAAPI) {
         // same qsv problem on Linux; if amd is ok in this regard should be an option
-        float factor = _p->context->height / _opt.maxH;
+        float factor = _p->context->height / _options.maxH;
         if (factor > 8)
           filters = qq("scale_vaapi=w=-1:h=ih/8:mode=hq,") + filters;
         else
-          filters = qq("scale_vaapi=w=%1:h=%2:mode=hq,").arg(_opt.maxW).arg(_opt.maxH) + filters;
+          filters = qq("scale_vaapi=w=%1:h=%2:mode=hq,").arg(_options.maxW).arg(_options.maxH)
+                    + filters;
       } else {
         qWarning() << "no hardware scaler for" << av_get_pix_fmt_name(fc->format)
                    << "expect extremely poor performance";

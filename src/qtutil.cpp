@@ -1105,7 +1105,7 @@ class MessageLog {
   bool _termColors = false;  // true if tty supports colors
   int _termColumns = -1;     // number of columns in the tty
 
-  QString _homePath;
+  QString _homePath, _rootPath;
   const bool _showTimestamp = getenv("CBIRD_LOG_TIMESTAMP");
   mutable const char* _lastColor = nullptr;  // format()
   mutable int64_t _lastTime = nanoTime();    // format()
@@ -1133,6 +1133,7 @@ class MessageLog {
   void append(const LogMsg& msg);
   void flush();
 
+  void setRootPath(const QString& rootPath) { _rootPath = rootPath; }
   void setCategoryFilter(const QString& category, bool enable) {
     QMutexLocker locker(&_mutex);
     if (!enable) {
@@ -1178,6 +1179,10 @@ class MessageLog {
 
 void qFlushMessageLog() {
   MessageLog::instance().flush();
+}
+
+void qMessageLogSetRootPath(const QString& path) {
+  MessageLog::instance().setRootPath(path);
 }
 
 Q_NORETURN void cbirdAbort() {
@@ -1307,6 +1312,7 @@ MessageLog::MessageLog() {
 #endif
 
   _homePath = QDir::homePath();
+  _rootPath = QDir().absolutePath();
 
 #ifdef Q_OS_WIN
   // disable text mode to speed up console
@@ -1554,6 +1560,7 @@ QString MessageLog::format(const LogMsg& msg, int& outUnprintable) const {
     _formatStr += msg.msg;
   }
 
+  _formatStr.replace(_rootPath, QLatin1String("."));
   _formatStr.replace(_homePath, QLatin1String("~"));
 
   outUnprintable = 0;

@@ -173,6 +173,9 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& context, cons
 /// flush logger, required before using printf/scanf etc
 void qFlushMessageLog();
 
+/// remove this prefix from paths appearing in logs
+void qMessageLogSetRootPath(const QString& path);
+
 /// if enable=false, ignore logs with matching QMessageLogContext::category
 void qMessageLogCategoryEnable(const QString& category, bool enable);
 

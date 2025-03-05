@@ -26,9 +26,10 @@
 #include "dctfeaturesindex.h"
 #include "dcthashindex.h"
 #include "dctvideoindex.h"
+#include "qtutil.h"
 #include "scanner.h"
 #include "templatematcher.h"
-#include "qtutil.h"
+#include "videocontext.h"
 
 #include <QtCore/QDir>
 #include <QtCore/QFile>
@@ -93,6 +94,9 @@ void Engine::update(bool wait, const QString& dirPath) {
   QElapsedTimer timer;
   timer.start();
 
+  qMessageLogSetRootPath(QDir(dirPath).absolutePath());
+  VideoContext::avLoggerSetLogFile(db->indexPath() + "/video-error.log");
+
   // metadataChangeTime might not work on this filesystem
   bool useMetadataTime = scanner->indexParams().modTime;
   QDateTime timeBefore;
@@ -118,12 +122,12 @@ void Engine::update(bool wait, const QString& dirPath) {
     for (const Media& m : videos) {
       QString vIndexPath = QString("%1/%2.vdx").arg(db->videoPath()).arg(m.id());
       if (!QFileInfo(vIndexPath).exists()) {
-        qWarning() << "missing index for" << QDir().relativeFilePath(m.path());
+        qWarning() << "missing index for" << m.path();
         missingVideos.append(m.id());
       } else {
         VideoIndex idx;
         if (!idx.isValid(vIndexPath)) {
-          qWarning() << "invalid index for" << QDir().relativeFilePath(m.path());
+          qWarning() << "invalid index for" << m.path();
           missingVideos.append(m.id());
         }
       }
@@ -227,8 +231,7 @@ void Engine::update(bool wait, const QString& dirPath) {
           if (requestParams.verbose) {
             IndexParams tmp;
             tmp.setValue("algos", item.algos);
-            qDebug() << "re-indexing id:" << item.id << "algos:" << tmp.toString("algos")
-                     << QDir(path).relativeFilePath(p);
+            qDebug() << "re-indexing id:" << item.id << "algos:" << tmp.toString("algos") << p;
           }
 
           reindex.append(item.id);

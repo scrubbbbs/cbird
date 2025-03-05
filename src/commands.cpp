@@ -662,6 +662,8 @@ void Commands::testVideoDecoder() {
       scale = true;
     } else if (arg == "-loop")
       loop = true;
+    else if (arg == "-log")
+      VideoContext::avLoggerSetLogFile(nextArg());
     else if (arg == "-seek")
       seek = true;
     else if (arg == "-gray")
@@ -684,6 +686,8 @@ void Commands::testVideoDecoder() {
       zoom = true;
     } else if (arg == "-no-sws") {
       noSws = true;
+    } else if (arg == "-no-fallback") {
+      opt.nofallback = true;
     } else if (arg == "-iframes") {
       opt.iframes = true;
     } else if (arg == "-lowres") {
@@ -776,9 +780,11 @@ void Commands::testVideoDecoder() {
     const qint64 start0 = QDateTime::currentMSecsSinceEpoch();
     qint64 start1 = start0;
 
+    MessageContext context(files[fileIndex]);
+
     if (loopCount == 0 || !seek) {
       qInfo() << "opening decoder";
-      Q_ASSERT(0 == video.open(files[fileIndex], opt));
+      if (0 != video.open(files[fileIndex], opt)) break;
       fileIndex = (fileIndex + 1) % files.count();
     } else
       video.seek(1); // seek (0) reopens

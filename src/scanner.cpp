@@ -199,9 +199,8 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
     }
 
     if (_params.verbose) {
-      QDir d(_topDirPath);
       for (auto& p : std::as_const(_videoQueue))
-        qDebug() << "video job:" << QFileInfo(p).size() / 1024.0 / 1024.0 << d.relativeFilePath(p);
+        qDebug() << "video job:" << QFileInfo(p).size() / 1024.0 / 1024.0 << p;
     }
 
   } else if (_params.types & IndexParams::TypeVideo) {
@@ -209,9 +208,8 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   }
 
   if (_params.verbose) {
-    QDir d(_topDirPath);
     for (auto& p : std::as_const(_imageQueue))
-      qDebug() << "image job:" << d.relativeFilePath(p);
+      qDebug() << "image job:" << p;
   }
 
   if (_params.dryRun) {
@@ -304,7 +302,7 @@ void Scanner::setError(const QString& path, const QString& error, bool print) {
   QMutexLocker locker(staticMutex());
   QStringList& list = (*errors())[path];
   if (!list.contains(error)) list.append(error);
-  if (print) qWarning() << QDir().relativeFilePath(path) << error;
+  if (print) qWarning() << path << error;
 }
 
 QMap<QString, QStringList>* Scanner::errors() {
@@ -363,7 +361,7 @@ void Scanner::readDirectory(const QString& dirPath,
         continue;
       } else if (_params.verbose) {
         // TODO: check for broken symlinks?
-        qDebug() << "following link:" << QDir(_topDirPath).relativeFilePath(path);
+        qDebug() << "following link:" << path;
       }
     }
 
@@ -376,8 +374,8 @@ void Scanner::readDirectory(const QString& dirPath,
         auto it = hash.find(id);
         if (it != hash.end()) {
           if (_params.showIgnored) {
-            qWarning() << "ignoring dup inode:" << QDir(_topDirPath).relativeFilePath(path);
-            qWarning() << "    first instance:" << QDir(_topDirPath).relativeFilePath(it.value());
+            qWarning() << "ignoring dup inode:" << path;
+            qWarning() << "    first instance:" << it.value();
           }
           _ignoredFiles++;
           setError(path, ErrorDupInode, _params.showIgnored);
@@ -402,8 +400,7 @@ void Scanner::readDirectory(const QString& dirPath,
       // if link resolves within root we can automatically remove
       // potential duplicates; otherwise we just follow it as normal
       if (canonical.startsWith(_topDirPath)) {
-        if (_params.verbose)
-          qDebug() << "using resolved link:" << QDir(_topDirPath).relativeFilePath(canonical);
+        if (_params.verbose) qDebug() << "using resolved link:" << canonical;
         path = canonical;
         _imageQueue.removeOne(path);
         _videoQueue.removeOne(path);
@@ -421,8 +418,7 @@ void Scanner::readDirectory(const QString& dirPath,
       }
       _modifiedFiles++;
       // files with invalid modtimes will always be re-indexed
-      if (entry.lastModified() > _startTime)
-        qWarning() << "future modtime:" << QDir().relativeFilePath(path);
+      if (entry.lastModified() > _startTime) qWarning() << "future modtime:" << path;
     }
 
     if (entry.isFile()) {
@@ -431,7 +427,7 @@ void Scanner::readDirectory(const QString& dirPath,
       //                   qPrintable(path));
       //            fflush(stdout);
       if (_activeWork.contains(path)) {
-        qDebug() << "skipping active work" << QDir().relativeFilePath(path);
+        qDebug() << "skipping active work" << path;
         continue;
       }
 
@@ -684,7 +680,7 @@ void Scanner::processOne() {
           QThreadPool* pool = v->isHardware() ? &_accelPool : QThreadPool::globalInstance();
 
           if (!v->isHardware()) {
-            // FIXME: what is this trying to do (-1)
+            // -1 because:
             // - if indexThreads is divisible by decoderThreads we get expected number of parallel jobs
             // - the job thread isn't doing much compared to the decoder
             // - the total utilization is usually much less than 100% of threadCount threads.
@@ -1029,8 +1025,7 @@ VideoContext* Scanner::initVideoProcess(const QString& path, int accelIndex, int
 }
 
 IndexResult Scanner::processVideo(VideoContext* video) const {
-  const QString context = video->path().mid(_topDirPath.length() + 1)
-                          + (video->isHardware() ? '|' + video->deviceId() : "");
+  const QString context = video->logContext();
   const CVErrorLogger cvLogger("processVideo:" + context);
   const MessageContext mc(context);
 
