@@ -1560,8 +1560,13 @@ QString MessageLog::format(const LogMsg& msg, int& outUnprintable) const {
     _formatStr += msg.msg;
   }
 
-  _formatStr.replace(_rootPath, QLatin1String("."));
-  _formatStr.replace(_homePath, QLatin1String("~"));
+  int noPathReplacement = _formatStr.indexOf("<NPR>");
+  if (noPathReplacement >= 0)
+    _formatStr.remove(noPathReplacement, 5);
+  else {
+    _formatStr.replace(_rootPath, QLatin1String("."));
+    _formatStr.replace(_homePath, QLatin1String("~"));
+  }
 
   outUnprintable = 0;
   for (auto& tag : tags) {

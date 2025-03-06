@@ -55,7 +55,7 @@ class Frame {
 class FrameCache {
  public:
   FrameCache(const Media& m, float cacheSizeKb) {
-    MessageContext mctx(m.path().split("/").last());
+    MessageContext mctx(m.path());
     VideoContext::DecodeOptions opt;
     opt.threads = QThread::idealThreadCount();
 

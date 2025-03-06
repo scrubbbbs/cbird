@@ -216,7 +216,7 @@ static void loadImage(QPromise<void>& promise, ImageWork* work, bool fastSeek) {
   Media& m = work->media;
   Q_ASSERT(m.image().isNull());
 
-  const MessageContext ctx(m.path().split("/").last());
+  const MessageContext ctx(m.path());
 
   // uint64_t ts = nanoTime();
   // uint64_t then = ts;

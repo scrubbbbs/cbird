@@ -46,6 +46,7 @@ Engine::Engine(const QString& path, const IndexParams& params) {
 
   scanner = new Scanner;
   scanner->setIndexParams(params);
+  scanner->setDatabasePath(db->path());
   connect(scanner, &Scanner::mediaProcessed, this, &Engine::add);
   connect(scanner, &Scanner::scanCompleted, this, &Engine::commit);
 
@@ -94,7 +95,6 @@ void Engine::update(bool wait, const QString& dirPath) {
   QElapsedTimer timer;
   timer.start();
 
-  qMessageLogSetRootPath(QDir(dirPath).absolutePath());
   VideoContext::avLoggerSetLogFile(db->indexPath() + "/video-error.log");
 
   // metadataChangeTime might not work on this filesystem
@@ -204,6 +204,9 @@ void Engine::update(bool wait, const QString& dirPath) {
 
     indexedFiles = included;
   }
+
+  // this defaults to db->path, but we may have changed it
+  qMessageLogSetRootPath(path);
 
   // if -i.algos changed try to manage the situation, prior to v0.8 there
   // was no management and -remove or rm -rf _index was needed

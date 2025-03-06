@@ -370,7 +370,7 @@ void Database::add(MediaGroup& inMedia) {
 
   QWriteLocker locker(_rwLock);
   QLockFile dbLock(indexPath() + "/write.lock");
-  if (!dbLock.tryLock(0)) {
+  if (!dbLock.tryLock(5000)) {
     qCritical() << "database update aborted, another process is writing,"
                 << "or lock file is stale";
     return;
@@ -1519,7 +1519,7 @@ MediaGroup Database::similarTo(const Media& needle, const SearchParams& params) 
   if (result.count() > 0) result.removeFirst();
 
   if (params.verbose) {
-    MessageContext mc(needle.path().mid(path().length() + 1));
+    MessageContext mc(needle.path());
     qInfo("%'lld results (%'d filtered out) in %'lldms", result.count(), filtered,
           QDateTime::currentMSecsSinceEpoch() - start);
   }

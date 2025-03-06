@@ -1321,8 +1321,7 @@ QIODevice* Media::ioDevice() const {
 
 QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString& name,
                         const QFuture<void>* future, const ImageLoadOptions& options) {
-  const QString fileName = QFileInfo(name).fileName();
-  MessageContext context(QLatin1String("QImageReader: ") + fileName);
+  MessageContext context(QLatin1String("QImageReader: ") + name);
 
   // safe to cast away const since we do not write the buffer
   QBuffer* buffer = new QBuffer(const_cast<QByteArray*>(&data));
@@ -1430,8 +1429,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
 
       if (!reader.read(&img))
         qWarning() << "read (pointer) failure";
-      if (data != img.data_ptr())
-        qWarning() << "read (pointer) in-place failed";
+      if (data != img.data_ptr()) qWarning() << "read (pointer) in-place failed";
     }
   } else {
     img = reader.read();
@@ -1441,7 +1439,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
     img = QImage();
 
   img.setText(ImgKey_FileSize, QString::number(data.length()));
-  img.setText(ImgKey_FileName, name);
+  img.setText(ImgKey_FileName, QFileInfo(name).fileName());
   img.setText(ImgKey_FileFormat, reader.format());
 
   if (!origSize.isValid()) {
@@ -1454,7 +1452,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
   img.setText(ImgKey_FileWidth, QString::number(origSize.width()));
   img.setText(ImgKey_FileHeight, QString::number(origSize.height()));
 
-  context.reset(fileName);
+  context.reset(name);
 
   // setAutoTransform() will pull orientation from thumbnail IFD if it is not present in the image
   // IFD, resulting in incorrect rotation
@@ -1593,7 +1591,7 @@ QStringList Media::exifVersion() {
 }
 
 QVariantList Media::readEmbeddedMetadata(const QStringList& keys, const QString& type) const {
-  const MessageContext mc(QFileInfo(path()).fileName());
+  const MessageContext mc(path());
 
   QVariantList values;
   for (int i = 0; i < keys.count(); ++i) values.append(QVariant());
