@@ -75,6 +75,7 @@ class IndexParams : public Params {
 
   /// threads
   QStringList accelList;       // list of accelerators to use
+  bool forkAccel = false;      // run hwaccel indexing in another process (for buggy codecs/drivers)
 
   int decoderThreads = 0;      // threads per item decoder (hardwaredec always == 1)
   int indexThreads = 0;        // total max threads (cpu) <=0 means auto detect
@@ -107,6 +108,8 @@ class IndexParams : public Params {
 class IndexResult {
  public:
   bool ok = false;
+  bool forked = false;
+  int accelIndex = -1;
   QString path;
   Media media;
   VideoContext* context = nullptr;
@@ -153,6 +156,8 @@ class Scanner : public QObject {
   void setIndexParams(const IndexParams& params) { _params = params; }
   const IndexParams& indexParams() const { return _params; }
 
+  void setDatabasePath(const QString& dbPath) { _dbPath = dbPath; }
+
   /// image file extensions we will try to process
   const QSet<QString>& imageTypes() const { return _imageTypes; }
 
@@ -187,7 +192,7 @@ class Scanner : public QObject {
   IndexResult processImage(const QString& path, const QString& digest, const QImage& qImg) const;
 
   /// process video
-  IndexResult processVideoFile(const QString& path) const;
+  IndexResult processVideoFile(const QString& path, int accelIndex) const;
 
   /**
    * empty queues, cancel work, spin until empty (QEventLoop::exec())
@@ -245,6 +250,9 @@ class Scanner : public QObject {
   // process video (in a thread)
   IndexResult processVideo(VideoContext* video) const;
 
+  // process video (forked process)
+  IndexResult forkVideo(const QString& path, int accelIndex, int cpuThreads) const;
+
  private:
   void readDirectory(const QString& dir, const QMap<QString,QStringList> zipFiles, QSet<QString>& expected);
   void readArchive(const QString& path, QSet<QString>& expected);
@@ -290,8 +298,11 @@ class Scanner : public QObject {
   QVector<Accel> _accel;                     // list of available accelerators
   QThreadPool _accelPool;                    // separate pool since cpu doesn't do much
 
-  QString _topDirPath;                       // relative path for logging
-  int _existingFiles = 0, _ignoredFiles = 0, _modifiedFiles = 0, _queuedFiles = 0, _processedFiles = 0;
+  QString _topDirPath;                       // path given to scanDirectory()
+  QString _dbPath;                           // Database::path() for forking
+
+  int _existingFiles = 0, _ignoredFiles = 0, _modifiedFiles = 0, _queuedFiles = 0,
+      _processedFiles = 0;
 
   QDateTime _modifiedSince;   // date index was last updated, to re-index modified files
   QDateTime _startTime;       // time when scan started

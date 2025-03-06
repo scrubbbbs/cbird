@@ -637,7 +637,7 @@ int main(int argc, char** argv) {
   std::unique_ptr<QCoreApplication> app;
   if (args.contains("-headless") || noDisplay) {
     app.reset(new QCoreApplication(argc, argv));
-    qInfo("selected headless mode, gui functions (-show,etc) will abort");
+    qDebug("selected headless mode, gui functions (-show,etc) will abort");
   }
   else {
     auto* guiApp = new QApplication(argc, argv);
@@ -1706,10 +1706,25 @@ int main(int argc, char** argv) {
       _commands.testCsv(engine(), nextArg());
     } else if (arg == "-vacuum") {
       engine().db->vacuum();
-    } else if (arg == "-test-add-video") {
-      IndexResult result = engine().scanner->processVideoFile(nextArg());
+    } else if (arg == "-add-video") {
+      const QString path = QFileInfo(nextArg()).absoluteFilePath();
+      int accel = -1;
+      if (indexParams.accelList.count()) accel = 0;
+      if (indexParams.decoderThreads == 0) indexParams.decoderThreads = 1;
+      engine().scanner->setIndexParams(indexParams);
+
+      IndexResult result = engine().scanner->processVideoFile(path, accel);
       MediaGroup media{result.media};
-      if (result.ok) engine().db->add(media);
+      if (result.ok) {
+        if (engine().db->mediaExists(path)) {
+          qWarning() << "add-video: path exists in the database";
+          return -1;
+        }
+        engine().db->add(media);
+        return 0;
+      }
+      qWarning() << "add-video: indexing failed";
+      return -2;
     } else if (arg == "-compare-videos") {
       Media left(nextArg(), Media::TypeVideo);
       Media right = left;

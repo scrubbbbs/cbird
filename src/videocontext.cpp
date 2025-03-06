@@ -212,8 +212,9 @@ static void FFmpeg(void* ptr, int level, const char* fmt, va_list vl) {
       if (ctx->opaque) msgContext = (const char*) ctx->opaque;
       msgContext += "|graph";
     } else if (avClassName == "SwsContext") {
-      auto ctx = (SwsContext*) ptr;
-      if (ctx->opaque) msgContext = (const char*) ctx->opaque;
+      // libswscale > release/7.1
+      // auto ctx = (SwsContext*) ptr;
+      // if (ctx->opaque) msgContext = (const char*) ctx->opaque;
       msgContext += "|sws";
     } else if (avClassName == "AVFilter") {
       // auto filter = (AVFilter*) ptr;
@@ -1076,6 +1077,11 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
     return false;
   }
 
+  // this is as much as we can do without opening device/driver
+  // we use this with fork option of indexer for buggy hw decoders
+  // that might crash the application or leak system/GPU memory
+  if (_options.preflight) return true;
+
   int err = 0;
 
   AVCodecContext* hwContext = avcodec_alloc_context3(hwCodec);
@@ -1380,10 +1386,11 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt_) {
       _options.lowres = false;
       snprintf(_logContext, sizeof(_logContext), "%s|%s", qUtf8Printable(path),
                qUtf8Printable(deviceId()));
+      if (_options.preflight) return 0;
     } else {
       avcodec_free_context(&hwContext);
       _options.accel.clear();
-      if (_options.nofallback) {
+      if (_options.nofallback || _options.preflight) {
         freeContext();
         return -3;
       }
@@ -1920,7 +1927,8 @@ int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame
       return ConvertError;
     }
 
-    _p->scaler->opaque = (void*) logContext();
+    // libswscale > release/7.1
+    // _p->scaler->opaque = (void*) logContext();
 
     if (srcFmt != srcFrame->format) {
       if (_p->context->color_range != AVCOL_RANGE_JPEG)

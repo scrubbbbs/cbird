@@ -35,6 +35,7 @@
 #include <QtCore/QBuffer>
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QDir>
+#include <QtCore/QProcess>
 #include <QtCore/QRegularExpression>
 #include <QtCore/QTimer>
 #include <QtGui/QImageReader>
@@ -165,9 +166,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
       for (auto& path : qAsConst(_videoQueue)) {
         threads[path] = false;
 
-        const QString context = path.mid(_topDirPath.length() + 1);
-        const MessageContext mc(context);
-
+        const MessageContext mc(path);
         VideoContext v;
         if (v.open(path) < 0) continue;
 
@@ -645,6 +644,8 @@ void Scanner::processOne() {
 
       // qWarning() << "threads" << activeThreads << availThreads << cpuThreads;
       if (tryAccel || cpuThreads > 0) {
+        bool doFork = false;
+        int accel = -1;
         VideoContext* v = nullptr;
 
         // fill accel with the most threads available, with the first supported file
@@ -658,25 +659,53 @@ void Scanner::processOne() {
             for (auto& a : accels) {
               if (a.failures.contains(p)) continue;
               if (a.maxThreadCount > a.threadCount) {
-                const MessageContext mc(p.mid(_topDirPath.length() + 1));
-                v = initVideoProcess(p, a.index, cpuThreads);
-                if (v) {
+                const MessageContext mc(p);
+                if (_params.forkAccel) {
+                  // if the forked process fails we will retry on another accel or cpu decoder
+                  // to prevent needless failures/retries, check compatibility first
+                  // note: we cannot open the device/codec as that would defeat the purpose of forking,
+                  // so some failures won't be detected until forking
+                  VideoContext::DecodeOptions opt;
+                  opt.accel = _params.accelList[a.index];
+                  opt.preflight = true;
+                  VideoContext v;
+                  if (0 == v.open(p, opt)) doFork = true;
+                } else
+                  v = initVideoProcess(p, a.index, cpuThreads);
+
+                if (v || doFork) {
                   _accel[a.index].threadCount++;
                   path = p;
+                  accel = a.index;
                   goto DONE;
                 }
+
                 _accel[a.index].failures.insert(p);
               }
             }
         }
       DONE:
-        if (!v && cpuThreads > 0) {
+        if (!v && !doFork && cpuThreads > 0) {
           path = _videoQueue.first();
-          const MessageContext mc(path.mid(_topDirPath.length() + 1));
+          const MessageContext mc(path);
           v = initVideoProcess(path, -1, cpuThreads);
         }
 
-        if (v) {
+        if (doFork) {
+          if (path.isEmpty()) path = _videoQueue.first();
+          QThreadPool* pool = accel >= 0 ? &_accelPool : QThreadPool::globalInstance();
+          if (accel >= 0) cpuThreads = 1;
+
+          static bool threadsWarning = false;
+          if (accel < 0 && cpuThreads > 1 && !threadsWarning) {
+            threadsWarning = true;
+            qWarning() << "forked decoders do not convey thread usage; cbird will use more "
+                          "threads than expected. Set -i.decthr 1 to prevent this";
+          }
+
+          f = QtConcurrent::run(pool, &Scanner::forkVideo, this, path, accel, cpuThreads);
+          _videoQueue.removeOne(path);
+        } else if (v) {
           QThreadPool* pool = v->isHardware() ? &_accelPool : QThreadPool::globalInstance();
 
           if (!v->isHardware()) {
@@ -752,7 +781,20 @@ void Scanner::processFinished() {
     _processedFiles++;
     result = w->future().result();
     Media& m = result.media;
-    if (result.ok) emit mediaProcessed(m);
+    if (result.ok && !result.forked) emit mediaProcessed(m);
+
+    if (result.forked && result.accelIndex >= 0) {
+      Q_ASSERT(result.accelIndex < _accel.count());
+      _accel[result.accelIndex].threadCount--;
+      Q_ASSERT(_accel[result.accelIndex].threadCount >= 0);
+
+      // retry the failed file on a different accel or sw codec
+      if (!result.ok) {
+        qDebug() << "forked accel:" << result.accelIndex << "failed, retrying" << result.path;
+        _accel[result.accelIndex].failures.insert(result.path);
+        _videoQueue.prepend(result.path);
+      }
+    }
 
     VideoContext* v = result.context;
     if (v) {
@@ -762,7 +804,6 @@ void Scanner::processFinished() {
         _accel[accelIndex].threadCount--;
         Q_ASSERT(_accel[accelIndex].threadCount >= 0);
       }
-
       delete v;
       result.context = nullptr;
     }
@@ -792,9 +833,8 @@ IndexResult Scanner::processImage(const QString& path, const QString& digest,
 
   // opencv throws exceptions
   try {
-    const QString shortPath = path.mid(_topDirPath.length() + 1);
-    const MessageContext mc(shortPath);
-    const CVErrorLogger cvLogger(shortPath);
+    const MessageContext mc(path);
+    const CVErrorLogger cvLogger(path);
 
     int width = qImg.width();
     int height = qImg.height();
@@ -1090,6 +1130,50 @@ IndexResult Scanner::processVideo(VideoContext* video) const {
   return result;
 }
 
+IndexResult Scanner::forkVideo(const QString& path, int accelIndex, int cpuThreads) const {
+  QProcess process;
+  QStringList args;
+  IndexResult result;
+  result.forked = true;
+  result.path = path;
+  result.accelIndex = accelIndex;
+
+  // run "cbird -add-video <path>"
+  if (_dbPath.isEmpty() || !path.startsWith(_dbPath)) {
+    qCritical() << "invalid _dbPath or file path";
+    return result;
+  }
+
+  args << "-headless";
+
+  args << "-use";
+  args << _dbPath;
+
+  if (accelIndex >= 0) {
+    args << "-i.hwdec";
+    args << _params.accelList[accelIndex];
+  }
+  if (cpuThreads > 0) {
+    args << "-i.decthr";
+    args << QString::number(cpuThreads);
+  }
+
+  args << "-i.vht";
+  args << QString::number(_params.videoThreshold);
+
+  args << "-i.verbose";
+  args << QString::number(_params.verbose);
+
+  args << "-add-video";
+  args << path;
+
+  qDebug() << "<NPR>forking decoder:<MAG>" << qApp->applicationFilePath() << args;
+  int status = process.execute(qApp->applicationFilePath(), args);
+
+  result.ok = status == 0;
+  return result;
+}
+
 bool Scanner::includePath(const QString& path) const {
   const QString relPath = path.mid(_topDirPath.length() + 1);
   if (!_includePatterns.empty()) {
@@ -1125,9 +1209,9 @@ bool Scanner::includePath(const QString& path) const {
   return true;
 }
 
-IndexResult Scanner::processVideoFile(const QString& path) const {
+IndexResult Scanner::processVideoFile(const QString& path, int accelIndex) const {
   // FIXME: only used for -test-add-video
-  VideoContext* video = initVideoProcess(path, -1, _params.decoderThreads);
+  VideoContext* video = initVideoProcess(path, accelIndex, _params.decoderThreads);
 
   if (!video) {
     IndexResult result;
@@ -1219,6 +1303,10 @@ IndexParams::IndexParams() {
 
   add({"hwdec", CatThreads, "Add hardware decoder <device-id>,family=<family>[,...]", Value::List,
        counter++, ADD_STRING(accelList), GET(accelList), NO_NAMES, NO_RANGE});
+
+  add({"forkhw", CatThreads,
+       "Run hardware decoders in a separate process (for buggy drivers/codecs)", Value::Bool,
+       counter++, SET_BOOL(forkAccel), GET(forkAccel), NO_NAMES, NO_RANGE});
 
   add({"decthr", CatThreads, "Max threads for a cpu video decoding job (0==auto)", Value::Int,
        counter++, SET_INT(decoderThreads), GET(decoderThreads), NO_NAMES, GET_CONST(positive)});

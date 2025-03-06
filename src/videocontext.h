@@ -80,6 +80,7 @@ class VideoContext {
     int threads = 1;      // max # of threads
     QString accel;        // <libav-device-spec>,<cbird-options>
     bool nofallback = false; // do not fallback to sw decoding when accel requested
+    bool preflight = false;  // do not open device/codec, only check compatibility
 
     DecodeOptions();
   };
