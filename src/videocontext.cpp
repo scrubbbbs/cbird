@@ -637,7 +637,7 @@ bool VideoContext::checkAmd(
   }
 
   if (!supported) {
-    qDebug() << "unsupported pixel format:" << codecName
+    qDebug() << "unsupported codec/pixel format:" << codecName
              << av_pix_fmt_desc_get(AVPixelFormat(pixelFormat))->name;
     return false;
   }
@@ -933,7 +933,7 @@ bool VideoContext::checkNvdec(
   }
 
   if (!supported) {
-    qDebug() << "unsupported pixel format:" << codecName
+    qDebug() << "unsupported codec/pixel format:" << codecName
              << av_pix_fmt_desc_get(AVPixelFormat(pixelFormat))->name;
     return false;
   }
@@ -968,7 +968,10 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
                              const AVStream* videoStream) const {
   QString deviceType, deviceId, deviceVendor, deviceFamily;
 
-  // <libav-device-string>,family=<family>,vendor=<vendor>,reject=<rej-list>,accept=<accept-list>
+  QStringList disabled;
+  QStringList enabled;
+
+  // <libav-device-string>,family=<family>,vendor=<vendor>,disable=<rej-list>,enable=<accept-list>
   QHash<QString, QString> deviceOptions;
   {
     const QStringList parts = _options.accel.split(',');
@@ -984,8 +987,22 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
         deviceVendor = kv[1];
         continue;
       }
+      if (kv[0] == "jobs") continue;
+      if (kv[0] == "disable") {
+        disabled = kv[1].split(';');
+        continue;
+      }
+      if (kv[0] == "enable") {
+        enabled = kv[1].split(';');
+        continue;
+      }
       deviceOptions.insert(kv[0], kv[1]);
     }
+  }
+
+  if (disabled.count() && enabled.count()) {
+    qWarning() << "using both disabled= and enabled= is not supported";
+    return false;
   }
 
   AVHWDeviceType deviceTypeId = AV_HWDEVICE_TYPE_NONE;
@@ -1074,6 +1091,16 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
   if (!hwCodec) {
     qWarning() << "codec" << codecName << "is not available in libavcodec";
     if (ffConfigure) qWarning() << "did you compiled ffmpeg with" << ffConfigure << "?";
+    return false;
+  }
+
+  if (disabled.contains(swCodec->name)) {
+    qDebug() << deviceId << swCodec->name << "is supported, but disabled by user";
+    return false;
+  }
+
+  if (enabled.count() && !enabled.contains(swCodec->name)) {
+    qDebug() << deviceId << swCodec->name << "is supported, but disabled by user";
     return false;
   }
 
