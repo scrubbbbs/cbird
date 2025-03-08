@@ -24,6 +24,10 @@ Setup
                                    - use "-i.dryrun true" to test the migration before applying
   -headless                        run without a window manager
   -about                           system information
+  -args [option|<file>]            load saved arguments file, one arg per line (default: global+local)
+                                   - "global" for ~/.config/cbird.args.txt
+                                   - "local" for _index/args.txt
+                                   - "none" to disable default processing
   -h|-help                         help page
   -version|--version               version
   -license|--license               show software license and attribution

@@ -1146,6 +1146,9 @@ IndexResult Scanner::forkVideo(const QString& path, int accelIndex, int cpuThrea
 
   args << "-headless";
 
+  args << "-args";
+  args << "-none";
+
   args << "-use";
   args << _dbPath;
 

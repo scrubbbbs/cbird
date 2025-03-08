@@ -179,8 +179,13 @@ int printCompletions(const char* argv0, const QStringList& args) {
                               "-or-without", "-sort-result", "-sort-result-rev"};
   cmds += propArg;
 
-  const QSet<QString> fileArg{"-select-one",     "-jpeg-repair-script", "-test-csv",
-                              "-compare-videos", "-test-image-loader",  "-video-thumbnail"};
+  const QSet<QString> fileArg{"-select-one",
+                              "-jpeg-repair-script",
+                              "-test-csv",
+                              "-compare-videos",
+                              "-test-image-loader",
+                              "-video-thumbnail",
+                              "-args"};
   cmds += fileArg;
 
   const QSet<QString> dirArg{"-use",          "-update",     "-dups-in",
@@ -587,6 +592,19 @@ void waitFuture(const QFuture<void>& future, const QString& format) {
   progress();
 }
 
+static QStringList readArgsFile(const QString& argsFile) {
+  QFile f(argsFile);
+  if (f.open(QFile::ReadOnly)) {
+    qDebug() << "reading from" << argsFile;
+    const auto lines = f.readAll().split('\n');
+    QStringList clean;
+    for (auto& l : lines)
+      if (!l.isEmpty() && !l.startsWith('#')) clean.append(l);
+    return clean;
+  }
+  return {};
+}
+
 int main(int argc, char** argv) {
   QStringList args(argv, argv+argc);
 
@@ -665,6 +683,26 @@ int main(int argc, char** argv) {
     return loggingArgs.contains(s);
   });
 
+  // default saved arguments
+  do {
+    int i = args.indexOf("-args");
+    const QString next = i >= 0 ? args[i + 1] : "";
+
+    // user can disable default saved args by specifying one of these
+    if (next == "global" || next == "local" || next == "none") break;
+
+    // local args must follow -use as they come from _index/args.txt
+    i = args.indexOf("-use");
+    if (i < 0)
+      args = QStringList{"-args", "global", "-args", "local"} + args;
+    else {
+      args.insert(i + 2, "-args");
+      args.insert(i + 3, "local");
+      args = QStringList{"-args", "global"} + args;
+    }
+  } while (0);
+  qDebug() << "args after init:" << args;
+
   if (args.count() <= 0) {
     qInfo() << "nothing to do, see -h|-help for usage";
     return 1;
@@ -682,8 +720,8 @@ int main(int argc, char** argv) {
 
   SearchParams params;
   IndexParams indexParams;
-  MediaGroup selection;        // selection of items by properties
-  MediaGroupList queryResult;  // results of a search query
+  MediaGroup selection;       // selection of items by properties
+  MediaGroupList queryResult; // results of a search query
 
   // start cleaning this up...
   Commands _commands(indexParams, params, arg, args, selection, queryResult);
@@ -725,8 +763,7 @@ int main(int argc, char** argv) {
         path = info.absoluteFilePath();
         if (info.isDir() && !path.endsWith(lc('/')))
           path += lc('/'); // if path => "./some" don't select "./something"
-      }
-      else if (path.contains("/")) {
+      } else if (path.contains("/")) {
         // try to form a valid path from the prefix
         QStringList parts = path.split("/");
 
@@ -822,8 +859,19 @@ int main(int argc, char** argv) {
         qFatal("-p/-i should be followed by param name and value (-p.dht 3, -i.types i)");
     }
 #endif
+    if (arg == "-args") {
+      const QString val = nextArg();
+      if (val == "global")
+        args = readArgsFile(DesktopHelper::settingsFile().replace(".ini", ".args.txt")) + args;
+      else if (val == "local")
+        args = readArgsFile(engine().db->indexPath() + "/args.txt") + args;
+      else if (val == "none")
+        ;
+      else
+        args = readArgsFile(val) + args;
 
-    if (arg.startsWith("-p.")) {
+      qDebug() << "args:" << args;
+    } else if (arg.startsWith("-p.")) {
       const QString val = nextArg();
       if (val.startsWith(lc('-'))) {
         qCritical() << arg << "must be followed by a value";
@@ -1113,8 +1161,7 @@ int main(int argc, char** argv) {
 
               work.append(QtConcurrent::run([=] {
                 QImage img = VideoContext::frameGrab(to, pos, true);
-                if (img.isNull())
-                  return Media();
+                if (img.isNull()) return Media();
 
                 img = img.convertToFormat(QImage::Format_RGB32); // MGLW needs this
 
@@ -1439,9 +1486,7 @@ int main(int argc, char** argv) {
         pl.end(0, {nonNull.loadRelaxed()});
       }
       if (external) {
-        auto future = QtConcurrent::map(mediaPtr, [](Media* m) {
-          m->readMetadata();
-        });
+        auto future = QtConcurrent::map(mediaPtr, [](Media* m) { m->readMetadata(); });
         PROGRESS_LOGGER(pl, "sort: reading metadata:<PL> %percent %step files",
                         future.progressMaximum());
         while (!future.isFinished()) {
@@ -1773,7 +1818,8 @@ int main(int argc, char** argv) {
     } else if (arg == "-test-update") {
       _commands.testUpdate(engine());
     } else {
-      qCritical("invalid argument \"%s\"", qUtf8Printable(arg));
+      qCritical("invalid argument name/usage: \"%s\"", qUtf8Printable(arg));
+      qInfo() << "note that global arguments cannot be used in saved args files (-args)";
 #ifdef Q_OS_WIN
       if (arg == "-p" || arg == "-i") qWarning() << "in PowerShell you must use -p: / -i: ";
 #endif
