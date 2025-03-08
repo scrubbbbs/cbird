@@ -330,11 +330,13 @@ class VideoContextPrivate {
   const AVCodec* codec = nullptr;
   AVCodecContext* context = nullptr;
 
+  bool hwFilter = false;                    // true if hwaccel uses a scale filter
+  const uint8_t* hwFramesContext = nullptr; // frames context used by filter graph
   AVFilterGraph* filterGraph = nullptr;
   AVFilterContext* filterSource = nullptr;
   AVFilterContext* filterSink = nullptr;
   AVFrame* filterFrame = nullptr;          // result of filter
-
+  AVFrame* transferFrame = nullptr;        // hw download frame
   AVFrame* frame = nullptr;                // frame we decode into (could be hardware frame)
   AVPacket packet;
   float sar = -1.0;
@@ -445,31 +447,32 @@ bool VideoContext::initFilters(const char* filters) {
   params->sample_aspect_ratio = _p->context->sample_aspect_ratio;
 
   if (_p->context->hw_frames_ctx) {
+#if 1
     auto* hwctx = (AVHWFramesContext*) _p->context->hw_frames_ctx->data;
     qDebug() << "<MAG>configuring hw avfilter:" << av_get_pix_fmt_name(hwctx->format);
     params->format = hwctx->format;
     params->hw_frames_ctx = _p->context->hw_frames_ctx;
-  }
+#else
+    // this works, but has issues since frames are not shared with decoder,
+    // we cannot use hwdownload without another hwfilter ahead of it
+    auto* hwctx = (AVHWFramesContext*) _p->context->hw_frames_ctx->data;
 
-  // this works, but has issues since frames are not shared with decoder,
-  // we cannot use hwdownload without another hwfilter ahead of it
-
-  /*
     AVBufferRef* frameCtx = av_hwframe_ctx_alloc(_p->context->hw_device_ctx);
     AVHWFramesContext* c = (AVHWFramesContext*) frameCtx->data;
-    c->format = AV_PIX_FMT_QSV;
-    c->sw_format = AV_PIX_FMT_NV12; //_p->context->sw_pix_fmt;
+    c->format = hwctx->format;
+    c->sw_format = hwctx->sw_format;
     c->width = _p->context->width;
     c->height = _p->context->height;
-    c->initial_pool_size = 2 + _p->context->extra_hw_frames;
+    //c->initial_pool_size = 2 + _p->context->extra_hw_frames;
     int err = av_hwframe_ctx_init(frameCtx);
     if (err < 0) {
       AV_CRITICAL("hwframe_ctx_init");
-      cleanup();
       return false;
     }
+    params->format = c->format;
     params->hw_frames_ctx = frameCtx;
-		*/
+#endif
+  }
 
   int err;
   if ((err = av_buffersrc_parameters_set(s.source, params)) < 0) {
@@ -529,6 +532,7 @@ bool VideoContext::initFilters(const char* filters) {
   _p->filterSource = s.source;
   _p->filterSink = s.sink;
   _p->filterFrame = av_frame_alloc();
+  _p->hwFramesContext = _p->context->hw_frames_ctx ? _p->context->hw_frames_ctx->data : nullptr;
 
   return true;
 }
@@ -963,6 +967,7 @@ bool VideoContext::checkNvdec(
 
 bool VideoContext::initAccel(const AVCodec** outCodec,
                              AVCodecContext** outContext,
+                             bool& outUsesFilter,
                              const AVCodec* swCodec,
                              const AVCodecContext* swContext,
                              const AVStream* videoStream) const {
@@ -1008,6 +1013,8 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
   AVHWDeviceType deviceTypeId = AV_HWDEVICE_TYPE_NONE;
   QString codecSuffix = "";
 
+  outUsesFilter = false;
+
   const char* ffConfigure = nullptr;
   if (deviceType == "nvdec") {
     // we do not setup hwdevice for nvdec as it can decode&scale directly into system memory
@@ -1020,30 +1027,35 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
     deviceVendor = "intel";
     codecSuffix = "_qsv";
     ffConfigure = "--enable-libvpl";
+    outUsesFilter = true; // scale_qsv
+  } else if (deviceType == "vulkan") {
+    deviceTypeId = AV_HWDEVICE_TYPE_VULKAN;
+    ffConfigure = "--enable-vulkan --enable-libshaderc";
+    outUsesFilter = true; // scale_vulkan
   }
 #ifdef Q_OS_UNIX
   else if (deviceType == "vaapi") {
     deviceTypeId = AV_HWDEVICE_TYPE_VAAPI;
     ffConfigure = "--enable-vaapi";
+    outUsesFilter = true; // scale_vaapi
   }
 #endif
 #ifdef Q_OS_WIN
-  else if (deviceType == "d3d11va") { // TODO: maybe remove anything with no hw scaler
+  else if (deviceType == "d3d11va") {
     deviceTypeId = AV_HWDEVICE_TYPE_D3D11VA;
+    // outUsesFilter = true; // experimental scale_d3d11va
   } else if (deviceType == "d3d12va") {
     deviceTypeId = AV_HWDEVICE_TYPE_D3D12VA;
-  } else if (deviceType == "dxva2") {
-    deviceTypeId = AV_HWDEVICE_TYPE_DXVA2;
   }
 #endif
   else {
 
     QStringList hwAccels;
 #ifdef Q_OS_LINUX
-    hwAccels = {"nvdec,qsv,vaapi"};
+    hwAccels = {"nvdec,qsv,vaapi,vulkan"};
 #endif
 #ifdef Q_OS_WIN
-    hwAccels = {"nvdec,qsv,d3d11va,d3d12va,dxva2"};
+    hwAccels = {"nvdec,qsv,d3d11va,d3d12va,vulkan"};
 #endif
 
     qWarning() << "unsupported device type" << deviceType << "choices are: " << hwAccels;
@@ -1074,6 +1086,12 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
   } else {
     supported = true;
     qDebug() << "format checks disabled";
+  }
+
+  // vp9 is definitely not supported
+  if (supported && deviceType == "vulkan" && swContext->codec_id == AV_CODEC_ID_VP9) {
+    qDebug() << "vulkan does not support vp9";
+    supported = false;
   }
 
   if (!supported) return false;
@@ -1184,7 +1202,8 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
     }
   }
 
-  // if (hwContext->hw_device_ctx) hwContext->extra_hw_frames = 2;
+  // add extra frames for filter
+  // if (outUsesFilter && hwContext->hw_device_ctx) hwContext->extra_hw_frames = 2;
 
   if ((err = avcodec_open2(hwContext, hwCodec, &hwOptions)) < 0) {
     AV_CRITICAL("failed to open codec");
@@ -1404,7 +1423,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt_) {
   if (!_options.accel.isEmpty()) {
     const AVCodec* hwCodec = nullptr;
     AVCodecContext* hwContext = nullptr;
-    if (initAccel(&hwCodec, &hwContext, swCodec, _p->context, _p->videoStream)) {
+    if (initAccel(&hwCodec, &hwContext, _p->hwFilter, swCodec, _p->context, _p->videoStream)) {
       avcodec_free_context(&_p->context);
       _p->codec = hwCodec;
       _p->context = hwContext;
@@ -1416,6 +1435,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt_) {
       if (_options.preflight) return 0;
     } else {
       avcodec_free_context(&hwContext);
+      _p->hwFilter = false;
       _options.accel.clear();
       if (_options.nofallback || _options.preflight) {
         freeContext();
@@ -1545,14 +1565,16 @@ void VideoContext::close() {
   }
   if (_p->scaled.data[0]) av_freep(&(_p->scaled.data[0]));
 
+  if (_p->transferFrame) av_frame_free(&_p->transferFrame);
+
   if (_p->filterFrame) av_frame_free(&_p->filterFrame);
 
-  if (_p->filterGraph) {
-    avfilter_graph_free(&_p->filterGraph);
-  }
+  if (_p->filterGraph) avfilter_graph_free(&_p->filterGraph);
 
   _p->filterSource = nullptr;
   _p->filterSink = nullptr;
+  _p->hwFilter = false;
+  _p->hwFramesContext = nullptr;
 
   if (_p->frame) {
     av_frame_free(&_p->frame);
@@ -1879,8 +1901,20 @@ int VideoContext::convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame
 
   // we could do this with api, but we need avfilter anyways
   if (isHardware) {
-    qWarning() << "hwdownload filter must be used for hw frames";
-    return ConvertError;
+    if (_p->filterGraph) {
+      qWarning() << "hwdownload filter should be used when filtering";
+      return ConvertError;
+    }
+
+    if (!_p->transferFrame) _p->transferFrame = av_frame_alloc();
+
+    int err;
+    if ((err = av_hwframe_transfer_data(_p->transferFrame, _p->frame, 0)) < 0) {
+      AV_CRITICAL("hw frame transfer failed");
+      return ConvertError;
+    }
+
+    srcFrame = _p->transferFrame;
   }
 
   fmt = AV_PIX_FMT_BGR24;
@@ -2060,10 +2094,23 @@ bool VideoContext::frameToQImg(QImage& img) {
 bool VideoContext::decodeFrameFiltered() {
   bool ok = decodeFrame();
 
-  // the first time through we setup the filter graph,
-  // this has to be done here since we don't have everything we need (like hw_frames_ctx)
-  // note: some hwdecs will *not* have a device context, like nvdec which decodes directly to system memory by default!
-  if (ok && !_p->filterGraph && _p->context->hw_device_ctx) {
+#if 0
+  // if this changes we should *probably* rebuild the filter graph,
+  // in practice it does not seem to matter, or even use more memory?
+  if (ok && _p->hwFilter && _p->filterGraph && _p->frame->hw_frames_ctx) {
+    if (_p->hwFramesContext != _p->frame->hw_frames_ctx->data) {
+      qDebug() << "hw frames context changed!!" << _p->hwFramesContext
+                 << _p->frame->hw_frames_ctx->data << _p->context->hw_frames_ctx->data;
+      av_frame_free(&_p->filterFrame);
+      avfilter_graph_free(&_p->filterGraph);
+      _p->filterSource = nullptr;
+      _p->filterSink = nullptr;
+    }
+  }
+#endif
+
+  // this has to be done here since we don't have hw_frames_ctx until after decodeFrame()
+  if (ok && _p->hwFilter && !_p->filterGraph) {
     // should be non-null if we decoded a frame, but sometimes not (vaapi)
     if (!_p->context->hw_frames_ctx) return false;
 
@@ -2083,11 +2130,13 @@ bool VideoContext::decodeFrameFiltered() {
         else
           filters = qq("scale_qsv=w=%1:h=%2:mode=hq,").arg(_options.maxW).arg(_options.maxH)
                     + filters;
-      } else if (fc->format == AV_PIX_FMT_D3D11) {
-        // prototype d3d11 scaler from dash; does not work with quicksync devices
-        filters = qq("scale_d3d11=width=%1:height=%2,").arg(_options.maxW).arg(_options.maxH)
-                  + filters;
-      } else if (fc->format == AV_PIX_FMT_VAAPI) {
+      }
+      // else if (fc->format == AV_PIX_FMT_D3D11) {
+      // prototype d3d11 scaler from dash; does not work with quicksync devices
+      // filters = qq("scale_d3d11=width=%1:height=%2,").arg(_options.maxW).arg(_options.maxH)
+      // + filters;
+      // }
+      else if (fc->format == AV_PIX_FMT_VAAPI) {
         // same qsv problem on Linux; if amd is ok in this regard should be an option
         float factor = _p->context->height / _options.maxH;
         if (factor > 8)
@@ -2095,6 +2144,8 @@ bool VideoContext::decodeFrameFiltered() {
         else
           filters = qq("scale_vaapi=w=%1:h=%2:mode=hq,").arg(_options.maxW).arg(_options.maxH)
                     + filters;
+      } else if (fc->format == AV_PIX_FMT_VULKAN) {
+        filters = qq("scale_vulkan=w=%1:h=%2,").arg(_options.maxW).arg(_options.maxH) + filters;
       } else {
         qWarning() << "no hardware scaler for" << av_get_pix_fmt_name(fc->format)
                    << "expect extremely poor performance";
@@ -2121,12 +2172,16 @@ bool VideoContext::decodeFrameFiltered() {
   if (!_p->filterGraph) return ok;
 
   // qDebug() << "filtering" << _p->filterGraph << _p->filterSource << _p->filterSink;
-
   while (ok) { // FIXME: ok==false we stil have flush the graph...
     _p->frame->pts = _p->frame->best_effort_timestamp;
     _p->frame->time_base = _p->videoStream->time_base;
 
-    // AV_BUFFERSRC_FLAG_KEEPREF is also an option..
+    // if (_p->frame->hw_frames_ctx) {
+    // auto* ctx = (const AVHWFramesContext*) _p->frame->hw_frames_ctx->data;
+    // qDebug() << "<CYN>" << ctx << _p->frame->hw_frames_ctx->buffer << ctx->width << ctx->height
+    // << av_get_pix_fmt_name(ctx->sw_format) << ctx->initial_pool_size;
+    // }
+
     int err = av_buffersrc_add_frame_flags(_p->filterSource, _p->frame, AV_BUFFERSRC_FLAG_PUSH);
     if (err < 0) {
       AV_CRITICAL("feeding filtergraph");

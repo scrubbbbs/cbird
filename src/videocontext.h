@@ -207,6 +207,7 @@ class VideoContext {
 
   bool initAccel(const AVCodec** codec,
                  AVCodecContext** context,
+                 bool& outUsesFilter,
                  const AVCodec* swCodec,
                  const AVCodecContext* swContext,
                  const AVStream* videoStream) const;
