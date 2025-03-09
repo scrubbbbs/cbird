@@ -289,8 +289,7 @@ void VideoContext::listFormats() {
 }
 
 void VideoContext::listCodecs() {
-
-  qWarning("listing FFmpeg configuration, not necessarily available for indexing");
+  qWarning("listing FFmpeg video decoders, not necessarily available for indexing");
 
   void* opaque = nullptr;
   const AVCodec* codec;
@@ -300,7 +299,7 @@ void VideoContext::listCodecs() {
   QVector<QPair<QString, QString>> codecs;
   while (nullptr != (codec = av_codec_iterate(&opaque))) {
     if (codec->type != AVMEDIA_TYPE_VIDEO) continue;
-
+    if (!av_codec_is_decoder(codec)) continue;
     QString desc = QString().asprintf("%3s %3s %-20s %s",
                                       codec->capabilities
                                               & (AV_CODEC_CAP_SLICE_THREADS
@@ -308,7 +307,10 @@ void VideoContext::listCodecs() {
                                                  | AV_CODEC_CAP_OTHER_THREADS)
                                           ? "mt"
                                           : "st",
-                                      codec->capabilities & AV_CODEC_CAP_HARDWARE ? "gpu" : "cpu",
+                                      codec->capabilities
+                                              & (AV_CODEC_CAP_HARDWARE | AV_CODEC_CAP_HYBRID)
+                                          ? "hw"
+                                          : "sw",
                                       codec->name, codec->long_name);
     codecs.append({codec->name, desc});
   }
