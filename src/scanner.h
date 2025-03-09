@@ -192,7 +192,7 @@ class Scanner : public QObject {
   IndexResult processImage(const QString& path, const QString& digest, const QImage& qImg) const;
 
   /// process video
-  IndexResult processVideoFile(const QString& path, int accelIndex) const;
+  IndexResult processVideoFile(const QString& path, int accelIndex=-1) const;
 
   /**
    * empty queues, cancel work, spin until empty (QEventLoop::exec())
