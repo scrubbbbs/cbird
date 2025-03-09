@@ -1,7 +1,7 @@
 Release Blockers (v0.8)
 =========================
 
-- opencv 4 -- requires cbird to be GPL	v3
+- opencv 4 -- requires cbird to be GPL v3
 - review and update the build notes
 - index is spawning more parallel jobs than it should
 - "invalid key size" with odt too large  > 100?  (-sort-similar)
@@ -19,7 +19,7 @@ Wish List
 - symbolic names for all enumerations (e.g. "v" == video)
 - ~disable/reduce logging (-verbose, -quiet etc)~ improved in v0.7.2
 - typecheck param values
-- presets for multiple parameters
+- ~presets for multiple parameters~ added in v0.8
 - move/link files rather than delete/rename
 - prune groups, keeping/ignoring needle
 - rename folders based on filenames
@@ -42,7 +42,8 @@ Wish List
   - unsupported ICC profile
   - colordescriptor on grayscale image
 - console progress bar
-- error-log to file
+- ~error-log to file for videos~ added v0.8
+- error-log to file for images
 - store symlinks to prevent broken links later on
 - ~~use idct scaling to speed up jpeg decompress (wip)~~
 - ~~hard links handling~~ added in v0.6

@@ -5,8 +5,8 @@ if [ -n "$1" ]; then
   PLUGINS_DIR="$1"
 fi
 
-CBIRD=cbird-mac
-PKG_DIR=_mac/cbird
+CBIRD=_mac/cbird
+PKG_DIR=_mac/cbird-mac
 TMP=_mac/libs.txt
 EXTRAS="readme.md tools/ffplay-sbs"
 

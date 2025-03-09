@@ -1423,6 +1423,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt_) {
   if (!_options.accel.isEmpty()) {
     const AVCodec* hwCodec = nullptr;
     AVCodecContext* hwContext = nullptr;
+    MessageContext msgContext(_path + '|' + deviceId());
     if (initAccel(&hwCodec, &hwContext, _p->hwFilter, swCodec, _p->context, _p->videoStream)) {
       avcodec_free_context(&_p->context);
       _p->codec = hwCodec;

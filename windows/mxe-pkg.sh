@@ -44,6 +44,10 @@ for exe in ffplay.exe ffprobe.exe ffmpeg.exe; do
     cp -auv "$CROSS_BIN/$exe" "$PKG_DIR/"
 done
 
+# disable for development
+#echo !!!! dlls are not being copied for speed !!!!
+#exit 0
+
 for exe in cbird.exe sqlite3.exe ffplay.exe ffprobe.exe ffmpeg.exe; do
 #for exe in cbird.exe ffmpeg.exe ffplay.exe ffprobe.exe; do
     
@@ -54,10 +58,10 @@ for exe in cbird.exe sqlite3.exe ffplay.exe ffprobe.exe ffmpeg.exe; do
         PASS=0
         DLLS=`wine "$PKG_DIR/$exe" -about 2>&1 | grep :err:module:import_dll | cut -d' ' -f3`
         for x in $DLLS; do
-            if   [ -e "$CROSS_BIN/$x"  ]; then cp -au "$CROSS_BIN/$x" "$PKG_DIR/"
-            elif [ -e "$OPENCV_BIN/$x" ]; then cp -au "$OPENCV_BIN/$x" "$PKG_DIR/"
-            elif [ -e "$QT_BIN/$x"     ]; then cp -au "$QT_BIN/$x" "$PKG_DIR/"
-            elif [ -e "$MXE_BIN/$x"    ]; then cp -au "$MXE_BIN/$x" "$PKG_DIR/"
+            if   [ -e "$CROSS_BIN/$x"  ]; then cp -auv "$CROSS_BIN/$x" "$PKG_DIR/"
+            elif [ -e "$OPENCV_BIN/$x" ]; then cp -auv "$OPENCV_BIN/$x" "$PKG_DIR/"
+            elif [ -e "$QT_BIN/$x"     ]; then cp -auv "$QT_BIN/$x" "$PKG_DIR/"
+            elif [ -e "$MXE_BIN/$x"    ]; then cp -auv "$MXE_BIN/$x" "$PKG_DIR/"
             else
                 echo "can't find dll: $x"
                 exit 1

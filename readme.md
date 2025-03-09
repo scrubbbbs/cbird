@@ -6,12 +6,13 @@ cbird is a command-line program for finding duplicate images and videos that can
 
 The main features are:
 
-- CBIR algorithms for image and video search
-- Cached index in the top directory, prevents needless re-indexing
+- Image and video search
+- Cached search index
 - GUI for evaluating duplicates
 - Huge index/database is possible
 - Comprehensive file format support
 - Search inside zip files
+- Hardware video decoding including multiple decoders/gpus
 
 Installing
 =========================
@@ -297,25 +298,30 @@ Release Notes
 #### v0.8
 
 - Command Line
-	+ Simplify logging
-    * new color scheme
-    * unified logging wording/text/behavior
-    * progress logs hidden for fast operations
-		* use `-v` to see verbose logging
+	+ Removed most default logging (`-v` to see all logging)
+    + Improved logging wording/behavior
+    + Hide progress logs unless operation is slow
 	+ Handle TTY resizing
 	+ Add ZSH tab completion to `-install`
+	+ Add `-args` to load saved argument lists
 	+ Add `-list-formats` `-list-codecs` to check FFmpeg configuration
-  + Support .zip in `-move`
-  + Support multiple files passed to `-select-grid`
-	+ Add special path (`@`) for `-use` to find the index in the parent path
+    + Support .zip in `-move`
+    + Support multiple files passed to `-select-grid`
+    + Add special path (`@`) for `-use` to find the index in the parent path
 - Indexing
   + Keep algos working if `-i.algos` changes (`-i.sync`)
   + Add optional path to `-update` to scan a sub-directory
-	+ Add `-i.include` and `-i.exclude` to include/exclude files or directories matching patterns
-	+ Add new video index file format
-		* removes the 65,535 frames-per-video limit (now 16.7 million)
-	+ Add `-migrate` to convert existing video index files
-		* files with >65k frames will be resumed and added back after `-update`
+  + Add `-i.include` and `-i.exclude` to include/exclude files or directories matching patterns
+  + Add full-featured hardware video decoding
+  	* Add av1 support in nvdec
+  	* Add `-i.hwdec` with new syntax (removes `-i.gpu`,`-i.gputhr`)
+  	* Support more hwdec's (qsv,vaapi,vulkan,d3d11va)
+  	* Add format detection with device vendor/family tables
+  	* Support multiple hwdecs
+  + Add new video index file format
+	* removes the 65,535 frames-per-video limit (now 16.7 million)
+  + Add `-migrate` to convert existing video index files
+	* files with >65k frames will be resumed and added back after `-update`
 - Searching
   + Optimize video search, 5-10x speedup.
   + Add `-p.vradix <num>` to control speed/accuracy tradeoff 
@@ -413,7 +419,7 @@ Release Notes
   - Fix potential crash/hang with corrupt video files
   - Fix elided strings display
 	
-#### v0.6.0
+#### v0.6
 - Add weeds feature (recommended by r/user/traal)
 - Search: Add max-threshold `-p.mt` which produces a result for every needle until threshold is exceeded
 - Indexer: Use skip-loop-filter to speedup video indexing ~20%

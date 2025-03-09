@@ -155,8 +155,8 @@ SearchParams::SearchParams() {
   add({"fp", CatPost, "Filter Parent: remove items in the same directory as needle", Value::Bool,
        counter++, SET_BOOL(filterParent), GET(filterParent), NO_NAMES, NO_RANGE});
 
-  add({"mg", CatPost, "Merge n-connected groups:", Value::Int, counter++, SET_INT(mergeGroups),
-       GET(mergeGroups), NO_NAMES, GET_CONST(positive)});
+  add({"mg", CatPost, "Merge n-connected groups: {a,b},{a,c}=>{a,b,c}", Value::Int, counter++,
+       SET_INT(mergeGroups), GET(mergeGroups), NO_NAMES, GET_CONST(positive)});
 
   add({"eg", CatPost, "Expand groups to make pairs {a,b,c}=>{a,b}+{a,c}", Value::Bool, counter++,
        SET_BOOL(expandGroups), GET(expandGroups), NO_NAMES, NO_RANGE});

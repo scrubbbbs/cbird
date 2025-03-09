@@ -24,8 +24,8 @@ apt-get install git cmake g++ qt6-base-dev qt6-base-private-dev libqt6core5compa
 #### 1.2 Compiling OpenCV
 
 ```shell
-wget https://github.com/opencv/opencv/archive/2.4.13.7.zip
-unzip 2.4.13.7.zip
+	wget https://github.com/opencv/opencv/archive/2.4.13.7.zip
+	unzip 2.4.13.7.zip
 mkdir build
 cd build
 cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_JASPER=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF CMAKE_INSTALL_PREFIX=/usr/local ../opencv-2.4.13.7/
@@ -51,7 +51,7 @@ sudo make install
 Note: not possible at the moment on 22.04, FFmpeg version is too old.
 
 ```shell
-apt-get install libavformat-dev libswscale-dev
+apt-get install libavformat-dev libswscale-dev libavfilter-dev
 ```
 
 #### 1.4b Compiling FFmpeg
@@ -61,7 +61,7 @@ The latest ffmpeg may not work due to deprecations, use the revision tag for a k
 With some additional flags (not shown here) you can get more codec support.
 
 ```shell
-sudo apt-get install nasm libfribidi-dev libsdl2-dev libharfbuzz-dev libfreetype-dev
+sudo apt-get install nasm libfribidi-dev libsdl2-dev libharfbuzz-dev libfreetype-dev libva-dev -libdav1d-dev
 
 git clone https://github.com/FFmpeg/nv-codec-headers.git
 cd nv-codec-headers
@@ -70,7 +70,7 @@ make && sudo make install
 git clone https://github.com/FFmpeg/FFmpeg.git
 cd FFmpeg
 git checkout 1bcb8a7338 # optional, last working version
-./configure --enable-gpl --enable-ffplay --enable-cuvid --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libharfbuzz  --disable-static --enable-shared
+./configure --enable-gpl --disable-static --enable-shared --enable-ffplay --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-cuvid --enable-vaapi --enable-libdav1d
 make -j8
 sudo make install
 ```
@@ -80,7 +80,6 @@ sudo make install
 ```shell
 git clone https://github.com/scrubbbbs/cbird
 cd cbird
-git checkout v0.7.0 # optional, last release version
 qmake6
 make -j8
 sudo make install
@@ -112,7 +111,7 @@ cd /path/to/stuff
 apt-get install libpcre3-dev
 git clone https://github.com/mxe/mxe.git
 cd mxe
-make MXE_TARGETS='x86_64-w64-mingw32.shared' cc qt6-qtbase qt6-qt5compat exiv2 sdl2 meson
+make MXE_TARGETS='x86_64-w64-mingw32.shared' cc qt6-qtbase qt6-qt5compat exiv2 sdl2 meson vulkan-headers vulkan-loader
 
 export MXE_DIR=/path/to/stuff/mxe
 ```
@@ -127,7 +126,7 @@ sudo add-apt-repository \
     "deb [arch=amd64] https://pkg.mxe.cc/repos/apt `lsb_release -sc` main" && \
 sudo apt-get update
 
-apt install mxe-x86-64-w64-mingw32.shared-cc mxe-x86-64-w64-mingw32.shared-qt6-qtbase mxe-x86-64-w64-mingw32.shared-quazip mxe-x86-64-w64-mingw32.shared-exiv2
+apt install mxe-x86-64-w64-mingw32.shared-* # same package names as above
 
 export MXE_DIR=/usr/lib/mxe
 ```
@@ -162,12 +161,6 @@ git clone https://github.com/FFmpeg/nv-codec-headers
 cd nv-codecs-headers
 make PREFIX=$MXE_DIR/usr/$MXE_TARGET install
 
-# get amd AMF headers
-cd _libs-win32
-git clone https://github.com/GPUOpen-LibrariesAndSDKs/AMF
-mkdir $MXE_DIR/usr/$MXE_TARGET/include/AMF
-cp -rv AMF/amf/public/include/* $MXE_DIR/usr/$MXE_TARGET/include/AMF/
-
 # compile libvpl for intel quicksync support
 git clone https://github.com/intel/libvpl
 cd libvpl
@@ -176,6 +169,13 @@ cd build
 cmake ..
 make -j8
 make install
+
+# compile opencl for quicksync/d3d11va support
+git clone khronos...
+cd opencl
+mkdir build;
+cd build
+cmake -D BUILD_TESTING=OFF -D BUILD_DOCS=OFF -D BUILD_EXAMPLES=OFF -D BUILD_TESTS=OFF -D OPENCL_SDK_BUILD_SAMPLES=OFF -D OPENCL_SDK_BUILD_UTILITY_LIBRARIES=OFF -D OPENCL_SDK_BUILD_CLINFO=OFF ..
 
 # compile dav1d for av1 software decoding support
 cd _libs-win32
@@ -187,12 +187,24 @@ meson --buildtype release
 ninja
 ninja install
 
+# compile libshaderc for vulkan support
+git clone https://github.com/google/shaderc
+cd sharderc
+./utils/git-sync-deps
+mkdir build; cd build
+cmake -DSHADERC_SKIP_TESTS=ON -DBUILD_SHARED_LIBS=ON -DBUILD_STATIC_LIBS=OFF -DBUILD_STATIC=OFF -DSPIRV_TOOLS_BUILD_STATIC=OFF -DCMAKE_BUILD_TYPE=Release  -DCMAKE_SYSTEM_NAME=Windows
+find . -name link.txt -exec sed -i 's/-static//g' {} +
+find . -name link.txt -exec sed -i 's/-libgcc//g' {} +
+find . -name link.txt -exec sed -i 's/-libstdc++//g' {} +
+make -j8
+make install
+
 # compile ffmpeg
 cd _libs-win32
 git clone https://github.com/ffmpeg/FFmpeg.git
 cd FFmpeg
-git checkout n7.0.2 # n7.1 build is broken
-	./configure --cross-prefix=x86_64-w64-mingw32.shared- --enable-cross-compile --arch=x86_64 --target-os=mingw32 --enable-shared --disable-static --x86asmexe=x86_64-w64-mingw32.shared-yasm --disable-debug --disable-pthreads --enable-w32threads --disable-doc --enable-gpl --enable-ffnvcodec --enable-libdav1d --enable-libvpl --extra-libs='-mconsole' --extra-ldflags="-fstack-protector" --prefix=../build-mxe
+git checkout release/7.1		
+./configure --cross-prefix=x86_64-w64-mingw32.shared- --enable-cross-compile --arch=x86_64 --target-os=mingw32 --enable-shared --disable-static --x86asmexe=x86_64-w64-mingw32.shared-yasm --disable-debug --disable-pthreads --enable-w32threads --disable-doc --enable-gpl --extra-libs='-mconsole' --extra-ldflags="-fstack-protector" --prefix=../build-mxe --enable-ffnvcodec --enable-libdav1d --enable-libvpl --enable-vulkan --enable-libshaderc --enable-opencl
 
 make -j8
 make install
