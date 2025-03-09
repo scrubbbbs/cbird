@@ -9,22 +9,26 @@ OPENCV_BIN=_libs-win32/build-opencv/install/x64/mingw/bin
 CROSS_BIN=_libs-win32/build-mxe/bin
 QT_DIR="$MXE_DIR/usr/$MXE_TARGET/qt6"
 QT_BIN="$QT_DIR/bin"
+STRIP="$MXE_DIR/usr/bin/$MXE_TARGET-strip"
 
 echo building $VERSION $ARCH in $PKG_DIR
 
 # we need this for dll discovery
 mkdir -p _index
 
-# TODO: copy the plugins we actually need
-echo qt plugins...
-cp -au "$QT_DIR/plugins" "$PKG_DIR"
-
-# use wine to find the dlls and copy them to package dir
-# script needs to be run until no more errors appear
-
 echo "programs..."
 mkdir -p "$PKG_DIR"
 cp -au cbird.exe "$PKG_DIR/"
+
+# copy qt plugins we actually need
+echo "qt plugins.."
+mkdir -p "$PKG_DIR/plugins"
+cp -auv "$QT_DIR/plugins/iconengines" "$PKG_DIR/plugins/"
+cp -auv "$QT_DIR/plugins/imageformats" "$PKG_DIR/plugins/"
+cp -auv "$QT_DIR/plugins/generic" "$PKG_DIR/plugins/"
+cp -auv "$QT_DIR/plugins/platforms" "$PKG_DIR/plugins/"
+cp -auv "$QT_DIR/plugins/sqldrivers" "$PKG_DIR/plugins/"
+cp -auv "$QT_DIR/plugins/styles" "$PKG_DIR/plugins/"
 
 #echo "termcap..."
 #TERMCAP_DIR="$MXE_BIN/../share/terminfo"
@@ -43,6 +47,9 @@ done
 for exe in ffplay.exe ffprobe.exe ffmpeg.exe; do
     cp -auv "$CROSS_BIN/$exe" "$PKG_DIR/"
 done
+
+# use wine to find the dlls and copy them to package dir
+# script needs to be run until no more errors appear
 
 # disable for development
 #echo !!!! dlls are not being copied for speed !!!!
@@ -71,6 +78,8 @@ for exe in cbird.exe sqlite3.exe ffplay.exe ffprobe.exe ffmpeg.exe; do
     done
 done
 
+echo "strip binaries..."
+$STRIP $PKG_DIR/*.exe $PKG_DIR/*.dll
+
 rm -fv "$ZIP"
 #(cd "$BUILD" && zip -r ../"$ZIP" cbird)
-
