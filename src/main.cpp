@@ -599,7 +599,7 @@ static QStringList readArgsFile(const QString& argsFile) {
     const auto lines = f.readAll().split('\n');
     QStringList clean;
     for (auto& l : lines)
-      if (!l.isEmpty() && !l.startsWith('#')) clean.append(l);
+      if (!l.isEmpty() && !l.startsWith('#')) clean.append(l.trimmed());
     return clean;
   }
   return {};
