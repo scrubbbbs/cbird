@@ -1390,6 +1390,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
   }
 
   QImage img; // imagereader output
+  reader.setAutoTransform(true);
 
   // optionally use a custom allocator; in most cases files are the same
   // format and dimensions so we could avoid repeated allocations
@@ -1454,6 +1455,7 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
 
   context.reset(name);
 
+#if BUGGED_AUTOTRANSFORM
   // setAutoTransform() will pull orientation from thumbnail IFD if it is not present in the image
   // IFD, resulting in incorrect rotation
   int exifOrientation = 0;
@@ -1490,6 +1492,9 @@ QImage Media::loadImage(const QByteArray& data, const QSize& size, const QString
   }
 
   if (exifOrientation) img = img.transformed(QTransform().rotate(rotate));
+#else
+  int exifOrientation = 0;
+#endif
 
   // FIXME: is size before or after orientation?
   if (size != QSize()) img = constrainedResize(img, size);
