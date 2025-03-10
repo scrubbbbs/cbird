@@ -908,8 +908,8 @@ int main(int argc, char** argv) {
         return -1;
       }
       QString path = nextArg();
-      if (path == lc('@')) {
-        QDir dir;
+      if (path.startsWith(lc('@'))) {
+        QDir dir(path.mid(1));
         while (!dir.exists(qq(INDEX_DIRNAME))) {
           if (!dir.cdUp()) {
             qCritical("-use[@]: failed to find index in the parent tree");

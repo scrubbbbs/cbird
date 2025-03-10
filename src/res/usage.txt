@@ -15,7 +15,8 @@ Usage: %1 [args...]
 Setup
 ==============================================================================
   -use <dir>                       set index location, in <dir>/_index, default current directory,
-                                   - use "@" to search in the parent tree
+                                   - use "@" to search for index in the parent tree of cwd
+                                   - use "@<path>" to search in parent tree of <path>
   -create                          create index if there is not one already, otherwise prompt
   -update [<dir>]                  create/refresh index, optionally only scan subdirectory <dir>
                                    - index is created in -use <dir>, not the subdirectory
