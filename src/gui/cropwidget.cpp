@@ -86,7 +86,7 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
       std::unique_ptr<Exiv2::Image> image = Exiv2::ImageFactory::open(qPrintable(thumbPath));
       if (!image.get()) throw std::logic_error("exiv2 open failed");
 
-      QString relPath = media.path();
+      QString relPath = QFileInfo(media.path()).absoluteFilePath();
       if (relPath.startsWith(indexPath)) relPath = relPath.mid(indexPath.length() + 1);
 
       image->readMetadata();
