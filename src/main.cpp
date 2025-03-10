@@ -683,6 +683,11 @@ int main(int argc, char** argv) {
     return loggingArgs.contains(s);
   });
 
+  if (args.count() <= 0) {
+    qInfo() << "nothing to do, see -h|-help for usage";
+    return 1;
+  }
+
   // default saved arguments
   do {
     int i = args.indexOf("-args");
@@ -702,11 +707,6 @@ int main(int argc, char** argv) {
     }
   } while (0);
   qDebug() << "args after init:" << args;
-
-  if (args.count() <= 0) {
-    qInfo() << "nothing to do, see -h|-help for usage";
-    return 1;
-  }
 
   // always refers to last arg removed from args
   QString arg;
@@ -863,9 +863,9 @@ int main(int argc, char** argv) {
       const QString val = nextArg();
       if (val == "global")
         args = readArgsFile(DesktopHelper::settingsFile().replace(".ini", ".args.txt")) + args;
-      else if (val == "local")
-        args = readArgsFile(engine().db->indexPath() + "/args.txt") + args;
-      else if (val == "none")
+      else if (val == "local") {
+        args = readArgsFile(indexPath() + "/_index/args.txt") + args;
+      } else if (val == "none")
         ;
       else
         args = readArgsFile(val) + args;
