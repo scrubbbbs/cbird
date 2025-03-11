@@ -24,10 +24,10 @@ apt-get install git cmake g++ qt6-base-dev qt6-base-private-dev libqt6core5compa
 #### 1.2 Compiling OpenCV
 
 ```shell
-	wget https://github.com/opencv/opencv/archive/2.4.13.7.zip
-	unzip 2.4.13.7.zip
-mkdir build
-cd build
+wget https://github.com/opencv/opencv/archive/2.4.13.7.zip
+unzip 2.4.13.7.zip
+mkdir build-cv
+cd build-cv
 cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_JASPER=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF CMAKE_INSTALL_PREFIX=/usr/local ../opencv-2.4.13.7/
 make -j8
 sudo make install
@@ -63,14 +63,19 @@ With some additional flags (not shown here) you can get more codec support.
 ```shell
 sudo apt-get install nasm libfribidi-dev libsdl2-dev libharfbuzz-dev libfreetype-dev libva-dev -libdav1d-dev
 
+# nvdec support
 git clone https://github.com/FFmpeg/nv-codec-headers.git
 cd nv-codec-headers
 make && sudo make install
 
+# qsv support
+git clone https://github.com/intel/libvpl
+cd libvpl; mkdir build; cd build; cmake ..; make -j8; sudo make install
+
 git clone https://github.com/FFmpeg/FFmpeg.git
 cd FFmpeg
-git checkout 1bcb8a7338 # optional, last working version
-./configure --enable-gpl --disable-static --enable-shared --enable-ffplay --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-cuvid --enable-vaapi --enable-libdav1d
+git checkout release/7.1 # optional, known working version
+./configure --enable-gpl --disable-static --enable-shared --enable-ffplay --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-cuvid --enable-vaapi --enable-libdav1d --enable-libvpl
 make -j8
 sudo make install
 ```
@@ -267,27 +272,27 @@ Additionally, `make portable` will build the release  binaries in _mac/cbird/
 
 ## Compiling: Linux AppImage
 
-The AppImage is built using linuxdeployqt on ubuntu 18.04 LTS.
+The AppImage is built using linuxdeployqt on ubuntu 20.04 LTS.
 
 QEMU is used, with cpu target "Westmere" to ensure binary compatibility with older systems (no AVX).
 
 #### 4.1 Packages
 
 ```shell
-sudo apt-get install bison build-essential gperf flex ruby python git mercurial nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev libncurses5-dev libfribidi-dev libharfbuzz-dev
+sudo apt install bison build-essential gperf flex ruby python git mercurial nasm protobuf-compiler libpulse-dev libasound2-dev libbz2-dev libcap-dev libgcrypt20-dev libnss3-dev libpci-dev libudev-dev libxtst-dev gyp ninja-build libcups2-dev libssl-dev libsrtp2-dev libwebp-dev libjsoncpp-dev libopus-dev libminizip-dev libvpx-dev libsnappy-dev libre2-dev libprotobuf-dev libexiv2-dev libsdl2-dev libmng-dev libncurses5-dev libfribidi-dev libharfbuzz-dev
 
-sudo apt-get install libxcb*-dev libx11*-dev libxext-dev libxfixes-dev libxi-dev libxcd*-dev libxkb*-dev libxrender-dev libfontconfig1-dev libfreetype6-dev libdrm-dev libegl1-mesa-dev libxcursor-dev libxcomposite-dev libxdamage-dev libxrandr-dev libfontconfig1-dev libxss-dev libevent-dev
+sudo apt install libxcb*-dev libx11*-dev libxext-dev libxfixes-dev libxi-dev libxkb*-dev libxrender-dev libfontconfig1-dev libfreetype6-dev libdrm-dev libegl1-mesa-dev libxcursor-dev libxcomposite-dev libxdamage-dev libxrandr-dev libfontconfig1-dev libxss-dev libevent-dev
 
-sudo apt-add-repository ppa:ubuntu-toolchain-r/test
-sudo apt-get install g++-10
+sudo apt install g++-10
 
+sudo apt autoremove
 ```
 
 #### 4.2 Environment
 
 ```shell
-# make sure we can't use g++7/8...incompatible with qt6
-sudo apt-get autoremove g++-7 g++-8
+# make sure we can't use g++9...incompatible with qt6
+sudo apt-get autoremove g++-9 gcc-9
 
 # force build tools to use gcc 10
 sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
@@ -297,15 +302,15 @@ sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
 gcc -v; g++-v
 
 # (after qt-base compilation)
-export Qt6_DIR=/usr/local/Qt-6.5.1
+export Qt6_DIR=/usr/local/Qt-6.8.2
 ```
 
-#### 4.3 cmake 3.24+
+#### 4.3 cmake 3.28+
 
 ```shell
-wget https://github.com/Kitware/CMake/archive/refs/tags/v3.25.0.tar.gz
-tar -xvf v3.25.0.tar.gz
-cd CMake-3.25.0
+wget https://github.com/Kitware/CMake/archive/refs/tags/v3.28.3.tar.gz
+tar -xvf v3.28.3.tar.gz
+cd CMake-3.28.3
 ./bootstrap
 make -j8
 sudo make install
@@ -315,40 +320,41 @@ cmake --version
 #### 4.4 Qt 6
 
 ```shell
-for x in qtbase qtimageformats qtwayland qt5compat qtsvg; do
-  wget "https://download.qt.io/official_releases/qt/6.5/6.5.1/submodules/$x-everywhere-src-6.5.1.tar.xz"
+for x in qtbase qtimageformats qtwayland qt5compat qtsvg qttools; do
+  wget "https://download.qt.io/official_releases/qt/6.8/6.8.2/submodules/$x-everywhere-src-6.8.2.tar.xz"
 done
 
 for x in *.xz; do tar -xvf "$x"; done
 ```
  
 ```shell
-cd qtbase-everywhere-src-6.5.1
-./configure -qt-libjpeg -no-avx -nomake tests -nomake examples -silent
+cd qtbase-everywhere-src-6.8.2
+./configure -xcb -qt-libjpeg -no-avx -nomake tests -nomake examples -silent
 cmake --build . --parallel
 sudo cmake --install .
 ```
 
-#### 4.4 JasPer format support in qimageformats (optional)
-
-```shell
-git clone https://github.com/jasper-software/jasper
-cd jasper
-mkdir _build && cd _build && cmake ..
-make -j8
-sudo make install
-```
 
 #### 4.5 Qt modules
 
 ```shell
-cd <module>-everywhere-src-6.5.1
-/usr/local/Qt-6.5.1/bin/qt-configure-module .
+cd <module>-everywhere-src-6.8.2
+/usr/local/Qt-6.8.2/bin/qt-configure-module .
 cmake --build . --parallel
 sudo cmake --install .
 ```
 
 #### 4.6 FFmpeg
+
+Install libdav1d for av1 support (not in repos)
+
+```shell
+sudo apt install meson
+git clone https://github.com/videolan/dav1d
+cd dav1d; mkdir build; cd build; meson .. ; ninja; sudo meson install
+sudo mv /usr/local/lib/x86_64-linux-gnu/libdav1d* /usr/local/lib/
+sudo mv /usr/local/lib/x86_64-linux-gnu/pkgconfig/* /usr/local/lib/pkgconfig/
+```
 
 See [Compiling FFmpeg](#14b-compiling-ffmpeg)
 
@@ -366,11 +372,65 @@ See [Compiling quazip](#13-compiling-quazip)
 
 #### 4.8 cbird
 
-"make appimage" should work if linuxdeployqt is in ~/Downloads/
-
 ```shell
+cd ~Downloads
+wget https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+chmod +x linuxdeployqt-continuous-x86_64.AppImage
+
 cd cbird
 $Qt6_DIR/bin/qmake -r
 make -j8
 make appimage
 ```
+
+#### 4.9 kimageformats (optional)
+
+Note: compile ffmpeg first for dav1d
+
+```shell
+apt install libjxr-dev
+
+git clone https://github.com/KDE/extra-cmake-modules
+cd extra-cmake-modules; mkdir build; cd build; cmake ..; make -j8; sudo make install
+
+git clone https://github.com/strukturag/libde265
+cd libde264; mkdir build; cd build; cmake ..; make -j8; sudo make install
+
+git clone https://github.com/strukturag/libheif
+cd libheif; mkdir build; cd build
+cmake -DWITH_DAV1D=ON -DWITH_LIBDE265=ON ..
+make -j12 && sudo make install
+
+git clone https://github.com/AcademySoftwareFoundation/openexr
+cd openexr; mkdir build; cd build
+CFLAGS="-march=westmere" CXXFLAGS="-march=westmere" cmake -DBUILD_TESTING=OFF ..
+make -j8 && sudo make install
+
+git clone https://github.com/uclouvain/openjpeg
+cd openjpeg; mkdir build; cd build; cmake ..; make -j8; sudo make install
+
+git clone https://github.com/libjxl/libjxl
+cd libjxl
+./deps.sh
+mkdir build; cd build; cmake ..; make -j8; sudo make install
+
+git clone https://github.com/AOMediaCodec/libavif
+cd libavif; mkdir build; cd build
+cmake -DAVIF_LIBYUV=LOCAL -DAVIF_CODEC_DAV1D=SYSTEM ..
+make -j8 && sudo make install
+
+
+git clone https://github.com/LibRaw/LibRaw
+sudo apt install autoconf libtool
+cd LibRaw
+autoreconf --install
+./configure; make -j8; sudo make install
+
+git clone https://github.com/KDE/kimageformats
+cd kimageformats; mkdir build; cd build
+/usr/local/Qt-6.8.2/bin/qt-configure-module .. -- -DKIMAGEFORMATS_HEIF=ON -DKIMAGEFORMATS_JXR=ON
+cmake --build . --parallel
+sudo cmake --install .
+sudo mv -v /usr/local/lib/x86_64-linux-gnu/plugins/imageformats/kimg_* $Qt6_DIR/plugins/imageformats
+
+`

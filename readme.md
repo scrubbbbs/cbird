@@ -29,15 +29,15 @@ Compile it yourself using [my detailed notes](doc/cbird-compile.md).
 
 Add execute permission and run
 ```shell
-chmod +x cbird-0.7.0-x86_64.AppImage
-./cbird-0.7.0-x86_64.AppImage -install # optional install helper
+chmod +x cbird-0.8.0-x86_64.AppImage
+./cbird-0.8.0-x86_64.AppImage -install # optional install helper
 cbird [...]
 ```
 - Required packages: trash-cli
 - Optional packages: ocenaudio, kdenlive
 
 ##### AppImage Issues
-- AppImage won't run (debian, Ubuntu 23.04+)
+- AppImage won't run (debian, Ubuntu, etc)
   + `apt install libfuse2`
 - Missing libOpenGL.so.0
   + debian: `apt install libopengl0`
