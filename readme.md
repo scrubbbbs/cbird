@@ -44,7 +44,7 @@ cbird [...]
   + redhat: `yum install libglvnd-opengl`
 - Missing window titlebar (Fedora)
   + `cbird -platform wayland-egl [...]` 
-
+ 
 #### Mac OS X 11.0+ x86
 
 - Unzip the distribution file and run
