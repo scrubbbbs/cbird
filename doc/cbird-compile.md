@@ -329,7 +329,7 @@ for x in *.xz; do tar -xvf "$x"; done
  
 ```shell
 cd qtbase-everywhere-src-6.8.2
-./configure -xcb -qt-libjpeg -no-avx -nomake tests -nomake examples -silent
+./configure -fontconfig -xcb -qt-libjpeg -no-avx -nomake tests -nomake examples -silent
 cmake --build . --parallel
 sudo cmake --install .
 ```
@@ -409,16 +409,15 @@ make -j8 && sudo make install
 git clone https://github.com/uclouvain/openjpeg
 cd openjpeg; mkdir build; cd build; cmake ..; make -j8; sudo make install
 
-git clone https://github.com/libjxl/libjxl
-cd libjxl
-./deps.sh
-mkdir build; cd build; cmake ..; make -j8; sudo make install
-
 git clone https://github.com/AOMediaCodec/libavif
 cd libavif; mkdir build; cd build
 cmake -DAVIF_LIBYUV=LOCAL -DAVIF_CODEC_DAV1D=SYSTEM ..
 make -j8 && sudo make install
 
+git clone https://github.com/libjxl/libjxl
+cd libjxl
+./deps.sh
+mkdir build; cd build; cmake ..; make -j8; sudo make install
 
 git clone https://github.com/LibRaw/LibRaw
 sudo apt install autoconf libtool
