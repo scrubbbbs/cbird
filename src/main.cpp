@@ -453,16 +453,21 @@ _cbird_completion() {
   local completions=(${(s[|])output})
 
   for comp in "${completions[@]}"; do
+    local orig=${comp}
+    
     if [[ "$word" =~ "^[']" ]]; then
       comp=("${comp//'/'\''}") # starts with ', escape '
     elif [[ "$word" =~ "^[\"]" ]]; then
       comp=("${comp//\"/\\\"}") # starts with ", escape "
     elif [[ "$comp" =~ "[ \"'<>=\?\*\;]" ]]; then
       comp=("${(q)comp}") # escape unquoted stuff
+      comp=("${comp//\\~/~}") # unescape tilde
     fi
 
     if [[ "$comp" =~ "#$" ]]; then
       compadd -Q -S '' --  "$comp" # no space after #
+    elif [[ -d ${~orig} ]]; then
+      compadd -Q -S '/' -- "$comp" # if dir, add slash instead of space 
     else
       compadd -Q -- "$comp"
     fi
@@ -541,7 +546,7 @@ Engine& engine() {
           "    cbird: <YEL>No index found in <PATH>%s<RESET>\n"
           "         - pass <MAG>-use <dir><RESET> to a valid location\n"
           "         - pass <MAG>-use @<RESET> to search in parent\n"
-          "         - pass <MAG>-create<RESET> to create index in CWD.",
+          "         - pass <MAG>-create<RESET> to create a new index",
           qUtf8Printable(path));
     exit(0);
     // qFlushMessageLog();
