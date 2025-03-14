@@ -151,6 +151,10 @@ unix:!macx: {
     EXTRA_PLUGINS=$$join(EXTRA_PLUGINS_REL,',')
     #message("EXTRA_PLUGINS=" $$EXTRA_PLUGINS)
 
+    # we need to use system libva or else we are missing symbols in newer os
+    # most distros seem to include it by default
+    EXCLUDE_LIBS=libva-drm.so.2,libva.so.2,libva-x11.so.2
+
     #message($$QMAKE_QMAKE)
     #message($$[QT_INSTALL_LIBS]);
     APPDIR=$$OBJECTS_DIR/appimage
@@ -161,6 +165,7 @@ unix:!macx: {
       cp -auv /usr/local/bin/ff* $$APPDIR/cbird/bin/ && \
       LD_LIBRARY_PATH=$$[QT_INSTALL_LIBS]:/usr/local/lib VERSION=$$VERSION $$LINUXDEPLOYQT \
         $$APPDIR/cbird/share/applications/cbird.desktop \
+        -exclude-libs=$$EXCLUDE_LIBS \
         -extra-plugins=$$EXTRA_PLUGINS \
         -executable=/usr/local/bin/ffplay \
         -executable=/usr/local/bin/ffprobe \
