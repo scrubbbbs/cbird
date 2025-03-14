@@ -143,8 +143,8 @@ Additional flags added for CPU compatibility in the release package (optional).
 ```shell
 cd cbird
 source windows/mxe.env
-mkdir -p _libs-win32/build-opencv
-cd _libs-win32
+mkdir -p ../libs-win32/build-opencv
+cd ../libs-win32
 unzip <opencv-2.4.13.7.zip>
 cd build-opencv
 cmake -D CMAKE_BUILD_TYPE=Release -D WITH_FFMPEG=OFF -D WITH_OPENEXR=OFF -D WITH_GSTREAMER=OFF -D ENABLE_FAST_MATH=1 -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_DOCS=OFF -D CMAKE_CXX_FLAGS_RELEASE="-march=westmere -Ofast" -D CMAKE_C_FLAGS_RELEASE="-march=westmere -Ofast" -D ENABLE_SSSE3=ON -D ENABLE_SSE41=ON -D ENABLE_SSE42=ON ../opencv-2.4.13.7/
@@ -161,7 +161,7 @@ Optional, if mxe ffmpeg version is incompatible.
 source windows/mxe.env
 
 # get nvidia headers for nvdec support
-cd _libs-win32
+cd ../libs-win32
 git clone https://github.com/FFmpeg/nv-codec-headers
 cd nv-codecs-headers
 make PREFIX=$MXE_DIR/usr/$MXE_TARGET install
@@ -183,7 +183,7 @@ cd build
 cmake -D BUILD_TESTING=OFF -D BUILD_DOCS=OFF -D BUILD_EXAMPLES=OFF -D BUILD_TESTS=OFF -D OPENCL_SDK_BUILD_SAMPLES=OFF -D OPENCL_SDK_BUILD_UTILITY_LIBRARIES=OFF -D OPENCL_SDK_BUILD_CLINFO=OFF ..
 
 # compile dav1d for av1 software decoding support
-cd _libs-win32
+cd ../libs-win32
 git clone https://github.com/videolan/dav1d
 cd dav1d
 mkdir build
@@ -205,7 +205,7 @@ make -j8
 make install
 
 # compile ffmpeg
-cd _libs-win32
+cd ../libs-win32
 git clone https://github.com/ffmpeg/FFmpeg.git
 cd FFmpeg
 git checkout release/7.1		
@@ -221,7 +221,7 @@ Optional, if mxe quazip version incompatible.
 
 ```shell
 source windows/mxe.env
-cd _libs-win32
+cd ../libs-win32
 git clone https://github.com/stachenov/quazip
 cd quazip
 cmake -DQUAZIP_QT_MAJOR_VERSION=6 -DCMAKE_INSTALL_PREFIX=../build-mxe .
@@ -239,7 +239,62 @@ make -j8
 make install # build/update portable dir in _win32/cbird/
 ```
 
-	## Compiling: Mac OS X
+#### 2.7 Cross-compiling kimageformats (optional)
+
+```shell
+# mxe packages
+make MXE_TARGETS='x86_64-w64-mingw32.shared' libraw openjpeg libwebp
+
+git clone https://github.com/KDE/extra-cmake-modules
+cd libde264; cmake .; make install
+
+git clone https://github.com/strukturag/libde265
+cd libde265; cmake .; make -j8 install
+
+git clone https://github.com/strukturag/libheif
+cd libheif; mkdir build; cd build
+cmake -DWITH_DAV1D=ON -DWITH_LIBDE265=ON ..
+make -j8 install
+
+git clone https://github.com/AcademySoftwareFoundation/openexr
+cd openexr; mkdir build; cd build
+CFLAGS="-march=westmere" CXXFLAGS="-march=westmere" cmake -DBUILD_TESTING=OFF ..
+make -j8 && make install
+
+# using mxe package
+#git clone https://github.com/uclouvain/openjpeg
+#cd openjpeg; mkdir build; cd build; cmake ..; make -j8; sudo make install
+
+git clone https://github.com/AOMediaCodec/libavif
+cd libavif; mkdir build; cd build
+cmake -DAVIF_LIBYUV=LOCAL -DAVIF_CODEC_DAV1D=SYSTEM ..
+make -j8 && make install
+
+# this recipe segfaults, excluding for now
+#git clone https://github.com/libjxl/libjxl
+#cd libjxl
+#./deps.sh
+#mkdir build; cd build; cmake -DBUILD_TESTING=OFF ..; make -j8; make install
+
+# note this is incorrect; I need to fork jxrlib and apply the patches
+git clone https://github.com/scrubbbbs/jxrlib-kif
+cd jxrlib-kif; mkdir build; cd build; cmake ..; make -j8; make install
+
+# using mxe package
+#git clone https://github.com/LibRaw/LibRaw
+#sudo apt install autoconf libtool
+#cd LibRaw
+#autoreconf --install
+#./configure; make -j8; sudo make install
+
+git clone https://github.com/KDE/kimageformats
+cd kimageformats; mkdir build; cd build
+cmake -DCMAKE_PREFIX_PATH=$MXE_DIR/usr/$MXE_TARGET/qt6/lib/cmake -DKIMAGEFORMATS_HEIF=ON -DKIMAGEFORMATS_JXR=ON  -DKIMAGEFORMATS_JXL=OFF ..
+make -j8
+cp -v bin/imageformats/*.dll $MXE_DIR/usr/x86_64-w64-mingw32.shared/qt6/plugins/imageformats/
+```
+
+## Compiling: Mac OS X
 
 #### 3.1 Install Homebrew
 
@@ -394,12 +449,12 @@ git clone https://github.com/KDE/extra-cmake-modules
 cd extra-cmake-modules; mkdir build; cd build; cmake ..; make -j8; sudo make install
 
 git clone https://github.com/strukturag/libde265
-cd libde264; mkdir build; cd build; cmake ..; make -j8; sudo make install
+cd libde265; mkdir build; cd build; cmake ..; make -j8; sudo make install
 
 git clone https://github.com/strukturag/libheif
 cd libheif; mkdir build; cd build
 cmake -DWITH_DAV1D=ON -DWITH_LIBDE265=ON ..
-make -j12 && sudo make install
+make -j8 && sudo make install
 
 git clone https://github.com/AcademySoftwareFoundation/openexr
 cd openexr; mkdir build; cd build

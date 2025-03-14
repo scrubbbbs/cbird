@@ -67,8 +67,12 @@ QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
 win32 {
-    INCLUDEPATH += _libs-win32/build-opencv/install/include
-    LIBS += -L_libs-win32/build-opencv/install/x64/mingw/lib
+    !exists( ../libs-win32 ) { error("win32 libs missing") }
+    !exists( ../libs-win32/build-opencv ) { error("win32 opencv libs missing") }
+    !exists( ../libs-win32/build-mxe ) { error("win32 mxe libs missing") }
+
+    INCLUDEPATH += ../libs-win32/build-opencv/install/include
+    LIBS += -L../libs-win32/build-opencv/install/x64/mingw/lib
     OPENCV_VERSION = 2413
     OPENCV_LIBS *= ml objdetect stitching superres videostab calib3d
     OPENCV_LIBS *= features2d highgui video photo imgproc flann core
@@ -76,10 +80,10 @@ win32 {
         LIBS *= -lopencv_$${CVLIB}$${OPENCV_VERSION}
     }
 
-    INCLUDEPATH = _libs-win32/build-mxe/include $$INCLUDEPATH # ensure this precedes mxe
-    LIBS += -L_libs-win32/build-mxe/lib
+    INCLUDEPATH = ../libs-win32/build-mxe/include $$INCLUDEPATH # ensure this precedes mxe
+    LIBS += -L../libs-win32/build-mxe/lib
    
-    INCLUDEPATH += _libs-win32/build-mxe/include/QuaZip-Qt6-1.4
+    INCLUDEPATH += ../libs-win32/build-mxe/include/QuaZip-Qt6-1.4
     LIBS += -lquazip1-qt6
     
     LIBS *= -lz -lpsapi -ldwmapi
