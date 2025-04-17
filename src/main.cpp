@@ -1308,15 +1308,15 @@ int main(int argc, char** argv) {
       selection.append(_commands.selectFiles());
     } else if (arg == "-select-grid") {
       const MediaGroup fileList = _commands.selectFiles();
+      int step = 0;
+      PROGRESS_LOGGER(pl, "select-grid:<PL> %percent %step images, %1 slices", fileList.count());
       for (const Media& grid : fileList) {
-        MessageContext ctx(grid.path());
-
         QImage qImg = grid.loadImage();
         cv::Mat cvImg;
         QVector<QRect> rects;
 
         qImageToCvImg(qImg, cvImg);
-        demosaic(cvImg, rects);
+        demosaicHough(cvImg, rects);
 
         int i = 1;
         for (const QRect& r : rects) {
@@ -1326,7 +1326,9 @@ int main(int argc, char** argv) {
           m.setIsFile(false);
           selection.append(m);
         }
-      };
+        pl.step(step++, {selection.count()});
+      }
+      pl.end(0, {selection.count()});
     } else if (arg == "-slice") {
       params.set = selectPath(nextArg());
       params.inSet = true;

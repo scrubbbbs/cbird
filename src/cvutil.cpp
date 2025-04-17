@@ -1391,6 +1391,293 @@ void autocrop(cv::Mat& cvImg, int range) {
       cvImg = cvImg.colRange(left, right).rowRange(top, bottom);
 }
 
+static void findSolidLines(const cv::Mat& img, cv::Mat& edges, float thresh) {
+  // Q_ASSERT(img.channels() == 1);
+
+  if (img.rows == 0 || img.cols == 0) return;
+
+  int minGap = 32;
+  // look for horizontal lines spanning the image
+  QVector<QPair<int, double>> hLines;
+  int y;
+  for (y = 0; y < img.rows; y++) {
+    cv::Scalar mean, stdDev;
+    cv::meanStdDev(img.row(y), mean, stdDev);
+    double st = stdDev[0];
+    if (st < thresh) {
+      hLines.append({y, st});
+      y += minGap - 1;
+    }
+  }
+
+  // look for vertical lines
+  QVector<QPair<int, double>> vLines; // left side of rectangles
+  for (int x = 0; x < img.cols; ++x) {
+    cv::Scalar mean, stdDev;
+    cv::meanStdDev(img.col(x), mean, stdDev);
+    double st = stdDev[0];
+    if (st < thresh) {
+      vLines.append({x, st});
+      x += minGap - 1;
+    }
+  }
+
+  std::sort(hLines.begin(), hLines.end(), [](auto& a, auto& b) { return a.second < b.second; });
+  if (hLines.count() > 16) hLines.remove(16, hLines.count() - 16);
+  for (auto& l : hLines)
+    cv::line(edges, {0, l.first}, {edges.cols, l.first}, 255, 1);
+
+  std::sort(vLines.begin(), vLines.end(), [](auto& a, auto& b) { return a.second < b.second; });
+  if (vLines.count() > 16) vLines.remove(16, vLines.count() - 16);
+  for (auto& l : vLines)
+    cv::line(edges, {l.first, 0}, {l.first, edges.rows}, 255, 1);
+}
+
+void demosaicHough(const cv::Mat& cvImg,
+                   QVector<QRect>& rects,
+                   const DemosaicParams& params,
+                   QList<QImage>* outImages) {
+  cv::Mat adjusted;
+  brightnessAndContrastAuto(cvImg, adjusted, params.clipHistogramPercent);
+
+  cv::Mat img;
+  grayscale(adjusted, img);
+  Q_ASSERT(img.channels() == 1);
+
+  if (img.rows == 0 || img.cols == 0) return;
+
+  cv::Mat edges;
+  if (params.preBlurKernel)
+    cv::GaussianBlur(img, img, {params.preBlurKernel, params.preBlurKernel}, 0);
+
+  cv::Canny(img, edges, params.cannyThresh1, params.cannyThresh2);
+
+  // seems we don't need this anymore with new tuning
+  // cv::Mat solids = cv::Mat::zeros(img.size(), img.type());
+  // findSolidLines(adjusted, solids, params.borderThresh); // blur messes this up
+  // cv::bitwise_or(solids, edges, edges);
+
+  if (params.postBlurKernel)
+    cv::GaussianBlur(edges, edges, {params.postBlurKernel, params.postBlurKernel},
+                     0); // helps, but 5,5 breaks things badly!
+
+  if (outImages) {
+    QImage qImg;
+    cvImgToQImage(edges, qImg); // display in UI
+    outImages->append(qImg);
+  }
+
+  cv::Mat result;
+  if (outImages) {
+    grayscale(adjusted, result);
+    cv::cvtColor(result, result, cv::COLOR_GRAY2BGR);
+  }
+
+  // compute H/V separately so we can use a different threshold, this is important
+  // as we are looking for spanning lines. The threshold parameter of hough is the
+  // number of pixels/samples that were on the line.
+  // TODO: threading is possible by processing image in slices
+  const auto houghLines = [&result, &params, &outImages](const cv::Mat& edges, bool findHorizontal) {
+    const int houghThreshold = findHorizontal ? edges.cols * params.houghThreshFactor
+                                              : edges.rows * params.houghThreshFactor;
+    QVector<int> good;
+
+    std::vector<cv::Vec2f> lines;
+    cv::HoughLines(edges, lines, params.houghRho, params.houghTheta * CV_PI / 180, houghThreshold);
+
+    for (size_t i = 0; i < lines.size(); i++) {
+      float rho = lines[i][0];
+      float theta = lines[i][1];
+      float a = cosf(theta);
+      float b = sinf(theta);
+      float x0 = a * rho;
+      float y0 = b * rho;
+      float angle = theta * 180 / CV_PI - 90;
+
+      float epsilon = 1; // degrees
+
+      bool horizontal = false;
+      bool vertical = false;
+
+      // theta is the *normal vector*
+      if (findHorizontal && abs(angle) < epsilon)
+        horizontal = true;
+      else if (!findHorizontal && abs(angle + 90) < epsilon)
+        vertical = true;
+
+      bool rejected = true;
+
+      if (horizontal) {
+        int y = y0;
+        cv::Point2i pt1{0, y}, pt2{edges.cols, y};
+        if (y >= params.hMargin && y < edges.rows - params.hMargin) {
+          rejected = false;
+          good.append(y);
+          if (outImages) cv::line(result, pt1, pt2, cv::Scalar(128, 128, 255), 2);
+        }
+        if (outImages && rejected) cv::line(result, pt1, pt2, cv::Scalar(255, 64, 255), 2);
+      }
+      if (vertical) {
+        int x = x0;
+        cv::Point2i pt1{x, 0}, pt2{x, edges.rows};
+        if (x >= params.vMargin && x < edges.cols - params.vMargin) {
+          rejected = false;
+          good.append(x);
+          if (outImages) cv::line(result, pt1, pt2, cv::Scalar(255, 128, 128), 2);
+        }
+        if (outImages && rejected) cv::line(result, pt1, pt2, cv::Scalar(255, 64, 255), 2);
+      }
+
+      // if (rejected) cv::line(result, pt1, pt2, cv::Scalar(255, 64, 255), 2);
+    }
+    return good;
+  };
+
+  QVector<int> hLines = houghLines(edges, true);
+  QVector<int> vLines = houghLines(edges, false);
+
+  // remove invalid lines that don't look like a grid or too near other lines
+  // look for step between lines of N, 2N and N/2, where N is the step
+  // of the first pair of lines. Try to find the most lines and/or total width
+  // meeting this constraint
+  const auto selectLines = [&params, &img](const QVector<int>& lines) {
+    // accept lines +/- this amount
+    const int margin = params.gridTolerance;
+    const int minSize = params.minGridSpacing;
+
+    int gridSize = 0;
+    QVector<int> maxGrid;
+
+    for (int k = 0; k < lines.size() - 2; ++k)
+      for (int i = k + 1; i < lines.size() - 1; ++i) {
+        gridSize = lines[i] - lines[k];
+        if (gridSize < minSize) continue;
+
+        QVector<int> grid;
+        grid.reserve(lines.size());
+        grid.append({lines[k], lines[i]});
+
+        QVector<int> acceptedSizes;
+        for (int n = 1; n < 3; ++n) {
+          int s = n * gridSize;
+          if (s > img.cols) break;
+          acceptedSizes += s;
+        }
+        for (int n = 1; n < 3; ++n) {
+          int s = gridSize / n;
+          if (s < minSize) break;
+          acceptedSizes += s;
+        }
+
+        int prevIdx = i;
+        int lastIdx;
+        do {
+          lastIdx = prevIdx;
+
+          // find the next line
+          for (int j = prevIdx + 1; j < lines.size(); ++j) {
+            int d = lines[j] - lines[prevIdx];
+            for (int s : acceptedSizes) {
+              if (s >= d - margin && s < d + margin) {
+                // too close to previous line, decide to keep or drop
+                int d2 = grid.last() - lines[prevIdx];
+                if (d2 > 0) {
+                  if (abs(d2 - gridSize) < abs(d - gridSize)) continue;
+                  grid.removeLast();
+                }
+
+                grid.append(lines[j]);
+                prevIdx = j;
+                goto find_next_line;
+              }
+            }
+          }
+        find_next_line:;
+        } while (prevIdx > lastIdx);
+
+        if (grid.isEmpty()) continue;
+
+        if (maxGrid.isEmpty() || grid.count() > maxGrid.count()
+            || (grid.count() == maxGrid.count()
+                && grid.last() - grid.first() > maxGrid.last() - maxGrid.first())) {
+          maxGrid = grid;
+        }
+      }
+
+    return maxGrid;
+  };
+
+  hLines.append(0);
+  hLines.append(img.rows);
+  std::sort(hLines.begin(), hLines.end());
+  auto hGrid = selectLines(hLines);
+
+  vLines.append(0);
+  vLines.append(img.cols);
+  std::sort(vLines.begin(), vLines.end());
+  auto vGrid = selectLines(vLines);
+
+  if (hGrid.empty()) hGrid = {0, cvImg.rows};
+  if (vGrid.empty()) vGrid = {0, cvImg.cols};
+
+  if (outImages) {
+    for (int y : hGrid)
+      cv::line(result, {0, y}, {result.cols, y}, cv::Scalar(128, 255, 128), 4);
+    for (int x : vGrid)
+      cv::line(result, {x, 0}, {x, result.rows}, cv::Scalar(128, 255, 128), 4);
+
+    QImage qImg;
+    cvImgToQImage(result, qImg);
+    outImages->append(qImg);
+  }
+
+  if (hGrid.count() < 3 && vGrid.count() < 3) {
+    rects.append({0, 0, cvImg.cols, cvImg.rows});
+  } else {
+    Q_ASSERT(hGrid.count() > 1);
+    Q_ASSERT(vGrid.count() > 1);
+
+    const QMargins crop{params.cropMargin, params.cropMargin, params.cropMargin, params.cropMargin};
+
+    int y0 = hGrid.first();
+    for (int i = 1; i < hGrid.count(); ++i) {
+      int y1 = hGrid[i];
+      int x0 = vGrid.first();
+      for (int j = 1; j < vGrid.count(); ++j) {
+        int x1 = vGrid[j];
+        QRect r{x0, y0, x1 - x0, y1 - y0};
+        r = r.marginsRemoved(crop);
+        rects.append(r);
+        x0 = x1;
+      }
+      y0 = y1;
+    }
+  }
+
+  if (rects.count() < 2) return;
+
+  // subdivide rects to find more
+  QVector<QRect> final;
+  for (auto& r : std::as_const(rects)) {
+    QVector<QRect> subRects;
+    float aspectRatio = float(r.width()) / r.height();
+    if (aspectRatio > params.maxAspectRatio || aspectRatio < params.minAspectRatio) {
+      cv::Mat subImg = cvImg(cv::Rect{r.x(), r.y(), r.width(), r.height()});
+      // a subimage should have no borders, the line constraint should be tighter
+      auto params2 = params;
+      params2.houghThreshFactor = 0.95;
+      demosaicHough(subImg, subRects, params2);
+    }
+    if (subRects.count()) {
+      for (auto& s : subRects)
+        final.append({r.x() + s.x(), r.y() + s.y(), s.width(), s.height()});
+    } else {
+      final.append(r);
+    }
+  }
+  rects = final;
+}
+
 void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
   cv::Mat img;
   grayscale(cvImg, img);
@@ -1426,6 +1713,7 @@ void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects) {
     for (; left >= 0; left--, pixels--)
       if (abs(int(pixels[0]) - int(pixels[1])) > brightThreshold) break;
 
+    // we have a left-right span, is it long enough?
     if (right - left >= img.cols * lengthThreshold) {
       lastLine = y;
       if (hLineIn.count() && y - lastNonLine == 1) {

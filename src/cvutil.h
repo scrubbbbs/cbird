@@ -178,6 +178,43 @@ void grayscale(const cv::Mat& input, cv::Mat& output);
 void autocrop(cv::Mat& cvImg, int range = 50);
 
 // detect NxM image grid (e.g. thumbnail grid) and return each sub-rect
+struct DemosaicParams {
+  int clipHistogramPercent = 10; // removes noise from dark/light solid lines
+  float borderThresh = 19.0;     // todo: remove
+  int preBlurKernel = 3;         // 3x3 gaussian, denoise the source
+  int cannyThresh1 = 50;
+  int cannyThresh2 = 0;
+  int postBlurKernel = 3; // 3x3 gaussian, blur the edge map
+  int hMargin = 0;        // todo:remove
+  int vMargin = 0;        // todo:remove
+  float houghRho = 0.5;   // search step, radius; < 1 seems to help a lot
+  float houghTheta = 45;  // search step, degrees; 45 slightly better than 90
+  float houghThreshFactor = 0.8;     // # intersections is width/height * factor
+
+  int minGridSpacing = 96;           // line filtering: minimum grid size
+  int gridTolerance = 4;             // line filtering: maximum deviation from grid spacing
+  int cropMargin = 2;                // reduce output rectangles to remove lines/borders
+  float maxAspectRatio = 2.5;        // if aspect greater, assume subdivision is needed
+  float minAspectRatio = 0.5;        // same
+};
+
+/**
+ * @brief Grid segmentation using using edge detection+hough transform
+ * @param cvImg
+ * @param rects rectangles of any found
+ * @param params settings
+ * @param outImages optional diagnostic images
+ */
+void demosaicHough(const cv::Mat& cvImg,
+                   QVector<QRect>& rects,
+                   const DemosaicParams& params = {},
+                   QList<QImage>* outImages = nullptr);
+
+/**
+ * @brief Grid segmentation using basic line detection
+ * @param cvImg
+ * @param rects
+ */
 void demosaic(const cv::Mat& cvImg, QVector<QRect>& rects);
 
 /**
