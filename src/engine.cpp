@@ -134,7 +134,8 @@ void Engine::update(bool wait, const QString& dirPath) {
       pl.stepRateLimited(i++);
     }
     pl.end(i);
-    db->remove(missingVideos);
+
+    if (!scanner->indexParams().dryRun) db->remove(missingVideos);
   }
 
   // if path is still present after scanning, remove from the index
