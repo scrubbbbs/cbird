@@ -1298,7 +1298,7 @@ IndexParams::IndexParams() {
        SET_INT(numFeatures), GET(numFeatures), NO_NAMES, GET_CONST(positive)});
 
   add({"rsize", CatImageProc,
-       "Dimension for prescaling images before processing (dct,fddt,orb,color)", Value::Int,
+       "Dimension for prescaling images before processing (dct,fdct,orb,color)", Value::Int,
        counter++, SET_INT(resizeLongestSide), GET(resizeLongestSide), NO_NAMES, GET_CONST(nonzero)});
 
   add({"vht", CatImageProc, "Dct threshold for discarding nearby frame hashes (video)", Value::Int,

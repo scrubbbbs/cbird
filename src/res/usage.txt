@@ -229,7 +229,7 @@ Definitions
       push,<string>               - append string to end of array
       pop                         - remove string from end of array
       shift                       - remove string from front of array
-      peek                        - return string at given index
+      peek,<integer>              - return string at given index
       foreach,<func>[|<func>]...  - apply function(s) separated by pipe (|) to each array element
       add,<integer>               - add integer arg to value
       pad,<integer>               - pad integer value with zeros, to width argument
