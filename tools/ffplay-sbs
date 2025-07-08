@@ -156,9 +156,6 @@ fi
 height1=$(parse $info1 "^height")
 height2=$(parse $info2 "^height")
 
-name1="$name1 \[${height1}p\]"
-name2="$name2 \[${height2}p\]"
-
 # correct aspect ratio for non-square pixels
 dar1=$(parse $info1 "^display_aspect_ratio")
 dar2=$(parse $info2 "^display_aspect_ratio")
@@ -167,6 +164,38 @@ dar2=$(parse $info2 "^display_aspect_ratio")
 width1=$(parse $info1 "^width")
 width2=$(parse $info2 "^width")
 
+# handle metadata rotation
+# ffmpeg does the actual rotation automatically, we only need to swap width/height
+rotation_swap() {
+  local idx=$1
+  eval "local num=\$rotation$idx"
+  local abs=$(( num < 0 ? -num : num)) # absolute value
+  if (( (abs/90) % 2 != 0 )); then # rotation is odd multiple of 90
+    eval "local tmp=\$width$idx"  # swap width/height
+    eval "width$idx=\$height$idx"
+    eval "height$idx=\$tmp"
+    eval "local aspect=\$dar$idx" # swap aspect ratio
+    local aspect_num=$(echo $aspect | cut -d':' -f1)
+    local aspect_den=$(echo $aspect | cut -d':' -f2)
+    eval "dar$idx=\"$aspect_den:$aspect_num\""
+  fi
+}
+
+rotation1=$(parse $info1 "^rotation")
+rotation2=$(parse $info2 "^rotation")
+[ -n "$rotation1" ] || rotation1=0;
+[ -n "$rotation2" ] || rotation2=0;
+
+if [ "$rotation1" -ne 0 ]; then
+  rotation_swap 1
+fi
+
+if [ "$rotation2" -ne 0 ]; then
+  rotation_swap 2
+fi
+
+name1="$name1 \[${height1}p\]"
+name2="$name2 \[${height2}p\]"
 
 # scale input to tallest video
 if [ $height1 -gt $height2 ]; then
@@ -237,4 +266,3 @@ done
 rm -f $video1 $video2 $audio1 $audio2 $info1 $info2 $log.*
 echo $prog done
 exit
-
