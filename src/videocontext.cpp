@@ -1781,6 +1781,12 @@ bool VideoContext::readPacket() {
 
 bool VideoContext::decodeFrame() {
   while (true) {
+    if (_errorCount > _MAX_ERROR_COUNT) {
+      qWarning() << "maximum error count exceeded";
+      close();
+      return false;
+    }
+
     int err = avcodec_receive_frame(_p->context, _p->frame);
 
     if (err == 0) {
@@ -1815,6 +1821,7 @@ bool VideoContext::decodeFrame() {
                         .arg(err, 0, 16)
                         .arg(avErrorString(err));
       avLoggerWriteLogLine(logContext(), msg);
+      _errorCount++;
       qCritical() << msg;
       break;
     }
@@ -1846,6 +1853,7 @@ bool VideoContext::decodeFrame() {
                           .arg(avErrorString(err));
         // TODO: limit number of errors logged
         avLoggerWriteLogLine(logContext(), msg);
+        _errorCount++;
         qCritical() << msg;
 
         // we get this when decoding av1 when there is no av1 implementation "Function not implemented"

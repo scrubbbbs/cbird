@@ -923,7 +923,6 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
     index.frames.clear();
   }
 
-  int corruptFrames = 0;
   int nearFrames = 0;
   int filteredFrames = 0;
 
@@ -1018,12 +1017,8 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
     index.frames.push_back(frameNumber);
   }
 
-  qDebug("%s nframes=%d near=%d filt=%d corrupt=%d",
-         qUtf8Printable(video.path()),
-         frameNumber,
-         nearFrames,
-         filteredFrames,
-         corruptFrames);
+  qDebug("%s nframes=%d near=%d filt=%d errors=%d", qUtf8Printable(video.path()), frameNumber,
+         nearFrames, filteredFrames, video.errorCount());
 
   progressCb(100);
 }

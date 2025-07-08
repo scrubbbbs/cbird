@@ -181,6 +181,8 @@ class VideoContext {
   /// @note only useful in iframes-only mode
   int lastFrameNumber() const { return _lastFrameNumber; }
 
+  int errorCount() const { return _errorCount; }
+
   /// log errors to file instead of console
   static void avLoggerSetLogFile(const QString& path);
   static void avLoggerWriteLogLine(const QString& context, const QString& message);
@@ -218,7 +220,8 @@ class VideoContext {
   QString _path;
   Metadata _metadata;
 
-  int _errorCount = 0;                    // TODO: tally errors to reject indexing
+  int _MAX_ERROR_COUNT = 100;             // give up decoding if exceeded
+  int _errorCount = 0;                    // tally errors to reject indexing
   int64_t _firstPts = -1;                 // pts of first frame for accurate seek
   bool _eof = false;                      // true when eof on input
 
