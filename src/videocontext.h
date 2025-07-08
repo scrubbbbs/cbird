@@ -60,6 +60,7 @@ class VideoContext {
     QDateTime creationTime;
     QString pixelFormat; // only valid after nextFrame()
     QString videoProfile;
+    double rotation = 0;
 
     /// @return if styled, return html for WidgetHelper::drawRichText
     QString toString(bool styled = false) const;
@@ -188,6 +189,7 @@ class VideoContext {
   bool readPacket();
   bool initFilters(const char* filters);
   bool decodeFrameFiltered();
+  QString rotationFilter();
 
   enum { ConvertOK = 0, ConvertNotNeeded = 1, ConvertError = 2 };
   int convertFrame(int& w, int& h, int& fmt, const AVFrame* srcFrame);

@@ -29,6 +29,7 @@ extern "C" {
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
 #include <libavformat/avformat.h>
+#include <libavutil/display.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
 #include <libswscale/swscale.h>
@@ -1335,6 +1336,21 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt_) {
       _metadata.frameSize = QSize(codecParams->width, codecParams->height);
       _metadata.videoBitrate = int(codecParams->bit_rate);
 
+      // if (stream->metadata) {
+      //   AVDictionaryEntry* tag = NULL;
+      //   while ((tag = av_dict_get(stream->metadata, "", tag, AV_DICT_IGNORE_SUFFIX))) {
+      //     qDebug() << tag->key << tag->value;
+      //   }
+      // }
+
+      const AVPacketSideData* sideData = av_packet_side_data_get(codecParams->coded_side_data,
+                                                                 codecParams->nb_coded_side_data,
+                                                                 AV_PKT_DATA_DISPLAYMATRIX);
+      if (sideData) {
+        const int32_t* matrix = (const int32_t*) sideData->data;
+        _metadata.rotation = av_display_rotation_get(matrix);
+      }
+
       const AVCodec* vCodec = avcodec_find_decoder(codecParams->codec_id);
       if (vCodec) {
         _metadata.videoCodec = vCodec->name;
@@ -2094,6 +2110,13 @@ bool VideoContext::frameToQImg(QImage& img) {
   return true;
 }
 
+QString VideoContext::rotationFilter() {
+  bool turned = (std::abs((int) _metadata.rotation) / 90) & 1;
+  QString sizeMod = turned ? ":out_w=ih:out_h=iw" : "";
+  QString filter = qq("rotate=%1*PI/180%2").arg(-_metadata.rotation).arg(sizeMod);
+  return filter;
+}
+
 bool VideoContext::decodeFrameFiltered() {
   bool ok = decodeFrame();
 
@@ -2153,6 +2176,8 @@ bool VideoContext::decodeFrameFiltered() {
         qWarning() << "no hardware scaler for" << av_get_pix_fmt_name(fc->format)
                    << "expect extremely poor performance";
       }
+
+      if (_metadata.rotation) filters += "," + rotationFilter();
     }
     qDebug() << "using hw avfilter:" << filters;
     av_log_set_level(AV_LOG_TRACE);
@@ -2162,6 +2187,12 @@ bool VideoContext::decodeFrameFiltered() {
       qCritical("filter setup failure");
       return false;
     }
+  }
+
+  if (ok && !_p->filterGraph && _metadata.rotation) {
+    QString filter = rotationFilter();
+    ok = initFilters(qPrintable(filter));
+    if (!ok) return false;
   }
 
   // test sw filter graph
