@@ -1349,6 +1349,7 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt_) {
       if (sideData) {
         const int32_t* matrix = (const int32_t*) sideData->data;
         _metadata.rotation = av_display_rotation_get(matrix);
+        if ((std::abs(int(_metadata.rotation)) / 90) & 1) _metadata.frameSize.transpose();
       }
 
       const AVCodec* vCodec = avcodec_find_decoder(codecParams->codec_id);
