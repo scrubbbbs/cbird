@@ -42,6 +42,7 @@
 #include <QtCore/QFutureWatcher>
 #include <QtCore/QProcessEnvironment>
 #include <QtCore/QSettings>
+#include <QtCore/QStringBuilder>
 
 #include <QtConcurrent/QtConcurrentMap>
 #include <QtConcurrent/QtConcurrentRun>
@@ -443,6 +444,15 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   a = WidgetHelper::addAction(settings, "File/Move Parent", Qt::Key_B, this,
                               SLOT(moveFolderAction()));
   a->setEnabled(_options.db != nullptr);
+
+  a = WidgetHelper::addAction(settings, "File/Move File Before", Qt::SHIFT | Qt::Key_G, this,
+                              SLOT(moveFileBeforeAction()));
+  a->setEnabled(_options.db != nullptr);
+
+  a = WidgetHelper::addAction(settings, "File/Move File After", Qt::SHIFT | Qt::Key_B, this,
+                              SLOT(moveFileAfterAction()));
+  a->setEnabled(_options.db != nullptr);
+
   a->setData(ll(";newfolder;"));
 
   WidgetHelper::addAction(settings, "File/Copy Image Buffer", Qt::CTRL | Qt::Key_C, this,
@@ -1040,6 +1050,51 @@ void MediaGroupListWidget::moveFileAction() {
     if (_options.db->move(m, dirPath)) updateMedia(path, m);
   }
   loadRow(_currentRow);  // path in window title may have changed
+}
+
+void MediaGroupListWidget::moveSelectionSorted(bool before) {
+  Q_ASSERT(_options.db);
+
+  Media *selected, *other;
+  if (!selectedPair(&selected, &other)) return;
+
+  if (selected->isArchived() || other->isArchived()) {
+    qWarning() << "renaming/moving archived files unsupported";
+    return;
+  }
+
+  // insert immediately before/after the other file in sorted order,
+  // without having to rename anything other than the selected file
+  // or check the folder contents
+  QString baseName = other->completeBaseName();
+  QString filePath, fileName;
+  int num = before ? 1 : 9999;
+  QChar beforeChar = lc('.'); // sorts before alpha numeric chars
+  QChar afterChar = lc('~');  // sorts after alpha numeric chars
+  QChar prefix = before ? beforeChar : afterChar;
+
+  do {
+    if (num == 10000 || num == 0) {
+      qWarning() << "too many renamed files";
+      return;
+    }
+
+    QString tag = prefix % qq("%1").arg(num, 4, 10, lc('0'));
+    fileName = baseName % tag % lc('.') % selected->suffix();
+    filePath = other->dirPath() % lc('/') % fileName;
+
+    if (filePath == selected->path()) {
+      qInfo() << "already before/after, nothing to do";
+      return;
+    }
+
+    num = before ? num + 1 : num - 1;
+
+  } while (QFile::exists(filePath));
+
+  if (!_options.db->rename(*selected, fileName)) return;
+  if (selected->dirPath() == other->dirPath() || _options.db->move(*selected, other->dirPath()))
+    updateMedia(filePath, *selected);
 }
 
 void MediaGroupListWidget::renameFileAction() {

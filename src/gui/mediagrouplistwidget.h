@@ -88,6 +88,12 @@ class MediaGroupListWidget : public QListWidget {
   /// Rename selected file
   void renameFileAction();
 
+  /// Rename and move selected file before other file
+  void moveFileBeforeAction() { moveSelectionSorted(true); }
+
+  /// Rename and move selected file after other file
+  void moveFileAfterAction() { moveSelectionSorted(false); }
+
   /// Rename; take name from the other (unselected) item in a pair (keep extension)
   void copyNameAction();
 
@@ -211,6 +217,9 @@ class MediaGroupListWidget : public QListWidget {
 
   /// Move parent of child(file) to newName
   void moveDatabaseDir(const Media& child, const QString& newName);
+
+  /// Move selected file to other file's folder and rename to be in sorted order
+  void moveSelectionSorted(bool before);
 
   /**
    * @brief Build file for verifying a dataset
