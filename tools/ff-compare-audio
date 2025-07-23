@@ -42,6 +42,9 @@ for x in "$@"; do
 done
 
 wait $(jobs -p)
+
+export QT_SCALE_FACTOR=1 # causes rendering artifacts in ocenaudio
+
 ocenaudio "${files[@]}"
 #/opt/Ardour-6.6.0/bin/ardour6 "${files[@]}"
 
