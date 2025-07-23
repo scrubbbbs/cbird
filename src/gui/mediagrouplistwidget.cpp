@@ -903,11 +903,9 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
     }
 
     if (_lockedFolders.contains(m.dirPath())) {
-      QMessageBox dialog(
-          QMessageBox::Warning, qq("Delete Item: Folder Locked"),
-          qq("\"%1\" is locked for deletion.\n\n")
-              .arg(m.dirPath()),
-          QMessageBox::Ok, this);
+      QMessageBox dialog(QMessageBox::Warning, qq("Delete Item: Folder Locked"),
+                         qq("\"%1\"\n\nis locked for deletion.").arg(m.dirPath()), QMessageBox::Ok,
+                         this);
       (void)Theme::instance().execDialog(&dialog);
       continue;
     }
@@ -1047,6 +1045,10 @@ void MediaGroupListWidget::moveFileAction() {
 
   for (Media& m : selectedMedia()) {
     QString path = m.path();
+    if (_lockedFolders.contains(m.dirPath())) {
+      qWarning() << "source folder is locked:" << path;
+      continue;
+    }
     if (_options.db->move(m, dirPath)) updateMedia(path, m);
   }
   loadRow(_currentRow);  // path in window title may have changed
@@ -1060,6 +1062,14 @@ void MediaGroupListWidget::moveSelectionSorted(bool before) {
 
   if (selected->isArchived() || other->isArchived()) {
     qWarning() << "renaming/moving archived files unsupported";
+    return;
+  }
+
+  if (_lockedFolders.contains(selected->dirPath())) {
+    QMessageBox dialog(QMessageBox::Warning, qq("Move Item: Source Folder Locked"),
+                       qq("\"%1\"\n\nCannot move from a locked folder.").arg(selected->dirPath()),
+                       QMessageBox::Ok, this);
+    (void) Theme::instance().execDialog(&dialog);
     return;
   }
 
