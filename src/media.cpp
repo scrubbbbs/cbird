@@ -1125,45 +1125,11 @@ void Media::openMedia(const Media& m, float seek) {
         //process.waitForFinished(10000);
     */
 #endif
-  } else if (m.isArchived()) {
-    QString child;
-    m.archivePaths(nullptr, &child);
-
-    // TODO: open file within archive...have it be browseable
-    //       there are various ways this is done depending on
-    //       the viewer
-    // nomacs: zipfile.zipdIrChAr/child.jpg => opens but not browseable
-    // - use our own browser
-    // - move this to DesktopHelper::openImage
-    QIODevice* io = m.ioDevice();
-    if (io && io->open(QIODevice::ReadOnly)) {
-      child = child.split("/").last();
-      QFileInfo info(child);
-      QString temporaryName =
-          DesktopHelper::tempName(info.completeBaseName() + ".unzipped.XXXXXX." + info.suffix());
-
-      if (temporaryName.isEmpty()) {
-        qWarning() << "open archived file: cannot get temporary file";
-        return;
-      }
-
-      QFile f(temporaryName);
-      if (!f.open(QFile::WriteOnly | QFile::Truncate)) {
-        qWarning() << "open archived file: cannot write temporary file";
-        return;
-      }
-
-      f.write(io->readAll());
-      f.close();  // necessary because file was opened excl mode (win32)
-
-      QUrl url = QUrl::fromLocalFile(temporaryName);
-      qInfo() << "QDesktopServices::openUrl" << url;
-      QDesktopServices::openUrl(url);
-    }
-    delete io;
+  } else if (m.type() == Media::TypeImage) {
+    DesktopHelper::openImage(m.path());
   } else {
     QUrl url(m.path());
-    if (url.scheme().length() < 2) {  // empty or a drive letter
+    if (url.scheme().length() < 2) { // empty or a drive letter
       QString path = m.path();
       QFileInfo info(path);
       if (info.isFile()) path = info.absoluteFilePath();

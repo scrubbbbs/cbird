@@ -22,6 +22,7 @@
 
 #include "gui/shadewidget.h"
 #include "gui/theme.h" // TODO: I don't like this dependency
+#include "media.h"
 #include "profile.h"
 
 #ifdef Q_OS_WIN
@@ -150,6 +151,49 @@ bool DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
                                const QString& inPath2, double seek2) {
   QString path(inPath);
   QString path2(inPath2);
+
+  if (path.contains(".zip:")) {
+    bool supportsZip = false;
+    QString parentPath, childPath;
+    Media::archivePaths(path, &parentPath, &childPath);
+    for (QString& arg : args) {
+      if (arg.startsWith("%zipPath(")) {
+        int openParen = arg.indexOf(lc('('));
+        int closeParen = arg.indexOf(lc(')'));
+        QString fmt = arg.mid(openParen + 1, closeParen - openParen - 1);
+        arg = QString(fmt).arg(parentPath).arg(childPath);
+        supportsZip = true;
+      }
+    }
+    if (!supportsZip) { // extract to tmpfile
+      Media m(path);
+      QIODevice* io = m.ioDevice();
+      if (io && io->open(QIODevice::ReadOnly)) {
+        childPath = childPath.split("/").last();
+        QFileInfo info(childPath);
+        QString temporaryName = DesktopHelper::tempName(info.completeBaseName()
+                                                        + ".unzipped.XXXXXX." + info.suffix());
+
+        if (temporaryName.isEmpty()) {
+          qWarning() << "open archived file: cannot get temporary file";
+          return false;
+        }
+
+        QFile f(temporaryName);
+        if (!f.open(QFile::WriteOnly | QFile::Truncate)) {
+          qWarning() << "open archived file: cannot write temporary file";
+          return false;
+        }
+
+        f.write(io->readAll());
+        f.close(); // necessary because file was opened excl mode (win32)
+
+        path = temporaryName;
+      }
+      delete io;
+    }
+  }
+
 #ifdef Q_OS_WIN
   path.replace("/", "\\");
   path2.replace("/", "\\");
@@ -164,6 +208,8 @@ bool DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
     arg.replace("%home", QDir::homePath());
     arg.replace("%dirname(1)", QFileInfo(path).dir().absolutePath());
     arg.replace("%dirname(2)", QFileInfo(path2).dir().absolutePath());
+
+    if (arg.startsWith("%zipPath(")) arg = path; // already removed if path is zip
   }
 
   qInfo() << args;
@@ -368,6 +414,25 @@ void DesktopHelper::revealPath(const QString& path) {
 
   if (!runProgram(args, false, tmp))
     putSetting(settingsKey, {});
+}
+
+void DesktopHelper::openImage(const QString& path) {
+  const QString settingsKey = qq("OpenImage");
+  QStringList args = getSetting(settingsKey, {}).toStringList();
+
+  QVector<QStringList> presets;
+
+  presets = {
+      {"Desktop Default", "DesktopServices"},
+      {"gwenview", "gwenview", "%zipPath(zip:%1/%2)"},
+      {"nomacs", "nomacs", "%zipPath(%1#/%2)"},
+  };
+
+  if (!chooseProgram(args, presets, settingsKey, qq("Choose Image Viewer"),
+                     qq("Select the program for opening images")))
+    return;
+
+  if (!runProgram(args, false, path)) putSetting(settingsKey, {});
 }
 
 void DesktopHelper::openVideo(const QString& path, double seekSeconds) {

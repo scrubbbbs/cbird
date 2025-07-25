@@ -27,6 +27,9 @@ class DesktopHelper {
   /// and highlight the item
   static void revealPath(const QString& path);
 
+  /// open image viewer
+  static void openImage(const QString& path);
+
   /// open video player with optional starting time
   static void openVideo(const QString& path, double seekSeconds);
 
