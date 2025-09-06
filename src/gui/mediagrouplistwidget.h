@@ -76,6 +76,9 @@ class MediaGroupListWidget : public QListWidget {
   /// Show selected item in filemanager
   void openFolderAction();
 
+  /// Move siblings of selected file to trash
+  void deleteAllAction() { removeSiblings(true); }
+
   /// Move selected files to trash
   void deleteAction();
 
@@ -114,6 +117,9 @@ class MediaGroupListWidget : public QListWidget {
 
   /// Remove selected items from the view (do not delete files)
   void clearAction() { removeSelection(false); }
+
+  /// Remove all siblings of the selected file's parent
+  void clearAllAction() { removeSiblings(false); }
 
   /// Add no-reference quality score to item descriptions
   void qualityScoreAction();
@@ -211,6 +217,9 @@ class MediaGroupListWidget : public QListWidget {
    * move to the next group
    */
   void removeSelection(bool deleteFiles, bool replace = false);
+
+  /// remove siblings from all pages
+  void removeSiblings(bool deleteFiles);
 
   /// Warn about renaming w/o database present
   bool renameWarning();

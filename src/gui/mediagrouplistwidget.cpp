@@ -430,6 +430,10 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addAction(settings, "File/Rename Parent", Qt::Key_F3, this,
                           SLOT(renameFolderAction()));
 
+  WidgetHelper::addAction(settings, "File/Delete All", Qt::CTRL | Qt::ALT | Qt::Key_D, this,
+                          SLOT(deleteAllAction()))
+      ->setEnabled(!(_options.flags & MediaWidgetOptions::FlagDisableDelete));
+
   WidgetHelper::addAction(settings, "File/Delete File", Qt::Key_D, this, SLOT(deleteAction()))
       ->setEnabled(!(_options.flags & MediaWidgetOptions::FlagDisableDelete));
 
@@ -465,6 +469,8 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
 
   WidgetHelper::addAction(settings, "Compare/Rotate Items", Qt::Key_R, this, SLOT(rotateAction()));
   WidgetHelper::addAction(settings, "Compare/Remove Item", Qt::Key_A, this, SLOT(clearAction()));
+  WidgetHelper::addAction(settings, "Compare/Remove Item Siblings", Qt::CTRL | Qt::ALT | Qt::Key_A,
+                          this, SLOT(clearAllAction()));
   WidgetHelper::addAction(settings, "Compare/Quality Score", Qt::Key_Q, this,
                           SLOT(qualityScoreAction()));
   WidgetHelper::addAction(settings, "Compare/Template Match", Qt::Key_T, this,
@@ -485,6 +491,8 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
   WidgetHelper::addAction(settings, "Tag/Record Bad Match", Qt::Key_N, this,
                           SLOT(recordMatchFalseAction()));
   WidgetHelper::addAction(settings, "Tag/Forget Weed", Qt::Key_W, this, SLOT(forgetWeedsAction()));
+  WidgetHelper::addAction(settings, "Tag/Toggle Folder Lock", Qt::Key_L, this,
+                          SLOT(toggleFolderLockAction()));
   WidgetHelper::addAction(settings, "Tag/Add to Negative Matches", Qt::Key_Minus, this,
                           SLOT(negMatchAction()))
       ->setEnabled(_options.db != nullptr);
@@ -528,9 +536,6 @@ MediaGroupListWidget::MediaGroupListWidget(const MediaGroupList& list,
       break;
   }
   WidgetHelper::addAction(settings, text, Qt::Key_Return, this, SLOT(chooseAction()));
-
-  WidgetHelper::addAction(settings, "Navigation/Toggle Folder Lock", Qt::Key_L, this,
-                          SLOT(toggleFolderLockAction()));
 
   WidgetHelper::addAction(settings, "Navigate/Browse Parent", Qt::Key_Tab, this,
                           SLOT(browseParentAction()))
@@ -854,6 +859,78 @@ void MediaGroupListWidget::openFolderAction() {
   const Media& m = group[items[0]->type()];
 
   Media::revealMedia(m);
+}
+
+void MediaGroupListWidget::removeSiblings(bool deleteFiles) {
+  const MediaGroup items = selectedMedia();
+  if (items.count() != 1) {
+    qWarning() << "one selected item is required";
+    return;
+  }
+  if (deleteFiles && items[0].isArchived()) {
+    qWarning() << "deletion of archive members is unsupported";
+    return;
+  }
+
+  const QString basePath = items[0].dirPath();
+  if (deleteFiles) {
+    if (_lockedFolders.contains(basePath)) {
+      QMessageBox dialog(QMessageBox::Warning, qq("Delete All Siblings: Folder Locked"),
+                         qq("\"%1\"\n\nis locked for deletion.").arg(basePath), QMessageBox::Ok,
+                         this);
+      (void) Theme::instance().execDialog(&dialog);
+      return;
+    }
+
+    {
+      QMessageBox dialog(QMessageBox::Warning, qq("Delete All Siblings?"),
+                         qq("Move all matches to trash with parent folder?\n\n%1").arg(basePath),
+                         QMessageBox::No | QMessageBox::Yes, this);
+
+      int result = Theme::instance().execDialog(&dialog);
+      if (result != QMessageBox::Yes) return;
+    }
+  }
+
+  MediaGroup toRemove;
+  QVector<int> emptyPages;
+  int pageIndex = -1;
+  for (MediaPage* page : _list) {
+    pageIndex++;
+    page->removeAnalysis();
+    MediaGroup newGroup;
+    for (const Media& m : page->group) {
+      if (m.dirPath() == basePath)
+        toRemove += m;
+      else
+        newGroup += m;
+    }
+    page->group = newGroup;
+    if (page->countNonAnalysis() < 2) emptyPages += pageIndex;
+  }
+
+  if (deleteFiles) {
+    QVector<int> toRemoveIds;
+    for (const Media& m : toRemove) {
+      if (!DesktopHelper::moveToTrash(m.path())) return;
+      toRemoveIds += m.id();
+    }
+
+    if (_options.db) _options.db->remove(toRemoveIds);
+  }
+
+  // must follow what itemCountChanged() does to remove pages correctly
+  std::reverse(emptyPages.begin(), emptyPages.end());
+  for (int index : emptyPages)
+    deletePage(index);
+
+  if (_list.isEmpty()) {
+    close();
+  } else {
+    if (_currentRow >= _list.count()) _currentRow = _list.count() - 1;
+    if (_autoDifference) currentPage()->addDifferenceAnalysis();
+    loadRow(_currentRow);
+  }
 }
 
 void MediaGroupListWidget::deleteAction() { removeSelection(true); }
