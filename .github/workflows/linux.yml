@@ -1,0 +1,87 @@
+name: Linux workflow
+on: 
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: build (${{ matrix.config.name }})
+    strategy:
+      matrix:
+        config:
+          - name: ubuntu-gcc-24.04
+            container: "ghcr.io/scrubbbbs/ubuntu:24.04"
+            #deps: ""
+            deps: "libquazip1-qt6-dev"
+            #cmake_flags: "-DENABLE_QUAZIP=ON -DUSE_SYSTEM_QUAZIP=OFF"
+            cmake_flags: "-DENABLE_QUAZIP=ON"
+            env: "CC=gcc CXX=g++"
+
+    container:
+      image: ${{ matrix.config.container }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libexiv2-dev cmake build-essential qt6-base-dev qt6-tools-dev libqt6svg6-dev qt6-image-formats-plugins libgl-dev qt6-l10n-tools ${{ matrix.config.deps }}
+
+      - name: Checkout
+        run: |
+          clang --version
+          gcc --version
+          git clone --depth 1 --no-single-branch https://github.com/scrubbbbs/nomacs.git
+          cd nomacs
+          git checkout appimage-test
+          git submodule init
+          git submodule update 3rd-party/quazip
+      - name: Cmake
+        run: |
+          cd nomacs/
+          mkdir build
+          cd build
+          ${{ matrix.config.env }} cmake -G Ninja ${{ matrix.config.cmake_flags }} ../ImageLounge
+
+      - name: Get Build Info
+        id: get_version
+        shell: bash
+        run: |
+          cd nomacs/build
+          ARCH=$(uname --machine)
+          OS=$(source /etc/lsb-release; echo $DISTRIB_ID-$DISTRIB_RELEASE)
+          SHA=$(git rev-parse --short ${{ github.event.pull_request.head.sha || github.sha }})
+          VERSION=$(cat DkVersion.h | grep NOMACS_VERSION_STR | sed 's/[^0-9\.]*//g')
+          echo "VERSION=${VERSION}-${SHA}-${OS}-${ARCH}" >> $GITHUB_OUTPUT
+          echo "ARCH=${ARCH}" >> $GITHUB_OUTPUT
+
+      - name: Compile
+        run: |
+          cd nomacs/build
+          ninja
+          ninja check
+
+      - name: AppImage
+        run: |
+          cd nomacs/build
+          ninja appimage
+      
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppImage ${{ matrix.config.name }}
+          path: nomacs/build/nomacs-*.AppImage
+          retention-days: 1 
+
+
