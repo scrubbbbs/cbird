@@ -1,0 +1,53 @@
+name: Linux workflow
+on: 
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: build (${{ matrix.config.name }})
+    strategy:
+      matrix:
+        config:
+          - name: default 
+            container: "ghcr.io/scrubbbbs/neon:24.04"
+            cmake_flags: ""
+            env: "CC=clang CXX=clang++"
+            appimage: false
+
+    container:
+      image: ${{ matrix.config.container }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libexiv2-dev cmake build-essential qt6-base-dev qt6-tools-dev libqt6svg6-dev qt6-image-formats-plugins libgl-dev qt6-l10n-tools libquazip1-qt6-dev
+
+      - name: Qmake configure
+        run: |
+          clang --version
+          gcc --version
+          git clone --depth 1 --no-single-branch https://github.com/scrubbbbs/nomacs.git
+          cd nomacs
+          git checkout appimage
+          mkdir build
+          cd build
+          ${{ matrix.config.env }} cmake -G Ninja ../ImageLounge
+          ninja
+          ninja check
+          ninja appimage
+
+
