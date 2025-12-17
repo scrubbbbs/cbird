@@ -307,6 +307,9 @@ void CropWidget::keyPressEvent(QKeyEvent *ev) {
     case Qt::Key_3:
       setConstraint(true, 5, 4);
       return;
+    case Qt::Key_4:
+      setConstraint(true, 29, 30);
+      return;
     case Qt::Key_R: {
       _selection = _selection.transposed();
       setConstraint(true, _aspect_den, _aspect_num);
