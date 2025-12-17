@@ -1,0 +1,35 @@
+
+Looks Like It
+2011/5/26
+http://www.hackerfactor.com/blog/?/archives/432-Looks-Like-It.html
+
+DETECTING SIMILAR AND IDENTICAL IMAGES USING PERSEPTUAL HASHES
+http://hackerlabs.github.io/blog/2012/07/30/organizing-photos-with-duplicate-and-similarity-checking/
+
+phash vptree
+2013/4/3
+https://github.com/bradley219/phash_vptree/tree/master/src
+
+Vantage point tree database and query engine for storing and searching millions of 
+photos based on adjustable similarity criteria. Perceptual-hash data is generated
+using the phash library (http://www.phash.org/).
+
+--
+cvhash
+2015/2/20
+https://github.com/ls64/cvhash
+
+Use OpenCV to produce a perceptual hash of an image (like pHash)
+
+--
+MVPTree c library version: 1.0.0 date: 2010/12/17 creator: D. Grant Starkweather license: GPLv3
+2013/1/13
+https://github.com/mediabox-gp/mvptree-mediabox
+contact: dstarkweather@phash.org, eklinger@phash.org
+
+The MVP tree is a distance-based data structure for the storage and retrieval of n-dimensional datapoints. It relies on the relative distances from selected vantage points to index the points
+
+perceptive-client
+Lookup image metadata locally using pHash index
+2016/2/2
+https://github.com/mediachain/perceptive-client

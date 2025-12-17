@@ -1,0 +1,51 @@
+
+-- updated for v6.5.0
+
+prereqs
+install cmake 3.24
+install node v16 (v18 on 23.04)
+
+export Qt6_DIR=/opt/qt/6.5/6.5.0
+- retry with qt-libjpeg since jpeg loader segfaults in longjmp_chk
+
+qtbase
+ ./configure -release -prefix $Qt6_DIR -qt-libjpeg
+ cmake --build . --parallel
+ sudo cmake --install .
+ 
+qtimageformats
+ $Qt6_DIR/bin/qt-configure-module
+ cmake --build . --parallel
+ sudo cmake --install .
+ 
+qtshadertools
+qtdeclarative
+qtquicktimeline
+qtquick3d
+qtscxml
+qtwebsockets
+qtwebchannel
+qtwayland
+qt5compat
+
+quazip (master)
+-
+
+webengine
+----
+qt 6.6.1
+
+git fsck
+git submodule foreach fsck
+git fetch
+git checkout v6.6.1
+git submodule update
+
+
+webengine..gcc 13, ubuntu 23.10
+build mem 24g, smp8 to prevent oom
+
+build  fails w/o disabling pdf? --unknown
+
+qt-configure-module . -webengine-proprietary-codecs -no-feature-qtpdf-build -no-feature-webengine-printing-and-pdf
+
