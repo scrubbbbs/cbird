@@ -68,6 +68,8 @@ class VideoContext {
     QTime timeDuration() const { return QTime(0, 0).addSecs(duration); }
 
     void toMediaAttributes(Media& media) const;
+
+    void clear() { *this = Metadata{}; }
   };
 
   struct DecodeOptions {

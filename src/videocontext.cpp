@@ -1223,6 +1223,8 @@ int VideoContext::open(const QString& path, const DecodeOptions& opt_) {
 
   snprintf(_logContext, sizeof(_logContext), "%s", qUtf8Printable(path));
 
+  if (_path != path) _metadata.clear();
+
   _path = path;
   _options = opt_;
 
