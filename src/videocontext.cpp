@@ -2100,7 +2100,11 @@ bool VideoContext::frameToQImg(QImage& img) {
   else
     return false;
 
+#ifdef AV_FRAME_FLAG_KEY
+  bool isKey = (_p->frame->flags & AV_FRAME_FLAG_KEY) || _p->frame->pict_type == AV_PICTURE_TYPE_I;
+#else
   bool isKey = _p->frame->key_frame || _p->frame->pict_type == AV_PICTURE_TYPE_I;
+#endif
 
   img.setText("isKey", QString::number(isKey));
 
