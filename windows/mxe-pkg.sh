@@ -1,15 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 VERSION=$1
 ARCH=$2
 BUILD=_win32
 PKG_DIR=$BUILD/cbird-win
 ZIP=cbird-windows-$VERSION-$ARCH.zip
 MXE_BIN="$MXE_DIR/usr/$MXE_TARGET/bin"
-OPENCV_BIN=../libs-win32/build-opencv/install/x64/mingw/bin
-CROSS_BIN=../libs-win32/build-mxe/bin
+OPENCV_BIN="$CV_BUILD/install/x64/mingw/bin"
 QT_DIR="$MXE_DIR/usr/$MXE_TARGET/qt6"
 QT_BIN="$QT_DIR/bin"
 STRIP="$MXE_DIR/usr/bin/$MXE_TARGET-strip"
+
+CROSS_BIN="$MXE_BIN"
+if [[ ! -d "$EXTRA_PREFIX/bin" ]]; then
+    CROSS_BIN="$EXTRA_PREFIX/bin";
+fi
 
 echo building $VERSION $ARCH in $PKG_DIR
 

@@ -25,7 +25,10 @@
 #include "ioutil.h"
 #include "profile.h"
 
+#ifdef ENABLE_HIGHGUI
 #include "opencv2/highgui/highgui.hpp"
+#endif
+
 #include "opencv2/imgproc/imgproc.hpp"
 
 #include <QtCore/QMutexLocker>
@@ -159,6 +162,7 @@ void saveMatrix(const cv::Mat& mat, const QString& path) {
   });
 }
 
+#ifdef ENABLE_HIGHGUI
 void showImage(const cv::Mat& img) {
   const char* title = "showImage";
   cv::namedWindow(title, CV_WINDOW_AUTOSIZE);
@@ -167,6 +171,7 @@ void showImage(const cv::Mat& img) {
   cv::waitKey();
   cv::destroyWindow(title);
 }
+#endif
 
 void cImgToCvImg(const CImg<uint8_t>& img, cv::Mat& cvImg) {
   if (img.spectrum() >= 3) {
@@ -824,10 +829,12 @@ void ColorDescriptor::create(const cv::Mat& cvImg, ColorDescriptor& desc) {
   // this only works if pure black is removed
   Q_ASSERT(!histFilter(0, 96, 136));
 
+#ifdef ENABLE_HIGHGUI
   if (debug) {
     cv::imshow("mask", mask);
     cv::moveWindow("mask", mask.cols, 0);
   }
+#endif
 
   // apply mask
   for (int row = 0; row < rgb.rows; row++) {
@@ -1074,6 +1081,7 @@ void ColorDescriptor::create(const cv::Mat& cvImg, ColorDescriptor& desc) {
   }
 
   if (debug) {
+#ifdef ENABLE_HIGHGUI
     cv::cvtColor(luv, rgb, convToRgb);
     cv::cvtColor(graph, graph, convToRgb);
 
@@ -1086,6 +1094,7 @@ void ColorDescriptor::create(const cv::Mat& cvImg, ColorDescriptor& desc) {
     cv::moveWindow("colors", 0, rgb.rows);
     cv::imshow("colors", graph);
     cv::waitKey(0);
+#endif
   }
 }
 

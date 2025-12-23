@@ -67,23 +67,40 @@ QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
 INCLUDEPATH += $$QTCORE_PRIVATE_HEADERS
 
 win32 {
-    !exists( ../libs-win32 ) { error("win32 libs missing") }
-    !exists( ../libs-win32/build-opencv ) { error("win32 opencv libs missing") }
-    !exists( ../libs-win32/build-mxe ) { error("win32 mxe libs missing") }
+    # opencv for mingw doesn't use unix-like install
+    CV_BUILD=../libs-win32/build-opencv
+    !equals('',$$(CV_BUILD)) { # take from environment
+        CV_BUILD=$$(CV_BUILD)
+    }
+    !exists( $${CV_BUILD} ) { error("win32 opencv2 build missing, tried <$${CV_BUILD}>") }
 
-    INCLUDEPATH += ../libs-win32/build-opencv/install/include
-    LIBS += -L../libs-win32/build-opencv/install/x64/mingw/lib
+    INCLUDEPATH += $${CV_BUILD}/install/include
+    LIBS += -L$${CV_BUILD}/install/x64/mingw/lib
     OPENCV_VERSION = 2413
-    OPENCV_LIBS *= ml objdetect stitching superres videostab calib3d
-    OPENCV_LIBS *= features2d highgui video photo imgproc flann core
+    OPENCV_LIBS *= core features2d imgproc video flann
+    #OPENCV_LIBS *= highgui video photo imgproc
+    #OPENCV_LIBS *= ml objdetect stitching superres videostab calib3d
     for (CVLIB, OPENCV_LIBS) {
         LIBS *= -lopencv_$${CVLIB}$${OPENCV_VERSION}
     }
 
-    INCLUDEPATH = ../libs-win32/build-mxe/include $$INCLUDEPATH # ensure this precedes mxe
-    LIBS += -L../libs-win32/build-mxe/lib
-   
-    INCLUDEPATH += ../libs-win32/build-mxe/include/QuaZip-Qt6-1.4
+    # install prefix for extra deps (in unix convention) we want to keep out of mxe
+    EXTRA_PREFIX=../libs-win32/build-mxe
+    !equals('',$$(EXTRA_PREFIX)) {
+        EXTRA_PREFIX=$$(EXTRA_PREFIX)
+    }
+    exists( $${EXTRA_PREFIX} ) {
+        INCLUDEPATH = $${EXTRA_PREFIX}/include $$INCLUDEPATH # ensure this precedes mxe
+        LIBS += -L$${EXTRA_PREFIX}/lib
+    }
+  
+    QUAZIP_PATH=$${EXTRA_PREFIX}/include/QuaZip-Qt6-6.1.5
+    !exists( $${QUAZIP_PATH} ) {
+        QUAZIP_PATH=$(MXE_DIR)/usr/$(MXE_TARGET)/include/QuaZip-Qt6-1.5
+    }
+    !exists( $${QUAZIP_PATH} ) { error("quazip missing, tried $${QUAZIP_PATH}") } 
+    
+    INCLUDEPATH += $${QUAZIP_PATH} 
     LIBS += -lquazip1-qt6
     
     LIBS *= -lz -lpsapi -ldwmapi

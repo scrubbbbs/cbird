@@ -116,8 +116,10 @@ struct ColorDescriptor {
 void cImgToCvImg(const CImg<uint8_t>& img, cv::Mat& cvImg);
 void cvImgToCImg(const cv::Mat& cvImg, CImg<uint8_t>& cImg);
 
+#ifdef ENABLE_HIGHGUI
 // show image viewer and wait for key press
 void showImage(const cv::Mat& img);
+#endif
 
 // convert QImage to cv::Mat
 // unless QImage is manipulated in some way,
