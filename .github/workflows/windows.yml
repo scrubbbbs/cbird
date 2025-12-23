@@ -1,0 +1,95 @@
+name: Windows Build
+on: 
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - .github/workflows/docker.yml
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - .github/workflows/docker.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: build (${{ matrix.config.name }})
+    strategy:
+      # needs to be set; reduce if github is cancelling jobs
+      max-parallel: 2
+      matrix:
+        config:
+          - name: "portable"
+            container: "ghcr.io/scrubbbbs/mxe:latest"
+            submodules: false
+            deps: ""
+            cmake_flags: ""
+            env: ""
+
+    container:
+      image: ${{ matrix.config.container }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Allow unsafe git in container
+        run: git config --global --add safe.directory ${GITHUB_WORKSPACE}
+
+      - name: Checkout submodules
+        if: matrix.config.submodules
+        run: |
+          git submodule init
+          git submodule update
+
+      #- name: Install build dependencies
+      #  run: |
+      #    sudo apt-get update
+
+      - name: Configure
+        shell: bash
+        run: |
+          shopt -s expand_aliases
+          source /build/mxe.env
+          ${{ matrix.config.env }} qmake
+
+      - name: Build
+        shell: bash
+        run: |
+          shopt -s expand_aliases
+          source /build/mxe.env
+          ${{ matrix.config.env }} make -j$(nproc)
+
+      - name: Get Build Info
+        shell: bash
+        id: get_version
+        run: |
+          ARCH="x86_64"
+          OS=windows
+          SHA=$(git rev-parse --short ${{ github.event.pull_request.head.sha || github.sha }})
+          VERSION=$(cat _win32/git.h | grep CBIRD_VERSION | sed 's/[^0-9\.]*//g')
+          echo "BUILD=${VERSION}-${SHA}-${OS}-${ARCH}" >> $GITHUB_OUTPUT
+
+      - name: Build Portable App 
+        shell: bash
+        run: |
+          shopt -s expand_aliases
+          source /build/mxe.env
+          export HOME="$PWD/home"
+          export WINEPREFIX="$PWD/wineprefix"
+          mkdir -p "$HOME" "$WINEPREFIX"
+          make install
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "cbird-${{ steps.get_version.outputs.BUILD }}-${{ matrix.config.name }}"
+          path: _win32/cbird-win
+          retention-days: 30
+
