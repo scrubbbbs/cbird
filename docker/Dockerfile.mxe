@@ -1,0 +1,100 @@
+FROM ubuntu:24.04
+
+WORKDIR /build
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt update \
+&&  apt install -y \
+    bash \
+    ca-certificates \
+    coreutils \
+    curl \
+    git \
+    gnupg \
+    gzip \
+    nasm \
+    ninja-build \
+    sudo \
+    tar \
+    unzip \
+    wine \
+    wget \
+    # mxe dependencies copied from mxe.cc
+    autoconf \
+    automake \
+    autopoint \
+    bash \
+    bison \
+    bzip2 \
+    flex \
+    g++ \
+    g++-multilib \
+    gettext \
+    git \
+    gperf \
+    intltool \
+    libc6-dev-i386 \
+    libclang-dev \
+    libgdk-pixbuf2.0-dev \
+    libltdl-dev \
+    libgl-dev \
+    libpcre2-dev \
+    libssl-dev \
+    libtool-bin \
+    libxml-parser-perl \
+    lzip \
+    make \
+    openssl \
+    p7zip-full \
+    patch \
+    perl \
+    python3 \
+    python3-mako \
+    python3-packaging \
+    python3-pkg-resources \
+    python3-setuptools \
+    python-is-python3 \
+    ruby \
+    sed \
+    sqlite3 \
+    unzip \
+    wget \
+    xz-utils \
+&& apt upgrade -y \
+&& apt clean -y \
+&& rm -rf /var/lib/apt/lists/*
+
+COPY ./utility.env ./
+
+COPY ./build-mxe.sh ./
+RUN  ./build-mxe.sh \
+    cc \
+    exiv2 \
+    qt6-qtbase \
+    qt6-qt5compat \
+    vulkan-loader \
+    vulkan-headers \
+    libraw \
+    openjpeg \
+    libwebp
+
+COPY ./mxe.env ./
+
+COPY ./build-quazip.sh ./
+RUN  ./build-quazip.sh
+
+COPY ./build-opencv.sh ./
+RUN  ./build-opencv.sh
+
+COPY ./build-ffmpeg.sh ./
+RUN  ./build-ffmpeg.sh
+
+COPY ./build-kimageformats.sh ./
+RUN  ./build-kimageformats.sh
+ 
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENTRYPOINT []
+CMD []
+USER root
