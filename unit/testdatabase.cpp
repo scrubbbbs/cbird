@@ -280,7 +280,7 @@ void TestDatabase::testMoveZip() {
   existingPaths(true, srcPath, otherPath);
 
   QString zipPath, childPath;
-  Media::archivePaths(srcPath, zipPath, childPath);
+  Media::archivePaths(srcPath, &zipPath, &childPath);
   const auto zipContents = _database->mediaWithPathLike(zipPath+"%");
   QVERIFY(zipContents.count() > 0);
 
