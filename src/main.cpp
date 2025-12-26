@@ -984,8 +984,10 @@ int main(int argc, char** argv) {
       imageExt.sort();
       auto videoExt = sc->videoTypes().values();
       videoExt.sort();
+      auto zipExt = sc->archiveTypes();
       qInfo() << "image extensions:" << imageExt;
       qInfo() << "video extensions:" << videoExt;
+      qInfo() << "archive extensions:" << zipExt;
       qInfo() << db->count() << "indexed files";
       qInfo() << db->countType(Media::TypeImage) << "image files";
       qInfo() << db->countType(Media::TypeVideo) << "video files";

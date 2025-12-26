@@ -1023,6 +1023,68 @@ void Media::makeVideoIndex(VideoContext& video, int threshold, VideoIndex& outIn
   progressCb(100);
 }
 
+static constexpr std::array<QStringView, 20> kZipMarkers{u".zip:",  u".ZIP:",  u".cbz:",  u".CBZ:",
+                                                         u".epub:", u".EPUB:", u".odt:",  u".ODT:",
+                                                         u".ods:",  u".ODS:",  u".odp:",  u".ODP:",
+                                                         u".docx:", u".DOCX:", u".pptx:", u".PPTX:",
+                                                         u".xlsx:", u".XLSX:", u".xps:",  u".XPS"};
+
+QStringList Media::archiveExtensions() {
+  QStringList list;
+  for (auto marker : kZipMarkers) {
+    if (marker[1].isLower()) {
+      auto ext = marker.sliced(1, marker.length() - 2);
+      list.append(ext.toString());
+    }
+  }
+  return list;
+}
+
+bool Media::isArchive(const QString& path) {
+  if (isArchived(path)) return false; // not an archive, path to archive member
+
+  QStringView sv(path);
+  int index = sv.lastIndexOf('.');
+  if (index < 0) return false;
+
+  QStringView pathExt = sv.sliced(index);
+  for (QStringView marker : kZipMarkers) {
+    QStringView ext = marker.sliced(0, marker.length() - 1);
+    if (ext == pathExt) return true;
+  }
+
+  return false;
+}
+
+bool Media::isArchived(const QString& path) {
+  return static_cast<bool>(parseArchivePath(path));
+}
+
+void Media::archivePaths(const QString& path, QString* parent, QString* child) {
+  if (auto result = parseArchivePath(path)) {
+    if (parent) *parent = result->parentPath.toString();
+    if (child) *child = result->childPath.toString();
+  }
+}
+
+std::optional<Media::ArchivePath> Media::parseArchivePath(const QString& path) {
+  QStringView view{path};
+  qsizetype end = path.lastIndexOf(u':'); // ":" is rare/illegal so search for it first
+  while (end > 1) {                       // minimum marker is ".x:", also excludes C:\ quickly
+    for (auto marker : kZipMarkers) {
+      qsizetype start = end - marker.length() + 1;
+      if (start < 0) continue;
+      QStringView check = view.sliced(start, marker.length());
+      if (check == marker) {
+        qsizetype cut = start + marker.length();
+        return ArchivePath{view.sliced(0, cut - 1), view.sliced(cut)};
+      }
+    }
+    end = path.lastIndexOf(u':', end - 1);
+  }
+  return std::nullopt;
+}
+
 void Media::playSideBySide(const Media& left, float seekLeft, const Media& right, float seekRight) {
   DesktopHelper::playSideBySide(left.path(), double(seekLeft), right.path(), double(seekRight));
 }

@@ -152,16 +152,14 @@ bool DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
   QString path(inPath);
   QString path2(inPath2);
 
-  if (path.contains(".zip:")) {
+  if (auto parse = Media::parseArchivePath(path)) {
     bool supportsZip = false;
-    QString parentPath, childPath;
-    Media::archivePaths(path, &parentPath, &childPath);
     for (QString& arg : args) {
       if (arg.startsWith("%zipPath(")) {
         int openParen = arg.indexOf(lc('('));
         int closeParen = arg.indexOf(lc(')'));
         QString fmt = arg.mid(openParen + 1, closeParen - openParen - 1);
-        arg = QString(fmt).arg(parentPath).arg(childPath);
+        arg = QString(fmt).arg(parse->parentPath).arg(parse->childPath);
         supportsZip = true;
       }
     }
@@ -169,8 +167,7 @@ bool DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
       Media m(path);
       QIODevice* io = m.ioDevice();
       if (io && io->open(QIODevice::ReadOnly)) {
-        childPath = childPath.split("/").last();
-        QFileInfo info(childPath);
+        QFileInfo info(parse->fileName().toString());
         QString temporaryName = DesktopHelper::tempName(info.completeBaseName()
                                                         + ".unzipped.XXXXXX." + info.suffix());
 

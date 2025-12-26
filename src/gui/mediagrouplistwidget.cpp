@@ -1293,10 +1293,11 @@ void MediaGroupListWidget::moveDatabaseDir(const Media& child, const QString& ne
 
   QString newPath = newName;
   QString absSrcPath = QFileInfo(dir.absolutePath()).absoluteFilePath();
-  if (child.isArchived()) {
-    child.archivePaths(&absSrcPath);
+  if (auto archive = child.parseArchivePath()) {
+    absSrcPath = archive->parentPath.toString();
     dir = QFileInfo(absSrcPath).dir();  // dir otherwise may refer to a zip dir
-    if (!newPath.endsWith(".zip")) newPath += ".zip";
+    QStringView zipSuffix = archive->archiveSuffix();
+    if (!newPath.endsWith(zipSuffix)) newPath += zipSuffix;
   } else if (!dir.cdUp()) {
     // use parent for direct rename/updating
     qWarning() << "cdUp() failed";
@@ -1377,10 +1378,9 @@ void MediaGroupListWidget::renameFolderAction() {
   QStringList completions;
   QDir parentDir;
 
-  if (m.isArchived()) {  // first completion is selection
-    QString zip;
-    m.archivePaths(&zip);
-    QFileInfo info(zip);
+  auto selArchive = m.parseArchivePath();
+  if (selArchive) { // first completion is selection
+    QFileInfo info(selArchive->parentPath.toString());
     newName = info.fileName();
     parentDir = info.dir();
   } else {
@@ -1389,6 +1389,8 @@ void MediaGroupListWidget::renameFolderAction() {
     parentDir = info.dir();
     parentDir.cdUp();
   }
+
+  // show the current name first in combo box
   completions += newName;
 
   //  for (const auto& ii : qAsConst(currentPage())) {
@@ -1398,18 +1400,21 @@ void MediaGroupListWidget::renameFolderAction() {
   //  }
 
   for (const Media& ii : currentGroup()) {
-    if (ii.isArchived()) {
-      QString zipPath;
-      ii.archivePaths(&zipPath);
-      const QFileInfo info(zipPath);
-      QString zipName = QFileInfo(zipPath).fileName();
-      if (!m.isArchived()) zipName = zipName.mid(0, zipName.lastIndexOf("."));
-      maybeAppend(completions, zipName);
-    } else {
-      QString dirName = QFileInfo(ii.path()).dir().dirName();
-      if (m.isArchived()) dirName += ".zip";
-      maybeAppend(completions, dirName);
+    if (MediaPage::isAnalysis(ii)) continue;
+
+    QString dirName;
+
+    if (auto archive = ii.parseArchivePath())
+      dirName = archive->baseArchiveName().toString();
+    else
+      dirName = QFileInfo(ii.path()).dir().dirName();
+
+    if (selArchive) { // selection is archive; add archive extension
+      dirName += u'.';
+      dirName += selArchive->archiveSuffix();
     }
+
+    maybeAppend(completions, dirName);
   }
 
   QInputDialog dialog(this);

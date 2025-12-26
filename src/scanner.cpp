@@ -47,7 +47,7 @@ Scanner::Scanner() {
   _videoTypes << "mp4" << "wmv" << "asf" << "flv" << "mpg" << "mpeg"  << "mov" << "vob" << "ogv"
               << "rm" << "ram" << "webm"<< "f4v" << "m4v" << "avi" << "qt" << "mkv"
               << "ts" << "mts"  << "m2t";
-  _archiveTypes << "zip";
+  _archiveTypes = Media::archiveExtensions();
   // clang-format on
 
   for (auto& suffix : QImageReader::supportedImageFormats())

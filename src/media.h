@@ -542,36 +542,63 @@ class Media {
    * @return
    */
   static QString virtualPath(const QString& parent, const QString& child) {
-    return parent + ":" + child;
+    return parent + u":" + child;
   }
 
+  static QStringList archiveExtensions();
+
   /// test if path is a zip
-  static bool isArchive(const QString& path) { return path.endsWith(".zip"); }
+  static bool isArchive(const QString& path);
 
   /// test if path is a zip file member
-  static bool isArchived(const QString& path) { return path.contains(".zip:"); }
+  static bool isArchived(const QString& path);
   bool isArchived() const { return isArchived(_path); }
 
   /// decompose a virtual path, assuming it was for a zip file
-  QT_DEPRECATED static void archivePaths(const QString& path, QString& parent, QString& child) {
-    auto parts = path.split(".zip:");
-    parent = parts[0] + ".zip";
-    child = parts.count() > 1 ? parts[1] : "";
-  }
+  [[deprecated("use parseArchivePath() instead")]] static void archivePaths(
+      const QString& path, QString* parent, QString* child = nullptr);
 
-  QT_DEPRECATED void archivePaths(QString& parent, QString& child) const {
-    archivePaths(_path, &parent, &child);
-  }
-
-  static void archivePaths(const QString& path, QString* parent, QString* child = nullptr) {
-    auto parts = path.split(".zip:");
-    if (parent) *parent = parts.at(0) + ".zip";
-    if (child) *child = parts.count() > 1 ? parts.at(1) : "";
-  }
-
-  void archivePaths(QString* parent, QString* child = nullptr) const {
+  [[deprecated("use parseArchivePath() instead")]] void archivePaths(
+      QString* parent, QString* child = nullptr) const {
     archivePaths(_path, parent, child);
   }
+
+  struct ArchivePath {
+    QStringView parentPath; // zip file
+    QStringView childPath;  // zip member
+    QStringView fileSuffix() const { return childPath.sliced(childPath.lastIndexOf(u'.') + 1); }
+    QStringView fileName() const { return childPath.sliced(childPath.lastIndexOf(u'/') + 1); }
+    QStringView baseFileName() const {
+      auto view = fileName();
+      qsizetype index = view.lastIndexOf(u'.');
+      return index >= 0 ? view.sliced(0, index) : view;
+    }
+
+    QStringView archiveSuffix() const {
+      return parentPath.sliced(parentPath.lastIndexOf(u'.') + 1);
+    }
+    QStringView archiveName() const { return parentPath.sliced(parentPath.lastIndexOf(u'/') + 1); }
+    QStringView baseArchiveName() const {
+      auto view = archiveName();
+      qsizetype index = view.lastIndexOf(u'.');
+      return index >= 0 ? view.sliced(0, index) : view;
+    }
+  };
+
+  /**
+   * decompose a virtual path for zip file member
+   * @param path
+   * @return optional ArchivePath with views of path
+   */
+  static std::optional<ArchivePath> parseArchivePath(const QString& path);
+
+  // unsafe: result contains non-owning views on path
+  static std::optional<ArchivePath> parseArchivePath(QString&& path) = delete;
+
+  std::optional<ArchivePath> parseArchivePath() const& { return parseArchivePath(_path); }
+
+  // unsafe: result contains non-owning views on Media::_path
+  std::optional<ArchivePath> parseArchivePath() const&& = delete;
 
   /**
    * count all things in the archive containing this
