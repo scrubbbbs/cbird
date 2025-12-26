@@ -1619,7 +1619,10 @@ void MediaGroupListWidget::recordMatch(bool matched) {
     line = QString("%1,,0,,,%2\n").arg(search.path()).arg(group.count() - 1);
 
   QFile f("matches.csv");
-  f.open(QFile::WriteOnly | QFile::Append);
+  if (!f.open(QFile::WriteOnly | QFile::Append)) {
+    qCritical() << "failed to open:" << f.fileName() << f.error() << f.errorString();
+    return;
+  }
   f.write(line.toLatin1());
 
   if (_currentRow < _list.count() - 1)

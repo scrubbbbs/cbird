@@ -65,8 +65,14 @@ class CPU {
 
  private:
   void readTimes() {
+    _active = 0;
+    _total = 0;
     QFile f("/proc/stat");
-    f.open(QFile::ReadOnly);
+    if (!f.open(QFile::ReadOnly)) {
+      qCritical() << "open failed:" << f.fileName() << f.error() << f.errorString();
+      return;
+    }
+
     QString line = f.readLine();
     QStringList vals = line.split(" ");
 

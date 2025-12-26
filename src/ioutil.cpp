@@ -89,10 +89,13 @@ void loadBinaryData(const QString& path, void** data, uint64_t* len, bool compre
 
   try {
     QFile f(path);
-    f.open(QFile::ReadOnly);
+    if (!f.open(QFile::ReadOnly)) {
+      qCritical() << "open failed:" << path << f.error() << f.errorString();
+      return;
+    }
 
     if (compress) {
-      QByteArray b = (f.readAll());
+      QByteArray b = f.readAll();
       if (compress) b = qUncompress(b);
       void* ptr = malloc(size_t(b.size()));
       if (!ptr) throw std::bad_alloc();

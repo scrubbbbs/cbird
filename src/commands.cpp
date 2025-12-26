@@ -1172,7 +1172,11 @@ void Commands::testUpdate(Engine& engine) {
 
 void Commands::testCsv(Engine& engine, const QString& path) {
   QFile csv(path);
-  csv.open(QFile::ReadOnly);
+  if (!csv.open(QFile::ReadOnly)) {
+    qCritical() << "open failed:" << path << csv.error() << csv.errorString();
+    return;
+  }
+
   QByteArray line;
   int numImages, numFound;
   numImages = numFound = 0;

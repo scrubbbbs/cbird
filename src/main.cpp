@@ -98,7 +98,7 @@ static QStringList buildFlags() {
 static void printLicense() {
   qFlushMessageLog();
   QFile file(qq(":res/license.txt"));
-  file.open(QFile::ReadOnly);
+  (void) file.open(QFile::ReadOnly);
   printf("%s", file.readAll().data());
 }
 
@@ -106,7 +106,7 @@ static int printUsage(int argc, char** argv) {
   (void)argc;
 
   QFile file(qq(":res/usage.txt"));
-  file.open(QFile::ReadOnly);
+  (void) file.open(QFile::ReadOnly);
   const QString usage = file.readAll();
 
   QString paramsUsage;

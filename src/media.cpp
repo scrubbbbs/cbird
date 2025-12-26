@@ -819,9 +819,11 @@ void Media::recordMatch(const Media& match, int matchIndex, int numMatches) cons
     line = QString("%1,,0,,,%2\n").arg(path()).arg(numMatches);
 
   QFile f("match.csv");
-  f.open(QFile::WriteOnly | QFile::Append);
+  if (!f.open(QFile::WriteOnly | QFile::Append)) {
+    qCritical() << "failed to open:" << f.fileName() << f.error() << f.errorString();
+    return;
+  }
   f.write(line.toLatin1());
-  f.close();
 }
 
 size_t Media::memSize() const {
