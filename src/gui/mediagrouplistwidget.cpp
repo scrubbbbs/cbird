@@ -1027,7 +1027,7 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
       MediaGroup zipGroup = _options.db->mediaWithPathLike(like);
       _options.db->remove(zipGroup);
 
-      for (auto& mm : qAsConst(zipGroup))
+      for (auto& mm : std::as_const(zipGroup))
         removedIds.insert(mm.id());
 
       if (_options.trackWeeds)
@@ -1393,7 +1393,7 @@ void MediaGroupListWidget::renameFolderAction() {
   // show the current name first in combo box
   completions += newName;
 
-  //  for (const auto& ii : qAsConst(currentPage())) {
+  //  for (const auto& ii : std::as_const(currentPage())) {
   //    const auto it = ii.attributes().find("group");
   //    if (it != ii.attributes().end())
   //      maybeAppend(completions, it.value());
@@ -1766,7 +1766,7 @@ void MediaGroupListWidget::resizePage(bool more) {
   int id = _list.last()->id + 1; // ensure id's are not repeated
   QList<MediaPage*> newList;
   MediaGroup newGroup;
-  for (const MediaPage* p : qAsConst(_list))
+  for (const MediaPage* p : std::as_const(_list))
     for (const Media& m : p->group)
       if (!MediaPage::isAnalysis(m)) {
         newGroup += m;
@@ -1784,7 +1784,7 @@ void MediaGroupListWidget::resizePage(bool more) {
   // find the page that contains the selected item
   const MediaPage* currentPage = nullptr;
   int currentIndex = -1;
-  for (const MediaPage* p : qAsConst(_list)) {
+  for (const MediaPage* p : std::as_const(_list)) {
     int index = p->group.indexOf(lastViewed);
     if (index < 0) continue;
 
@@ -2570,7 +2570,7 @@ void MediaGroupListWidget::loadRow(int row, bool preloadNextRow) {
         if (benchmark == 1)
           count = currPage->count();
         else
-          for (auto* p : qAsConst(_list))
+          for (auto* p : std::as_const(_list))
             count += p->count();
 
         qCritical() << "BENCHMARK_LISTWIDGET"

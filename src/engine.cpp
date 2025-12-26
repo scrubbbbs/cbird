@@ -85,7 +85,7 @@ void Engine::add(const Media& m) {
 void Engine::commit() {
   if (_batch.count() > 0) {
     db->add(_batch);
-    // for (const auto& m : qAsConst(_batch))
+    // for (const auto& m : std::as_const(_batch))
     //   qDebug() << "added id: " << m.id() << m.path();
     _batch.clear();
   }
@@ -308,7 +308,7 @@ void Engine::update(bool wait, const QString& dirPath) {
     size_t i = 0;
     // TODO: this takes a long time for big removals...could be threaded
     // NOTE: use db->indexedFiles() instead of querying each file
-    for (const auto& path : qAsConst(sorted)) {
+    for (const auto& path : std::as_const(sorted)) {
       QString relPath = QDir(db->path()).relativeFilePath(path);
       pl.stepRateLimited(i++, {relPath});
 

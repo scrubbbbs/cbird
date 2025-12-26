@@ -107,7 +107,7 @@ size_t PooledImageAllocator::compactInternal() {
   // free memory in reverse-sorted order, less fragmentation?
   auto ptrList = _free.values();
   std::sort(ptrList.begin(), ptrList.end(), [](uchar* a, uchar* b) { return b < a; });
-  for (uchar* ptr : qAsConst(ptrList)) {
+  for (uchar* ptr : std::as_const(ptrList)) {
     bytesFreed += malloc_size(ptr);
     ::free(ptr);
   }

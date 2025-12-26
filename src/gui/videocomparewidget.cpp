@@ -118,7 +118,7 @@ class FrameCache {
 
     // note: calls to malloc/free stop due to implict sharing of QImage,
     // so heap usage won't fluctuate (and image pixels won't be copied)
-    for (auto k : qAsConst(keys)) {
+    for (auto k : std::as_const(keys)) {
       frames.append(_cache[k].image);
       _cache.remove(k);
       toDelete--;

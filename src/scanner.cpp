@@ -131,11 +131,11 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
 
   // index zipped files for the zip modtime optimization
   QMap<QString, QStringList> zipFiles;
-  for (const QString& path : qAsConst(expected)) {
-    if (!Media::isArchived(path)) continue;
-    QString zipFile;
-    Media::archivePaths(path, &zipFile);
-    zipFiles[zipFile].append(path);
+  for (const QString& path : std::as_const(expected)) {
+    auto result = Media::parseArchivePath(path);
+    if (result) {
+      zipFiles[result->parentPath.toString()].append(path);
+    }
   }
 
   // we have to remove expected paths matching patterns,
@@ -163,7 +163,7 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
     if (_params.estimateCost) {
       qDebug() << "using slower but more accurate video job scheduling (-i.ljf)";
       QMap<QString, bool> threads;
-      for (auto& path : qAsConst(_videoQueue)) {
+      for (auto& path : std::as_const(_videoQueue)) {
         threads[path] = false;
 
         const MessageContext mc(path);
@@ -541,7 +541,7 @@ void Scanner::finish() {
 
       QStringList vList;
       if (_videoProgress.count() > 0)
-        for (int percent : qAsConst(_videoProgress).values()) {
+        for (int percent : std::as_const(_videoProgress).values()) {
           if (percent == 100) continue; // we don't need to see quick jobs
           vList += qq("<YEL>%1%<RESET>").arg(percent);
         }
@@ -568,10 +568,10 @@ void Scanner::finish() {
       qInfo().noquote() << status;
 
       QStringList vDone;
-      for (const QString& k : qAsConst(_videoProgress).keys())
+      for (const QString& k : std::as_const(_videoProgress).keys())
         if (_videoProgress.value(k) >= 100)
           vDone += k;
-      for (const QString& k : qAsConst(vDone))
+      for (const QString& k : std::as_const(vDone))
         _videoProgress.remove(k);
     }
 

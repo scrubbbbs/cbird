@@ -336,7 +336,7 @@ void Theme::showToolbox() {
   vLayout->setAlignment(Qt::AlignRight);
   hLayout->addLayout(vLayout);
 
-  for (auto& name : qAsConst(props)) {
+  for (auto& name : std::as_const(props)) {
     QVariant prop = Theme::instance().property(qUtf8Printable(name));
     QColor color = qvariant_cast<QColor>(prop);
 

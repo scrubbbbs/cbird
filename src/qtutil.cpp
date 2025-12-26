@@ -241,7 +241,7 @@ bool DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
       }
       calls.append(dbusArgs);
 
-      for (const QStringList& dbusCall : qAsConst(calls))
+      for (const QStringList& dbusCall : std::as_const(calls))
         if (!callServiceMethod(dbusCall))
           return false;
 
@@ -341,7 +341,7 @@ bool DesktopHelper::chooseProgram(QStringList& args, const QVector<QStringList>&
 
   if (args.empty() || (qApp->keyboardModifiers() == CBIRD_DIALOG_MODS)) {
     QStringList optionLabels;
-    for (auto& option : qAsConst(options)) optionLabels += option.first();
+    for (auto& option : std::as_const(options)) optionLabels += option.first();
 
     QString program = optionLabels.at(0);
 #ifdef QT_TESTLIB_LIB // remove Theme dependency in unit tests
@@ -363,7 +363,7 @@ bool DesktopHelper::chooseProgram(QStringList& args, const QVector<QStringList>&
     }
 #endif
 
-    for (auto& option : qAsConst(options))
+    for (auto& option : std::as_const(options))
       if (option.first() == program) {
         args = option;
         args.removeFirst();

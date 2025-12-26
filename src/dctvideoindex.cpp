@@ -264,7 +264,7 @@ void DctVideoIndex::remove(const QVector<int>& ids) {
   for (auto& id : ids) set.insert(id);
 
   decltype(_mediaId) copy;
-  for (auto& id : qAsConst(_mediaId))
+  for (auto& id : std::as_const(_mediaId))
     if (!set.contains(id)) {
       copy.push_back(id);
     } else {
@@ -504,7 +504,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
 
     // add the closest match to the list of potential matches
     const int matchLen = 1; // to be determined
-    for (auto& closest : qAsConst(closestMatch))
+    for (auto& closest : std::as_const(closestMatch))
       cand[closest.first].push_back(MatchRange(queryFrame, int(closest.second.frame), matchLen));
   };
 
@@ -606,7 +606,7 @@ QVector<Index::Match> DctVideoIndex::findVideo(const Media& needle, const Search
     // distant frames.
     int numAdjacent = 0;
     int lastFrame = 0;
-    for (const MatchRange& range : qAsConst(ranges)) {
+    for (const MatchRange& range : std::as_const(ranges)) {
       int frame = range.dstIn;
       if (abs(frame - lastFrame) < frameMargin) numAdjacent++;
       lastFrame = frame;

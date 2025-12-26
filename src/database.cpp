@@ -387,7 +387,7 @@ void Database::add(MediaGroup& inMedia) {
   }
 
   MediaGroup media;
-  for (const Media& m : qAsConst(inMedia)) {
+  for (const Media& m : std::as_const(inMedia)) {
     Q_ASSERT(!m.path().isEmpty());
     Q_ASSERT(!m.md5().isEmpty());
     Q_ASSERT(m.path().startsWith(path()));
@@ -1331,7 +1331,7 @@ MediaGroupList Database::similar(const SearchParams& params) {
 
   // use id map to avoid slow database query in the work item
   QHash<int, Media> idMap;
-  for (auto& m : qAsConst(haystack))
+  for (auto& m : std::as_const(haystack))
     idMap.insert(m.id(), m);
 
   // slice the search index for fast subset search
@@ -1776,7 +1776,7 @@ bool Database::isNegativeMatch(const Media& m1, const Media& m2) {
   if (!_negMatchLoaded) loadNegativeMatches();
 
   QReadLocker locker(_rwLock);
-  auto& map = qAsConst(_negMatch);
+  auto& map = std::as_const(_negMatch);
   auto it = map.find(m1.md5());
   if (it != map.end() && it.value().contains(m2.md5())) return true;
 
@@ -1909,7 +1909,7 @@ bool Database::removeWeed(const Media& media) {
 
 //  QWriteLocker lock(_rwLock);
 //  bool rewrite = false;
-//  const auto copy = qAsConst(_weeds); // copy needed for remove()
+//  const auto copy = std::as_const(_weeds); // copy needed for remove()
 //  for (auto it = copy.begin(); it != copy.end(); ++it)
 //    if (!existing.contains(it.value())) {
 //      auto& weedHash = it.key();
@@ -1920,7 +1920,7 @@ bool Database::removeWeed(const Media& media) {
 
 //  if (rewrite) {
 //    QVector<std::pair<QString,QString>> pairs;
-//    const auto& map = qAsConst(_weeds);
+//    const auto& map = std::as_const(_weeds);
 //    for (auto it = map.begin(); it != map.end(); ++it)
 //      pairs.append({it.key(), it.value()});
 

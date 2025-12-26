@@ -27,7 +27,7 @@ void TestTemplateMatcher::testMatch_data() {
   MediaGroup mg = _database->mediaWithType(Media::TypeImage);
   Media::sortGroup(mg, {"name"});
 
-  for (auto& m : qAsConst(mg)) {
+  for (auto& m : std::as_const(mg)) {
     const QString file = m.path();
     const QImage img(file);
 

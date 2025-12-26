@@ -356,7 +356,7 @@ void Commands::filter(const std::vector<Filter>& filters) const {
   }
   if (_selection.count() > 0) {
     MediaGroup tmp;
-    for (const Media& m : qAsConst(_selection))
+    for (const Media& m : std::as_const(_selection))
       if (m.attributes().contains("filter"))
         tmp.append(m);
 
@@ -554,7 +554,7 @@ MediaGroup Commands::selectFiles() {
       for (auto& path : list) zippedFiles.append(path);
 
       std::sort(zippedFiles.begin(), zippedFiles.end(), std::greater<QString>());
-      for (auto& path : qAsConst(zippedFiles)) _args.push_front(path);
+      for (auto& path : std::as_const(zippedFiles)) _args.push_front(path);
       continue;
     }
 
@@ -887,7 +887,7 @@ void Commands::testImageSearch(Engine& engine) {
   test[3].loadOptions = test[2].loadOptions;
 
   for (int algo : {0, 1, 2})
-    for (auto t : qAsConst(test)) {
+    for (auto t : std::as_const(test)) {
       t.params.algo = algo;
       const int startMs = QDateTime::currentMSecsSinceEpoch();
       engine.scanner->setIndexParams(_indexParams);

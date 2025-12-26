@@ -496,7 +496,7 @@ compdef _cbird_completion cbird
     //      binaries.append({"ff-compare-audio", appDir+"/cbird/bin/ff-compare-audio"});
     //    }
 
-    for (auto& binary : qAsConst(binaries)) {
+    for (auto& binary : std::as_const(binaries)) {
       QString cmd = QString("%1install -D -v \"%2\" \"%3/bin/%4\"")
                         .arg(sudo)
                         .arg(binary[1])
@@ -562,7 +562,7 @@ static void nuke(const MediaGroup& group) {
   engine().db->remove(group);
   QSet<QString> zips;   // ask to delete each zip once
   bool yesAll = false;  // don't ask again
-  for (auto& m : qAsConst(group)) {
+  for (auto& m : std::as_const(group)) {
     QString path = m.path();
     if (m.isArchived()) {
       m.archivePaths(&path);

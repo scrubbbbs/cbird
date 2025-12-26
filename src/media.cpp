@@ -398,7 +398,7 @@ MediaGroupList Media::groupBy(const MediaGroup& group_, const QString& expr) {
   pl.end(0, {nonNull.loadRelaxed()});
 
   QHash<QString, MediaGroup> groups;
-  for (const auto& m : qAsConst(group))
+  for (const auto& m : std::as_const(group))
     groups[m.attributes()["group"]].append(m);
 
   return groups.values().toVector();
@@ -416,7 +416,8 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
     for (auto& expr : calls) chain.append(unaryFunc(expr));  // recursion ok, # is stripped out
     return [chain](const QVariant& v) {
       QVariant r = v;
-      for (auto& f : qAsConst(chain)) r = f(r);
+      for (auto& f : std::as_const(chain))
+        r = f(r);
       return r;
     };
   }
@@ -578,7 +579,8 @@ std::function<QVariant(const QVariant&)> Media::unaryFunc(const QString& expr) {
     return [functions](const QVariant& v) {
       QVariantList list = v.toList();
       for (auto& v : list)
-        for (auto& f : qAsConst(functions)) v = f(v);
+        for (auto& f : std::as_const(functions))
+          v = f(v);
       return list;
     };
   }

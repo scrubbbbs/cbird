@@ -4,7 +4,7 @@ QStringList Params::keys() const {
   auto values = _params.values();
   std::sort(values.begin(), values.end());
   QStringList keys;
-  for (auto& v : qAsConst(values)) keys += v.key;
+  for (auto& v : std::as_const(values)) keys += v.key;
   return keys;
 }
 
@@ -71,7 +71,7 @@ void Params::print() const {
     return _params[a].sort < _params[b].sort;
   });
   int cat = -1;
-  for (auto& k : qAsConst(keys)) {
+  for (auto& k : std::as_const(keys)) {
     const auto& p = _params.value(k);
     if (p.category != cat) {
       cat = p.category;
