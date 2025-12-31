@@ -419,11 +419,23 @@ void DesktopHelper::openImage(const QString& path) {
 
   QVector<QStringList> presets;
 
+#ifdef Q_OS_WIN
+  presets = {
+      {"Desktop Default", "DesktopServices"},
+      {"nomacs", "C:\Program Files\nomacs\nomacs.exe", "%zipPath(%1#/%2)"},
+  };
+#else
   presets = {
       {"Desktop Default", "DesktopServices"},
       {"gwenview", "gwenview", "%zipPath(zip:%1/%2)"},
       {"nomacs", "nomacs", "%zipPath(%1#/%2)"},
+      {"eog", "eog", "%1"},
+      {"gthumb", "gthumb", "%1"},
+      {"qimgv", "qimgv", "%1"},
+      {"qview", "qview", "%1"},
   };
+
+#endif
 
   if (!chooseProgram(args, presets, settingsKey, qq("Choose Image Viewer"),
                      qq("Select the program for opening images")))
