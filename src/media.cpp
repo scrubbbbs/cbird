@@ -195,6 +195,32 @@ QStringList Media::typeFlagsString(int typeFlags) {
   return types;
 }
 
+QString Media::dirPath() const {
+  auto archive = parseArchivePath();
+  if (archive) {
+    return QString{archive->parentPath};
+  }
+  qsizetype index = _path.lastIndexOf(u'/');
+  if (index < 0) {
+    return QString{};
+  }
+  return _path.left(index);
+}
+
+QString Media::suffix() const {
+  QStringView sv(_path);
+  sv = sv.sliced(sv.lastIndexOf(u'/') + 1);
+  int dot = sv.lastIndexOf(u'.');
+  return dot >= 0 ? QString{sv.sliced(dot + 1)} : QString{};
+}
+
+QString Media::completeBaseName() const {
+  QStringView sv{_path};
+  sv = sv.sliced(sv.lastIndexOf(u'/') + 1);
+  int dot = sv.lastIndexOf(u'.');
+  return dot >= 0 ? QString{sv.sliced(0, sv.lastIndexOf(u'.'))} : QString{sv};
+}
+
 // Media::Media(const QString& path, int type, int width, int height,
 //              const QString& md5, const uint64_t dctHash,
 //              const ColorDescriptor& colorDesc, const KeyPointList& keyPoints,
@@ -625,7 +651,6 @@ QList<QPair<const char*, const char*>> Media::propertyList() {
           {"md5", "checksum"},
           {"type", "1=image,2=video,3=audio"},
           {"path", "file path"},
-          {"parentPath", "archivePath if archive, or dirPath"},
           {"dirPath", "parent directory path"},
           {"relPath", "relative file path to cwd"},
           {"name", "file name"},
@@ -697,27 +722,14 @@ PropertyFunc Media::propertyFunc(const QString& expr) {
       {"relPath", [](const Media& m) { return QDir().relativeFilePath(m.path()); }},
       {"archive",
        [](const Media& m) {
-         if (m.isArchived()) {
-           QString a;
-           m.archivePaths(&a);
-           return a;
+         if (auto archive = m.parseArchivePath()) {
+           return QString{archive->parentPath};
          }
-         return QString();
-       }},
-      {"parentPath",
-       [](const Media& m) {
-         if (m.isArchived()) {
-           QString a;
-           m.archivePaths(&a);
-           return a;
-         }
-         return m.dirPath();
+         return QString{};
        }},
       {"created",
        [](const Media& m) {
-         QString path = m.path();
-         if (m.isArchived()) m.archivePaths(&path);
-         QFileInfo info(path);
+         QFileInfo info(m.containerPath());
          QDateTime created = info.birthTime();
 
          static bool shown = false;
@@ -730,12 +742,9 @@ PropertyFunc Media::propertyFunc(const QString& expr) {
        }},
       {"modified",
        [](const Media& m) {
-         QString path = m.path();
-         if (m.isArchived()) m.archivePaths(&path);
-         QFileInfo info(path);
+         QFileInfo info{m.containerPath()};
          return info.lastModified();
        }}
-
 
       /// TODO: attr(), VideoContext::metadata
   });
@@ -1065,13 +1074,13 @@ bool Media::isArchived(const QString& path) {
 }
 
 void Media::archivePaths(const QString& path, QString* parent, QString* child) {
-  if (auto result = parseArchivePath(path)) {
-    if (parent) *parent = result->parentPath.toString();
-    if (child) *child = result->childPath.toString();
+  if (auto archive = parseArchivePath(path)) {
+    if (parent) *parent = archive->parentPath.toString();
+    if (child) *child = archive->childPath.toString();
   }
 }
 
-std::optional<Media::ArchivePath> Media::parseArchivePath(const QString& path) {
+std::optional<const Media::ArchivePathView> Media::parseArchivePath(const QString& path) {
   QStringView view{path};
   qsizetype end = path.lastIndexOf(u':'); // ":" is rare/illegal so search for it first
   while (end > 1) {                       // minimum marker is ".x:", also excludes C:\ quickly
@@ -1081,7 +1090,7 @@ std::optional<Media::ArchivePath> Media::parseArchivePath(const QString& path) {
       QStringView check = view.sliced(start, marker.length());
       if (check == marker) {
         qsizetype cut = start + marker.length();
-        return ArchivePath{view.sliced(0, cut - 1), view.sliced(cut)};
+        return ArchivePathView{view.sliced(0, cut - 1), view.sliced(cut)};
       }
     }
     end = path.lastIndexOf(u':', end - 1);
@@ -1208,10 +1217,7 @@ void Media::openMedia(const Media& m, float seek) {
 }
 
 void Media::revealMedia(const Media& m) {
-  QString path = m.path();
-  if (m.isArchived()) m.archivePaths(&path);
-
-  DesktopHelper::revealPath(path);
+  DesktopHelper::revealPath(m.containerPath());
 }
 
 QColor Media::matchColor() const {
@@ -1262,10 +1268,8 @@ QIcon Media::loadIcon(const QSize& size) const {
 
 int Media::archiveCount() const {
   int count = -1;
-  if (isArchived()) {
-    QString zipPath;
-    archivePaths(&zipPath);
-
+  if (auto archive = parseArchivePath()) {
+    const QString zipPath{archive->parentPath};
     if (QFileInfo::exists(zipPath)) {
       QuaZip zip(zipPath);
       zip.open(QuaZip::mdUnzip);
@@ -1303,11 +1307,9 @@ QIODevice* Media::ioDevice() const {
     QBuffer* buf = new QBuffer;
     buf->setBuffer(const_cast<QByteArray*>(&data));
     io = buf;
-  } else if (isArchived()) {
-    QString zipPath, fileName;
-    archivePaths(&zipPath, &fileName);
-
-    QFileInfo info(zipPath);
+  } else if (auto archive = parseArchivePath()) {
+    const QString zipPath(archive->parentPath), fileName(archive->childPath);
+    const QFileInfo info(zipPath);
     if (!info.isFile()) {
       qWarning() << "zip file does not exist or invalid path";
       return nullptr;
@@ -1318,6 +1320,7 @@ QIODevice* Media::ioDevice() const {
       qWarning() << "open zip failed";
       return nullptr;
     }
+
     if (!zip.setCurrentFile(fileName)) {
       qWarning() << "select zip member failed";
       return nullptr;
@@ -1582,16 +1585,15 @@ QImage Media::constrainedResize(const QImage& img, const QSize& size) {
 void Media::readMetadata() {
   if (!_data.isEmpty())
     _origSize = _data.size();
-  else if (isArchived()) {
+  else if (auto archive = parseArchivePath()) {
     QString sizeText = _img.text(Media::ImgKey_FileSize);
     if (!sizeText.isEmpty()) {
       _origSize = _img.text(Media::ImgKey_FileSize).toLongLong();
     } else {
-      QString zipPath, fileName;
-      archivePaths(&zipPath, &fileName);
+      const QString zipPath(archive->parentPath), fileName(archive->childPath);
 
       bool ok = false;
-      if (QFileInfo::exists(zipPath)) {
+      if (QFile::exists(zipPath)) {
         QuaZip zip(zipPath);
         zip.open(QuaZip::mdUnzip);
 

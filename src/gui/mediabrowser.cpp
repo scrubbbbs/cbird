@@ -136,9 +136,7 @@ int MediaBrowser::showFolders(const MediaGroupList& list, const MediaWidgetOptio
     if (!key.isEmpty()) key = key.split(qq("==")).back();  // don't display -group-by expression
 
     if (key.isEmpty()) {
-      if (first.isArchived())
-        first.archivePaths(&key);
-      else if (first.type() == Media::TypeVideo)  // don't group videos TODO: option
+      if (first.type() == Media::TypeVideo) // don't group videos TODO: option
         key = first.path();
       else
         key = first.dirPath();
@@ -209,11 +207,7 @@ int MediaBrowser::showSets(const MediaGroupList& list, const MediaWidgetOptions&
   for (const MediaGroup& g : list) {
     QStringList dirPaths;
     for (const Media& m : g) {
-      QString path;
-      if (m.isArchived())
-        m.archivePaths(&path);
-      else
-        path = m.dirPath();
+      QString path = m.dirPath();
       if (!dirPaths.contains(path)) dirPaths.append(path);
     }
 
@@ -315,8 +309,7 @@ void MediaBrowser::showIndex(const MediaGroup& index,
       // if we opened the folder and modified the path
       // we will not see it here, check if it still exists
       const Media& m = group.at(_groupIndex);
-      QString filePath = m.path();
-      if (m.isArchived()) m.archivePaths(&filePath);
+      const QString filePath = m.containerPath();
       if (!QFile::exists(filePath)) return;
 
       QImage img = loadThumb(group.at(_groupIndex), _options);

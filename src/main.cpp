@@ -564,9 +564,8 @@ static void nuke(const MediaGroup& group) {
   bool yesAll = false;  // don't ask again
   for (auto& m : std::as_const(group)) {
     QString path = m.path();
-    if (m.isArchived()) {
-      m.archivePaths(&path);
-
+    if (auto archive = m.parseArchivePath()) {
+      path = archive->parentPath.toString();
       if (zips.contains(path)) continue;
       zips.insert(path);
 
@@ -1347,13 +1346,13 @@ int main(int argc, char** argv) {
       MediaGroup moveable;
       QStringList movedZips;
       for (auto& m : selection) {
-        if (!m.isArchived()) {
+        auto archive = m.parseArchivePath();
+        if (!archive) {
           moveable.append(m);
           continue;
         }
 
-        QString zipPath;
-        m.archivePaths(&zipPath);
+        QString zipPath(archive->parentPath);
         if (movedZips.contains(zipPath)) continue;
 
         const QFileInfo info(zipPath);
@@ -1679,7 +1678,7 @@ int main(int argc, char** argv) {
         if (selection.count() && !selection.first().attributes().contains("sort"))
           Media::sortGroup(selection, {"path"});
 
-        auto getProp = Media::propertyFunc("parentPath");
+        auto getProp = Media::propertyFunc("dirPath");
 
         qDebug("make groups of %d", widgetOptions.maxPerPage);
         MediaGroupList list;

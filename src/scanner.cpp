@@ -132,9 +132,8 @@ void Scanner::scanDirectory(const QString& path, QSet<QString>& expected,
   // index zipped files for the zip modtime optimization
   QMap<QString, QStringList> zipFiles;
   for (const QString& path : std::as_const(expected)) {
-    auto result = Media::parseArchivePath(path);
-    if (result) {
-      zipFiles[result->parentPath.toString()].append(path);
+    if (auto archive = Media::parseArchivePath(path)) {
+      zipFiles[archive->parentPath.toString()].append(path);
     }
   }
 

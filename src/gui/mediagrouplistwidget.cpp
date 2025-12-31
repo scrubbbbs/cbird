@@ -759,20 +759,20 @@ QMenu* MediaGroupListWidget::dirMenu(const char* slot) {
   const QModelIndex index = currentIndex();
   if (index.isValid()) selectedIndex = index.row();
 
-  for (int i = 0; i < group.count(); ++i)
-    if (i != selectedIndex) {
-      const auto& m = group.at(i);
-      if (!MediaPage::isAnalysis(m)) {
-        QString path = m.dirPath();
-        if (m.isArchived()) {
-          m.archivePaths(&path);
-          auto list = path.split(lc('/'));
-          list.removeLast();
-          path = list.join(lc('/'));
-        }
-        groupDirs.insert(path);
-      }
+  for (int i = 0; i < group.count(); ++i) {
+    const Media& m = group.at(i);
+    if (i == selectedIndex) continue;
+    if (MediaPage::isAnalysis(m)) continue;
+
+    QString path = m.dirPath();
+    if (m.isArchived()) {
+      int index = path.lastIndexOf(u'/'); // parent dir of zipfile
+      if (index >= 0) path = path.mid(0, index);
     }
+    if (!path.isEmpty()) {
+      groupDirs.insert(path);
+    }
+  }
 
   const auto& keys = groupDirs.values();
   QList<QAction*> actions;
@@ -964,9 +964,6 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
     Q_ASSERT(index >=0 && index < groupCount);
     const Media& m = page->group[index];
 
-    QString path = m.path();
-    if (m.isArchived()) m.archivePaths(&path);
-
     if (!deleteFiles) {
       removedIndices.insert(index);
       if (m.isValid())
@@ -987,6 +984,7 @@ void MediaGroupListWidget::removeSelection(bool deleteFiles, bool replace) {
       continue;
     }
 
+    QString path = m.containerPath();
     {
       static bool skipDeleteConfirmation = false;
       int button = 0;
@@ -1206,12 +1204,7 @@ void MediaGroupListWidget::renameFileAction() {
 
     // names of matches
     for (auto& m2 : group) {
-      if (m2.isArchived()) {
-        QString fileName;
-        m2.archivePaths(nullptr, &fileName);
-        maybeAppend(completions, fileName);
-      } else
-        maybeAppend(completions, m2.name());
+      maybeAppend(completions, m2.name());
     }
 
     // also files in same directory
@@ -1265,13 +1258,7 @@ void MediaGroupListWidget::copyNameAction() {
   }
 
   const QFileInfo info(selected->path());
-  QString otherName;
-  if (other->isArchived())
-    other->archivePaths(nullptr, &otherName);
-  else
-    otherName = other->name();  // TODO: should name() work with archives?
-
-  QString newName = QFileInfo(otherName).completeBaseName() + "." + info.suffix();
+  const QString newName = other->completeBaseName() + u'.' + info.suffix();
   const QString oldPath = selected->path();
   if (_options.db) {
     if (_options.db->rename(*selected, newName))
@@ -1351,16 +1338,11 @@ void MediaGroupListWidget::moveFolderAction() {
   QSet<QString> moved;
 
   for (Media& m : selectedMedia()) {
-    QString srcPath;
-    if (m.isArchived())
-      m.archivePaths(&srcPath);
-    else
-      srcPath = m.dirPath();
-
+    const QString srcPath = m.dirPath();
     if (moved.contains(srcPath))  // already moved
       continue;
 
-    const QString dstPath = dirPath + "/" + QFileInfo(srcPath).fileName();
+    const QString dstPath = dirPath + u'/' + QFileInfo(srcPath).fileName();
     moveDatabaseDir(m, dstPath);
     moved += srcPath;
   }
@@ -1881,11 +1863,7 @@ void MediaGroupListWidget::browseParentAction() {
   }
 
   const Media& m = g.first();
-  QString path;
-  if (m.isArchived())
-    m.archivePaths(&path);
-  else
-    path = m.dirPath();
+  const QString path = m.dirPath();
 
   MediaGroup siblings = _options.db->mediaWithPathLike(path + lc('%'));
   Media::sortGroup(siblings, {qq("path")});
@@ -2002,17 +1980,15 @@ void MediaGroupListWidget::updateItems() {
     }
 
     int fileCount = 0;
-    if (m.isArchived()) {
+    if (auto archive = m.parseArchivePath()) {
       // can be slow for large archives, we can cache since
       // archives are immutable here
-      QString archivePath;
-      m.archivePaths(&archivePath);
-      auto it = _archiveFileCount.find(archivePath);
+      auto it = _archiveFileCount.find(archive->parentPath);
       if (it != _archiveFileCount.end())
         fileCount = *it;
       else {
         fileCount = m.archiveCount();
-        _archiveFileCount.insert(archivePath, fileCount);
+        _archiveFileCount.insert(archive->parentPath.toString(), fileCount);
       }
     } else if (fileInfo.isFile()) {
       const auto key = fileInfo.absolutePath();

@@ -272,18 +272,22 @@ class Media {
   const QString& path() const { return _path; }
   void setPath(const QString& path) { _path = path; }
 
-  /// fast path components
-  QString dirPath() const { return path().left(path().lastIndexOf("/")); } // FIXME: use archivePath?
-  QString name() const { return path().mid(path().lastIndexOf("/") + 1); } // FIXME: use archivePath?
-  QString suffix() const {
-    QString s = name();
-    int dot = s.lastIndexOf(".");
-    return dot >= 0 ? s.mid(dot+1) : "";
+  /// dir path or archive/zip
+  QString dirPath() const;
+  QString name() const {
+    QStringView sv(_path);
+    return QString{sv.sliced(sv.lastIndexOf(u'/') + 1)};
   }
-  QString completeBaseName() const {
-    QString s = name();
-    return s.mid(0, s.lastIndexOf("."));
-  };  // w/o suffix
+  QString suffix() const;
+
+  /// name() up to the last "."
+  QString completeBaseName() const;
+
+  /// path of archive/zip or else path of file itself
+  QString containerPath() const {
+    auto archive = parseArchivePath();
+    return archive ? QString{archive->parentPath} : _path;
+  }
 
   /**
    * MIME content type, provided by the source
@@ -563,7 +567,7 @@ class Media {
     archivePaths(_path, parent, child);
   }
 
-  struct ArchivePath {
+  struct ArchivePathView {
     QStringView parentPath; // zip file
     QStringView childPath;  // zip member
     QStringView fileSuffix() const { return childPath.sliced(childPath.lastIndexOf(u'.') + 1); }
@@ -588,17 +592,14 @@ class Media {
   /**
    * decompose a virtual path for zip file member
    * @param path
-   * @return optional ArchivePath with views of path
+   * @return optional ArchivePathView with views of path
    */
-  static std::optional<ArchivePath> parseArchivePath(const QString& path);
+  static std::optional<const ArchivePathView> parseArchivePath(const QString& path);
+  std::optional<const ArchivePathView> parseArchivePath() const& { return parseArchivePath(_path); }
 
   // unsafe: result contains non-owning views on path
-  static std::optional<ArchivePath> parseArchivePath(QString&& path) = delete;
-
-  std::optional<ArchivePath> parseArchivePath() const& { return parseArchivePath(_path); }
-
-  // unsafe: result contains non-owning views on Media::_path
-  std::optional<ArchivePath> parseArchivePath() const&& = delete;
+  static std::optional<const ArchivePathView> parseArchivePath(QString&& path) = delete;
+  std::optional<const ArchivePathView> parseArchivePath() const&& = delete;
 
   /**
    * count all things in the archive containing this

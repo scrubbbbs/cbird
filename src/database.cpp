@@ -1230,28 +1230,12 @@ bool Database::filterMatch(const SearchParams& params, MediaGroup& match) {
 
   // remove match if in the same directory/zip as needle
   if (params.filterParent && match.count() > 1) {
-    if (match[0].isArchived()) {
-      QString parent;
-      match[0].archivePaths(&parent);
-      for (int i = 1; i < match.count(); ++i)
-        if (match[i].isArchived()) {
-          QString p;
-          match[i].archivePaths(&p);
-          if (p == parent) {
-            match.remove(i);
-            --i;
-          }
-        }
-    } else {
-      auto parent = match[0].path().split("/");
-      parent.pop_back();
-      for (int i = 1; i < match.count(); ++i) {
-        auto tmp = match[i].path().split("/");
-        tmp.pop_back();
-        if (tmp == parent) {
-          match.remove(i);
-          --i;
-        }
+    const QString parent = match[0].dirPath();
+    for (int i = 1; i < match.count(); ++i) {
+      const QString tmp = match[i].dirPath();
+      if (tmp == parent) {
+        match.remove(i);
+        --i;
       }
     }
   }

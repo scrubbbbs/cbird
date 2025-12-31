@@ -147,13 +147,18 @@ void Engine::update(bool wait, const QString& dirPath) {
     // updating correctly
     // FIXME: this can take a long time, figure out where
     //        the invalid paths actually come from
-    QStringList paths = indexedFiles.values(); // sort to reduce random access
-    paths.sort();
+    const QStringList paths = ([&indexedFiles] {
+      auto list = indexedFiles.values(); // sort to reduce random access
+      list.sort();
+      return list;
+    })();
     QSet<QString> checked;
     int progress = 0;
-    for (int i = 0; i < paths.count(); ++i) {
-      auto& path = paths[i];
-      if (Media::isArchived(path)) Media::archivePaths(path, &path);
+    int i = 0;
+    for (auto path : paths) {
+      if (auto archive = Media::parseArchivePath(path)) {
+        path = QString(archive->parentPath);
+      }
 
       if (checked.contains(path)) continue;  // skip zip members
       checked.insert(path);
@@ -171,6 +176,7 @@ void Engine::update(bool wait, const QString& dirPath) {
           relPath.contains("//"))
         qCritical("invalid path in database:\n\tcanonical=%s\n\tdatabase =%s",
                   qUtf8Printable(canRelPath), qUtf8Printable(relPath));
+      i++;
       if (progress++ == 10) {
         progress = 0;
         qInfo("<NC>%s: validating index <PL> %d/%lld", qUtf8Printable(db->path()), i,

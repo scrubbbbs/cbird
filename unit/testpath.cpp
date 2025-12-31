@@ -10,6 +10,8 @@ class TestPath : public QObject {
   void initTestCase();
   // void cleanupTestCase() {}
 
+  void testPathOps();
+
   void testIsArchive_data() { loadArchivePaths(); }
   void testIsArchive();
 
@@ -67,8 +69,77 @@ void TestPath::loadArchivePaths() {
 }
 
 void TestPath::initTestCase() {
-  QString dataDir = getenv("TEST_DATA_DIR");
-  QVERIFY(QDir(dataDir).exists());
+  // QString dataDir = getenv("TEST_DATA_DIR");
+  // QVERIFY(QDir(dataDir).exists());
+}
+
+void TestPath::testPathOps() {
+  Media m("");
+  QCOMPARE(m.suffix(), "");
+  QCOMPARE(m.name(), "");
+  QCOMPARE(m.completeBaseName(), "");
+  QCOMPARE(m.dirPath(), "");
+  QCOMPARE(m.containerPath(), "");
+
+  m = Media(".jpg");
+  QCOMPARE(m.suffix(), "jpg");
+  QCOMPARE(m.name(), ".jpg");
+  QCOMPARE(m.completeBaseName(), "");
+  QCOMPARE(m.dirPath(), "");
+  QCOMPARE(m.containerPath(), ".jpg");
+
+  m = Media("x");
+  QCOMPARE(m.suffix(), "");
+  QCOMPARE(m.name(), "x");
+  QCOMPARE(m.completeBaseName(), "x");
+  QCOMPARE(m.dirPath(), "");
+  QCOMPARE(m.containerPath(), "x");
+
+  m = Media("x.");
+  QCOMPARE(m.suffix(), "");
+  QCOMPARE(m.name(), "x.");
+  QCOMPARE(m.completeBaseName(), "x");
+  QCOMPARE(m.dirPath(), "");
+  QCOMPARE(m.containerPath(), "x.");
+
+  m = Media(".x.jpg");
+  QCOMPARE(m.suffix(), "jpg");
+  QCOMPARE(m.name(), ".x.jpg");
+  QCOMPARE(m.completeBaseName(), ".x");
+  QCOMPARE(m.dirPath(), "");
+  QCOMPARE(m.containerPath(), ".x.jpg");
+
+  m = Media("x.jpg");
+  QCOMPARE(m.suffix(), "jpg");
+  QCOMPARE(m.name(), "x.jpg");
+  QCOMPARE(m.completeBaseName(), "x");
+  QCOMPARE(m.dirPath(), "");
+  QCOMPARE(m.containerPath(), "x.jpg");
+
+  m = Media("/d/x.jpg");
+  QCOMPARE(m.suffix(), "jpg");
+  QCOMPARE(m.name(), "x.jpg");
+  QCOMPARE(m.completeBaseName(), "x");
+  QCOMPARE(m.dirPath(), "/d");
+  QCOMPARE(m.containerPath(), "/d/x.jpg");
+
+  m = Media("/d/e/x.jpg");
+  QCOMPARE(m.suffix(), "jpg");
+  QCOMPARE(m.name(), "x.jpg");
+  QCOMPARE(m.completeBaseName(), "x");
+  QCOMPARE(m.dirPath(), "/d/e");
+  QCOMPARE(m.containerPath(), "/d/e/x.jpg");
+
+  m = Media("/d/e.zip:/x.jpg");
+  QCOMPARE(m.suffix(), "jpg");
+  QCOMPARE(m.name(), "x.jpg");
+  QCOMPARE(m.completeBaseName(), "x");
+  QCOMPARE(m.dirPath(), "/d/e.zip");
+  QCOMPARE(m.containerPath(), "/d/e.zip");
+
+  m = Media(".jpg/x");
+  QCOMPARE(m.suffix(), "");
+  QCOMPARE(m.completeBaseName(), "x");
 }
 
 void TestPath::testIsArchive() {
