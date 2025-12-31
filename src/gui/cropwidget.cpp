@@ -67,8 +67,8 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
     }
 
     QImage img = thumb;
+    cv::Mat cvImg;
     if (img.width() > 1024 || img.height() > 1024) {
-      cv::Mat cvImg;
       qImageToCvImgNoCopy(thumb, cvImg);
       sizeLongestSide(cvImg, 1024);
       cvImgToQImageNoCopy(cvImg, img);
