@@ -1298,8 +1298,7 @@ void qColorMessageOutput(QtMsgType type, const QMessageLogContext& ctx, const QS
       fprintf(stdout, "\n\n[X][%s:%d] debug trigger matched: <<%s>>\n\n", ctx.file, ctx.line,
               qPrintable(msg));
       fflush(stdout);
-      char* ptr = nullptr;
-      *ptr = 0;
+      __builtin_trap();
     }
   }
 #endif
