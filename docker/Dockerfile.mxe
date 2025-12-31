@@ -79,7 +79,7 @@ RUN  ./build-mxe.sh \
     openjpeg \
     libwebp
 
-COPY ./mxe.env ./
+COPY ./mxe.env ./build.env
 
 COPY ./build-quazip.sh ./
 RUN  ./build-quazip.sh

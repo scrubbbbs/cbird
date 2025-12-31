@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-if [[ -e mxe.env ]]; then
+if [[ -e build.env ]]; then
     shopt -s expand_aliases
-    source mxe.env
+    source build.env
 fi
 
 source utility.env
@@ -15,7 +15,7 @@ pkg_begin opencv-${CV_VERSION} &&
     mkdir -p "${CV_BUILD}" &&
     cd "${CV_BUILD}/.." &&
     wget "https://github.com/opencv/opencv/archive/${CV_VERSION}.zip" &&
-    unzip "${CV_VERSION}.zip" && rm "${CV_VERSION}.zip" &&
+    unzip -q "${CV_VERSION}.zip" && rm "${CV_VERSION}.zip" &&
     cd "${CV_BUILD}" &&
 step_configure &&
     cmake -G Ninja \
@@ -55,7 +55,7 @@ step_configure &&
         -D BUILD_opencv_world=OFF \
         "../opencv-${CV_VERSION}/" &&
 step_build &&
-    ninja install &&
+    ${INSTALL_SUDO} ninja install &&
     rm -rf modules &&
 pkg_end
 

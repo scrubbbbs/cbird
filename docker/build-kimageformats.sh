@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-if [[ -e mxe.env ]]; then
+if [[ -e build.env ]]; then
     shopt -s expand_aliases
-    source mxe.env
+    source build.env
 fi
 
 source utility.env

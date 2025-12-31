@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-if [[ -e mxe.env ]]; then
+if [[ -e build.env ]]; then
     shopt -s expand_aliases
-    source mxe.env
+    source build.env
 fi
 
 source utility.env
@@ -15,11 +15,13 @@ group_begin "FFmpeg deps"
         cd nv-codec-headers &&
     step_configure &&
     step_build &&
-        make PREFIX=$MXE_DIR/usr/$MXE_TARGET install &&
+        make PREFIX=$MXE_DIR/usr/$MXE_TARGET &&
+        ${INSTALL_SUDO} make install &&
     pkg_end
 ) || exit 1
 
 # libvpl for intel quicksync support
+if [[ ! -e "${SYSTEM_INCLUDE_PATH}/vpl/mfx.h" ]]; then
 (
     pkg_begin libvpl &&
         git clone --depth 1 https://github.com/intel/libvpl &&
@@ -27,11 +29,14 @@ group_begin "FFmpeg deps"
     step_configure &&
         cmake -G Ninja .. &&
     step_build &&
-        ninja install &&
+        ninja &&
+        ${INSTALL_SUDO} ninja install &&
     pkg_end
 ) || exit 2
+fi
 
 # opencl for quicksync/d3d11va support
+if [[ ! -e "${SYSTEM_INCLUDE_PATH}/CL/cl.h" ]]; then
 (
     pkg_begin OpenCL-SDK &&
         git clone --depth 1 https://github.com/KhronosGroup/OpenCL-SDK &&
@@ -48,11 +53,14 @@ group_begin "FFmpeg deps"
             -D OPENCL_SDK_BUILD_CLINFO=OFF \
             .. &&
     step_build &&
-        ninja install &&
+        ninja &&
+        ${INSTALL_SUDO} ninja install &&
     pkg_end
 ) || exit 3
+fi
 
 # dav1d for av1 software decoding support
+if [[ ! -e "${SYSTEM_INCLUDE_PATH}/dav1d/dav1d.h" ]]; then
 (
     pkg_begin dav1d &&
         git clone --depth 1 https://github.com/videolan/dav1d &&
@@ -60,13 +68,17 @@ group_begin "FFmpeg deps"
     step_configure &&
         meson --buildtype release &&
     step_build &&
-        ninja install
+        ninja &&
+        ${INSTALL_SUDO} ninja install &&
     pkg_end
 ) || exit 4
+fi
 
 # compile libshaderc for vulkan support
 # note the hack to disable static linking to libgcc which for some
+# note this is recipe is broken on linux
 # reason is only enabled for mingw
+if [[ -n "${ENABLE_VULKAN}" && ! -e "${SYSTEM_INCLUDE_PATH}/shaderc/shaderc.h" ]]; then
 (
     pkg_begin shaderc &&
         git clone --depth 1 https://github.com/google/shaderc &&
@@ -87,9 +99,11 @@ group_begin "FFmpeg deps"
         find . -name build.ninja -exec sed -i 's/-libgcc//g' {} + &&
         find . -name build.ninja -exec sed -i 's/-libstdc++//g' {} + &&
     step_build &&
-        ninja install &&
+        ninja &&
+        ${INSTALL_SUDO} ninja install &&
     pkg_end
 ) || exit 5
+fi
 
 group_end # ffmpeg deps
 
@@ -101,29 +115,19 @@ group_end # ffmpeg deps
         cd FFmpeg &&
     step_configure &&
         ./configure \
-            --cross-prefix="${MXE_TARGET}-" \
-            --enable-cross-compile \
-            --prefix="${MXE_DIR}/usr/${MXE_TARGET}" \
-            --arch=x86_64 \
-            --target-os=mingw32 \
+            ${FFMPEG_OPTIONS} \
             --enable-shared \
             --disable-static \
-            --x86asmexe="${MXE_TARGET}-yasm" \
             --disable-debug \
-            --disable-pthreads \
-            --enable-w32threads \
             --disable-doc \
             --enable-gpl \
-            --extra-libs='-mconsole' \
-            --extra-ldflags="-fstack-protector" \
-            --enable-ffnvcodec \
             --enable-libdav1d \
             --enable-libvpl \
-            --enable-vulkan \
-            --enable-libshaderc \
-            --enable-opencl &&
+            --enable-opencl  \
+            --enable-cuvid &&
     step_build &&
-        make -j$(nproc) && make install &&
+        make -j$(nproc) && \
+        ${INSTALL_SUDO} make install &&
     pkg_end
 ) || exit 6
 

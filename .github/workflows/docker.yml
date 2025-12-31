@@ -13,15 +13,12 @@ jobs:
     strategy:
       matrix:
         config:
-          #- name: "neon"
-          #  tag: "24.04"
-          #  dockerfile: "Dockerfile.kde-neon.2404"
-          #- name: "ubuntu"
-          #  tag: "22.04"
-          #  dockerfile: "Dockerfile.ubuntu.2204"
-          - name: "mxe"
+          - name: "appimage"
             tag: "latest"
-            dockerfile: "Dockerfile.mxe"
+            dockerfile: "Dockerfile.appimage"
+          #- name: "mxe"
+          #  tag: "latest"
+          #  dockerfile: "Dockerfile.mxe"
 
     steps:
       - name: Checkout repository
