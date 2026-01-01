@@ -267,8 +267,8 @@ bool DesktopHelper::runProgram(QStringList& args, bool wait, const QString& inPa
           libDir = appDir + "/";
         } else if (!appDir.isEmpty()) {
           setEnv = true;
-          binDir = appDir + "/cbird/bin/";
-          libDir = appDir + "/cbird/lib/";
+          binDir = appDir + "/usr/bin/";
+          libDir = appDir + "/usr/lib/";
         }
 
         if (setEnv)

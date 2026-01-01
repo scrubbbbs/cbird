@@ -159,7 +159,7 @@ unix:!macx: {
     #message($$[QT_INSTALL_LIBS]);
     APPDIR=$$OBJECTS_DIR/appimage
     LINUXDEPLOYQT=~/Downloads/linuxdeployqt-continuous-x86_64.AppImage
-    appimage.commands = (rm -rf $$APPDIR && \
+    appimage_disable.commands = (rm -rf $$APPDIR && \
       PREFIX="$$APPDIR/cbird" $$QMAKE_QMAKE && \
       make install && \
       cp -auv /usr/local/bin/ff* $$APPDIR/cbird/bin/ && \
@@ -173,6 +173,17 @@ unix:!macx: {
         -qmake=$$QMAKE_QMAKE \
         -appimage)
 
+    appimage.commands = (rm -rf $$APPDIR && \
+      PREFIX="$$APPDIR/usr" $$QMAKE_QMAKE && \
+      make install && \
+      (cp -auv /usr/local/bin/ff* $$APPDIR/usr/bin/ || echo 0) && \
+      LDAI_NO_APPSTREAM=1 \
+      QMAKE=$$QMAKE_QMAKE \
+      EXTRA_QT_PLUGINS=waylandcompositor \
+      EXTRA_PLATFORM_PLUGINS=libqwayland.so \
+      linuxdeploy --appdir $$APPDIR --plugin=qt --output appimage --verbosity=2 \
+        --desktop-file=$$APPDIR/usr/share/applications/cbird.desktop \
+      )
     QMAKE_EXTRA_TARGETS += appimage
 }
 
