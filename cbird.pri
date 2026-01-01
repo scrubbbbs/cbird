@@ -15,6 +15,10 @@ macx {
 
 VERSION=0.8.1
 
+CXXFLAGS=$$(CXXFLAGS)
+!isEmpty(CXXFLAGS) {
+    QMAKE_CXXFLAGS += $$CXXFLAGS
+}
 QMAKE_CXXFLAGS += -fdiagnostics-color=always
 QMAKE_CXXFLAGS += -Wno-deprecated-declarations
 #QMAKE_CXXFLAGS += -ftime-report
@@ -198,8 +202,8 @@ contains(DEFINES, DEBUG) {
 else {
     # -westmere is latest that I can run in qemu, and
     #  it has popcnt (population count) which is nice for hamm64()
-    win32: QMAKE_CXXFLAGS_RELEASE += -march=westmere
-    unix: QMAKE_CXXFLAGS_RELEASE += -march=native
+    #win32: QMAKE_CXXFLAGS_RELEASE += -march=westmere
+    #unix: QMAKE_CXXFLAGS_RELEASE += -march=native
 }
 
 # -no-ms-bitfields fixes struct packing problem for 24-bit video index,
