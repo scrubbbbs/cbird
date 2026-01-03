@@ -64,6 +64,10 @@ contains(BUILD, debugOptimized) { DEFINES += DEBUG_OPTIMIZED }
 
 # private headers for DebugEventFilter
 QTCORE_PRIVATE_HEADERS="$$[QT_INSTALL_HEADERS]/QtCore/$$QT_VERSION"
+macx {
+    BREW_QTBASE_PREFIX=$$system("brew --prefix qtbase")
+    QTCORE_PRIVATE_HEADERS="$${BREW_QTBASE_PREFIX}/Frameworks/QtCore.framework/Headers"
+}
 !exists( $$QTCORE_PRIVATE_HEADERS ) {
     message("$${QTCORE_PRIVATE_HEADERS}/")
     error("Can't find qtcore private headers, maybe you need qt6-base-private-dev")
@@ -114,12 +118,18 @@ macx {
     # homebrew configuration
     QT *= dbus
 
-    INCLUDEPATH *= /usr/local/include
-    LIBS *= -L/usr/local/lib
+    BREW_PREFIX=$$system("brew --prefix")
+    INCLUDEPATH *= "$${BREW_PREFIX}/include"
+    LIBS *= "-L$${BREW_PREFIX}/lib"
     LIBS *= -ltermcap
 
-    OPENCV_LIBS *= ml objdetect stitching superres videostab calib3d
-    OPENCV_LIBS *= features2d highgui video photo imgproc flann core
+    INCLUDEPATH *= /opt/opencv2/include
+    LIBS *= -L/opt/opencv2/lib
+    LIBS *= "-Wl,-rpath,/opt/opencv2/lib"
+
+    #OPENCV_LIBS *= ml objdetect stitching superres videostab calib3d
+    #OPENCV_LIBS *= features2d highgui video photo imgproc flann core
+    OPENCV_LIBS *= features2d imgproc flann core video
     for (CVLIB, OPENCV_LIBS) {
         LIBS *= -lopencv_$${CVLIB}
     }

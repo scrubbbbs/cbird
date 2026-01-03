@@ -612,7 +612,7 @@ bool DesktopHelper::moveToTrash(const QString& path) {
   }
 #else
 #if defined(Q_OS_MAC)
-  const QStringList defaultArgs{{"trash", "-v", "-F", "%1"}}; // trash-put doesn't use Finder interface
+  const QStringList defaultArgs{{"trash", "-v", "-s", "%1"}}; // new trash program since macOS 14
 #else
   const QStringList defaultArgs{{"trash-put", "%1"}};
 #endif

@@ -15,11 +15,14 @@ pkg_begin opencv-${CV_VERSION} &&
     mkdir -p "${CV_BUILD}" &&
     cd "${CV_BUILD}/.." &&
     wget "https://github.com/opencv/opencv/archive/${CV_VERSION}.zip" &&
-    unzip -q "${CV_VERSION}.zip" && rm "${CV_VERSION}.zip" &&
+    unzip -q "${CV_VERSION}.zip" &&
+    rm "${CV_VERSION}.zip" &&
+    (if [[ -f opencv.diff ]]; then cd "opencv-${CV_VERSION}/" && patch -p1 < ../opencv.diff; fi) &&
     cd "${CV_BUILD}" &&
 step_configure &&
-    cmake -G Ninja \
+    cmake -G Ninja ${CV_OPTIONS} \
         -D CMAKE_BUILD_TYPE=Release \
+        -D BUILD_ZLIB=OFF \
         -D WITH_OPENEXR=OFF \
         -D WITH_JASPER=OFF \
         -D WITH_TIFF=OFF \
@@ -55,6 +58,7 @@ step_configure &&
         -D BUILD_opencv_world=OFF \
         "../opencv-${CV_VERSION}/" &&
 step_build &&
+    ninja &&
     ${INSTALL_SUDO} ninja install &&
     rm -rf modules &&
 pkg_end

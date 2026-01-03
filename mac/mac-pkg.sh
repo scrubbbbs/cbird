@@ -1,20 +1,24 @@
 #!/bin/bash
 
-PLUGINS_DIR=/usr/local/share/qt/plugins
+PLUGINS_DIR=$(qtpaths --query | grep QT_INSTALL_PLUGINS | cut -d: -f2)
 if [ -n "$1" ]; then
   PLUGINS_DIR="$1"
 fi
 
 CBIRD=_mac/cbird
+CBIRD_ARGS="-headless -create -about"
+SYSROOT=$(brew --prefix)
 PKG_DIR=_mac/cbird-mac
 TMP=_mac/libs.txt
 EXTRAS="readme.md tools/ffplay-sbs"
 
 echo "mac-pkg: $CBIRD => $PKG_DIR/ | plugins = $PLUGINS_DIR"
 
+cp -v /opt/kimageformats/lib/plugins/imageformats/*.dylib "$PLUGINS_DIR/imageformats/"
+
 # check that cbird is compiled and working
 # we also need an index in CWD for "cbird -about" which we'll need for dylib/framework probe
-./$CBIRD -headless -create -about >/dev/null 2>&1
+./$CBIRD $CBIRD_ARGS >/dev/null 2>&1
 if [ $? -ne 0 ]; then
   echo the build is broken, check that ./$CBIRD is working
   exit -1
@@ -65,6 +69,7 @@ fix_imports()
 add_exe()
 {
   local SRC_EXE=$1
+  local EXE_ARGS="$2"
   local DST_EXE="$PKG_DIR/$(basename $SRC_EXE)"
 
   if [ $SRC_EXE -nt $DST_EXE ]; then
@@ -72,6 +77,8 @@ add_exe()
     chmod 755 $DST_EXE
     fix_imports $DST_EXE
     install_name_tool -add_rpath "@executable_path/lib/" $DST_EXE
+    echo "mac-pkg: sign $DST_EXE"
+    codesign --force --sign - "$DST_EXE"
   fi
 
   echo "mac-pkg: probing $SRC_EXE"
@@ -79,9 +86,9 @@ add_exe()
   # get all libraries loaded by the program with dyld logging
   # this gets both the imported library path and resolved path;
   # we need both to create symlinks
-  DYLD_PRINT_LIBRARIES_POST_LAUNCH=1 DYLD_PRINT_LIBRARIES=1 DYLD_PRINT_RPATHS=1 DYLD_PRINT_SEARCHING=1 $SRC_EXE 2>&1 | grep -A1 'found: dylib-from-disk:' | grep -v '^--' | sed -n 'N;s/\n/ /p' | sed 's/"//g' >$TMP 2>&1
+  DYLD_BIND_AT_LAUNCH=1 DYLD_PRINT_LIBRARIES_POST_LAUNCH=1 DYLD_PRINT_LIBRARIES=1 DYLD_PRINT_RPATHS=1 DYLD_PRINT_SEARCHING=1 $SRC_EXE $EXE_ARGS 2>&1 | grep -A1 'found: dylib-from-disk:' | grep -v '^--' | sed -n 'N;s/\n/ /p' | sed 's/"//g' >$TMP 2>&1
   
-  cat $TMP | grep ^dyld | grep "/usr/local/.*\.dylib" | grep -v "/plugins/" | cut -d' ' -f6 -f9 | while read -r LINE; do
+  cat $TMP | grep ^dyld | grep -E "(/opt/|/usr/local/).*\.dylib" | grep -v "/plugins/" | cut -d' ' -f6 -f9 | while read -r LINE; do
     local import=$(echo $LINE | cut -d' ' -f1)
     local resolved=$(echo $LINE | cut -d' ' -f2)
     local libName=$(basename $import)
@@ -95,10 +102,12 @@ add_exe()
         ln -sv $resName $PKG_DIR/lib/$libName
       fi
       fix_imports $PKG_DIR/lib/$resName
+      echo "mac-pkg: sign $PKG_DIR/lib/$resName"
+      codesign --force --sign - "$PKG_DIR/lib/$resName"
     fi
   done
 
-  cat $TMP | grep ^dyld | grep "/usr/local/.*\.framework.*" | cut -d' ' -f6 -f9 | while read -r LINE; do
+  cat $TMP | grep ^dyld | grep -E "(/opt|/usr/local/).*\.framework.*" | cut -d' ' -f6 -f9 | while read -r LINE; do
       #echo $LINE
       # resolve framework symlinks and get the .framework bundle path
       local framework=$(echo $LINE | cut -d' ' -f2)
@@ -111,15 +120,16 @@ add_exe()
         echo "mac-pkg: adding $bundle $libName"
         rsync -auv --no-owner --no-group --exclude "Headers" --exclude "*.prl" $bundle $PKG_DIR/lib/
         fix_imports $PKG_DIR/lib/$dirName/$libName
+        echo "mac-pkg: sign $PKG_DIR/lib/$dirName/$libName"
+        codesign --force --sign - "$PKG_DIR/lib/$dirName/$libName"
       fi
   done
 }
 
-add_exe /usr/local/bin/trash # for sending files to trash
-add_exe /usr/local/bin/ffmpeg # for ffplay-sbs
-add_exe /usr/local/bin/ffplay # for ffplay-sbs
-add_exe /usr/local/bin/ffprobe # for ffplay-sbs
-add_exe ./$CBIRD
+add_exe $SYSROOT/bin/ffmpeg "" # for ffplay-sbs
+add_exe $SYSROOT/bin/ffplay "" # for ffplay-sbs
+add_exe $SYSROOT/bin/ffprobe "" # for ffplay-sbs
+add_exe ./$CBIRD "$CBIRD_ARGS"
 
 # we can detect a smaller set of plugins with DYLD logging trick, but this is easier
 PLUGINS_DST=$PKG_DIR/lib/plugins
@@ -141,15 +151,15 @@ test_exe()
   DYLD_PRINT_LIBRARIES_POST_LAUNCH=1 DYLD_PRINT_LIBRARIES=1 DYLD_PRINT_RPATHS=1 \
       DYLD_LIBRARY_PATH= BENCHMARK_LISTWIDGET_LOAD=1 $CMD > $TMP 2>&1
 
-  local DYLIBS=$(cat $TMP | grep ^dyld | grep "/usr/local/" | cut -d' ' -f3)
+  local DYLIBS=$(cat $TMP | grep ^dyld | grep -E "(/usr/local/|/opt)" | cut -d' ' -f3)
 
   for DYLIB in $DYLIBS; do
     echo "!! unpackaged lib !! $DYLIB"
   done
 }
 
-test_exe "$PKG_DIR/trash -v"
+#test_exe "$PKG_DIR/trash -v"
 test_exe "$PKG_DIR/ffmpeg -version"
 test_exe "$PKG_DIR/ffprobe -version"
 test_exe "$PKG_DIR/ffplay -autoexit screenshot.png"
-test_exe "$PKG_DIR/$CBIRD -use ~/Pictures -about -update -select-all -show"
+test_exe "$PKG_DIR/$CBIRD $CBIRD_ARGS" 

@@ -12,6 +12,7 @@ group_begin "kimageformats deps"
 #make MXE_TARGETS='x86_64-w64-mingw32.shared' libraw openjpeg libwebp
 
 # fork of jxrlib to fix the build
+if [[ ! -e "${SYSTEM_PREFIX}/include/jxrlib/JXRGlue.h" ]]; then
 (
     pkg_begin jxrlib-kif &&
         git clone --depth 1 https://github.com/scrubbbbs/jxrlib-kif &&
@@ -22,7 +23,9 @@ group_begin "kimageformats deps"
         ninja install &&
     pkg_end
 ) || exit 1
+fi
 
+if [[ ! -e "${SYSTEM_PREFIX}/share/ECM" ]]; then
 (
     pkg_begin extra-cmake-modules &&
         git clone --depth 1 https://github.com/KDE/extra-cmake-modules &&
@@ -33,7 +36,9 @@ group_begin "kimageformats deps"
         ninja install &&
     pkg_end
 ) || exit 2
+fi
 
+if [[ ! -e "${SYSTEM_PREFIX}/include/libde265/de265.h" ]]; then
 (
     pkg_begin libde265 &&
         git clone --depth 1 https://github.com/strukturag/libde265 &&
@@ -44,7 +49,9 @@ group_begin "kimageformats deps"
         ninja install &&
     pkg_end
 ) || exit 3
+fi
 
+if [[ -n ${ENABLE_LIBHEIF} ]]; then
 (
     pkg_begin libheif &&
         git clone --depth 1 https://github.com/strukturag/libheif &&
@@ -55,7 +62,9 @@ group_begin "kimageformats deps"
         ninja install &&
     pkg_end
 ) || exit 4
+fi
 
+if [[ ! -e "${SYSTEM_PREFIX}/include/dav1d/dav1d.h" ]]; then
 (
     pkg_begin dav1d &&
         git clone --depth 1 https://github.com/videolan/dav1d &&
@@ -67,7 +76,9 @@ group_begin "kimageformats deps"
         ninja install &&
     pkg_end
 ) || exit 5
+fi
 
+if [[ ! -e "${SYSTEM_PREFIX}/include/avif/avif.h" ]]; then
 (
     pkg_begin libavif &&
         git clone --depth 1 https://github.com/AOMediaCodec/libavif &&
@@ -81,7 +92,9 @@ group_begin "kimageformats deps"
         ninja install &&
     pkg_end
 ) || exit 6
+fi
 
+if [[ ! -e "${SYSTEM_PREFIX}/include/OpenEXR/openexr.h" ]]; then
 (
     pkg_begin openexr &&
         git clone --depth 1 https://github.com/AcademySoftwareFoundation/openexr &&
@@ -94,9 +107,12 @@ group_begin "kimageformats deps"
         ninja install &&
     pkg_end
 ) || exit 7
+fi
 
 # note jxl decode segfaults in avx2 code unless flags given below
 # https://github.com/libjxl/libjxl/issues/4546#issuecomment-3681157792
+
+if [[ ! -e "${SYSTEM_PREFIX}/include/jxl/version.h" ]]; then
 (
     pkg_begin libjxl &&
         git clone --depth 1 https://github.com/libjxl/libjxl &&
@@ -115,6 +131,7 @@ group_begin "kimageformats deps"
         ninja install &&
     pkg_end
 ) || exit 8
+fi
 
 # using mxe package
 #git clone https://github.com/LibRaw/LibRaw
@@ -127,19 +144,19 @@ group_end # kimageformats deps
 
 (
     pkg_begin kimageformats &&
-        git clone --depth 1 https://github.com/KDE/kimageformats &&
+        git clone --branch ${KIMAGEFORMATS_TAG} --single-branch --depth 1 https://github.com/KDE/kimageformats &&
         cd kimageformats &&
         mkdir build && cd build &&
     step_configure &&
         cmake -G Ninja \
-            -D CMAKE_PREFIX_PATH=${MXE_DIR}/usr/${MXE_TARGET}/qt6/lib/cmake \
+            ${KIMAGEFORMATS_OPTIONS} \
             -D KIMAGEFORMATS_HEIF=ON \
             -D KIMAGEFORMATS_JXR=ON \
             -D KIMAGEFORMATS_JXL=ON \
             .. &&
     step_build &&
         ninja &&
-        cp -v bin/imageformats/*.dll ${MXE_DIR}/usr/${MXE_TARGET}/qt6/plugins/imageformats/ &&
+        ${KIMAGEFORMATS_INSTALL} &&
     pkg_end
 ) || exit 9
 

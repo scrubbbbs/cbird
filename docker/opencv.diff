@@ -1,0 +1,12 @@
+diff -ru opencv-2.4.13.7/CMakeLists.txt opencv-2.4.13.7.edit/CMakeLists.txt
+--- opencv-2.4.13.7/CMakeLists.txt	2018-07-02 05:41:56
++++ opencv-2.4.13.7.edit/CMakeLists.txt	2026-01-02 09:32:55
+@@ -50,7 +50,7 @@
+ 
+ if (POLICY CMP0042)
+   # silence cmake 3.0+ warnings about MACOSX_RPATH
+-  cmake_policy(SET CMP0042 OLD)
++  #cmake_policy(SET CMP0042 OLD)
+ endif()
+ 
+ # must go before the project command
