@@ -6,13 +6,15 @@ on:
       - main
     paths-ignore:
       - .github/workflows/docker.yml
-      - .github/workflows/windows.yml
+      - .github/workflows/linux.yml
+      - .github/workflows/macos.yml
   pull_request:
     branches:
       - main
     paths-ignore:
       - .github/workflows/docker.yml
-      - .github/workflows/windows.yml
+      - .github/workflows/linux.yml
+      - .github/workflows/macos.yml
 
 jobs:
   build:
@@ -82,7 +84,7 @@ jobs:
         shell: bash
         run: |
           shopt -s expand_aliases
-          source /build/mxe.env
+          source /build/mxe.env # TODO: =>build.env after rebuilding docker image
           export HOME="$PWD/home"
           export WINEPREFIX="$PWD/wineprefix"
           mkdir -p "$HOME" "$WINEPREFIX"

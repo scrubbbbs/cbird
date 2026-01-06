@@ -1,0 +1,153 @@
+name: macOS workflow
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - .github/workflows/docker.yml
+      - .github/workflows/linux.yml
+      - .github/workflows/windows.yml
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - .github/workflows/docker.yml
+      - .github/workflows/linux.yml
+      - .github/workflows/windows.yml
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner.name }}
+    name: build (${{ matrix.config.type }}, ${{ matrix.runner.arch }})
+    strategy:
+      max-parallel: 1
+      matrix:
+        runner:
+          - name: macos-15-intel # github-hosted runner name
+            packages: qtbase qtimageformats quazip exiv2 ffmpeg wget
+            arch: intel
+            arch_flags:
+            homebrew-opt: "/usr/local/opt" # root of qt_dir
+
+          - name: macos-15
+            packages: qtbase qtimageformats quazip exiv2 ffmpeg wget
+            arch: arm64
+            arch_flags:
+            homebrew-opt: "/opt/homebrew/opt"
+
+        config:
+          - type: full 
+            packages: extra-cmake-modules karchive jpeg-xl libraw libde265 jxrlib libavif
+            flags: ""
+            kimageformats: true # compile kimageformat-plugins
+            opencv: true # compile a minimal opencv
+            portable: true # build portable folder 
+            artifacts: true # upload artifacts
+            release: true # TODO: publish release
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # ensure full history for git rev-parse
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Get System Info
+        id: get_info
+        run: |
+          COMPILER_ID=$(echo $(c++ --version) $(realpath $(xcrun --show-sdk-path)))
+          SCRIPTS_ID=$(cat docker/*env docker/*.sh docker/*.diff | sha256)
+          OPENCV_KEY=$(echo $COMPILER_ID $SCRIPTS_ID | sha256)
+          KIF_KEY=$(echo $COMPILER_ID $SCRIPTS_ID | sha256)
+          echo "Compiler: $COMPILER_ID"
+          echo "Scripts: $SCRIPTS_ID"
+          echo "OpenCV Cache Key: $OPENCV_KEY"
+          echo "kimageformats Cache Key: $KIF_KEY"
+          echo "OPENCV_KEY=${OPENCV_KEY}" >> $GITHUB_OUTPUT
+          echo "KIF_KEY=${KIF_KEY}" >> $GITHUB_OUTPUT
+
+      - name: Setup Cache
+        run: |
+          # we must install things to /opt for packaging script to work, but cache@v4 won't write there
+          # note this location is hardcoded to docker/macos.env
+          sudo mkdir /opt/opencv2 /opt/kimageformats
+          sudo chown $USER:$(id -gn) /opt/opencv2 /opt/kimageformats
+
+      - name: Install Packages
+        run: |
+          brew install --quiet --force-bottle ${{ matrix.runner.packages }} ${{ matrix.config.packages }}
+
+      - name: Cache opencv
+        id: cache_opencv
+        if: matrix.config.opencv
+        uses: actions/cache@v4
+        with:
+          path: /opt/opencv2
+          key: ${{ runner.os }}-opencv-${{ steps.get_info.outputs.OPENCV_KEY }}
+
+      - name: Build opencv
+        if: matrix.config.opencv && steps.cache_opencv.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          cd ${GITHUB_WORKSPACE}/docker
+          shopt -s expand_aliases
+          source macos.env
+          ./build-opencv.sh
+
+      - name: Cache kimageformats
+        id: cache_kimageformats
+        if: matrix.config.kimageformats
+        uses: actions/cache@v4
+        with:
+          path: /opt/kimageformats
+          key: ${{ runner.os }}-kimageformats-${{ steps.get_info.outputs.KIF_KEY }}
+
+      - name: Build kimageformats
+        if: matrix.config.kimageformats && steps.cache_kimageformats.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          cd ${GITHUB_WORKSPACE}/docker
+          shopt -s expand_aliases
+          source macos.env
+          ./build-kimageformats.sh
+
+      - name: Configure
+        shell: bash
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          shopt -s expand_aliases
+          source docker/macos.env
+          qmake6
+          make _mac/git.h
+
+      - name: Get Build Version
+        id: get_version
+        run: |
+          cd ${GITHUB_WORKSPACE}/
+          ARCH=$(uname -m)
+          OS="$(sw_vers -productName)-$(sw_vers -productVersion)"
+          SHA=$(git rev-parse --short ${{ github.event.pull_request.head.sha || github.sha }})
+          VERSION=$(cat _mac/git.h | grep CBIRD_VERSION | sed 's/[^0-9\.]*//g')
+          echo "VERSION=${VERSION}-${SHA}-${OS}-${ARCH}" >> $GITHUB_OUTPUT
+
+      - name: Build
+        run: |
+          cd ${GITHUB_WORKSPACE}/
+          make -j$(nproc) 
+
+      - name: Make Portable Bundle
+        if: matrix.config.portable
+        run: |
+          cd ${GITHUB_WORKSPACE}/
+          make portable
+          cd _mac && zip -ry cbird-mac.zip cbird-mac # we must double-zip; artifacts won't keep symlinks
+
+
+      - name: Upload Artifacts
+        if: matrix.config.artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "cbird-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.type }}"
+          path: _mac/cbird-mac.zip
+          retention-days: 30

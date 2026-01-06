@@ -55,6 +55,7 @@ step_configure &&
         -D BUILD_opencv_ts=OFF \
         -D BUILD_opencv_video=ON \
         -D BUILD_opencv_videostab=OFF \
+        -D BUILD_opencv_java=OFF \
         -D BUILD_opencv_world=OFF \
         "../opencv-${CV_VERSION}/" &&
 step_build &&
