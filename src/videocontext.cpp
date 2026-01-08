@@ -1051,14 +1051,22 @@ bool VideoContext::initAccel(const AVCodec** outCodec,
     deviceTypeId = AV_HWDEVICE_TYPE_D3D12VA;
   }
 #endif
+#ifdef Q_OS_MAC
+  else if (deviceType == "videotoolbox") {
+    deviceTypeId = AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
+    outUsesFilter = true; // scale_vt
+  }
+#endif
   else {
-
     QStringList hwAccels;
 #ifdef Q_OS_LINUX
     hwAccels = {"nvdec,qsv,vaapi,vulkan"};
 #endif
 #ifdef Q_OS_WIN
     hwAccels = {"nvdec,qsv,d3d11va,d3d12va,vulkan"};
+#endif
+#ifdef Q_OS_MAC
+    hwAccels = {"videotoolbox"};
 #endif
 
     qWarning() << "unsupported device type" << deviceType << "choices are: " << hwAccels;
@@ -2187,6 +2195,8 @@ bool VideoContext::decodeFrameFiltered() {
                     + filters;
       } else if (fc->format == AV_PIX_FMT_VULKAN) {
         filters = qq("scale_vulkan=w=%1:h=%2,").arg(_options.maxW).arg(_options.maxH) + filters;
+      } else if (fc->format == AV_PIX_FMT_VIDEOTOOLBOX) {
+        filters = qq("scale_vt=w=%1:h=%2,").arg(_options.maxW).arg(_options.maxH) + filters;
       } else {
         qWarning() << "no hardware scaler for" << av_get_pix_fmt_name(fc->format)
                    << "expect extremely poor performance";
