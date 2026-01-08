@@ -13,7 +13,7 @@ source utility.env
     step_configure &&
         cmake -G Ninja -DQUAZIP_QT_MAJOR_VERSION=6 &&
     step_build &&
-        ninja install &&
+        ${INSTALL_SUDO} ninja install &&
     pkg_end
 ) || exit 1
 
