@@ -90,7 +90,7 @@ bool CropWidget::setIndexThumbnail(const Database &db, const Media &media, QWidg
       if (relPath.startsWith(indexPath)) relPath = relPath.mid(indexPath.length() + 1);
 
       image->readMetadata();
-      if (comment.isEmpty()) {
+      if (comment.isEmpty() || !comment.contains("cbird thumbnail")) {
         comment = "cbird thumbnail";
         comment += "\nversion:1";
         comment += "\npath:" + relPath;
