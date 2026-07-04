@@ -47,7 +47,7 @@ class VideoContext {
 
  public:
   struct Metadata {
-    bool isEmpty = false;
+    bool isEmpty = true;
     bool supportsThreads = false;
     QSize frameSize;
     float frameRate = 0.0f;
