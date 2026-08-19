@@ -18,16 +18,26 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    name: build (${{ matrix.config.name }})
+    runs-on: ${{ matrix.config.runner }}
+    name: build (${{ matrix.config.name }}, ${{ matrix.config.arch }})
     strategy:
       # needs to be set; reduce if github is cancelling jobs
       max-parallel: 2
       matrix:
         config:
-          - name: "AppImage"
-            container: "ghcr.io/scrubbbbs/appimage:latest"
+          - name: AppImage
+            arch: x86_64
+            container: ghcr.io/scrubbbbs/appimage:latest
             submodules: false
+            runner: ubuntu-latest
+            deps: ""
+            cmake_flags: ""
+            env: ""
+          - name: AppImage
+            arch: aarch64
+            container: ghcr.io/scrubbbbs/appimage:latest
+            submodules: false
+            runner: ubuntu-24.04-arm
             deps: ""
             cmake_flags: ""
             env: ""
@@ -39,7 +49,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -84,11 +94,13 @@ jobs:
         run: |
           ldconfig # TODO: missing from Dockerfile
           make appimage 
+          mv -v cbird-*.AppImage "cbird-${{ steps.get_version.outputs.BUILD }}.AppImage"
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: "cbird-${{ steps.get_version.outputs.BUILD }}-${{ matrix.config.name }}"
-          path: cbird-${{ steps.get_version.outputs.ARCH }}.AppImage 
+          name: "<unused>"
+          path: cbird-*.AppImage
+          archive: false
           retention-days: 30
 

@@ -2,6 +2,8 @@ FROM ubuntu:24.04
 
 WORKDIR /build
 
+ARG TARGETARCH
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update \
@@ -36,7 +38,6 @@ RUN echo "deb http://archive.neon.kde.org/user noble main" > \
     libgl-dev \
     libsdl2-dev \
     libva-dev \
-    libvpl-dev \
     ocl-icd-opencl-dev \
     # linuxdeploy extra deps
     cimg-dev \
@@ -58,8 +59,13 @@ RUN echo "deb http://archive.neon.kde.org/user noble main" > \
     kf6-kimageformat-plugins \
     libexiv2-dev \
     libquazip1-qt6-dev \
-    libncurses-dev \
-&& apt upgrade -y \
+    libncurses-dev
+
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+      apt install -y libvpl-dev; \
+    fi
+
+RUN apt upgrade -y \
 && apt clean -y \
 && rm -rf /var/lib/apt/lists/*
 

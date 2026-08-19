@@ -21,18 +21,21 @@ group_begin "FFmpeg deps"
 ) || exit 1
 
 # libvpl for intel quicksync support
-if [[ ! -e "${SYSTEM_INCLUDE_PATH}/vpl/mfx.h" ]]; then
-(
-    pkg_begin libvpl &&
-        git clone --depth 1 https://github.com/intel/libvpl &&
-        cd libvpl && mkdir build && cd build &&
-    step_configure &&
-        cmake -G Ninja .. &&
-    step_build &&
-        ninja &&
-        ${INSTALL_SUDO} ninja install &&
-    pkg_end
-) || exit 2
+if [ $ARCH = "x86_64" ]; then
+    FFMPEG_OPTIONS="${FFMPEG_OPTIONS} --enable-libvpl"
+    if [[ ! -e "${SYSTEM_INCLUDE_PATH}/vpl/mfx.h" ]]; then
+    (
+        pkg_begin libvpl &&
+            git clone --depth 1 https://github.com/intel/libvpl &&
+            cd libvpl && mkdir build && cd build &&
+        step_configure &&
+            cmake -G Ninja .. &&
+        step_build &&
+            ninja &&
+            ${INSTALL_SUDO} ninja install &&
+        pkg_end
+    ) || exit 2
+    fi
 fi
 
 # opencl for quicksync/d3d11va support
@@ -122,7 +125,6 @@ group_end # ffmpeg deps
             --disable-doc \
             --enable-gpl \
             --enable-libdav1d \
-            --enable-libvpl \
             --enable-opencl  \
             --enable-cuvid &&
     step_build &&
